@@ -56,3 +56,18 @@ jobs:
             sudo systemctl restart quanthunt && \
             (sudo restorecon -R $APP 2>/dev/null || true) && \
             sudo systemctl reload nginx"
+
+      - name: Verify the app is up (post-deploy smoke test)
+        env:
+          U: ${{ secrets.VM_USER }}
+          H: ${{ secrets.VM_HOST }}
+        run: |
+          # Give gunicorn a moment to rebind, then confirm nginx -> app answers.
+          ssh -i ~/.ssh/id_deploy "$U@$H" '
+            for i in $(seq 1 10); do
+              if curl -fsS http://127.0.0.1/ping >/dev/null; then
+                echo "OK: app responded on attempt $i"; exit 0
+              fi
+              sleep 2
+            done
+            echo "FAIL: app did not respond after restart"; exit 1'
