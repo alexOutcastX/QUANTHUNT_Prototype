@@ -1,0 +1,6 @@
+@echo off
+echo Installing / updating dependencies...
+pip install flask flask-cors requests yfinance ta pandas tvdatafeed --quiet --upgrade
+echo Starting QuantHunt (dev mode - serves latest code)...
+start http://localhost:5000
+python server.py

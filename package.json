@@ -1,0 +1,19 @@
+{
+  "name": "quanthunt-prototype",
+  "version": "1.0.0",
+  "description": "QuantHunt stock screener prototype - Flask backend + single-file HTML UI",
+  "private": true,
+  "scripts": {
+    "setup": "python -m venv venv && npm run setup:deps",
+    "setup:deps": "venv/Scripts/python -m pip install --upgrade pip && venv/Scripts/pip install -r requirements.txt",
+    "start": "venv/Scripts/python server.py",
+    "start:global": "python server.py",
+    "build:exe": "venv/Scripts/pip install pyinstaller && venv/Scripts/pyinstaller quanthunt.spec"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/alexOutcastX/QUANTHUNT_Prototype.git"
+  },
+  "author": "alexOutcastX",
+  "license": "UNLICENSED"
+}

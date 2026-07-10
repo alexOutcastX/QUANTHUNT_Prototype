@@ -1,0 +1,8 @@
+flask
+flask-cors
+requests
+pandas
+yfinance
+ta
+# tvDatafeed is not on PyPI anymore; install from GitHub:
+tvdatafeed @ git+https://github.com/rongardF/tvdatafeed.git
