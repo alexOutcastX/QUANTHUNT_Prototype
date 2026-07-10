@@ -6,47 +6,54 @@
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>QuantHunt — NSE · BSE</title>
-<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Syne:wght@400;500;600;700&display=swap" rel="stylesheet">
+<title>TaurEye — NSE/BSE EOD stock screener</title>
+<meta name="theme-color" content="#0a0c0f">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
+<link rel="icon" type="image/png" sizes="48x48" href="/favicon-48.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
   :root {
-    --bg:       #080c14;
-    --bg2:      #0d1321;
-    --bg3:      #111927;
-    --card:     #0f1620;
-    --border:   #1a2640;
-    --border2:  #243451;
-    --accent:   #0ea5e9;
-    --accent2:  #06b6d4;
-    --green:    #10b981;
-    --red:      #f43f5e;
-    --amber:    #f59e0b;
+    --bg:       #0a0c0f;
+    --bg2:      #11141a;
+    --bg3:      #161a22;
+    --card:     #11141a;
+    --border:   #232a35;
+    --border2:  #2f3845;
+    --accent:   #ffffff;
+    --accent2:  #c9d1db;
+    --on-accent:#0a0f0c;
+    --green:    #18c98c;
+    --red:      #f0506e;
+    --amber:    #f5a623;
     --purple:   #a78bfa;
-    --text:     #e2e8f0;
-    --muted:    #4a6080;
-    --muted2:   #7a95b8;
+    --text:     #e7eaef;
+    --muted:    #5e6776;
+    --muted2:   #9aa4b2;
     --font-mono:'JetBrains Mono', monospace;
-    --font-sans:'Syne', sans-serif;
+    --font-sans:'Inter', 'Segoe UI', system-ui, sans-serif;
   }
 
   .light {
-    --bg:       #f0f4fa;
-    --bg2:      #e4eaf5;
-    --bg3:      #dce4f0;
+    --bg:       #fbfcfd;
+    --bg2:      #f3f5f8;
+    --bg3:      #eaeef2;
     --card:     #ffffff;
-    --border:   #ccd6e8;
-    --border2:  #b0c0d8;
-    --accent:   #0284c7;
-    --accent2:  #0891b2;
-    --green:    #059669;
-    --red:      #e11d48;
-    --amber:    #d97706;
+    --border:   #e8ebef;
+    --border2:  #d6dbe2;
+    --accent:   #0f1419;
+    --accent2:  #3a4250;
+    --on-accent:#ffffff;
+    --green:    #0f9d63;
+    --red:      #e0455f;
+    --amber:    #c2870f;
     --purple:   #7c3aed;
-    --text:     #0f172a;
-    --muted:    #94a3b8;
-    --muted2:   #475569;
+    --text:     #0f1419;
+    --muted:    #98a1ad;
+    --muted2:   #58616d;
   }
 
   html, body { height: 100%; }
@@ -74,19 +81,19 @@
     gap: 4px; padding: 5px 0; line-height: 1;
   }
   .logo-brand {
-    display: flex; align-items: center; gap: 0;
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 52px; font-weight: 700; letter-spacing: 3px;
-    color: #22d3ee; text-shadow: 0 0 22px rgba(34,211,238,0.55);
+    display: flex; align-items: center; gap: 11px;
+    font-family: 'Inter', sans-serif;
+    font-size: 34px; font-weight: 700; letter-spacing: -0.02em;
+    color: var(--text);
     line-height: 1; white-space: nowrap;
   }
-  .logo-brand .logo-pulse { margin-right: 13px; flex-shrink: 0; }
-  .logo-brand .logo-hunt  { color: #f8fafc; text-shadow: 0 0 12px rgba(248,250,252,0.3); }
+  .logo-brand .logo-mark { height: 40px; width: auto; display: block; flex-shrink: 0; }
+  .logo-brand .logo-hunt  { color: var(--accent); }
   .logo-tagline {
-    font-family: 'Syne', sans-serif; font-size: 13.3px; font-weight: 400;
-    color: #64748b; letter-spacing: 0.3px;
+    font-family: 'Inter', sans-serif; font-size: 12px; font-weight: 500;
+    color: var(--muted2); letter-spacing: 0.2px;
     white-space: nowrap; line-height: 1; text-align: left;
-    margin-left: 8px;
+    margin-left: 51px;
   }
   .logo-pulse {
     width: 8px; height: 8px; border-radius: 50%;
@@ -179,7 +186,7 @@
     color: var(--muted2); border: none; background: none;
     transition: all 0.15s; font-family: var(--font-sans);
   }
-  .seg-btn.active { background: var(--accent); color: #fff; }
+  .seg-btn.active { background: var(--accent); color: var(--on-accent); }
 
   /* fields */
   .field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px; }
@@ -210,7 +217,7 @@
     font-family: var(--font-mono);
     transition: all 0.15s; user-select: none;
   }
-  .ma-chip.on { border-color: var(--accent); color: var(--accent); background: rgba(14,165,233,0.08); }
+  .ma-chip.on { border-color: var(--accent); color: var(--accent); background: rgba(255,255,255,0.08); }
   .ma-chip .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); flex-shrink: 0; }
   .ma-chip.on .dot { background: var(--accent); }
 
@@ -249,7 +256,7 @@
   /* scan btn */
   .scan-btn {
     width: 100%; padding: 11px;
-    background: var(--accent); color: #fff;
+    background: var(--accent); color: var(--on-accent);
     border: none; border-radius: 7px;
     font-size: 13px; font-weight: 600; cursor: pointer;
     font-family: var(--font-sans);
@@ -257,7 +264,7 @@
     transition: all 0.15s;
     letter-spacing: 0.3px;
   }
-  .scan-btn:hover { background: #0284c7; }
+  .scan-btn:hover { background: var(--accent2); }
   .scan-btn:active { transform: scale(0.98); }
   .scan-btn.running { background: var(--amber); }
   .spin { display: inline-block; animation: spin 1s linear infinite; }
@@ -399,7 +406,7 @@
     display: inline-block; font-size: 9px; padding: 1px 5px;
     border-radius: 3px; margin-left: 5px; font-family: var(--font-sans); font-weight: 500;
   }
-  .nse { background: rgba(14,165,233,0.15); color: var(--accent); }
+  .nse { background: rgba(255,255,255,0.15); color: var(--accent); }
   .bse { background: rgba(167,139,250,0.15); color: var(--purple); }
 
   .up { color: var(--green); }
@@ -867,7 +874,7 @@
     min-width: 0; box-sizing: border-box; width: 100%;
   }
   .ds-option:last-of-type { margin-bottom: 0; }
-  .ds-option.selected { border-color: var(--accent); background: rgba(14,165,233,0.07); }
+  .ds-option.selected { border-color: var(--accent); background: rgba(255,255,255,0.07); }
   .ds-option.selected.av-selected { border-color: var(--purple); background: rgba(167,139,250,0.07); }
   .ds-radio {
     width: 14px; height: 14px; border-radius: 50%;
@@ -996,12 +1003,12 @@
   .chart-btn {
     display: inline-flex; align-items: center; justify-content: center;
     width: 20px; height: 20px; border-radius: 4px;
-    background: rgba(14,165,233,0.1); border: 1px solid rgba(14,165,233,0.25);
+    background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.25);
     color: var(--accent); cursor: pointer; font-size: 10px;
     transition: all 0.15s; flex-shrink: 0; text-decoration: none;
     vertical-align: middle; margin-left: 4px;
   }
-  .chart-btn:hover { background: rgba(14,165,233,0.22); border-color: var(--accent); }
+  .chart-btn:hover { background: rgba(255,255,255,0.22); border-color: var(--accent); }
   .sym-wrap { display: flex; align-items: center; gap: 4px; }
 
   /* ── LOCAL SERVER STATUS ── */
@@ -1054,17 +1061,17 @@
     font-size: 11px; font-weight: 500; color: var(--muted2);
     border: none; background: none; font-family: var(--font-sans); transition: all 0.15s;
   }
-  .tl-seg-btn.active { background: var(--accent); color: #fff; }
+  .tl-seg-btn.active { background: var(--accent); color: var(--on-accent); }
   .tl-seg-btn.buy-active  { background: var(--green); color: #fff; }
   .tl-seg-btn.sell-active { background: var(--red);   color: #fff; }
   .update-btn {
     margin-left: auto; display: flex; align-items: center; gap: 6px;
-    background: var(--accent); color: #fff;
+    background: var(--accent); color: var(--on-accent);
     border: none; border-radius: 5px; padding: 6px 14px;
     font-size: 12px; font-weight: 600; cursor: pointer;
     font-family: var(--font-sans); transition: all 0.15s;
   }
-  .update-btn:hover { background: #0284c7; }
+  .update-btn:hover { background: var(--accent2); }
   .tracklist-wrap {
     display: flex; flex-direction: column;
     flex: 1; overflow-y: auto; padding: 20px;
@@ -1122,7 +1129,7 @@
   .tk-exit.overbought { background: rgba(244,63,94,0.1);  border: 1px solid rgba(244,63,94,0.3); color: var(--red); }
   .tk-exit.oversold   { background: rgba(16,185,129,0.1); border: 1px solid rgba(16,185,129,0.3); color: var(--green); }
   .tk-exit.caution    { background: rgba(245,158,11,0.1); border: 1px solid rgba(245,158,11,0.25); color: var(--amber); }
-  .tk-exit.clear      { background: rgba(14,165,233,0.08); border: 1px solid rgba(14,165,233,0.2); color: var(--accent2); }
+  .tk-exit.clear      { background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.2); color: var(--accent2); }
 
   /* ── WATCHLIST & REPORT COMING SOON ── */
   .cs-wrap {
@@ -1163,7 +1170,7 @@
   .univ-count { font-size: 11px; color: var(--accent2); font-family: var(--font-mono); margin-left: auto; }
   .univ-seg { display: flex; background: var(--bg3); border-radius: 5px; padding: 2px; gap: 2px; border: 1px solid var(--border); }
   .univ-seg-btn { padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: 500; color: var(--muted2); border: none; background: none; font-family: var(--font-sans); transition: all 0.15s; }
-  .univ-seg-btn.active { background: var(--accent); color: #fff; }
+  .univ-seg-btn.active { background: var(--accent); color: var(--on-accent); }
   .univ-select { background: var(--bg3); border: 1px solid var(--border); color: var(--text); border-radius: 5px; padding: 4px 8px; font-size: 12px; font-family: var(--font-mono); cursor: pointer; outline: none; }
   .univ-scroll { flex: 1; overflow-y: auto; overflow-x: auto; scrollbar-width: thin; scrollbar-color: var(--border2) transparent; }
   .univ-scroll::-webkit-scrollbar { width: 5px; height: 5px; }
@@ -1183,16 +1190,16 @@
   .univ-table tbody tr:hover td { background: var(--card); }
   .univ-num { color: var(--muted); font-size: 11px; text-align: right; padding-right: 10px !important; }
   .univ-sym { font-weight: 600; color: var(--text); font-size: 13px; }
-  .cap-large { background: rgba(14,165,233,0.12); color: var(--accent); border: 1px solid rgba(14,165,233,0.25); border-radius: 3px; padding: 1px 6px; font-size: 9px; font-weight: 600; font-family: var(--font-sans); }
+  .cap-large { background: rgba(255,255,255,0.12); color: var(--accent); border: 1px solid rgba(255,255,255,0.25); border-radius: 3px; padding: 1px 6px; font-size: 9px; font-weight: 600; font-family: var(--font-sans); }
   .cap-mid   { background: rgba(167,139,250,0.12); color: var(--purple); border: 1px solid rgba(167,139,250,0.25); border-radius: 3px; padding: 1px 6px; font-size: 9px; font-weight: 600; font-family: var(--font-sans); }
   .cap-small { background: rgba(245,158,11,0.12); color: var(--amber); border: 1px solid rgba(245,158,11,0.25); border-radius: 3px; padding: 1px 6px; font-size: 9px; font-weight: 600; font-family: var(--font-sans); }
   .univ-load-btn {
-    background: var(--accent); color: #fff;
+    background: var(--accent); color: var(--on-accent);
     border: none; border-radius: 5px; padding: 5px 14px;
     font-size: 12px; font-weight: 600; cursor: pointer;
     font-family: var(--font-sans); transition: all 0.15s;
   }
-  .univ-load-btn:hover { background: #0284c7; }
+  .univ-load-btn:hover { background: var(--accent2); }
   .univ-action-btn { background: var(--bg3); border: 1px solid var(--border); color: var(--muted2); border-radius: 4px; padding: 2px 6px; font-size: 11px; cursor: pointer; transition: all 0.15s; margin-right: 3px; }
   .univ-action-btn:hover { border-color: var(--border2); color: var(--text); }
 
@@ -1234,14 +1241,14 @@
   .hol-table th { background:var(--bg3); color:var(--muted2); padding:8px 12px; text-align:left; border-bottom:1px solid var(--border); position:sticky;top:0; }
   .hol-table td { padding:7px 12px; border-bottom:1px solid var(--border); color:var(--text); }
   .hol-table tr:hover td { background:var(--bg3); }
-  .hol-today td { background: rgba(14,165,233,0.08) !important; color:var(--accent) !important; font-weight:600; }
+  .hol-today td { background: rgba(255,255,255,0.08) !important; color:var(--accent) !important; font-weight:600; }
   .hol-past td { color:var(--muted) !important; }
 
   /* ── Indices page ── */
   .indices-toolbar { padding:16px 20px 12px; }
   .idx-seg-bar { display:flex; gap:6px; }
   .idx-seg { background:var(--bg3); border:1px solid var(--border); border-radius:6px; padding:6px 16px; color:var(--muted2); font-size:12px; cursor:pointer; transition:.15s; }
-  .idx-seg.active { background:var(--accent); border-color:var(--accent); color:#fff; }
+  .idx-seg.active { background:var(--accent); border-color:var(--accent); color:var(--on-accent); }
   .idx-section-title { padding:0 20px 10px; font-size:11px; color:var(--muted); font-family:var(--font-mono); text-transform:uppercase; letter-spacing:1px; }
   .idx-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:10px; padding:0 20px 20px; }
   .idx-card { background:var(--card); border:1px solid var(--border); border-radius:8px; padding:12px 14px; cursor:pointer; transition:.15s; }
@@ -1266,30 +1273,30 @@
 <!-- TOPBAR -->
 
 <!-- WELCOME SCREEN -->
-<div id="wScreen" style="position:fixed;inset:0;z-index:9999;background:#080c14;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;">
+<div id="wScreen" style="position:fixed;inset:0;z-index:9999;background:#0a0c0f;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;">
   <!-- Brand block -->
-  <div style="display:flex;flex-direction:column;align-items:center;gap:10px;margin-bottom:8px;">
-    <!-- Pulse + Name row -->
-    <div style="display:flex;align-items:center;gap:14px;">
-      <div style="width:12px;height:12px;border-radius:50%;background:#10b981;box-shadow:0 0 12px #10b981;animation:livepulse 1.5s infinite;flex-shrink:0;"></div>
-      <span style="font-family:'JetBrains Mono',monospace;font-size:50px;font-weight:700;letter-spacing:4px;color:#22d3ee;text-shadow:0 0 40px rgba(34,211,238,0.7),0 0 80px rgba(34,211,238,0.3);">QUANT<span style="color:#f8fafc;text-shadow:0 0 20px rgba(248,250,252,0.4);">HUNT</span></span>
+  <div style="display:flex;flex-direction:column;align-items:center;gap:14px;margin-bottom:8px;">
+    <!-- Logo + Name row -->
+    <div style="display:flex;align-items:center;gap:16px;">
+      <picture><source srcset="/logo.webp" type="image/webp"><img src="/logo.png" alt="TaurEye" style="height:64px;width:auto;display:block;"></picture>
+      <span style="font-family:'Inter',sans-serif;font-size:52px;font-weight:700;letter-spacing:-0.02em;color:#e7eaef;">Taur<span style="color:#ffffff;">Eye</span></span>
     </div>
     <!-- Tagline -->
-    <div style="font-family:'Syne',sans-serif;font-size:12px;font-weight:600;color:#cbd5e1;letter-spacing:2px;text-align:center;line-height:1.6;text-shadow:0 0 20px rgba(203,213,225,0.3);">
-      Invest like a Bull &nbsp;·&nbsp; Sit like a Bear &nbsp;·&nbsp; Watch like an Eagle
+    <div style="font-family:'Inter',sans-serif;font-size:12px;font-weight:600;color:#9aa4b2;letter-spacing:2px;text-align:center;line-height:1.6;">
+      NSE · BSE &nbsp;·&nbsp; END-OF-DAY STOCK SCREENER
     </div>
     <!-- Subtext -->
   </div>
-  <div style="width:220px;height:2px;background:#1a2640;border-radius:1px;overflow:hidden;margin-top:6px;">
-    <div id="wBar" style="height:100%;width:0%;background:#0ea5e9;border-radius:1px;"></div>
+  <div style="width:220px;height:2px;background:#232a35;border-radius:1px;overflow:hidden;margin-top:6px;">
+    <div id="wBar" style="height:100%;width:0%;background:#ffffff;border-radius:1px;"></div>
   </div>
   <div id="wStatus" style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#4a6080;"></div>
 </div>
 
 <div class="topbar">
   <div class="logo">
-    <div class="logo-brand"><div class="logo-pulse"></div>QUANT<span class="logo-hunt">HUNT</span></div>
-    <div class="logo-tagline">Invest like a Bull · Sit like a Bear · Watch like an Eagle</div>
+    <div class="logo-brand"><picture><source srcset="/logo.webp" type="image/webp"><img class="logo-mark" src="/logo.png" alt="TaurEye"></picture><span class="logo-word">Taur<span class="logo-hunt">Eye</span></span></div>
+    <div class="logo-tagline">NSE · BSE · End-of-day stock screener</div>
   </div>
   <div class="topbar-center" id="tickerBar">
     <div class="ticker-chip" onclick="window.open('https://www.tradingview.com/chart/?symbol=NSE:NIFTY','_blank')" style="cursor:pointer;" title="Open NIFTY 50 chart">NIFTY 50 <span class="val" id="tcNifty">—</span><span id="tcNiftyChg" class="up"></span></div>
@@ -1455,7 +1462,7 @@
           <div class="ds-status idle" id="dsNSEStatus">
             <div class="ds-status-dot"></div><span>Idle</span>
           </div>
-          <button class="av-test-btn" onclick="testNSE(event)" style="border-color:rgba(14,165,233,0.4);color:var(--accent);width:100%;margin-top:8px;">Test Connection</button>
+          <button class="av-test-btn" onclick="testNSE(event)" style="border-color:rgba(255,255,255,0.4);color:var(--accent);width:100%;margin-top:8px;">Test Connection</button>
         </div>
       </div>
 
@@ -1498,7 +1505,7 @@
       <div class="tabs">
         <div class="tab active" data-page="pageUniverse" onclick="setTab(this)">Stock Universe</div>
         <div class="tab" data-page="pageResults" onclick="setTab(this)">Screener</div>
-        <div class="tab" data-page="pageTracklist" onclick="setTab(this)">Track List <span id="tlCount" style="background:var(--accent);color:#fff;border-radius:3px;padding:1px 6px;font-size:10px;margin-left:4px;display:none;">0</span></div>
+        <div class="tab" data-page="pageTracklist" onclick="setTab(this)">Track List <span id="tlCount" style="background:var(--accent);color:var(--on-accent);border-radius:3px;padding:1px 6px;font-size:10px;margin-left:4px;display:none;">0</span></div>
         <div class="tab" data-page="pageWatchlist" onclick="setTab(this)">Watchlist</div>
         <div class="tab" data-page="pageBacktest" onclick="setTab(this)">Backtest</div>
       </div>
@@ -1690,7 +1697,7 @@
             <span style="font-size:10px;color:#4a6080;">%</span>
           </div>
         </div>
-        <button onclick="runBacktest()" style="background:rgba(14,165,233,0.15);border:1px solid #0ea5e9;color:#0ea5e9;border-radius:6px;padding:7px 18px;font-size:13px;font-family:'JetBrains Mono',monospace;cursor:pointer;font-weight:700;">▶ Run Backtest</button>
+        <button onclick="runBacktest()" style="background:rgba(255,255,255,0.15);border:1px solid var(--accent);color:var(--accent);border-radius:6px;padding:7px 18px;font-size:13px;font-family:'JetBrains Mono',monospace;cursor:pointer;font-weight:700;">▶ Run Backtest</button>
       </div>
 
       <!-- Results area -->
@@ -2097,7 +2104,7 @@
 
   <!-- Modal topbar -->
   <div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:#0d1321;border-bottom:1px solid #1a2640;flex-shrink:0;overflow-x:auto;">
-    <button onclick="closeChart()" style="background:none;border:1px solid #1a2640;color:#7a95b8;border-radius:5px;padding:5px 12px;cursor:pointer;font-size:12px;font-family:'Syne',sans-serif;">✕ Close</button>
+    <button onclick="closeChart()" style="background:none;border:1px solid #1a2640;color:#7a95b8;border-radius:5px;padding:5px 12px;cursor:pointer;font-size:12px;font-family:'Inter',sans-serif;">✕ Close</button>
     <!-- Symbol search -->
     <div style="flex-shrink:0;">
       <input id="chartSymSearch" type="text" placeholder="Search symbol…" autocomplete="off"
@@ -2106,7 +2113,7 @@
         onfocus="_chartSymInput(this.value)" onblur="setTimeout(()=>{ document.getElementById('chartSymDrop').style.display='none'; },200)" />
     </div>
     <span id="chartSymLbl" style="font-family:'JetBrains Mono',monospace;font-size:18px;font-weight:700;color:#e2e8f0;"></span>
-    <span id="chartNameLbl" style="font-size:12px;color:#4a6080;font-family:'Syne',sans-serif;"></span>
+    <span id="chartNameLbl" style="font-size:12px;color:#4a6080;font-family:'Inter',sans-serif;"></span>
     <span id="chartPriceLbl" style="font-family:'JetBrains Mono',monospace;font-size:16px;font-weight:600;color:#10b981;margin-left:auto;"></span>
     <span id="chartChgLbl"  style="font-family:'JetBrains Mono',monospace;font-size:13px;"></span>
     <!-- Interval selector -->
@@ -2138,7 +2145,7 @@
     </div>
     <!-- Scan HVT button -->
     <button id="scanHvtBtn" onclick="_scanHVT()"
-      style="margin-left:8px;flex-shrink:0;background:#0d1b2e;border:1px solid #1a2640;color:#0ea5e9;border-radius:5px;padding:4px 11px;font-size:11px;font-family:'JetBrains Mono',monospace;cursor:pointer;white-space:nowrap;transition:all .15s;"
+      style="margin-left:8px;flex-shrink:0;background:#0d1b2e;border:1px solid #1a2640;color:var(--accent);border-radius:5px;padding:4px 11px;font-size:11px;font-family:'JetBrains Mono',monospace;cursor:pointer;white-space:nowrap;transition:all .15s;"
       title="Institutional High-Value Trade Scan">Scan HVT</button>
     <!-- Signals panel toggle -->
     <button id="signalBtn" onclick="_toggleSignalPanel()"
@@ -2197,11 +2204,11 @@
     </div>
     <!-- FVG settings bar -->
     <div id="fvgSettingsBar" style="display:none;align-items:center;gap:5px;margin-left:6px;flex-shrink:0;position:relative;">
-      <span style="color:#0ea5e9;font-weight:600;font-family:'JetBrains Mono',monospace;font-size:11px;padding:4px 8px;background:#0d1b2e;border:1px solid #1a2640;border-radius:5px;white-space:nowrap;">FVG</span>
-      <button id="fvgSettingsBtn" onclick="_toggleFvgSettings(event)" style="background:#0d1b2e;border:1px solid #1a2640;color:#0ea5e9;border-radius:5px;padding:3px 8px;cursor:pointer;font-size:13px;line-height:1;" title="FVG Settings">⚙</button>
+      <span style="color:var(--accent);font-weight:600;font-family:'JetBrains Mono',monospace;font-size:11px;padding:4px 8px;background:#0d1b2e;border:1px solid #1a2640;border-radius:5px;white-space:nowrap;">FVG</span>
+      <button id="fvgSettingsBtn" onclick="_toggleFvgSettings(event)" style="background:#0d1b2e;border:1px solid #1a2640;color:var(--accent);border-radius:5px;padding:3px 8px;cursor:pointer;font-size:13px;line-height:1;" title="FVG Settings">⚙</button>
       <div id="fvgSettingsPanel" style="display:none;position:fixed;z-index:9999;background:#0d1321;border:1px solid #243451;border-radius:8px;padding:14px 16px;width:260px;font-family:'JetBrains Mono',monospace;font-size:11px;color:#7a95b8;box-shadow:0 8px 32px rgba(0,0,0,0.65);">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
-          <span style="color:#0ea5e9;font-size:12px;font-weight:700;">FVG Settings</span>
+          <span style="color:var(--accent);font-size:12px;font-weight:700;">FVG Settings</span>
           <button onclick="document.getElementById('fvgSettingsPanel').style.display='none'" style="background:none;border:none;color:#4a6080;cursor:pointer;font-size:14px;line-height:1;padding:0 2px;">✕</button>
         </div>
         <div style="display:flex;flex-direction:column;gap:9px;">
@@ -2215,7 +2222,7 @@
           </label>
           <label style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
             <span>Fill % <span id="fvgFillPct" style="color:#e2e8f0;">15</span></span>
-            <input id="fvgFillAlpha" type="range" min="0" max="40" value="15" oninput="document.getElementById('fvgFillPct').textContent=this.value;_onFvgSettingChange()" style="width:90px;accent-color:#0ea5e9;">
+            <input id="fvgFillAlpha" type="range" min="0" max="40" value="15" oninput="document.getElementById('fvgFillPct').textContent=this.value;_onFvgSettingChange()" style="width:90px;accent-color:var(--accent);">
           </label>
           <label style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
             <span>Lookback</span>
@@ -2226,7 +2233,7 @@
             <input id="fvgMinGap" type="number" value="0" min="0" step="0.1" oninput="_onFvgSettingChange()" style="width:56px;background:#080c14;border:1px solid #1a2640;color:#e2e8f0;border-radius:3px;padding:2px 5px;font-size:11px;font-family:'JetBrains Mono',monospace;">
           </label>
           <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
-            <input id="fvgShowFilled" type="checkbox" onchange="_onFvgSettingChange()" style="accent-color:#0ea5e9;">
+            <input id="fvgShowFilled" type="checkbox" onchange="_onFvgSettingChange()" style="accent-color:var(--accent);">
             <span>Show filled gaps (dimmed)</span>
           </label>
         </div>
@@ -2243,7 +2250,7 @@
         <label style="display:flex;justify-content:space-between;align-items:center;">Crosshair<select id="chartCrosshair" style="background:#080c14;border:1px solid #1a2640;color:#e2e8f0;border-radius:3px;padding:2px 6px;font-family:'JetBrains Mono',monospace;font-size:11px;" onchange="_onChartSettingChange()"><option value="normal" selected>Normal</option><option value="magnet">Magnet</option></select></label>
       </div>
     </div>
-    <button onclick="openReportForChartSym()" style="background:rgba(14,165,233,0.1);border:1px solid rgba(14,165,233,0.3);color:var(--accent);border-radius:5px;padding:5px 12px;cursor:pointer;font-size:12px;font-family:'Syne',sans-serif;margin-left:8px;">📋 Report</button>
+    <button onclick="openReportForChartSym()" style="background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.3);color:var(--accent);border-radius:5px;padding:5px 12px;cursor:pointer;font-size:12px;font-family:'Inter',sans-serif;margin-left:8px;">📋 Report</button>
   </div>
 
   <!-- Chart area: flex row — charts | pattern sidebar -->
@@ -2303,7 +2310,7 @@
   transition:all .15s;
 }
 .ch-tf:hover { border-color:#243451;color:#7a95b8; }
-.ch-tf.active { background:rgba(14,165,233,0.15);border-color:#0ea5e9;color:#0ea5e9; }
+.ch-tf.active { background:rgba(255,255,255,0.15);border-color:var(--accent);color:var(--accent); }
 .ch-ind-row {
   display:flex;align-items:center;gap:8px;padding:7px 14px;cursor:pointer;color:#7a95b8;
   transition:background .12s;
@@ -2315,7 +2322,7 @@
   flex-shrink:0;transition:all .15s;
 }
 .ch-ind-row.active .ch-ind-dot { background:#a78bfa;border-color:#a78bfa; }
-#scanHvtBtn:hover:not(:disabled) { border-color:#0ea5e9;background:rgba(14,165,233,0.1); }
+#scanHvtBtn:hover:not(:disabled) { border-color:var(--accent);background:rgba(255,255,255,0.1); }
 #scanHvtBtn:disabled { opacity:0.55;cursor:not-allowed; }
 #scanHvtBtn.loading { color:#f59e0b;border-color:#f59e0b;animation:hvtPulse 1s ease-in-out infinite; }
 #scanHvtBtn.cooldown { color:#4a6080;border-color:#1a2640; }
@@ -2362,15 +2369,15 @@
 
     <!-- Sticky Top Bar -->
     <div style="position:sticky;top:0;z-index:20;background:rgba(5,9,16,0.97);border-bottom:1px solid #1a2640;padding:11px 0;display:flex;align-items:center;gap:10px;flex-wrap:wrap;backdrop-filter:blur(6px);">
-      <button onclick="closeReport()" style="background:none;border:1px solid #1a2640;color:#7a95b8;border-radius:5px;padding:5px 13px;cursor:pointer;font-size:12px;font-family:'Syne',sans-serif;flex-shrink:0;">✕ Close</button>
+      <button onclick="closeReport()" style="background:none;border:1px solid #1a2640;color:#7a95b8;border-radius:5px;padding:5px 13px;cursor:pointer;font-size:12px;font-family:'Inter',sans-serif;flex-shrink:0;">✕ Close</button>
       <span id="rptSym" style="font-family:'JetBrains Mono',monospace;font-size:20px;font-weight:800;color:#e2e8f0;letter-spacing:-0.5px;"></span>
       <span id="rptGradeBadge" style="display:none;font-size:11px;font-weight:700;border-radius:4px;padding:3px 9px;font-family:'JetBrains Mono',monospace;"></span>
       <span id="rptRecBadge"   style="display:none;font-size:11px;font-weight:700;border-radius:4px;padding:3px 9px;font-family:'JetBrains Mono',monospace;"></span>
       <span id="rptName" style="font-size:11px;color:#4a6080;flex:1;"></span>
       <span id="rptPrice" style="font-family:'JetBrains Mono',monospace;font-size:16px;font-weight:700;color:#10b981;"></span>
       <span id="rptChg"   style="font-size:12px;font-family:'JetBrains Mono',monospace;"></span>
-      <button id="rptChartBtn" onclick="_toggleRptChart()" style="background:rgba(167,139,250,0.1);border:1px solid rgba(167,139,250,0.35);color:#a78bfa;border-radius:5px;padding:5px 13px;cursor:pointer;font-size:12px;font-family:'Syne',sans-serif;flex-shrink:0;">📊 Chart</button>
-      <button onclick="window.print()" style="background:rgba(14,165,233,0.08);border:1px solid rgba(14,165,233,0.2);color:#0ea5e9;border-radius:5px;padding:5px 13px;cursor:pointer;font-size:11px;font-family:'Syne',sans-serif;flex-shrink:0;">⬇ PDF</button>
+      <button id="rptChartBtn" onclick="_toggleRptChart()" style="background:rgba(167,139,250,0.1);border:1px solid rgba(167,139,250,0.35);color:#a78bfa;border-radius:5px;padding:5px 13px;cursor:pointer;font-size:12px;font-family:'Inter',sans-serif;flex-shrink:0;">📊 Chart</button>
+      <button onclick="window.print()" style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.2);color:var(--accent);border-radius:5px;padding:5px 13px;cursor:pointer;font-size:11px;font-family:'Inter',sans-serif;flex-shrink:0;">⬇ PDF</button>
     </div>
 
     <!-- Tags + mcap row -->
@@ -2430,7 +2437,7 @@
 }
 .rpt-section-title {
   font-size:10px; color:#4a6080; text-transform:uppercase; letter-spacing:1.5px;
-  margin:24px 0 10px; padding-bottom:6px; border-bottom:1px solid #1a2640; font-family:'Syne',sans-serif;
+  margin:24px 0 10px; padding-bottom:6px; border-bottom:1px solid #1a2640; font-family:'Inter',sans-serif;
 }
 .rpt-card {
   background:#0b1320; border:1px solid #1a2640; border-radius:7px; padding:13px 15px;
@@ -2445,7 +2452,7 @@
 .rpt-table td { padding:9px 10px; border-bottom:1px solid #0d1929; text-align:right; color:#c4d4e8; }
 .rpt-table td:first-child { text-align:left; color:#7a95b8; }
 .rpt-table tr:last-child td { border-bottom:none; }
-.rpt-tag { border-radius:4px; padding:3px 9px; font-size:11px; font-family:'Syne',sans-serif; }
+.rpt-tag { border-radius:4px; padding:3px 9px; font-size:11px; font-family:'Inter',sans-serif; }
 .rpt-ma-row { display:flex; align-items:center; gap:8px; padding:7px 0; border-bottom:1px solid #0d1929; }
 .rpt-ma-row:last-child { border-bottom:none; }
 </style>
@@ -5183,7 +5190,7 @@ function toggleHeatmap() {
   _heatmapActive = !_heatmapActive;
 
   if (_heatmapActive) {
-    btn.style.cssText = 'background:var(--accent);color:#fff;border-color:var(--accent);';
+    btn.style.cssText = 'background:var(--accent);color:var(--on-accent);border-color:var(--accent);';
     btn.textContent   = '☰ Table';
     if (tableEl) tableEl.style.display = 'none';
     if (emptyEl) emptyEl.style.display = 'none';
@@ -6197,8 +6204,8 @@ function _buildCharts(candles) {
 
   // Bollinger Bands
   if (_chartInds.bb) {
-    const bbOpts = (style) => ({ color:'rgba(14,165,233,0.55)', lineWidth:1, priceLineVisible:false, lastValueVisible:false, crosshairMarkerVisible:false, ...(style||{}) });
-    const bbMOpts = { color:'rgba(14,165,233,0.85)', lineWidth:1, lineStyle:LW.LineStyle.Dashed, priceLineVisible:false, lastValueVisible:false, crosshairMarkerVisible:false };
+    const bbOpts = (style) => ({ color:'rgba(255,255,255,0.55)', lineWidth:1, priceLineVisible:false, lastValueVisible:false, crosshairMarkerVisible:false, ...(style||{}) });
+    const bbMOpts = { color:'rgba(255,255,255,0.85)', lineWidth:1, lineStyle:LW.LineStyle.Dashed, priceLineVisible:false, lastValueVisible:false, crosshairMarkerVisible:false };
     _addSegmentedLine(_lwMain, candles.filter(c => c.bb_upper != null).map(c => ({ time:c.t, value:c.bb_upper })), bbOpts());
     _addSegmentedLine(_lwMain, candles.filter(c => c.bb_mid   != null).map(c => ({ time:c.t, value:c.bb_mid   })), bbMOpts);
     _addSegmentedLine(_lwMain, candles.filter(c => c.bb_lower != null).map(c => ({ time:c.t, value:c.bb_lower })), bbOpts());
@@ -7574,7 +7581,7 @@ async function openReportModal(sym) {
 
     // Tags
     const tags = document.getElementById('rptTags');
-    if (d.sector)       tags.innerHTML += `<span class="rpt-tag" style="background:rgba(14,165,233,0.1);border:1px solid rgba(14,165,233,0.25);color:#0ea5e9;">${d.sector}</span>`;
+    if (d.sector)       tags.innerHTML += `<span class="rpt-tag" style="background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.25);color:var(--accent);">${d.sector}</span>`;
     if (d.industry)     tags.innerHTML += `<span class="rpt-tag" style="background:rgba(167,139,250,0.1);border:1px solid rgba(167,139,250,0.25);color:#a78bfa;">${d.industry}</span>`;
     if (d.market_cap_cat) tags.innerHTML += `<span class="rpt-tag" style="background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.2);color:#fbbf24;">${d.market_cap_cat}</span>`;
 
@@ -7843,7 +7850,7 @@ function _buildReportHTML(d, q) {
 
   // ── helpers ────────────────────────────────────────────────────────────────
   const sec = (title) => `<div style="display:flex;align-items:center;gap:10px;margin:26px 0 12px;">
-    <div style="font-size:9px;color:#3a5070;text-transform:uppercase;letter-spacing:2px;font-family:'Syne',sans-serif;white-space:nowrap;">${title}</div>
+    <div style="font-size:9px;color:#3a5070;text-transform:uppercase;letter-spacing:2px;font-family:'Inter',sans-serif;white-space:nowrap;">${title}</div>
     <div style="flex:1;height:1px;background:#0d1929;"></div>
   </div>`;
 
@@ -7853,7 +7860,7 @@ function _buildReportHTML(d, q) {
   </div>`;
 
   const tblHdr = (...cols) => `<div style="display:grid;grid-template-columns:${cols.map((_,i)=>i===0?'1.8fr':'1fr').join(' ')};background:#080f1a;padding:7px 12px;border-bottom:1px solid #0d1929;">
-    ${cols.map((c,i)=>`<div style="font-size:9px;color:#3a5070;text-transform:uppercase;letter-spacing:1.5px;font-family:'Syne',sans-serif;${i>0?'text-align:right;':''}">${c}</div>`).join('')}
+    ${cols.map((c,i)=>`<div style="font-size:9px;color:#3a5070;text-transform:uppercase;letter-spacing:1.5px;font-family:'Inter',sans-serif;${i>0?'text-align:right;':''}">${c}</div>`).join('')}
   </div>`;
 
   const tblRow = (cols, hl=false) => `<div style="display:grid;grid-template-columns:${cols.map((_,i)=>i===0?'1.8fr':'1fr').join(' ')};padding:8px 12px;border-bottom:1px solid #060d18;${hl?'background:rgba(167,139,250,0.04);':''}">
@@ -7975,7 +7982,7 @@ function _buildReportHTML(d, q) {
     <!-- Valuation -->
     <div style="background:#07101c;">
       <div style="padding:8px 14px;border-bottom:1px solid #0d1929;background:#080f1a;">
-        <span style="font-size:9px;color:#3a5070;text-transform:uppercase;letter-spacing:1.5px;font-family:'Syne',sans-serif;">Valuation</span>
+        <span style="font-size:9px;color:#3a5070;text-transform:uppercase;letter-spacing:1.5px;font-family:'Inter',sans-serif;">Valuation</span>
       </div>
       ${kv('P/E Ratio (TTM)',  d.pe    != null ? cr(d.pe,0,0) + 'x' : null)}
       ${kv('Forward P/E',      d.forward_pe != null ? xv(d.forward_pe) : null)}
@@ -7989,7 +7996,7 @@ function _buildReportHTML(d, q) {
     <!-- Profitability -->
     <div style="background:#07101c;">
       <div style="padding:8px 14px;border-bottom:1px solid #0d1929;background:#080f1a;">
-        <span style="font-size:9px;color:#3a5070;text-transform:uppercase;letter-spacing:1.5px;font-family:'Syne',sans-serif;">Profitability</span>
+        <span style="font-size:9px;color:#3a5070;text-transform:uppercase;letter-spacing:1.5px;font-family:'Inter',sans-serif;">Profitability</span>
       </div>
       ${kv('Return on Equity',   d.roe  != null ? cr(d.roe, 15, 8, '%') : null)}
       ${kv('Return on Assets',   d.roa  != null ? cr(d.roa, 8, 4, '%') : null)}
@@ -8005,7 +8012,7 @@ function _buildReportHTML(d, q) {
     <!-- Financial Health -->
     <div style="background:#07101c;">
       <div style="padding:8px 14px;border-bottom:1px solid #0d1929;background:#080f1a;">
-        <span style="font-size:9px;color:#3a5070;text-transform:uppercase;letter-spacing:1.5px;font-family:'Syne',sans-serif;">Financial Health</span>
+        <span style="font-size:9px;color:#3a5070;text-transform:uppercase;letter-spacing:1.5px;font-family:'Inter',sans-serif;">Financial Health</span>
       </div>
       ${kv('Debt / Equity',     d.debt_equity    != null ? cr(d.debt_equity, 0, 100, 'x') : null)}
       ${kv('Current Ratio',     d.current_ratio  != null ? cr(d.current_ratio, 2, 1, 'x') : null)}
@@ -8018,7 +8025,7 @@ function _buildReportHTML(d, q) {
     <!-- Cash Flow -->
     <div style="background:#07101c;">
       <div style="padding:8px 14px;border-bottom:1px solid #0d1929;background:#080f1a;">
-        <span style="font-size:9px;color:#3a5070;text-transform:uppercase;letter-spacing:1.5px;font-family:'Syne',sans-serif;">Cash Flow (₹ Cr)</span>
+        <span style="font-size:9px;color:#3a5070;text-transform:uppercase;letter-spacing:1.5px;font-family:'Inter',sans-serif;">Cash Flow (₹ Cr)</span>
       </div>
       ${cf.ocf   != null ? kv('Operating CF',    `<span style="color:${cf.ocf>=0?'#10b981':'#f43f5e'}">₹${N(cf.ocf)}</span>`) : ''}
       ${cf.fcf   != null ? kv('Free Cash Flow',  `<span style="color:${cf.fcf>=0?'#10b981':'#f43f5e'}">₹${N(cf.fcf)}</span>`) : ''}
@@ -8034,7 +8041,7 @@ function _buildReportHTML(d, q) {
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:1px;background:#0d1929;border:1px solid #0d1929;border-radius:6px;overflow:hidden;margin-bottom:4px;">
     <div style="background:#07101c;">
       <div style="padding:8px 14px;border-bottom:1px solid #0d1929;background:#080f1a;">
-        <span style="font-size:9px;color:#3a5070;text-transform:uppercase;letter-spacing:1.5px;font-family:'Syne',sans-serif;">Momentum & Trend</span>
+        <span style="font-size:9px;color:#3a5070;text-transform:uppercase;letter-spacing:1.5px;font-family:'Inter',sans-serif;">Momentum & Trend</span>
       </div>
       ${kv('Trend (MA alignment)', trendLabel)}
       ${rsi != null ? kv('RSI (14)', `<span style="color:${rsiColor};">${rsi.toFixed(0)} — ${rsiLabel}</span>`) : ''}
@@ -8045,7 +8052,7 @@ function _buildReportHTML(d, q) {
     </div>
     <div style="background:#07101c;">
       <div style="padding:8px 14px;border-bottom:1px solid #0d1929;background:#080f1a;">
-        <span style="font-size:9px;color:#3a5070;text-transform:uppercase;letter-spacing:1.5px;font-family:'Syne',sans-serif;">Risk & Levels</span>
+        <span style="font-size:9px;color:#3a5070;text-transform:uppercase;letter-spacing:1.5px;font-family:'Inter',sans-serif;">Risk & Levels</span>
       </div>
       ${t.volatility != null ? kv('Volatility (Ann.)', `<span style="color:${t.volatility<20?'#10b981':t.volatility>40?'#f43f5e':'#f59e0b'}">${t.volatility.toFixed(1)}%</span>`) : ''}
       ${t.sharpe != null ? kv('Sharpe Ratio (1Y)', `<span style="color:${t.sharpe>1?'#10b981':t.sharpe<0?'#f43f5e':'#f59e0b'}">${t.sharpe.toFixed(2)}</span>`) : ''}
@@ -8060,7 +8067,7 @@ function _buildReportHTML(d, q) {
   ${t.fibs ? `
   <div style="background:#07101c;border:1px solid #0d1929;border-radius:6px;overflow:hidden;margin-bottom:4px;">
     <div style="padding:8px 14px;border-bottom:1px solid #0d1929;background:#080f1a;">
-      <span style="font-size:9px;color:#3a5070;text-transform:uppercase;letter-spacing:1.5px;font-family:'Syne',sans-serif;">Fibonacci Retracements (52-Week Range)</span>
+      <span style="font-size:9px;color:#3a5070;text-transform:uppercase;letter-spacing:1.5px;font-family:'Inter',sans-serif;">Fibonacci Retracements (52-Week Range)</span>
     </div>
     <div style="display:flex;flex-wrap:wrap;gap:0;">
       ${Object.entries(t.fibs).map(([label, price]) => {
