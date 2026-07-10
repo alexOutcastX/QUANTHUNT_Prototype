@@ -1,0 +1,24 @@
+# systemd unit for the QuantHunt gunicorn service.
+# setup-vm.sh installs this to /etc/systemd/system/quanthunt.service and
+# substitutes __DEPLOY_USER__ with the deploy user (opc / ubuntu).
+#
+# Binds 127.0.0.1 only — the app is never exposed directly; nginx (port 80/443)
+# is the sole public entry point and reverse-proxies to it.
+[Unit]
+Description=QuantHunt screener (gunicorn)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=__DEPLOY_USER__
+WorkingDirectory=/opt/quanthunt
+Environment=PORT=5000
+# One worker, many threads: the universe/price caches are per-process in memory,
+# so multiple workers would each re-fetch from NSE and defeat the 6-hour cache.
+ExecStart=/opt/quanthunt/venv/bin/gunicorn --bind 127.0.0.1:5000 --workers 1 --threads 8 --timeout 120 wsgi:app
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

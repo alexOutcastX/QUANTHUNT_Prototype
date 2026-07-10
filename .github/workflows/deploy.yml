@@ -1,0 +1,58 @@
+name: Deploy to VM
+
+# LIVE-BACKEND hosting model (mirrors TaurEye's push-to-deploy, adapted for a
+# resident service):
+#   edit locally -> push -> GitHub rsyncs the app to /opt/quanthunt on the VM,
+#   installs any new deps, and restarts the gunicorn service that nginx proxies
+#   to. nginx itself is only reloaded (config rarely changes).
+#
+# Requires these repo secrets (Settings -> Secrets and variables -> Actions):
+#   VM_HOST     the VM's host/IP
+#   VM_USER     the deploy user (opc / ubuntu) — needs passwordless sudo (Oracle
+#               default users have it) for systemctl restart/reload
+#   VM_SSH_KEY  the PRIVATE deploy key whose public half is in the VM's
+#               ~/.ssh/authorized_keys
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
+  workflow_dispatch: {}
+
+concurrency:
+  group: deploy-vm
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure SSH
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.VM_SSH_KEY }}" > ~/.ssh/id_deploy
+          chmod 600 ~/.ssh/id_deploy
+          ssh-keyscan -H "${{ secrets.VM_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Rsync app + restart service
+        env:
+          U: ${{ secrets.VM_USER }}
+          H: ${{ secrets.VM_HOST }}
+          APP: /opt/quanthunt
+        run: |
+          ssh -i ~/.ssh/id_deploy "$U@$H" "mkdir -p $APP"
+          # Ship the app, but never delete the server-side venv or local env file.
+          rsync -az --delete \
+            --exclude venv --exclude .git --exclude node_modules \
+            --exclude '__pycache__' --exclude '.env' \
+            -e "ssh -i ~/.ssh/id_deploy" ./ "$U@$H:$APP/"
+          # Install any new deps, then restart gunicorn and reload nginx.
+          ssh -i ~/.ssh/id_deploy "$U@$H" "\
+            $APP/venv/bin/pip install -q -r $APP/requirements.txt gunicorn && \
+            sudo systemctl restart quanthunt && \
+            (sudo restorecon -R $APP 2>/dev/null || true) && \
+            sudo systemctl reload nginx"
