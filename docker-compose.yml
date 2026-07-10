@@ -1,0 +1,21 @@
+# QuantHunt backend on a cloud host (e.g. Oracle Always-Free).
+#   docker compose up -d --build
+#
+# The app fetches live NSE / yfinance data on demand (6-hour in-memory cache),
+# so there is NO database to mount or keep in sync — the container is stateless
+# between restarts.
+services:
+  web:
+    build: .
+    image: quanthunt
+    container_name: quanthunt
+    restart: always
+    ports:
+      - "5000:5000"
+    environment:
+      PORT: 5000
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:5000/ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5

@@ -1,0 +1,13 @@
+# Keep the build context small and reproducible.
+venv/
+.git/
+.gitignore
+__pycache__/
+*.pyc
+*.pyo
+node_modules/
+build/
+dist/
+*.spec
+.env
+*.log
