@@ -4,11 +4,12 @@
   "description": "QuantHunt stock screener prototype - Flask backend + single-file HTML UI",
   "private": true,
   "scripts": {
-    "setup": "python -m venv venv && npm run setup:deps",
-    "setup:deps": "venv/Scripts/python -m pip install --upgrade pip && venv/Scripts/pip install -r requirements.txt",
-    "start": "venv/Scripts/python server.py",
+    "setup": "python3 -m venv venv && venv/bin/python -m pip install --upgrade pip && venv/bin/pip install -r requirements.txt",
+    "setup:win": "python -m venv venv && venv\\Scripts\\python -m pip install --upgrade pip && venv\\Scripts\\pip install -r requirements.txt",
+    "start": "venv/bin/python server.py",
+    "start:win": "venv\\Scripts\\python server.py",
     "start:global": "python server.py",
-    "build:exe": "venv/Scripts/pip install pyinstaller && venv/Scripts/pyinstaller quanthunt.spec"
+    "build:exe": "venv\\Scripts\\pip install pyinstaller && venv\\Scripts\\pyinstaller quanthunt.spec"
   },
   "repository": {
     "type": "git",
