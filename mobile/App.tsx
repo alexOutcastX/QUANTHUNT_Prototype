@@ -6,7 +6,9 @@ import { Text } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { api } from './src/api';
 import AnalysisScreen from './src/screens/AnalysisScreen';
+import CalculatorScreen from './src/screens/CalculatorScreen';
 import ChartScreen from './src/screens/ChartScreen';
+import PortfolioScreen from './src/screens/PortfolioScreen';
 import ScreenerScreen from './src/screens/ScreenerScreen';
 import TradingViewScreen from './src/screens/TradingViewScreen';
 import WatchlistScreen from './src/screens/WatchlistScreen';
@@ -62,13 +64,17 @@ export default function App() {
             tabBarStyle: { backgroundColor: theme.surface, borderTopColor: theme.border },
             tabBarActiveTintColor: theme.accent,
             tabBarInactiveTintColor: theme.muted,
+            tabBarLabelStyle: { fontSize: 9 },
+            tabBarItemStyle: { paddingHorizontal: 0 },
           }}
         >
           <Tab.Screen name="Screener" component={ScreenerScreen} options={{ tabBarIcon: icon('#') }} />
           <Tab.Screen name="Chart" component={ChartScreen} options={{ tabBarIcon: icon('~') }} />
           <Tab.Screen name="Analysis" component={AnalysisScreen} options={{ tabBarIcon: icon('%') }} />
-          <Tab.Screen name="TradingView" component={TradingViewScreen} options={{ tabBarIcon: icon('TV'), title: 'TradingView' }} />
-          <Tab.Screen name="Watchlist" component={WatchlistScreen} options={{ tabBarIcon: icon('*') }} />
+          <Tab.Screen name="TradingView" component={TradingViewScreen} options={{ tabBarIcon: icon('TV'), title: 'TView' }} />
+          <Tab.Screen name="Portfolio" component={PortfolioScreen} options={{ tabBarIcon: icon('Pf') }} />
+          <Tab.Screen name="Watchlist" component={WatchlistScreen} options={{ tabBarIcon: icon('*'), title: 'Watch' }} />
+          <Tab.Screen name="Calculator" component={CalculatorScreen} options={{ tabBarIcon: icon('='), title: 'Calc' }} />
         </Tab.Navigator>
       </NavigationContainer>
     </SafeAreaProvider>
