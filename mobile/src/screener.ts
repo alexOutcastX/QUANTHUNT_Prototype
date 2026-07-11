@@ -205,10 +205,20 @@ export function applyFilters(rows: Row[], active: ActiveFilters): Row[] {
   );
 }
 
+const FUND_SORT = new Set([
+  'pe', 'forward_pe', 'pb', 'eps', 'dividend_yield', 'roe', 'roce',
+  'debt_equity', 'current_ratio', 'market_cap_cr',
+]);
+
 export function getSortVal(s: Row, col: string): number | string {
   if (col === 'signal' || col === 'strength') return SIGNAL_ORDER[calcSignal(s)];
   if (col === 'sym') return s.sym;
   if (col === 'relvol') return s.avgvol && s.volume ? s.volume / s.avgvol : 0;
+  if (FUND_SORT.has(col)) {
+    const v = s._fund ? (s._fund as Record<string, unknown>)[col] : null;
+    // missing fundamentals sort to the bottom either way (large finite sentinel)
+    return typeof v === 'number' && isFinite(v) ? v : -1e15;
+  }
   const v = (s as unknown as Record<string, unknown>)[col];
   return typeof v === 'number' && isFinite(v) ? v : 0;
 }

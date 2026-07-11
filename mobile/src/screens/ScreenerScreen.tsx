@@ -29,7 +29,6 @@ import {
   TE_GROUPS,
   applyFilters,
   calcSignal,
-  hasFundFilter,
   sortRows,
 } from '../screener';
 import { TrackDir, TrackEntry, addTrack, loadTrack, removeTrack } from '../tracklist';
@@ -54,6 +53,18 @@ const fmtVol = (v: number | null | undefined) => {
   return String(Math.round(v));
 };
 const n1 = (v: number | null | undefined) => (v == null || !isFinite(v) ? '—' : v.toFixed(1));
+// Market cap arrives in ₹ crore; compact to L (lakh cr) / K (thousand cr).
+const fmtMcap = (v: number | null | undefined) => {
+  if (v == null || !isFinite(v)) return '—';
+  if (v >= 1e5) return (v / 1e5).toFixed(2) + 'L';
+  if (v >= 1e3) return (v / 1e3).toFixed(1) + 'K';
+  return v.toFixed(0);
+};
+const fnum2 = (r: Row, k: string, d = 1): string => {
+  const f = r._fund as Record<string, unknown> | null | undefined;
+  const v = f ? f[k] : null;
+  return typeof v === 'number' && isFinite(v) ? v.toFixed(d) : '—';
+};
 
 type Col = {
   key: string;
@@ -104,6 +115,14 @@ const COLS: Col[] = [
       </View>
     ),
   },
+  // Fundamentals (bulk-cached server-side; stream in shortly after load)
+  { key: 'market_cap_cr', label: 'MCap(cr)', w: 66, render: (r) => <Text style={styles.cell}>{fmtMcap((r._fund as { market_cap_cr?: number } | null)?.market_cap_cr)}</Text> },
+  { key: 'pe', label: 'P/E', w: 52, render: (r) => <Text style={styles.cell}>{fnum2(r, 'pe')}</Text> },
+  { key: 'pb', label: 'P/B', w: 48, render: (r) => <Text style={styles.cell}>{fnum2(r, 'pb')}</Text> },
+  { key: 'roe', label: 'ROE%', w: 52, render: (r) => <Text style={styles.cell}>{fnum2(r, 'roe')}</Text> },
+  { key: 'roce', label: 'ROCE%', w: 56, render: (r) => <Text style={styles.cell}>{fnum2(r, 'roce')}</Text> },
+  { key: 'debt_equity', label: 'D/E', w: 46, render: (r) => <Text style={styles.cell}>{fnum2(r, 'debt_equity', 2)}</Text> },
+  { key: 'dividend_yield', label: 'Div%', w: 48, render: (r) => <Text style={styles.cell}>{fnum2(r, 'dividend_yield')}</Text> },
   { key: 'signal', label: 'Signal', w: 64, render: (r) => { const s = calcSignal(r); return <Text style={[styles.cell, styles.sig, { color: sigColor(s) }]}>{s.toUpperCase()}</Text>; } },
 ];
 const TABLE_W = COLS.reduce((a, c) => a + c.w, 0) + 120; // + track column
@@ -244,13 +263,14 @@ export default function ScreenerScreen() {
     loadTrack().then(setTrack);
   }, []);
 
-  // Fetch fundamentals when a fundamental filter is active. /fundamentals/bulk
-  // returns cached rows immediately plus a `pending` list still warming server-
-  // side — poll until pending drains (bounded) so warming stocks aren't
-  // silently excluded by strict fundamental filters forever.
+  // Fetch fundamentals for every loaded index (they now feed table columns,
+  // not just filters). /fundamentals/bulk returns cached rows immediately plus
+  // a `pending` list still warming server-side — poll until pending drains
+  // (bounded) so warming stocks aren't stuck at '—' or silently excluded by
+  // strict fundamental filters.
   const fundPolling = React.useRef(false);
   useEffect(() => {
-    if (!hasFundFilter(active) || fundPolling.current) return;
+    if (fundPolling.current) return;
     const missing = rows.filter((r) => r._fund === undefined).map((r) => r.sym);
     if (!missing.length) return;
     fundPolling.current = true;

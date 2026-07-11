@@ -45,8 +45,21 @@ const FIELDS: { header: string; get: (r: Row) => unknown }[] = [
   { header: 'New52wHigh', get: (r) => r.new_high_52w },
   { header: 'New52wLow', get: (r) => r.new_low_52w },
   { header: 'VolumeSpike', get: (r) => r.volume_spike },
+  { header: 'MktCap(cr)', get: (r) => fund(r, 'market_cap_cr') },
+  { header: 'P/E', get: (r) => fund(r, 'pe') },
+  { header: 'P/B', get: (r) => fund(r, 'pb') },
+  { header: 'ROE%', get: (r) => fund(r, 'roe') },
+  { header: 'ROCE%', get: (r) => fund(r, 'roce') },
+  { header: 'D/E', get: (r) => fund(r, 'debt_equity') },
+  { header: 'DivYield%', get: (r) => fund(r, 'dividend_yield') },
+  { header: 'Sector', get: (r) => fund(r, 'sector') },
   { header: 'Signal', get: (r) => calcSignal(r).toUpperCase() },
 ];
+
+function fund(r: Row, k: string): unknown {
+  const f = r._fund as Record<string, unknown> | null | undefined;
+  return f ? f[k] : null;
+}
 
 const cell = (v: unknown): string => {
   if (v == null) return '';

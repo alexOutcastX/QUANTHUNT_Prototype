@@ -33,12 +33,19 @@ const SCREEN_BY_KEY: Record<string, Screen> = {
   calc: () => <CalculatorScreen />,
 };
 
-const SIDEBAR: { title: string; items: { k: string; label: string; glyph: string }[] }[] = [
-  { title: 'Markets', items: [{ k: 'screener', label: 'Screener', glyph: '#' }, { k: 'universe', label: 'Universe', glyph: '◈' }] },
-  { title: 'Analyze', items: [{ k: 'inst', label: 'Institutional', glyph: '%' }, { k: 'backtest', label: 'Backtest', glyph: '▶' }] },
-  { title: 'Charts', items: [{ k: 'chart', label: 'Chart', glyph: '~' }, { k: 'tv', label: 'TradingView', glyph: 'TV' }] },
-  { title: 'Lists', items: [{ k: 'track', label: 'Track List', glyph: '★' }, { k: 'portfolio', label: 'Portfolio', glyph: 'Pf' }, { k: 'watchlist', label: 'Watchlist', glyph: '☆' }] },
-  { title: 'Tools', items: [{ k: 'calc', label: 'Calculator', glyph: '=' }] },
+// Desktop pages bar: every destination flat in one horizontal row, in the
+// order of the old sidebar groups.
+const PAGES: { k: string; label: string; glyph: string }[] = [
+  { k: 'screener', label: 'Screener', glyph: '#' },
+  { k: 'universe', label: 'Universe', glyph: '◈' },
+  { k: 'inst', label: 'Institutional', glyph: '%' },
+  { k: 'backtest', label: 'Backtest', glyph: '▶' },
+  { k: 'chart', label: 'Chart', glyph: '~' },
+  { k: 'tv', label: 'TradingView', glyph: 'TV' },
+  { k: 'track', label: 'Track List', glyph: '★' },
+  { k: 'portfolio', label: 'Portfolio', glyph: 'Pf' },
+  { k: 'watchlist', label: 'Watchlist', glyph: '☆' },
+  { k: 'calc', label: 'Calculator', glyph: '=' },
 ];
 
 const TABS: { k: string; label: string; glyph: string; render: () => React.ReactElement }[] = [
@@ -66,36 +73,31 @@ function useVersion() {
   return version;
 }
 
-// ── Desktop: persistent left sidebar + main content ──────────────────────────
+// ── Desktop: branding bar on top, pages bar below it, full-width content ─────
 function DesktopShell({ version }: { version: string }) {
   const [active, setActive] = useState('screener');
   const Cur = SCREEN_BY_KEY[active] || SCREEN_BY_KEY.screener;
   return (
     <View style={styles.desktop}>
-      <View style={styles.sidebar}>
-        <View style={styles.brandBox}>
-          <Brand version={version} big />
-          <Text style={styles.tagline}>NSE · BSE Live Screener</Text>
-        </View>
-        <ScrollView showsVerticalScrollIndicator={false} style={styles.navScroll}>
-          {SIDEBAR.map((section) => (
-            <View key={section.title} style={styles.section}>
-              <Text style={styles.sectionTitle}>{section.title}</Text>
-              {section.items.map((it) => {
-                const on = active === it.k;
-                return (
-                  <TouchableOpacity
-                    key={it.k}
-                    style={[styles.navItem, on && styles.navItemOn]}
-                    onPress={() => setActive(it.k)}
-                  >
-                    <Text style={[styles.navGlyph, on && styles.navTextOn]}>{it.glyph}</Text>
-                    <Text style={[styles.navLabel, on && styles.navTextOn]}>{it.label}</Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          ))}
+      <View style={styles.brandBar}>
+        <Brand version={version} big />
+        <Text style={styles.tagline}>NSE · BSE Live Screener</Text>
+      </View>
+      <View style={styles.pagesBar}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pagesRow}>
+          {PAGES.map((it) => {
+            const on = active === it.k;
+            return (
+              <TouchableOpacity
+                key={it.k}
+                style={[styles.pageItem, on && styles.pageItemOn]}
+                onPress={() => setActive(it.k)}
+              >
+                <Text style={[styles.pageGlyph, on && styles.pageTextOn]}>{it.glyph}</Text>
+                <Text style={[styles.pageLabel, on && styles.pageTextOn]}>{it.label}</Text>
+              </TouchableOpacity>
+            );
+          })}
         </ScrollView>
       </View>
       <View style={styles.main}>
@@ -137,20 +139,34 @@ export default function Shell() {
   return isDesktop ? <DesktopShell version={version} /> : <MobileShell version={version} />;
 }
 
-const SIDEBAR_W = 232;
 const styles = StyleSheet.create({
-  desktop: { flex: 1, flexDirection: 'row', backgroundColor: theme.bg },
-  sidebar: { width: SIDEBAR_W, backgroundColor: theme.surface, borderRightColor: theme.border, borderRightWidth: 1 },
-  brandBox: { paddingHorizontal: 18, paddingVertical: 18, borderBottomColor: theme.border, borderBottomWidth: 1 },
-  tagline: { color: theme.muted, fontSize: 10, fontFamily: theme.mono, marginTop: 4 },
-  navScroll: { flex: 1 },
-  section: { paddingTop: 14, paddingHorizontal: 10 },
-  sectionTitle: { color: theme.muted, fontSize: 10, fontFamily: theme.mono, textTransform: 'uppercase', letterSpacing: 1, paddingHorizontal: 8, marginBottom: 4 },
-  navItem: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10, paddingHorizontal: 12, borderRadius: 8 },
-  navItemOn: { backgroundColor: theme.surface2 },
-  navGlyph: { color: theme.muted2, fontSize: 14, fontWeight: '700', width: 22, textAlign: 'center' },
-  navLabel: { color: theme.muted2, fontSize: 14, fontWeight: '600' },
-  navTextOn: { color: theme.accent },
+  desktop: { flex: 1, backgroundColor: theme.bg },
+  brandBar: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 14,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    backgroundColor: theme.surface,
+    borderBottomColor: theme.border,
+    borderBottomWidth: 1,
+  },
+  tagline: { color: theme.muted, fontSize: 10, fontFamily: theme.mono },
+  pagesBar: { backgroundColor: theme.surface, borderBottomColor: theme.border, borderBottomWidth: 1 },
+  pagesRow: { paddingHorizontal: 10, gap: 2 },
+  pageItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
+  },
+  pageItemOn: { borderBottomColor: theme.accent, backgroundColor: theme.surface2 },
+  pageGlyph: { color: theme.muted2, fontSize: 12, fontWeight: '700' },
+  pageLabel: { color: theme.muted2, fontSize: 13, fontWeight: '600' },
+  pageTextOn: { color: theme.accent },
   main: { flex: 1, backgroundColor: theme.bg },
 
   mobile: { flex: 1, backgroundColor: theme.bg },
