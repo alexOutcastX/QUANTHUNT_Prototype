@@ -209,7 +209,7 @@ function Meta({ label, value }: { label: string; value: string }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.bg },
-  content: { padding: 16, paddingBottom: 48 },
+  content: { padding: 16, paddingBottom: 48, width: '100%', maxWidth: 760, alignSelf: 'center' },
   h1: { color: theme.text, fontSize: 18, fontWeight: '700' },
   sub: { color: theme.muted, fontSize: 12, marginTop: 4, marginBottom: 16, lineHeight: 17 },
   inputs: { flexDirection: 'row', gap: 10 },

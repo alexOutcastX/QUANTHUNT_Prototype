@@ -319,7 +319,7 @@ function StatCard({ label, value, color }: { label: string; value: string; color
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.bg },
-  content: { padding: 16, paddingBottom: 48 },
+  content: { padding: 16, paddingBottom: 48, width: '100%', maxWidth: 820, alignSelf: 'center' },
   h1: { color: theme.text, fontSize: 18, fontWeight: '700', marginBottom: 12 },
   lbl: { color: theme.muted2, fontSize: 11, fontFamily: theme.mono, marginTop: 14, marginBottom: 5 },
   lblSm: { color: theme.muted2, fontSize: 10, fontFamily: theme.mono, marginBottom: 4 },

@@ -206,7 +206,7 @@ const styles = StyleSheet.create({
   segBtnActive: { backgroundColor: theme.accent, borderColor: theme.accent },
   segText: { color: theme.muted2, fontFamily: theme.mono, fontSize: 12 },
   segTextActive: { color: theme.bg, fontWeight: '700' },
-  content: { padding: 16, paddingBottom: 48 },
+  content: { padding: 16, paddingBottom: 48, width: '100%', maxWidth: 620, alignSelf: 'center' },
   blurb: { color: theme.muted, fontSize: 12, lineHeight: 17, marginBottom: 16 },
   field: { marginBottom: 14 },
   label: { color: theme.muted2, fontSize: 11, fontFamily: theme.mono, marginBottom: 5 },
