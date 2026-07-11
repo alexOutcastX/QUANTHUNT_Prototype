@@ -91,10 +91,17 @@ tab via **Run workflow**.)
 
 ---
 
-## Optional: EODHD fundamentals (faster fundamental screening)
-The screener's fundamental filters work out of the box using yfinance, but you can
-plug in **EODHD** (https://eodhd.com) for fundamentals that load reliably from a
-datacenter IP. On the VM:
+## Fundamentals data sources
+Fundamental filters work out of the box — by default they scrape **screener.in**
+(India-native ratios: P/E, P/B, ROE, ROCE, dividend yield, market cap), falling
+back to **yfinance**. Results are cached server-side for 7 days, so scraping stays
+light (each symbol ~once/week). Override the order with the `FUND_SOURCE` env var
+(`screener` | `yfinance` | `eodhd` | a comma list); default `auto` =
+`[eodhd if key] → screener → yfinance`.
+
+### Optional: EODHD (licensed fundamentals)
+You can plug in **EODHD** (https://eodhd.com) for richer, licensed fundamentals
+that load reliably from a datacenter IP. On the VM:
 ```bash
 echo "EODHD_API_KEY=your_key_here" >> /opt/quanthunt/.env
 bash /opt/quanthunt/deploy/setup-vm.sh   # refreshes the systemd unit so it reads .env

@@ -19,6 +19,9 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 
 EODHD_KEY = (os.environ.get("EODHD_API_KEY") or "").strip()
+# Provider order. 'auto' = [eodhd if key] -> screener.in -> yfinance. Override with
+# FUND_SOURCE (e.g. "screener", "yfinance", "screener,yfinance", "eodhd").
+FUND_SOURCE = (os.environ.get("FUND_SOURCE") or "auto").strip().lower()
 TTL = int(os.environ.get("FUND_TTL_SEC", str(7 * 24 * 3600)))   # fundamentals move slowly → 7 days
 _DIR = os.path.dirname(os.path.abspath(__file__))
 _FILE = os.path.join(_DIR, "fund_cache.json")
@@ -133,19 +136,107 @@ def _fetch_yf(sym: str):
     return _map_yf(info) if info else None
 
 
+# ---------- screener.in scraper ----------
+_SCR_UA = {
+    "User-Agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                   "(KHTML, like Gecko) Chrome/124.0 Safari/537.36"),
+    "Accept-Language": "en-US,en;q=0.9",
+}
+
+
+def _snum(s):
+    """Parse a screener.in figure like '17,87,234' / '₹ 1,320' / '22.5 %' → float."""
+    if s is None:
+        return None
+    s = str(s).replace(",", "").replace("₹", "").replace("%", "").strip()
+    try:
+        return float(s)
+    except ValueError:
+        return None
+
+
+def _parse_screener(html: str) -> dict | None:
+    """Parse the #top-ratios box on a screener.in company page into our schema.
+    Kept separate from the HTTP fetch so it can be unit-tested offline."""
+    from bs4 import BeautifulSoup
+    soup = BeautifulSoup(html, "html.parser")
+    ul = soup.find(id="top-ratios")
+    if not ul:
+        return None
+    ratios: dict = {}
+    for li in ul.find_all("li"):
+        name_el = li.find(class_="name")
+        if not name_el:
+            continue
+        name = name_el.get_text(" ", strip=True).lower()
+        val_el = li.find(class_="value") or li
+        nums = [_snum(n.get_text()) for n in val_el.find_all(class_="number")]
+        ratios[name] = [n for n in nums if n is not None]
+
+    def first(key):
+        v = ratios.get(key)
+        return v[0] if v else None
+
+    pe = first("stock p/e")
+    price = first("current price")
+    book = first("book value")
+    return {
+        "pe": pe,
+        "forward_pe": None,
+        "pb": round(price / book, 2) if price and book else None,
+        "eps": round(price / pe, 2) if price and pe else None,
+        "dividend_yield": first("dividend yield"),
+        "roe": first("roe"),
+        "roce": first("roce"),
+        "debt_equity": None,        # not in the top-ratios box (yfinance has it)
+        "current_ratio": None,
+        "market_cap_cr": first("market cap"),
+        "sector": None,
+        "industry": None,
+        "source": "screener.in",
+    }
+
+
+def _fetch_screener(sym: str):
+    import requests
+    for path in (f"/company/{sym}/", f"/company/{sym}/consolidated/"):
+        try:
+            r = requests.get("https://www.screener.in" + path, timeout=25, headers=_SCR_UA)
+        except Exception:
+            continue
+        if r.status_code == 200 and 'id="top-ratios"' in r.text:
+            data = _parse_screener(r.text)
+            if data and (data.get("pe") or data.get("market_cap_cr") or data.get("roe")):
+                return data
+    return None
+
+
+_FETCHERS = {"eodhd": _fetch_eodhd, "screener": _fetch_screener, "yfinance": _fetch_yf}
+
+
+def _provider_chain() -> list:
+    if FUND_SOURCE and FUND_SOURCE != "auto":
+        return [p.strip() for p in FUND_SOURCE.split(",") if p.strip() in _FETCHERS]
+    chain = []
+    if EODHD_KEY:
+        chain.append("eodhd")
+    chain += ["screener", "yfinance"]
+    return chain
+
+
 def _fetch_one(sym: str) -> None:
     global _dirty
     data = None
-    if EODHD_KEY:
+    for prov in _provider_chain():
+        fn = _FETCHERS.get(prov)
+        if not fn:
+            continue
         try:
-            data = _fetch_eodhd(sym)
+            data = fn(sym)
         except Exception:
             data = None
-    if data is None:
-        try:
-            data = _fetch_yf(sym)
-        except Exception:
-            data = None
+        if data:
+            break
     with _lock:
         _cache[sym] = {"data": data or {}, "ts": time.time()}
         _inflight.discard(sym)
