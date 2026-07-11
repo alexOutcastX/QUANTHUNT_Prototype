@@ -76,6 +76,13 @@ feature/* ──PR──▶ main (CI, integration; does NOT deploy)
 
 Canonical per-version notes are in **[CHANGELOG.md](CHANGELOG.md)**. Summary:
 
+### v2.2.0 — easy filter selection
+
+| Area | Change |
+|---|---|
+| Screener | 15 one-tap **preset scans** (stackable chips, taureye-style) |
+| Screener | **Plain-English screener** — "rsi below 30 and above 200 dma" → filters, offline parser with live feedback |
+
 ### v2.1.0 — screener parity & polish
 
 | Area | Change |

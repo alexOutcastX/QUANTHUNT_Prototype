@@ -17,6 +17,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { api } from '../api';
 import StockDetail from '../components/StockDetail';
 import { exportCsv } from '../csv';
+import { parseNL } from '../nlScreen';
+import { PRESETS, presetActive, togglePreset } from '../presets';
 import {
   ActiveFilters,
   FILTER_DEFS,
@@ -397,6 +399,21 @@ export default function ScreenerScreen() {
             </TouchableOpacity>
           ))}
         </ScrollView>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.presetRow}>
+          <Text style={styles.presetLabel}>Scans</Text>
+          {PRESETS.map((p) => {
+            const on = presetActive(active, p);
+            return (
+              <TouchableOpacity
+                key={p.id}
+                style={[styles.presetChip, on && styles.presetChipOn]}
+                onPress={() => setActive(togglePreset(active, p))}
+              >
+                <Text style={[styles.presetTxt, on && styles.presetTxtOn]}>{on ? '✓ ' : ''}{p.name}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
       </View>
 
       <View style={styles.statsRow}>
@@ -488,9 +505,27 @@ function FilterDrawer({
   onApply: (a: ActiveFilters) => void;
 }) {
   const [draft, setDraft] = useState<ActiveFilters>(active);
+  const [nlText, setNlText] = useState('');
+  // Bumped on non-typing draft changes (NL add, clear-all, reopen) so the
+  // uncontrolled range inputs remount with fresh defaultValues — but never
+  // while the user is typing in them, which would drop focus.
+  const [extVersion, setExtVersion] = useState(0);
   useEffect(() => {
-    if (visible) setDraft(active);
+    if (visible) {
+      setDraft(active);
+      setNlText('');
+      setExtVersion((v) => v + 1);
+    }
   }, [visible, active]);
+
+  // Live plain-English preview — what the parser understood so far.
+  const nlParsed = useMemo(() => (nlText.trim() ? parseNL(nlText) : null), [nlText]);
+  const applyNl = () => {
+    if (!nlParsed?.matchedAny) return;
+    setDraft((d) => ({ ...d, ...nlParsed.filters }));
+    setNlText('');
+    setExtVersion((v) => v + 1);
+  };
 
   const setRange = (key: string, part: 'min' | 'max', text: string) => {
     setDraft((d) => {
@@ -561,6 +596,7 @@ function FilterDrawer({
         </Text>
         <View style={styles.rangeInputs}>
           <TextInput
+            key={`${def.key}-min-${extVersion}`}
             style={styles.rInput}
             placeholder="min"
             placeholderTextColor={theme.muted}
@@ -569,6 +605,7 @@ function FilterDrawer({
             onChangeText={(t) => setRange(def.key, 'min', t)}
           />
           <TextInput
+            key={`${def.key}-max-${extVersion}`}
             style={styles.rInput}
             placeholder="max"
             placeholderTextColor={theme.muted}
@@ -587,11 +624,43 @@ function FilterDrawer({
       <View style={styles.drawer}>
         <View style={styles.drawerHead}>
           <Text style={styles.drawerTitle}>All Filters</Text>
-          <TouchableOpacity onPress={() => setDraft({})}>
+          <TouchableOpacity
+            onPress={() => {
+              setDraft({});
+              setExtVersion((v) => v + 1);
+            }}
+          >
             <Text style={styles.clearAll}>Clear all</Text>
           </TouchableOpacity>
         </View>
         <ScrollView keyboardShouldPersistTaps="handled">
+          <View style={styles.nlBox}>
+            <Text style={styles.nlLabel}>Describe a scan in plain English</Text>
+            <View style={styles.nlRow}>
+              <TextInput
+                style={styles.nlInput}
+                value={nlText}
+                onChangeText={setNlText}
+                placeholder='e.g. "rsi below 30 and above 200 dma"'
+                placeholderTextColor={theme.muted}
+                returnKeyType="done"
+                onSubmitEditing={applyNl}
+              />
+              <TouchableOpacity
+                style={[styles.nlAdd, !nlParsed?.matchedAny && styles.nlAddOff]}
+                onPress={applyNl}
+                disabled={!nlParsed?.matchedAny}
+              >
+                <Text style={[styles.nlAddTxt, !nlParsed?.matchedAny && { color: theme.muted }]}>Add</Text>
+              </TouchableOpacity>
+            </View>
+            {nlParsed ? (
+              <Text style={styles.nlFeedback}>
+                {nlParsed.matchedAny ? '✓ ' + nlParsed.recognized.join(' · ') : 'Nothing recognised yet…'}
+                {nlParsed.unrecognized.length ? `   (ignored: ${nlParsed.unrecognized.join(', ')})` : ''}
+              </Text>
+            ) : null}
+          </View>
           {TE_GROUPS.map((g) => (
             <View key={g} style={styles.group}>
               <Text style={styles.groupTitle}>{g}</Text>
@@ -629,6 +698,20 @@ const styles = StyleSheet.create({
   idxChipOn: { backgroundColor: theme.accent, borderColor: theme.accent },
   idxTxt: { color: theme.muted2, fontFamily: theme.mono, fontSize: 11 },
   idxTxtOn: { color: theme.bg, fontWeight: '700' },
+  presetRow: { paddingHorizontal: 10, paddingBottom: 8, gap: 6, alignItems: 'center' },
+  presetLabel: { color: theme.muted, fontSize: 10, fontFamily: theme.mono, textTransform: 'uppercase', marginRight: 2 },
+  presetChip: { backgroundColor: theme.surface2, borderColor: theme.border, borderWidth: 1, borderRadius: 12, paddingHorizontal: 10, paddingVertical: 4 },
+  presetChipOn: { backgroundColor: theme.accent, borderColor: theme.accent },
+  presetTxt: { color: theme.muted2, fontSize: 11 },
+  presetTxtOn: { color: theme.bg, fontWeight: '700' },
+  nlBox: { paddingHorizontal: 16, paddingTop: 14 },
+  nlLabel: { color: theme.muted2, fontSize: 11, fontFamily: theme.mono, marginBottom: 6 },
+  nlRow: { flexDirection: 'row', gap: 8 },
+  nlInput: { flex: 1, backgroundColor: theme.surface2, borderColor: theme.border2, borderWidth: 1, borderRadius: 8, color: theme.text, paddingHorizontal: 12, paddingVertical: 9, fontFamily: theme.mono, fontSize: 13 },
+  nlAdd: { backgroundColor: theme.accent, borderRadius: 8, paddingHorizontal: 16, justifyContent: 'center' },
+  nlAddOff: { backgroundColor: theme.surface2, borderColor: theme.border2, borderWidth: 1 },
+  nlAddTxt: { color: theme.bg, fontWeight: '700', fontSize: 13 },
+  nlFeedback: { color: theme.green, fontSize: 11, fontFamily: theme.mono, marginTop: 8, lineHeight: 16 },
   statsRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 8, gap: 6 },
   stat: { alignItems: 'center', minWidth: 46 },
   statV: { fontSize: 16, fontWeight: '700' },
