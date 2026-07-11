@@ -1,0 +1,39 @@
+name: Tag & Release
+
+# Creates a git tag (vX.Y.Z) and a GitHub Release from the VERSION file.
+# Fires automatically when VERSION changes on main; can also be run manually
+# (Actions -> Tag & Release -> Run workflow) — use that once to mint the first
+# release. Idempotent: skips if the tag/release already exists.
+on:
+  push:
+    branches: [main]
+    paths: [VERSION]
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Create tag + release from VERSION
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          V=$(cat VERSION)
+          TAG="v$V"
+          if git rev-parse "$TAG" >/dev/null 2>&1 || gh release view "$TAG" >/dev/null 2>&1; then
+            echo "$TAG already exists — nothing to do."
+            exit 0
+          fi
+          # Pull the matching section out of CHANGELOG.md for release notes.
+          notes=$(awk "/^## \\[$V\\]/{f=1;next} /^## \\[/{f=0} f" CHANGELOG.md)
+          [ -z "$notes" ] && notes="Release $TAG"
+          printf '%s\n' "$notes" > _notes.md
+          gh release create "$TAG" --title "$TAG" --notes-file _notes.md --target "$GITHUB_SHA"
+          echo "Created release $TAG"
