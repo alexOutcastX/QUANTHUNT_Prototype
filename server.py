@@ -13,6 +13,7 @@ import requests, logging, time, threading, os, io, csv, datetime, json, math, sy
 import pandas as pd
 import fundamentals as _fund   # bulk fundamentals cache (EODHD + yfinance fallback)
 import scanner as _scanner     # live per-symbol technical scan for the screener
+import relations as _relations # curated company-relationship graph (Terminal tab)
 
 # Support both normal run and PyInstaller frozen exe
 _BASE_DIR = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
@@ -881,6 +882,16 @@ def start_scan_warm():
     """Start the warm loop once (called from __main__ and wsgi.py)."""
     if SCAN_WARM and SCAN_WARM.lower() not in ("0", "off", "false", "no"):
         threading.Thread(target=_warm_scan_loop, name="scan-warm", daemon=True).start()
+
+
+@app.route("/graph")
+def relationship_graph():
+    """Company-relationship graph for the Terminal tab.
+
+    Currently serves the curated demo dataset; the response shape is stable so
+    an AI-generated (Claude) graph per symbol can replace it transparently.
+    """
+    return jsonify(_relations.graph())
 
 
 @app.route("/scan")

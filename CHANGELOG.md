@@ -3,6 +3,26 @@
 All notable changes are recorded here. Versioning is [SemVer](https://semver.org):
 `MAJOR.MINOR.PATCH`.
 
+## [2.5.0] — 2026-07-11
+New **Terminal** tab — Bloomberg-style company relationship graph
+(supply-chain intelligence), demo dataset now, AI mode ready.
+
+### Terminal
+- Interactive force-directed relationship graph: centre any company and
+  see its **suppliers, customers/demand exposure, financiers,
+  competitors and group companies** as typed, annotated edges (e.g.
+  TMCV ← steel from Tata Steel/JSW; trucks financed by Chola; fleets at
+  VRL/TCI). Click any node to walk the graph hop by hop; drag, zoom,
+  edge-type legend, per-edge confidence tags.
+- Command line ("> TMCV · GO") with the available-symbol chip row;
+  listed nodes show live price/day-change from /ltp.
+- Curated demo dataset (~29 companies, 45 edges around the
+  auto/steel/logistics/finance cluster) served by a new `/graph`
+  endpoint whose response shape is AI-ready — a Claude-generated graph
+  for any company plugs in later without frontend changes.
+- Clearly labelled indicative/demo data with a persistent disclaimer.
+- Desktop pages bar + mobile More menu entries.
+
 ## [2.4.0] — 2026-07-11
 Desktop layout rework + fundamentals in the table.
 
@@ -170,6 +190,7 @@ Oracle Always-Free VM with push-to-deploy.
 - Embedded TradingView Advanced Chart tab, plus deep-link to the user's
   logged-in TradingView account.
 
+[2.5.0]: https://github.com/alexOutcastX/QUANTHUNT_Prototype/releases/tag/v2.5.0
 [2.4.0]: https://github.com/alexOutcastX/QUANTHUNT_Prototype/releases/tag/v2.4.0
 [2.3.1]: https://github.com/alexOutcastX/QUANTHUNT_Prototype/releases/tag/v2.3.1
 [2.3.0]: https://github.com/alexOutcastX/QUANTHUNT_Prototype/releases/tag/v2.3.0

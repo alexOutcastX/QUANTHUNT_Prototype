@@ -76,6 +76,13 @@ feature/* ──PR──▶ main (CI, integration; does NOT deploy)
 
 Canonical per-version notes are in **[CHANGELOG.md](CHANGELOG.md)**. Summary:
 
+### v2.5.0 — Terminal: relationship graph
+
+| Area | Change |
+|---|---|
+| New | **Terminal** tab — interactive supply-chain/relationship graph (suppliers, customers, financiers, competitors, group) with command line and walk-the-graph navigation |
+| Backend | `/graph` endpoint (curated demo dataset, AI-ready response shape) |
+
 ### v2.4.0 — top nav + fundamentals in the table
 
 | Area | Change |
