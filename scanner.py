@@ -12,7 +12,13 @@ Fields returned per symbol (all best-effort; missing → null):
   high52, low52, pct_from_high, pct_from_low,
   beta,                          (vs NIFTY 50, 1y daily returns)
   sqzOn, sqzFire, sqzMom,        (TTM squeeze)
-  s1, s2, s3, r1, r2, r3         (classic floor-trader pivots)
+  s1, s2, s3, r1, r2, r3,        (classic floor-trader pivots)
+  golden_cross, death_cross,     (50-DMA crossed the 200-DMA on the latest bar)
+  cross_20_50_up, cross_20_50_down,
+  macd_bull_cross, macd_bear_cross,
+  gap_up, gap_down,              (open vs previous bar's high/low)
+  new_high_52w, new_low_52w,     (fresh 52-week extreme on the latest bar)
+  volume_spike                   (volume >= 2.5x the 20-day average)
 """
 import math
 import threading
@@ -155,6 +161,58 @@ def _compute_row(sym, idx_ret):
     except Exception:
         pass
 
+    # ── True cross/event detection on the latest bar ──
+    def _cross_up(a, b):
+        """a crossed above b between the previous and latest bar (None = n/a)."""
+        try:
+            a0, a1 = float(a.iloc[-2]), float(a.iloc[-1])
+            b0, b1 = float(b.iloc[-2]), float(b.iloc[-1])
+            if any(math.isnan(x) for x in (a0, a1, b0, b1)):
+                return None
+            return bool(a0 <= b0 and a1 > b1)
+        except (IndexError, TypeError, ValueError):
+            return None
+
+    sma20, sma50, sma200 = _sma(close, 20), _sma(close, 50), _sma(close, 200)
+    golden_cross = _cross_up(sma50, sma200)
+    death_cross = _cross_up(sma200, sma50)
+    cross_20_50_up = _cross_up(sma20, sma50)
+    cross_20_50_down = _cross_up(sma50, sma20)
+
+    # MACD histogram sign flip = MACD line crossing its signal line
+    macd_bull_cross = macd_bear_cross = None
+    try:
+        h0, h1 = float(macd_hist.iloc[-2]), float(macd_hist.iloc[-1])
+        if not (math.isnan(h0) or math.isnan(h1)):
+            macd_bull_cross = bool(h0 <= 0 < h1)
+            macd_bear_cross = bool(h0 >= 0 > h1)
+    except (IndexError, TypeError, ValueError):
+        pass
+
+    # Gaps: latest open vs the previous bar's range
+    gap_up = gap_down = None
+    try:
+        o1 = float(df["Open"].iloc[-1])
+        ph, pl = float(high.iloc[-2]), float(low.iloc[-2])
+        if not any(math.isnan(x) for x in (o1, ph, pl)):
+            gap_up = bool(o1 > ph)
+            gap_down = bool(o1 < pl)
+    except (IndexError, KeyError, TypeError, ValueError):
+        pass
+
+    # Fresh 52-week extremes: latest bar beats every prior bar in the window
+    new_high_52w = new_low_52w = None
+    if win > 2:
+        try:
+            prior_hi = float(high.iloc[-win:-1].max())
+            prior_lo = float(low.iloc[-win:-1].min())
+            new_high_52w = bool(float(high.iloc[-1]) > prior_hi)
+            new_low_52w = bool(float(low.iloc[-1]) < prior_lo)
+        except (TypeError, ValueError):
+            pass
+
+    volume_spike = bool(avgvol and volume >= 2.5 * avgvol) if avgvol else None
+
     # Classic floor-trader pivots from the last completed bar
     H, L, C = float(high.iloc[-1]), float(low.iloc[-1]), price
     P = (H + L + C) / 3
@@ -187,6 +245,17 @@ def _compute_row(sym, idx_ret):
         "sqzMom": sqz_mom,
         "s1": round(s1, 2), "s2": round(s2, 2), "s3": round(s3, 2),
         "r1": round(r1, 2), "r2": round(r2, 2), "r3": round(r3, 2),
+        "golden_cross": golden_cross,
+        "death_cross": death_cross,
+        "cross_20_50_up": cross_20_50_up,
+        "cross_20_50_down": cross_20_50_down,
+        "macd_bull_cross": macd_bull_cross,
+        "macd_bear_cross": macd_bear_cross,
+        "gap_up": gap_up,
+        "gap_down": gap_down,
+        "new_high_52w": new_high_52w,
+        "new_low_52w": new_low_52w,
+        "volume_spike": volume_spike,
     }
 
 

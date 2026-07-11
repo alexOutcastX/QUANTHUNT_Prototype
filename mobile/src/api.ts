@@ -135,6 +135,18 @@ export type ScanRow = {
   r1?: number | null;
   r2?: number | null;
   r3?: number | null;
+  // true event flags detected on the latest bar (null = not enough history)
+  golden_cross?: boolean | null;
+  death_cross?: boolean | null;
+  cross_20_50_up?: boolean | null;
+  cross_20_50_down?: boolean | null;
+  macd_bull_cross?: boolean | null;
+  macd_bear_cross?: boolean | null;
+  gap_up?: boolean | null;
+  gap_down?: boolean | null;
+  new_high_52w?: boolean | null;
+  new_low_52w?: boolean | null;
+  volume_spike?: boolean | null;
 };
 export type ScanResp = {
   data: Record<string, ScanRow>;
