@@ -3,6 +3,21 @@
 All notable changes are recorded here. Versioning is [SemVer](https://semver.org):
 `MAJOR.MINOR.PATCH`.
 
+## [2.3.1] — 2026-07-11
+Reliability fix: the live site's screener showed "HTTP 502 / no matches"
+when NSE Direct refused the VM's requests (datacenter IPs are routinely
+blocked).
+
+### Fixed
+- `/index` now falls back through a chain: NSE Direct (live quotes) →
+  **niftyindices.com constituent CSV** (official symbol lists, rarely
+  blocked) → last-good **disk cache**. With the CSV/cache paths the
+  screener stays fully live — /scan supplies prices and technicals.
+- Deploy rsync no longer deletes `fund_cache.json` / `index_cache.json`
+  on the VM (caches now survive deploys).
+- Screener note honestly says "N symbols" instead of "N live quotes"
+  when the constituent source had no quotes.
+
 ## [2.3.0] — 2026-07-11
 True cross/event detection — real signals computed on the latest bar, not
 proxies.
@@ -138,6 +153,7 @@ Oracle Always-Free VM with push-to-deploy.
 - Embedded TradingView Advanced Chart tab, plus deep-link to the user's
   logged-in TradingView account.
 
+[2.3.1]: https://github.com/alexOutcastX/QUANTHUNT_Prototype/releases/tag/v2.3.1
 [2.3.0]: https://github.com/alexOutcastX/QUANTHUNT_Prototype/releases/tag/v2.3.0
 [2.2.0]: https://github.com/alexOutcastX/QUANTHUNT_Prototype/releases/tag/v2.2.0
 [2.1.0]: https://github.com/alexOutcastX/QUANTHUNT_Prototype/releases/tag/v2.1.0
