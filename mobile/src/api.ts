@@ -100,6 +100,7 @@ export type Fundamentals = {
   debt_equity?: number | null;
   current_ratio?: number | null;
   market_cap_cr?: number | null;
+  description?: string;
   error?: string;
 };
 

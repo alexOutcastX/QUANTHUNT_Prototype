@@ -13,7 +13,10 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { api } from '../api';
+import StockDetail from '../components/StockDetail';
+import { exportCsv } from '../csv';
 import {
   ActiveFilters,
   FILTER_DEFS,
@@ -41,6 +44,14 @@ const pct = (v: number | null | undefined, d = 2) =>
 const colorOf = (v: number | null | undefined) =>
   v == null ? theme.muted : v >= 0 ? theme.green : theme.red;
 const sigColor = (s: Signal) => (s === 'buy' ? theme.green : s === 'sell' ? theme.red : theme.muted2);
+const fmtVol = (v: number | null | undefined) => {
+  if (v == null || !isFinite(v)) return '—';
+  if (v >= 1e7) return (v / 1e7).toFixed(1) + 'Cr';
+  if (v >= 1e5) return (v / 1e5).toFixed(1) + 'L';
+  if (v >= 1e3) return (v / 1e3).toFixed(0) + 'K';
+  return String(Math.round(v));
+};
+const n1 = (v: number | null | undefined) => (v == null || !isFinite(v) ? '—' : v.toFixed(1));
 
 type Col = {
   key: string;
@@ -61,9 +72,42 @@ const COLS: Col[] = [
   { key: 'willr', label: 'W%R', w: 52, render: (r) => <Text style={styles.cell}>{r.willr != null ? r.willr.toFixed(0) : '—'}</Text> },
   { key: 'bollb', label: 'BB%', w: 50, render: (r) => <Text style={styles.cell}>{r.bollb != null ? r.bollb.toFixed(2) : '—'}</Text> },
   { key: 'relvol', label: 'RVol', w: 52, render: (r) => <Text style={styles.cell}>{r.relvol != null ? r.relvol.toFixed(1) + 'x' : '—'}</Text> },
+  { key: 'volume', label: 'Vol', w: 58, render: (r) => <Text style={styles.cell}>{fmtVol(r.volume)}</Text> },
+  { key: 'beta', label: 'Beta', w: 46, render: (r) => <Text style={styles.cell}>{r.beta != null ? r.beta.toFixed(2) : '—'}</Text> },
+  {
+    key: 'sqzMom', label: 'Sqz', w: 52,
+    render: (r) => (
+      <Text style={[styles.cell, { color: r.sqzFire ? theme.green : r.sqzOn ? theme.text : theme.muted }]}>
+        {r.sqzFire ? 'FIRE' : r.sqzOn ? 'ON' : r.sqzOn === false ? 'off' : '—'}
+      </Text>
+    ),
+  },
+  {
+    key: 's1', label: 'Support', w: 66,
+    render: (r) => (
+      <View>
+        <Text style={styles.zone}>{n1(r.s1)}</Text>
+        <Text style={styles.zoneDim}>{n1(r.s2)}</Text>
+        <Text style={styles.zoneDim}>{n1(r.s3)}</Text>
+      </View>
+    ),
+  },
+  {
+    key: 'r1', label: 'Resist', w: 66,
+    render: (r) => (
+      <View>
+        <Text style={styles.zone}>{n1(r.r1)}</Text>
+        <Text style={styles.zoneDim}>{n1(r.r2)}</Text>
+        <Text style={styles.zoneDim}>{n1(r.r3)}</Text>
+      </View>
+    ),
+  },
   { key: 'signal', label: 'Signal', w: 64, render: (r) => { const s = calcSignal(r); return <Text style={[styles.cell, styles.sig, { color: sigColor(s) }]}>{s.toUpperCase()}</Text>; } },
 ];
 const TABLE_W = COLS.reduce((a, c) => a + c.w, 0) + 120; // + track column
+
+const FILTERS_KEY = 'taureye.screener.filters.v1';
+const INDEX_KEY = 'taureye.screener.index.v1';
 
 export default function ScreenerScreen() {
   const [indexName, setIndexName] = useState('NIFTY 50');
@@ -78,6 +122,39 @@ export default function ScreenerScreen() {
   const [drawer, setDrawer] = useState(false);
   const [track, setTrack] = useState<TrackEntry[]>([]);
   const [fundBusy, setFundBusy] = useState(false);
+  const [detail, setDetail] = useState<Row | null>(null);
+  const [restored, setRestored] = useState(false);
+
+  // Restore persisted filters + index once, before saving anything back.
+  useEffect(() => {
+    (async () => {
+      try {
+        const [f, idx] = await Promise.all([
+          AsyncStorage.getItem(FILTERS_KEY),
+          AsyncStorage.getItem(INDEX_KEY),
+        ]);
+        if (f) {
+          const parsed = JSON.parse(f);
+          if (parsed && typeof parsed === 'object') setActive(parsed);
+        }
+        if (idx && INDICES.includes(idx)) setIndexName(idx);
+      } catch {
+        /* fresh start */
+      } finally {
+        setRestored(true);
+      }
+    })();
+  }, []);
+
+  useEffect(() => {
+    if (!restored) return;
+    AsyncStorage.setItem(FILTERS_KEY, JSON.stringify(active)).catch(() => {});
+  }, [active, restored]);
+
+  useEffect(() => {
+    if (!restored) return;
+    AsyncStorage.setItem(INDEX_KEY, indexName).catch(() => {});
+  }, [indexName, restored]);
 
   // Monotonic token so a stale in-flight scan can't write into a newer index's rows.
   const loadSeq = React.useRef(0);
@@ -154,36 +231,66 @@ export default function ScreenerScreen() {
   }, []);
 
   useEffect(() => {
+    if (!restored) return;
     setLoading(true);
     load(indexName);
-  }, [indexName, load]);
+  }, [indexName, load, restored]);
 
   useEffect(() => {
     loadTrack().then(setTrack);
   }, []);
 
-  // Fetch fundamentals when a fundamental filter becomes active and we lack them.
+  // Fetch fundamentals when a fundamental filter is active. /fundamentals/bulk
+  // returns cached rows immediately plus a `pending` list still warming server-
+  // side — poll until pending drains (bounded) so warming stocks aren't
+  // silently excluded by strict fundamental filters forever.
+  const fundPolling = React.useRef(false);
   useEffect(() => {
-    if (!hasFundFilter(active)) return;
+    if (!hasFundFilter(active) || fundPolling.current) return;
     const missing = rows.filter((r) => r._fund === undefined).map((r) => r.sym);
     if (!missing.length) return;
+    fundPolling.current = true;
     let cancelled = false;
     setFundBusy(true);
-    api
-      .fundamentalsBulk(missing)
-      .then((res) => {
-        if (cancelled) return;
-        const data = res.data || {};
+    (async () => {
+      let target = missing;
+      const settled = new Set<string>();
+      for (let round = 0; round < 25 && target.length && !cancelled; round++) {
+        try {
+          const res = await api.fundamentalsBulk(target);
+          if (cancelled) break;
+          const data = res.data || {};
+          const got = Object.keys(data);
+          if (got.length) {
+            got.forEach((s) => settled.add(s));
+            setRows((prev) =>
+              prev.map((r) =>
+                data[r.sym] !== undefined ? { ...r, _fund: data[r.sym] as Row['_fund'] } : r,
+              ),
+            );
+          }
+          const pending = new Set(res.pending || []);
+          target = target.filter((s) => !settled.has(s) && pending.has(s));
+        } catch {
+          break; // network trouble — settle what's left as unavailable below
+        }
+        if (target.length) await new Promise((r) => setTimeout(r, 3000));
+      }
+      if (!cancelled) {
+        // Anything never delivered is definitively unavailable (null), so the
+        // effect doesn't loop and strict filters treat it consistently.
         setRows((prev) =>
           prev.map((r) =>
-            r._fund === undefined ? { ...r, _fund: (data[r.sym] as Row['_fund']) ?? null } : r,
+            missing.includes(r.sym) && r._fund === undefined ? { ...r, _fund: null } : r,
           ),
         );
-      })
-      .catch(() => {})
-      .finally(() => !cancelled && setFundBusy(false));
+        setFundBusy(false);
+      }
+      fundPolling.current = false;
+    })();
     return () => {
       cancelled = true;
+      fundPolling.current = false;
     };
   }, [active, rows]);
 
@@ -234,11 +341,21 @@ export default function ScreenerScreen() {
     const dir = trackDirOf(item.sym);
     return (
       <View style={styles.dataRow}>
-        {COLS.map((c) => (
-          <View key={c.key} style={[styles.td, { width: c.w, alignItems: c.align === 'left' ? 'flex-start' : 'flex-end' }]}>
-            {c.render(item)}
-          </View>
-        ))}
+        {COLS.map((c) =>
+          c.key === 'sym' ? (
+            <TouchableOpacity
+              key={c.key}
+              style={[styles.td, { width: c.w, alignItems: 'flex-start' }]}
+              onPress={() => setDetail(item)}
+            >
+              {c.render(item)}
+            </TouchableOpacity>
+          ) : (
+            <View key={c.key} style={[styles.td, { width: c.w, alignItems: c.align === 'left' ? 'flex-start' : 'flex-end' }]}>
+              {c.render(item)}
+            </View>
+          ),
+        )}
         <View style={styles.trackCell}>
           <TouchableOpacity
             style={[styles.tBtn, dir === 'buy' && styles.tBuyOn]}
@@ -287,6 +404,12 @@ export default function ScreenerScreen() {
         <Stat v={stats.buy} l="Bullish" c={theme.green} />
         <Stat v={stats.sell} l="Bearish" c={theme.red} />
         <Stat v={stats.neutral} l="Neutral" c={theme.muted2} />
+        <TouchableOpacity
+          style={[styles.filterBtn, { marginLeft: 'auto' }]}
+          onPress={() => exportCsv(sorted, indexName).catch(() => {})}
+        >
+          <Text style={styles.filterTxt}>⇩ CSV</Text>
+        </TouchableOpacity>
         <TouchableOpacity style={styles.filterBtn} onPress={() => setDrawer(true)}>
           <Text style={styles.filterTxt}>⚙ Filters{activeCount ? ` (${activeCount})` : ''}</Text>
         </TouchableOpacity>
@@ -337,6 +460,8 @@ export default function ScreenerScreen() {
         onClose={() => setDrawer(false)}
         onApply={setActive}
       />
+
+      {detail ? <StockDetail row={detail} onClose={() => setDetail(null)} /> : null}
     </View>
   );
 }
@@ -508,7 +633,7 @@ const styles = StyleSheet.create({
   stat: { alignItems: 'center', minWidth: 46 },
   statV: { fontSize: 16, fontWeight: '700' },
   statL: { color: theme.muted, fontSize: 9, fontFamily: theme.mono },
-  filterBtn: { marginLeft: 'auto', backgroundColor: theme.surface2, borderColor: theme.border2, borderWidth: 1, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8 },
+  filterBtn: { backgroundColor: theme.surface2, borderColor: theme.border2, borderWidth: 1, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8 },
   filterTxt: { color: theme.text, fontSize: 12, fontWeight: '600' },
   note: { color: theme.muted, fontFamily: theme.mono, fontSize: 10, paddingHorizontal: 12, paddingBottom: 6 },
   headerRow: { flexDirection: 'row', borderBottomColor: theme.border2, borderBottomWidth: 1, backgroundColor: theme.surface, paddingVertical: 8 },
@@ -517,7 +642,9 @@ const styles = StyleSheet.create({
   dataRow: { flexDirection: 'row', alignItems: 'center', borderBottomColor: theme.border, borderBottomWidth: 1, paddingVertical: 9 },
   td: { justifyContent: 'center', paddingHorizontal: 4 },
   cell: { color: theme.text, fontFamily: theme.mono, fontSize: 12 },
-  symTxt: { color: theme.text, fontWeight: '700', fontSize: 13 },
+  zone: { color: theme.text, fontFamily: theme.mono, fontSize: 10, textAlign: 'right' },
+  zoneDim: { color: theme.muted2, fontFamily: theme.mono, fontSize: 10, textAlign: 'right' },
+  symTxt: { color: theme.accent, fontWeight: '700', fontSize: 13 },
   sig: { fontWeight: '700', fontSize: 11 },
   trackCell: { width: 120, flexDirection: 'row', gap: 6, paddingHorizontal: 6, justifyContent: 'center' },
   tBtn: { borderColor: theme.border2, borderWidth: 1, borderRadius: 5, paddingHorizontal: 12, paddingVertical: 5, minWidth: 40, alignItems: 'center' },
