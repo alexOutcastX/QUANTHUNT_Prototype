@@ -3,6 +3,25 @@
 All notable changes are recorded here. Versioning is [SemVer](https://semver.org):
 `MAJOR.MINOR.PATCH`.
 
+## [2.2.0] — 2026-07-11
+Filter selection made taureye-easy: one-tap preset scans and a
+plain-English screener.
+
+### Screener
+- **Preset scans**: 15 curated one-tap screens on a "Scans" chip row
+  (Trend / Momentum / Breakouts / Volume / Fundamentals — e.g. Above
+  200-DMA, RSI below 30, Up 3%+ on 2× volume, Within 5% of 52w high,
+  Squeeze fired, P/E below 20). Presets stack, toggle off cleanly, and
+  stay editable in the All Filters drawer.
+- **Natural-language screener** in the filter drawer: type
+  "rsi below 30 and above 200 dma" or "large cap oversold" and the
+  deterministic, offline parser (ported from taureye's design) turns it
+  into filters — with live feedback on what was understood vs ignored.
+  Understands operators/synonyms, between-ranges, ₹/cr/lakh/k units,
+  DMA distance, 52-week range, squeeze, cap tiers, day change, N× volume,
+  fundamentals (P/E, ROE, D/E…) and sector names with aliases
+  ("pharma sector", "it sector").
+
 ## [2.1.0] — 2026-07-11
 Closes the main React-vs-legacy gaps found in the two-UI analysis.
 
@@ -93,6 +112,7 @@ Oracle Always-Free VM with push-to-deploy.
 - Embedded TradingView Advanced Chart tab, plus deep-link to the user's
   logged-in TradingView account.
 
+[2.2.0]: https://github.com/alexOutcastX/QUANTHUNT_Prototype/releases/tag/v2.2.0
 [2.1.0]: https://github.com/alexOutcastX/QUANTHUNT_Prototype/releases/tag/v2.1.0
 [2.0.0]: https://github.com/alexOutcastX/QUANTHUNT_Prototype/releases/tag/v2.0.0
 [1.0.0]: https://github.com/alexOutcastX/QUANTHUNT_Prototype/releases/tag/v1.0.0
