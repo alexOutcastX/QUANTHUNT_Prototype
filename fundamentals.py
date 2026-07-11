@@ -289,6 +289,19 @@ def _fetch_one(sym: str) -> None:
         _dirty = True
 
 
+def get_one(sym: str) -> dict:
+    """Synchronous single-symbol fetch through the provider chain
+    (screener.in → yfinance gap-fill → EODHD), served from cache when fresh.
+    Blocks a few seconds on a cold symbol; instant afterwards (disk TTL)."""
+    sym = sym.strip().upper()
+    if not _fresh(sym):
+        with _lock:
+            _inflight.add(sym)
+        _fetch_one(sym)
+    with _lock:
+        return dict((_cache.get(sym) or {}).get("data") or {})
+
+
 def enqueue(symbols) -> list:
     """Submit background fetches for any symbols not fresh in cache. Returns the
     list actually scheduled (already-cached / in-flight ones are skipped)."""
