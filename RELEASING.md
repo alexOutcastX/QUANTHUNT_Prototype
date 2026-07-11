@@ -8,17 +8,23 @@
   - **MINOR** — new backward-compatible features (most of what we ship).
   - **MAJOR** — breaking changes.
 
+## Branches
+- **`main`** — integration. PRs merge here; CI runs. Does **not** deploy.
+- **`production`** — the live website. A push here deploys to the VM. Nothing
+  else deploys.
+
 ## Cutting a release
 1. Update `VERSION` and add a section to `CHANGELOG.md`.
-2. Merge to `main` (via PR — see below). The merge auto-deploys to the VM.
-3. Tag it and push the tag:
+2. Merge to `main` via PR (CI runs).
+3. **Promote to production** to go live (see below).
+4. Tag it and push the tag (or let the Tag & Release workflow do it):
    ```bash
    git tag -a v1.2.0 -m "v1.2.0 — <summary>"
    git push origin v1.2.0
    ```
    (Optionally create a GitHub Release from the tag for release notes.)
 
-## Branching / PR workflow
+## PR workflow (into main)
 `main` is protected — no direct pushes. All changes go through a pull request:
 ```bash
 git checkout -b feature/my-change
@@ -26,7 +32,19 @@ git checkout -b feature/my-change
 git push -u origin feature/my-change
 # open a PR into main; CI (.github/workflows/ci.yml) must pass; then merge.
 ```
-Merging to `main` triggers **Deploy to VM**.
+Merging to `main` does NOT deploy — it just integrates the change.
+
+## Promoting to production (going live)
+When `main` is ready to ship, promote it to `production`:
+```bash
+git fetch origin
+git checkout production
+git merge --ff-only origin/main      # production must be a fast-forward of main
+git push origin production           # <-- this triggers Deploy to VM
+```
+(Or open a PR from `main` into `production` and merge it.) Only this deploys the
+live site. Roll back with `deploy/rollback.sh` or by re-running Deploy to VM with
+an older ref (see below).
 
 ## Rolling back a bad deploy
 Two ways:

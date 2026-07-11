@@ -1,10 +1,13 @@
 name: Deploy to VM
 
 # LIVE-BACKEND hosting model (mirrors TaurEye's push-to-deploy, adapted for a
-# resident service):
-#   edit locally -> push -> GitHub rsyncs the app to /opt/quanthunt on the VM,
-#   installs any new deps, and restarts the gunicorn service that nginx proxies
-#   to. nginx itself is only reloaded (config rarely changes).
+# resident service). Only the `production` branch is live: a push to production
+# rsyncs the app to /opt/quanthunt on the VM, installs any new deps, and restarts
+# the gunicorn service that nginx proxies to.
+#
+# Flow: work on feature branches -> PR into `main` (CI runs) -> merge. To go
+# live, promote `main` into `production` (fast-forward or PR), which triggers
+# this deploy. `main` itself does NOT deploy.
 #
 # Requires these repo secrets (Settings -> Secrets and variables -> Actions):
 #   VM_HOST     the VM's host/IP
@@ -15,7 +18,7 @@ name: Deploy to VM
 
 on:
   push:
-    branches: [main]
+    branches: [production]
     paths-ignore:
       - "**/*.md"
       - "docs/**"
