@@ -774,7 +774,16 @@ def fundamentals():
         except Exception:
             pass
 
-        return jsonify({
+        # Overlay the screener.in provider chain (get_one blocks briefly on a
+        # cold symbol, then serves from the 7-day disk cache). Screener values
+        # win where present — that chain is the product's fundamentals source.
+        chain = {}
+        try:
+            chain = _fund.get_one(sym)
+        except Exception as e:
+            log.warning("fundamentals chain fetch failed for %s: %s", sym, e)
+
+        payload = {
             "symbol":       sym,
             "name":         info.get("longName") or info.get("shortName", sym),
             "sector":       info.get("sector"),
@@ -796,7 +805,13 @@ def fundamentals():
             "beta":         round(info.get("beta", 0) or 0, 2) or None,
             "description":  (info.get("longBusinessSummary") or "")[:600],
             "financials":   financials,
-        })
+        }
+        for k in _fund.FIELDS:
+            if chain.get(k) is not None:
+                payload[k] = chain[k]
+        if chain.get("source"):
+            payload["fund_source"] = chain["source"]
+        return jsonify(payload)
     except Exception as e:
         log.error("Fundamentals error for %s: %s", sym, e)
         return jsonify({"error": str(e)}), 502

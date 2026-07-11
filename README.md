@@ -76,6 +76,14 @@ feature/* ──PR──▶ main (CI, integration; does NOT deploy)
 
 Canonical per-version notes are in **[CHANGELOG.md](CHANGELOG.md)**. Summary:
 
+### v2.6.0 — Terminal workspace
+
+| Area | Change |
+|---|---|
+| Terminal | INPUTS/OUTPUTS edge highlighting; node menu (open graph / open in window / add to compare) |
+| Terminal | Floating draggable-resizable multi-tab window: candle chart + screener.in fundamentals per company |
+| Terminal | COMPARE tab: metric table + Quality/Trend/Momentum sub-scores + starred FINAL SCORE |
+
 ### v2.5.0 — Terminal: relationship graph
 
 | Area | Change |
