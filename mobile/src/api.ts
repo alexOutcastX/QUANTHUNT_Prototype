@@ -83,15 +83,85 @@ export type Fundamentals = {
   name?: string;
   longName?: string;
   sector?: string | null;
+  industry?: string | null;
   pe?: number | null;
   forward_pe?: number | null;
   pb?: number | null;
+  eps?: number | null;
+  dividend_yield?: number | null;
   roe?: number | null;
   roce?: number | null;
   debt_equity?: number | null;
   current_ratio?: number | null;
+  market_cap_cr?: number | null;
   error?: string;
 };
+
+// Live technical snapshot per symbol (from /scan).
+export type ScanRow = {
+  price?: number | null;
+  prevClose?: number | null;
+  chg?: number | null;
+  absChg?: number | null;
+  volume?: number | null;
+  avgvol?: number | null;
+  relvol?: number | null;
+  d9?: number | null;
+  d20?: number | null;
+  d50?: number | null;
+  d200?: number | null;
+  rsi?: number | null;
+  macd?: number | null;
+  willr?: number | null;
+  bollb?: number | null;
+  high52?: number | null;
+  low52?: number | null;
+  pct_from_high?: number | null;
+  pct_from_low?: number | null;
+  beta?: number | null;
+  sqzOn?: boolean | null;
+  sqzFire?: boolean | null;
+  sqzMom?: number | null;
+  s1?: number | null;
+  s2?: number | null;
+  s3?: number | null;
+  r1?: number | null;
+  r2?: number | null;
+  r3?: number | null;
+};
+export type ScanResp = {
+  data: Record<string, ScanRow>;
+  count: number;
+  computed?: number;
+  cached?: number;
+  error?: string;
+};
+
+export type IndexConstituent = {
+  symbol: string;
+  price?: number | null;
+  prevClose?: number | null;
+  chg?: number | null;
+  absChg?: number | null;
+  open?: number | null;
+  high?: number | null;
+  low?: number | null;
+  volume?: number | null;
+};
+export type IndexResp = {
+  index: string;
+  count: number;
+  data: IndexConstituent[];
+  error?: string;
+};
+
+export type ReturnsRow = { ret1y?: number | null; ret3y?: number | null; ret5y?: number | null };
+export type ReturnsResp = Record<string, ReturnsRow>;
+
+// Scan up to 60 symbols per request; caller batches larger lists.
+async function scanBatch(symbols: string[]): Promise<ScanResp> {
+  return getJson<ScanResp>('/scan?symbols=' + encodeURIComponent(symbols.join(',')), 60000);
+}
 
 export const api = {
   ping: () => getJson<Ping>('/ping'),
@@ -110,4 +180,21 @@ export const api = {
     ),
   fundamentals: (symbol: string) =>
     getJson<Fundamentals>('/fundamentals?symbol=' + encodeURIComponent(symbol)),
+  indexConstituents: (name: string) =>
+    getJson<IndexResp>('/index?name=' + encodeURIComponent(name)),
+  returns: (symbols: string[]) =>
+    getJson<ReturnsResp>('/returns?symbols=' + encodeURIComponent(symbols.join(',')), 60000),
+  // Scans any number of symbols by batching into 60-symbol requests and merging.
+  scan: async (symbols: string[]): Promise<ScanResp> => {
+    const merged: Record<string, ScanRow> = {};
+    let cached = 0;
+    let computed = 0;
+    for (let i = 0; i < symbols.length; i += 60) {
+      const res = await scanBatch(symbols.slice(i, i + 60));
+      Object.assign(merged, res.data || {});
+      cached += res.cached || 0;
+      computed += res.computed || 0;
+    }
+    return { data: merged, count: Object.keys(merged).length, cached, computed };
+  },
 };
