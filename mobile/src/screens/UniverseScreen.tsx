@@ -1,0 +1,210 @@
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  ActivityIndicator,
+  FlatList,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import { IndexConstituent, ReturnsRow, api } from '../api';
+import { theme } from '../theme';
+
+const INDICES = [
+  'NIFTY 50', 'NIFTY 100', 'NIFTY 200', 'NIFTY 500', 'NIFTY BANK', 'NIFTY IT',
+  'NIFTY AUTO', 'NIFTY PHARMA', 'NIFTY FMCG', 'NIFTY METAL',
+  'NIFTY MIDCAP 100', 'NIFTY MIDCAP 150', 'NIFTY SMALLCAP 100',
+  'NIFTY SMALLCAP 250', 'NIFTY MICROCAP 250',
+];
+
+type UnivRow = IndexConstituent & ReturnsRow;
+
+const pct = (v: number | null | undefined, d = 2) =>
+  v == null || !isFinite(v) ? '—' : (v >= 0 ? '+' : '') + v.toFixed(d) + '%';
+const colorOf = (v: number | null | undefined) =>
+  v == null ? theme.muted : v >= 0 ? theme.green : theme.red;
+// Heatmap background tint by day change.
+const heatBg = (v: number | null | undefined) => {
+  if (v == null) return 'transparent';
+  const a = Math.min(0.28, Math.abs(v) / 6 * 0.28);
+  return v >= 0 ? `rgba(24,201,140,${a})` : `rgba(240,80,110,${a})`;
+};
+
+type Col = { key: keyof UnivRow | 'symbol'; label: string; w: number };
+const COLS: Col[] = [
+  { key: 'symbol', label: 'Symbol', w: 110 },
+  { key: 'price', label: 'CMP', w: 78 },
+  { key: 'chg', label: 'Chg%', w: 66 },
+  { key: 'ret1y', label: '1Y', w: 66 },
+  { key: 'ret3y', label: '3Y', w: 66 },
+  { key: 'ret5y', label: '5Y', w: 66 },
+];
+const TABLE_W = COLS.reduce((a, c) => a + c.w, 0);
+
+export default function UniverseScreen() {
+  const [indexName, setIndexName] = useState('NIFTY 50');
+  const [rows, setRows] = useState<UnivRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [note, setNote] = useState('');
+  const [heatmap, setHeatmap] = useState(false);
+  const [sortCol, setSortCol] = useState<string>('chg');
+  const [sortDir, setSortDir] = useState<1 | -1>(-1);
+
+  const load = useCallback(async (name: string) => {
+    setError(null);
+    try {
+      const idx = await api.indexConstituents(name);
+      const base = idx.data || [];
+      if (!base.length) {
+        setRows([]);
+        setNote(idx.error || 'No constituents.');
+        return;
+      }
+      setRows(base.map((c) => ({ ...c })));
+      setNote(`${base.length} constituents · loading returns…`);
+      // Returns are heavier; layer them in once loaded.
+      try {
+        const rets = await api.returns(base.map((c) => c.symbol));
+        setRows(base.map((c) => ({ ...c, ...(rets[c.symbol] || {}) })));
+        setNote(`${base.length} constituents`);
+      } catch {
+        setNote(`${base.length} constituents · returns unavailable`);
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to load index');
+      setRows([]);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    setLoading(true);
+    load(indexName);
+  }, [indexName, load]);
+
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    load(indexName);
+  }, [indexName, load]);
+
+  const onSort = (col: string) => {
+    if (col === sortCol) setSortDir((d) => (d === 1 ? -1 : 1));
+    else {
+      setSortCol(col);
+      setSortDir(col === 'symbol' ? 1 : -1);
+    }
+  };
+
+  const sorted = useMemo(() => {
+    return [...rows].sort((a, b) => {
+      if (sortCol === 'symbol') return a.symbol.localeCompare(b.symbol) * sortDir;
+      const va = (a as unknown as Record<string, number | null>)[sortCol];
+      const vb = (b as unknown as Record<string, number | null>)[sortCol];
+      const na = va == null || !isFinite(va) ? -Infinity : va;
+      const nb = vb == null || !isFinite(vb) ? -Infinity : vb;
+      return (na - nb) * sortDir;
+    });
+  }, [rows, sortCol, sortDir]);
+
+  const renderRow = ({ item }: { item: UnivRow }) => (
+    <View style={[styles.row, heatmap ? { backgroundColor: heatBg(item.chg) } : null]}>
+      <Text style={[styles.cell, styles.cSym, { width: COLS[0].w }]}>{item.symbol}</Text>
+      <Text style={[styles.cell, styles.right, { width: COLS[1].w }]}>
+        {item.price != null ? item.price.toFixed(1) : '—'}
+      </Text>
+      <Text style={[styles.cell, styles.right, { width: COLS[2].w, color: colorOf(item.chg) }]}>{pct(item.chg)}</Text>
+      <Text style={[styles.cell, styles.right, { width: COLS[3].w, color: colorOf(item.ret1y) }]}>{pct(item.ret1y, 0)}</Text>
+      <Text style={[styles.cell, styles.right, { width: COLS[4].w, color: colorOf(item.ret3y) }]}>{pct(item.ret3y, 0)}</Text>
+      <Text style={[styles.cell, styles.right, { width: COLS[5].w, color: colorOf(item.ret5y) }]}>{pct(item.ret5y, 0)}</Text>
+    </View>
+  );
+
+  if (loading) {
+    return (
+      <View style={styles.center}>
+        <ActivityIndicator color={theme.accent} />
+        <Text style={styles.dim}>Loading {indexName}…</Text>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.container}>
+      <View style={styles.topBar}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
+          {INDICES.map((idx) => (
+            <TouchableOpacity
+              key={idx}
+              style={[styles.chip, idx === indexName && styles.chipOn]}
+              onPress={() => setIndexName(idx)}
+            >
+              <Text style={[styles.chipTxt, idx === indexName && styles.chipTxtOn]}>{idx.replace('NIFTY ', '')}</Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      </View>
+
+      <View style={styles.metaRow}>
+        <Text style={styles.note}>{note}{error ? ` · ${error}` : ''}</Text>
+        <TouchableOpacity style={[styles.heatBtn, heatmap && styles.heatOn]} onPress={() => setHeatmap((v) => !v)}>
+          <Text style={[styles.heatTxt, heatmap && styles.heatTxtOn]}>⊞ Heatmap</Text>
+        </TouchableOpacity>
+      </View>
+
+      <ScrollView horizontal showsHorizontalScrollIndicator>
+        <View style={{ width: TABLE_W }}>
+          <View style={styles.headerRow}>
+            {COLS.map((c) => (
+              <TouchableOpacity key={String(c.key)} style={{ width: c.w }} onPress={() => onSort(String(c.key))}>
+                <Text style={[styles.th, c.key !== 'symbol' && styles.right]}>
+                  {c.label}
+                  {sortCol === c.key ? (sortDir === 1 ? ' ↑' : ' ↓') : ''}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+          <FlatList
+            data={sorted}
+            keyExtractor={(r) => r.symbol}
+            renderItem={renderRow}
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.accent} />
+            }
+            initialNumToRender={25}
+            windowSize={11}
+          />
+        </View>
+      </ScrollView>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: theme.bg },
+  center: { flex: 1, backgroundColor: theme.bg, alignItems: 'center', justifyContent: 'center', gap: 10 },
+  dim: { color: theme.muted, fontFamily: theme.mono, fontSize: 12 },
+  topBar: { borderBottomColor: theme.border, borderBottomWidth: 1 },
+  chips: { paddingHorizontal: 10, paddingVertical: 8, gap: 6 },
+  chip: { borderColor: theme.border2, borderWidth: 1, borderRadius: 6, paddingHorizontal: 10, paddingVertical: 5 },
+  chipOn: { backgroundColor: theme.accent, borderColor: theme.accent },
+  chipTxt: { color: theme.muted2, fontFamily: theme.mono, fontSize: 11 },
+  chipTxtOn: { color: theme.bg, fontWeight: '700' },
+  metaRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 12, paddingVertical: 8 },
+  note: { color: theme.muted, fontFamily: theme.mono, fontSize: 10, flex: 1 },
+  heatBtn: { borderColor: theme.border2, borderWidth: 1, borderRadius: 6, paddingHorizontal: 10, paddingVertical: 5 },
+  heatOn: { backgroundColor: theme.accent, borderColor: theme.accent },
+  heatTxt: { color: theme.muted2, fontFamily: theme.mono, fontSize: 11 },
+  heatTxtOn: { color: theme.bg, fontWeight: '700' },
+  headerRow: { flexDirection: 'row', backgroundColor: theme.surface, borderBottomColor: theme.border2, borderBottomWidth: 1, paddingVertical: 8, paddingHorizontal: 8 },
+  th: { color: theme.muted2, fontSize: 10, fontFamily: theme.mono, textTransform: 'uppercase' },
+  row: { flexDirection: 'row', alignItems: 'center', borderBottomColor: theme.border, borderBottomWidth: 1, paddingVertical: 10, paddingHorizontal: 8 },
+  cell: { color: theme.text, fontFamily: theme.mono, fontSize: 12 },
+  cSym: { fontWeight: '700', fontSize: 13 },
+  right: { textAlign: 'right' },
+});

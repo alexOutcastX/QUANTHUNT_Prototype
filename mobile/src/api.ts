@@ -182,8 +182,18 @@ export const api = {
     getJson<Fundamentals>('/fundamentals?symbol=' + encodeURIComponent(symbol)),
   indexConstituents: (name: string) =>
     getJson<IndexResp>('/index?name=' + encodeURIComponent(name)),
-  returns: (symbols: string[]) =>
-    getJson<ReturnsResp>('/returns?symbols=' + encodeURIComponent(symbols.join(',')), 60000),
+  // /returns caps at 50 symbols/call; batch and merge.
+  returns: async (symbols: string[]): Promise<ReturnsResp> => {
+    const merged: ReturnsResp = {};
+    for (let i = 0; i < symbols.length; i += 50) {
+      const res = await getJson<ReturnsResp>(
+        '/returns?symbols=' + encodeURIComponent(symbols.slice(i, i + 50).join(',')),
+        60000,
+      );
+      Object.assign(merged, res);
+    }
+    return merged;
+  },
   // Scans any number of symbols by batching into 60-symbol requests and merging.
   scan: async (symbols: string[]): Promise<ScanResp> => {
     const merged: Record<string, ScanRow> = {};
