@@ -3,6 +3,27 @@
 All notable changes are recorded here. Versioning is [SemVer](https://semver.org):
 `MAJOR.MINOR.PATCH`.
 
+## [2.1.0] — 2026-07-11
+Closes the main React-vs-legacy gaps found in the two-UI analysis.
+
+### Fixed
+- **Pending fundamentals now arrive**: the screener polls `/fundamentals/bulk`
+  until the server-side warm queue drains (bounded rounds), instead of one
+  fire-and-forget call that left warming stocks permanently excluded by
+  strict fundamental filters.
+
+### Screener
+- Six new live columns the `/scan` endpoint already provided: Volume,
+  Beta, Squeeze state (ON/FIRED), stacked Support (S1–S3) and Resistance
+  (R1–R3) zones.
+- Active filters and the selected index persist across launches
+  (AsyncStorage / localStorage).
+- **CSV export** of the filtered, sorted table — real file download on web,
+  OS share sheet on mobile (31 data columns).
+- **Stock detail view**: tap any symbol for a 6-month candle chart, live
+  technicals, pivots, and fundamentals with company profile — the RN
+  counterpart of the legacy report modal.
+
 ## [2.0.0] — 2026-07-11
 Complete frontend rewrite in **React Native (Expo SDK 57)**. The same codebase
 now ships as the live website (via `react-native-web`) and as a native mobile
@@ -72,5 +93,6 @@ Oracle Always-Free VM with push-to-deploy.
 - Embedded TradingView Advanced Chart tab, plus deep-link to the user's
   logged-in TradingView account.
 
+[2.1.0]: https://github.com/alexOutcastX/QUANTHUNT_Prototype/releases/tag/v2.1.0
 [2.0.0]: https://github.com/alexOutcastX/QUANTHUNT_Prototype/releases/tag/v2.0.0
 [1.0.0]: https://github.com/alexOutcastX/QUANTHUNT_Prototype/releases/tag/v1.0.0

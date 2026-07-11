@@ -76,6 +76,15 @@ feature/* ──PR──▶ main (CI, integration; does NOT deploy)
 
 Canonical per-version notes are in **[CHANGELOG.md](CHANGELOG.md)**. Summary:
 
+### v2.1.0 — screener parity & polish
+
+| Area | Change |
+|---|---|
+| Fix | Pending fundamentals poll until delivered (no more silent exclusions) |
+| Screener | +6 live columns: Volume, Beta, Squeeze, S1–S3, R1–R3 |
+| Screener | Filters + index persist across launches; CSV export (web download / native share) |
+| Screener | Tap-a-symbol stock detail: chart + technicals + pivots + fundamentals |
+
 ### v2.0.0 — React Native rewrite (web + mobile from one codebase)
 
 | Area | Change |
