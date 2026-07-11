@@ -12,6 +12,7 @@ from flask_cors import CORS
 import requests, logging, time, threading, os, io, csv, datetime, math, sys
 import pandas as pd
 import fundamentals as _fund   # bulk fundamentals cache (EODHD + yfinance fallback)
+import scanner as _scanner     # live per-symbol technical scan for the screener
 
 # Support both normal run and PyInstaller frozen exe
 _BASE_DIR = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
@@ -240,14 +241,37 @@ def _no_cache(response):
     response.headers["Expires"] = "0"
     return response
 
+# Exported React Native web build (Expo). When present it becomes the live UI;
+# the legacy single-file HTML stays available at /legacy and as a fallback.
+WEB_DIR = os.path.join(_BASE_DIR, "mobile", "dist")
+_WEB_INDEX = os.path.join(WEB_DIR, "index.html")
+
+
 @app.route("/")
 def index():
+    if os.path.exists(_WEB_INDEX):
+        return _no_cache(send_from_directory(WEB_DIR, "index.html"))
+    return _no_cache(send_from_directory(_BASE_DIR, "StockScreenPro.html"))
+
+
+@app.route("/legacy")
+def legacy_ui():
     return _no_cache(send_from_directory(_BASE_DIR, "StockScreenPro.html"))
 
 
 @app.route("/<path:fname>")
 def static_files(fname):
-    return _no_cache(send_from_directory(".", fname))
+    # 1) Prefer the RN-web bundle (index.html SPA shell, _expo/*, assets/*, favicon)
+    if os.path.isfile(os.path.join(WEB_DIR, fname)):
+        return _no_cache(send_from_directory(WEB_DIR, fname))
+    # 2) Fall back to repo-root files (StockScreenPro.html, VERSION, legacy assets)
+    if os.path.isfile(os.path.join(_BASE_DIR, fname)):
+        return _no_cache(send_from_directory(_BASE_DIR, fname))
+    # 3) SPA fallback: unknown non-API paths → the web shell (API routes are
+    #    matched by Flask before this catch-all, so they're unaffected)
+    if os.path.exists(_WEB_INDEX):
+        return _no_cache(send_from_directory(WEB_DIR, "index.html"))
+    return ("Not found", 404)
 
 
 def _app_version():
@@ -724,6 +748,24 @@ def returns():
             out[sym] = data
     log.info("Returns: computed %d/%d symbols", sum(1 for v in out.values() if v), len(symbols))
     return jsonify(out)
+
+
+@app.route("/scan")
+def scan():
+    """Live technical indicators per symbol for the screener filter engine.
+
+    Query: ?symbols=A,B,C (max 60). Returns computed + cached rows; call again
+    for the same symbols within the cache TTL to get instant results.
+    """
+    raw = request.args.get("symbols", "").strip().upper()
+    if not raw:
+        return jsonify({"error": "symbols required", "data": {}}), 400
+    symbols = [s.strip() for s in raw.split(",") if s.strip()]
+    try:
+        return jsonify(_scanner.scan(symbols))
+    except Exception as e:
+        log.error("Scan error: %s", e)
+        return jsonify({"error": str(e), "data": {}}), 502
 
 
 @app.route("/report")
