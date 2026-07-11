@@ -200,16 +200,33 @@ export const api = {
     }
     return merged;
   },
-  // Scans any number of symbols by batching into 60-symbol requests and merging.
-  scan: async (symbols: string[]): Promise<ScanResp> => {
+  // Scans any number of symbols in small batches so results stream in instead
+  // of blocking on one huge request (a cold 50-symbol scan can take a minute;
+  // 12 at a time returns the first technicals within seconds). onBatch fires
+  // after each batch with that batch's rows and overall progress.
+  scan: async (
+    symbols: string[],
+    opts?: {
+      batch?: number;
+      onBatch?: (data: Record<string, ScanRow>, done: number, total: number) => void;
+    },
+  ): Promise<ScanResp> => {
+    const size = opts?.batch ?? 12;
     const merged: Record<string, ScanRow> = {};
     let cached = 0;
     let computed = 0;
-    for (let i = 0; i < symbols.length; i += 60) {
-      const res = await scanBatch(symbols.slice(i, i + 60));
-      Object.assign(merged, res.data || {});
-      cached += res.cached || 0;
-      computed += res.computed || 0;
+    for (let i = 0; i < symbols.length; i += size) {
+      const slice = symbols.slice(i, i + size);
+      try {
+        const res = await scanBatch(slice);
+        Object.assign(merged, res.data || {});
+        cached += res.cached || 0;
+        computed += res.computed || 0;
+        opts?.onBatch?.(res.data || {}, Math.min(i + size, symbols.length), symbols.length);
+      } catch {
+        // One failed batch shouldn't kill the whole scan — report progress and move on.
+        opts?.onBatch?.({}, Math.min(i + size, symbols.length), symbols.length);
+      }
     }
     return { data: merged, count: Object.keys(merged).length, cached, computed };
   },

@@ -750,6 +750,39 @@ def returns():
     return jsonify(out)
 
 
+# ── Scan cache warmer ────────────────────────────────────────────────────────
+# Pre-computes technicals for the default screener index so first visitors hit
+# a hot cache instead of waiting out a cold 50-symbol yfinance sweep. Refreshes
+# just inside scanner's 5-min TTL. Disable with SCAN_WARM=off; point at another
+# index with e.g. SCAN_WARM="NIFTY 100".
+SCAN_WARM = os.environ.get("SCAN_WARM", "NIFTY 50").strip()
+
+
+def _warm_scan_loop():
+    time.sleep(15)  # let the service settle before hitting data sources
+    while True:
+        try:
+            key = NSE_INDEX_MAP.get(SCAN_WARM.upper())
+            syms = []
+            if key:
+                data = nse_get("/api/equity-stockIndices", params={"index": key})
+                syms = [it.get("symbol") for it in data.get("data", [])
+                        if it.get("symbol") and it.get("symbol") != key]
+            if syms:
+                res = _scanner.scan(syms)
+                log.info("Scan warm: %s -> %d/%d rows (%d computed)",
+                         SCAN_WARM, res["count"], len(syms[:60]), res["computed"])
+        except Exception as e:
+            log.warning("Scan warm failed: %s", e)
+        time.sleep(240)
+
+
+def start_scan_warm():
+    """Start the warm loop once (called from __main__ and wsgi.py)."""
+    if SCAN_WARM and SCAN_WARM.lower() not in ("0", "off", "false", "no"):
+        threading.Thread(target=_warm_scan_loop, name="scan-warm", daemon=True).start()
+
+
 @app.route("/scan")
 def scan():
     """Live technical indicators per symbol for the screener filter engine.
@@ -1256,6 +1289,7 @@ def analyze():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     threading.Thread(target=_prefetch_universe, daemon=True).start()
+    start_scan_warm()
     print("\n" + "=" * 60)
     print("  QuantHunt — NSE Direct + YF fallback")
     print("  Universe: bhavcopy EQ/BE + NIFTY MICROCAP 250")
