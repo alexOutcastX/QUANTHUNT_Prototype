@@ -3054,7 +3054,7 @@ function setSeg(segId, btn, showId, hideId) {
     document.getElementById(hideId).style.display = 'none';
     // Re-filter when switching between Market Cap and Index mode
     setTimeout(() => {
-      DATA = applyRsiFilter(getActiveData());
+      DATA = getScreenedData();
       const tf = document.querySelector('#tfSeg .seg-btn.active').textContent;
       const isIndex = btn.textContent.trim() === 'Index';
       const label = isIndex
@@ -3336,7 +3336,7 @@ function runScan() {
       const universeLabel = isIndex
         ? document.getElementById('indexSel').value
         : document.getElementById('capRange').value;
-      DATA = applyRsiFilter(getActiveData());
+      DATA = getScreenedData();
       renderTable();
       const demoNote = activeSource === 'yahoo' || (!dhanClientId && !tdApiKey && !avApiKey) ? ' · demo data' : ' · live data';
       document.getElementById('sTxt').textContent = 'Scan complete · ' + maxStocks + ' stocks in universe · ' + DATA.length + ' matched · ' + universeLabel + ' · ' + tf + demoNote;
@@ -4519,7 +4519,7 @@ async function fetchAllPrices() {
       });
 
       // Apply current filters and re-render
-      DATA = applyRsiFilter(getActiveData());
+      DATA = getScreenedData();
       txt.textContent   = gotAny
         ? `Full market scan complete · ${ok.toLocaleString()} live prices · ${DATA.length} matched filters`
         : `Dhan batch failed — check token in server.py`;
@@ -5352,19 +5352,374 @@ renderUniverse();
 
 // Live re-filter when universe selection changes (without needing to press scan)
 document.getElementById('capRange').addEventListener('change', () => {
-  DATA = applyRsiFilter(getActiveData());
+  DATA = getScreenedData();
   const tf = document.querySelector('#tfSeg .seg-btn.active').textContent;
   document.getElementById('scanCount').textContent = DATA.length + ' matches · ' + document.getElementById('capRange').value + ' · ' + tf;
   renderTable();
 });
 document.getElementById('indexSel').addEventListener('change', () => {
-  DATA = applyRsiFilter(getActiveData());
+  DATA = getScreenedData();
   const tf = document.querySelector('#tfSeg .seg-btn.active').textContent;
   document.getElementById('scanCount').textContent = DATA.length + ' matches · ' + document.getElementById('indexSel').value + ' · ' + tf;
   renderTable();
 });
-document.getElementById('rsiMin').addEventListener('change', () => { DATA = applyRsiFilter(getActiveData()); renderTable(); });
-document.getElementById('rsiMax').addEventListener('change', () => { DATA = applyRsiFilter(getActiveData()); renderTable(); });
+document.getElementById('rsiMin').addEventListener('change', () => { DATA = getScreenedData(); renderTable(); });
+document.getElementById('rsiMax').addEventListener('change', () => { DATA = getScreenedData(); renderTable(); });
+
+
+/* ══════════════════════════════════════════════════════════════════
+   ADVANCED FILTER SYSTEM  ("All Filters" drawer + pinned sidebar)
+   Additive, monochrome, vanilla JS. Integrates via getScreenedData().
+   ══════════════════════════════════════════════════════════════════ */
+
+// ── value helpers (guard undefined → technical filters are lenient) ──
+function teNum(v){ const n = (typeof v === 'number') ? v : parseFloat(v); return (v===null||v===undefined||v===''||isNaN(n)) ? null : n; }
+function teInRange(v, val){
+  if(v===null || v===undefined || (typeof v==='number' && isNaN(v))) return true; // lenient (technical)
+  const mn = teNum(val && val.min), mx = teNum(val && val.max);
+  if(mn!==null && v < mn) return false;
+  if(mx!==null && v > mx) return false;
+  return true;
+}
+function teDmaDist(price, dma){ if(price==null || dma==null || !dma) return null; return (price - dma) / dma * 100; }
+// technical range eval from a getter; undefined value → pass
+function teTech(getter){ return (s, val) => { let v; try{ v = getter(s); }catch(e){ v = null; } return teInRange(v, val); }; }
+// fundamental range eval — STRICT: missing _fund/field → exclude
+function teFund(field){ return (s, val) => {
+  const f = s && s._fund; if(!f) return false;
+  const raw = f[field]; const v = teNum(raw);
+  if(v===null) return false;
+  const mn = teNum(val && val.min), mx = teNum(val && val.max);
+  if(mn!==null && v < mn) return false;
+  if(mx!==null && v > mx) return false;
+  return true;
+}; }
+
+const TE_SECTORS = ['Automobile','Banking','Capital Goods','Chemicals','Construction','Consumer Durables','Energy','FMCG','Financial Services','Healthcare','Information Technology','Infrastructure','Media','Metals & Mining','Oil & Gas','Pharmaceuticals','Power','Realty','Services','Telecom','Textiles'];
+
+// ── FILTER REGISTRY ──
+const FILTER_DEFS = [
+  // Trend
+  { key:'d20',           label:'Price vs 20 DMA',   group:'Trend',        type:'range', unit:'%',  eval: teTech(s => teDmaDist(s.price, s.d20)) },
+  { key:'d50',           label:'Price vs 50 DMA',   group:'Trend',        type:'range', unit:'%',  eval: teTech(s => teDmaDist(s.price, s.d50)) },
+  { key:'d200',          label:'Price vs 200 DMA',  group:'Trend',        type:'range', unit:'%',  eval: teTech(s => teDmaDist(s.price, s.d200)) },
+  { key:'macd',          label:'MACD Histogram',    group:'Trend',        type:'range',            eval: teTech(s => s.macd) },
+  { key:'pct_from_high', label:'% from 52W High',   group:'Trend',        type:'range', unit:'%',  eval: teTech(s => (s.pct_from_high!=null ? s.pct_from_high : (s.high52 ? (s.price - s.high52) / s.high52 * 100 : null))) },
+  { key:'pct_from_low',  label:'% from 52W Low',    group:'Trend',        type:'range', unit:'%',  eval: teTech(s => (s.pct_from_low!=null ? s.pct_from_low : (s.low52 ? (s.price - s.low52) / s.low52 * 100 : null))) },
+  // Momentum (RSI handled by sidebar — omitted here)
+  { key:'willr',         label:'Williams %R',       group:'Momentum',     type:'range',            eval: teTech(s => s.willr) },
+  { key:'bollb',         label:'Bollinger %B',      group:'Momentum',     type:'range',            eval: teTech(s => s.bollb) },
+  { key:'chg',           label:'Day % Change',      group:'Momentum',     type:'range', unit:'%',  eval: teTech(s => s.chg) },
+  // Volatility
+  { key:'sqzOn',         label:'Squeeze ON',        group:'Volatility',   type:'toggle',           eval:(s,val)=> val!==true ? true : (s.sqzOn==null ? true : s.sqzOn===true) },
+  { key:'sqzFire',       label:'Squeeze Fired',     group:'Volatility',   type:'toggle',           eval:(s,val)=> val!==true ? true : (s.sqzFire==null ? true : s.sqzFire===true) },
+  { key:'sqzMom',        label:'Squeeze Momentum',  group:'Volatility',   type:'range',            eval: teTech(s => s.sqzMom) },
+  // Volume
+  { key:'vol',           label:'Volume',            group:'Volume',       type:'range',            eval: teTech(s => s.vol) },
+  { key:'avgvol',        label:'Avg Volume',        group:'Volume',       type:'range',            eval: teTech(s => s.avgvol) },
+  { key:'relvol',        label:'Relative Volume',   group:'Volume',       type:'range', unit:'x',  eval: teTech(s => (s.avgvol ? s.vol / s.avgvol : null)) },
+  // Structure
+  { key:'price',         label:'Price',             group:'Structure',    type:'range', unit:'₹',  eval: teTech(s => s.price) },
+  { key:'cap',           label:'Market Cap',        group:'Structure',    type:'range', unit:'₹cr',eval: teTech(s => s.mcr) },
+  { key:'beta',          label:'Beta',              group:'Structure',    type:'range',            eval: teTech(s => s.beta) },
+  { key:'above_s1',      label:'% above Support S1',group:'Structure',    type:'range', unit:'%',  eval: teTech(s => (s.s1 ? (s.price - s.s1) / s.s1 * 100 : null)) },
+  { key:'below_r1',      label:'% below Resist. R1',group:'Structure',    type:'range', unit:'%',  eval: teTech(s => (s.r1 ? (s.r1 - s.price) / s.r1 * 100 : null)) },
+  // Fundamentals (lazy, per-symbol)
+  { key:'pe',            label:'P/E',               group:'Fundamentals', type:'range', fund:true, eval: teFund('pe') },
+  { key:'forward_pe',    label:'Forward P/E',       group:'Fundamentals', type:'range', fund:true, eval: teFund('forward_pe') },
+  { key:'pb',            label:'P/B',               group:'Fundamentals', type:'range', fund:true, eval: teFund('pb') },
+  { key:'eps',           label:'EPS',               group:'Fundamentals', type:'range', fund:true, eval: teFund('eps') },
+  { key:'dividend_yield',label:'Dividend Yield',    group:'Fundamentals', type:'range', unit:'%', fund:true, eval: teFund('dividend_yield') },
+  { key:'roe',           label:'ROE',               group:'Fundamentals', type:'range', unit:'%', fund:true, eval: teFund('roe') },
+  { key:'roce',          label:'ROCE',              group:'Fundamentals', type:'range', unit:'%', fund:true, eval: teFund('roce') },
+  { key:'debt_equity',   label:'Debt / Equity',     group:'Fundamentals', type:'range', fund:true, eval: teFund('debt_equity') },
+  { key:'current_ratio', label:'Current Ratio',     group:'Fundamentals', type:'range', fund:true, eval: teFund('current_ratio') },
+  { key:'market_cap_cr', label:'Market Cap',        group:'Fundamentals', type:'range', unit:'₹cr',fund:true, eval: teFund('market_cap_cr') },
+  { key:'sector',        label:'Sector',            group:'Fundamentals', type:'select', options: TE_SECTORS, fund:true, eval:(s,val)=>{ if(!val) return true; const f=s&&s._fund; if(!f) return false; const sec=(f.sector||f.industry||''); if(!sec) return false; return String(sec).toLowerCase().includes(String(val).toLowerCase()); } },
+];
+const TE_GROUPS = ['Trend','Momentum','Volatility','Volume','Structure','Fundamentals'];
+const TE_DEF_BY_KEY = {}; FILTER_DEFS.forEach(d => { TE_DEF_BY_KEY[d.key] = d; });
+
+// ── STATE + PERSISTENCE ──
+let activeFilters = {};      // { key: {min,max} | string | true }
+let pinnedFilters = [];      // array of keys pinned to sidebar
+function teLoadState(){
+  try{ const a = JSON.parse(localStorage.getItem('te_activeFilters')); if(a && typeof a==='object') activeFilters = a; }catch(e){}
+  try{ const p = JSON.parse(localStorage.getItem('te_pinnedFilters')); if(Array.isArray(p)) pinnedFilters = p.filter(k => TE_DEF_BY_KEY[k]); }catch(e){}
+}
+function teSaveState(){
+  try{ localStorage.setItem('te_activeFilters', JSON.stringify(activeFilters)); }catch(e){}
+  try{ localStorage.setItem('te_pinnedFilters', JSON.stringify(pinnedFilters)); }catch(e){}
+}
+function teIsActive(def, val){
+  if(!def) return false;
+  if(def.type==='range')  return !!val && (teNum(val.min)!==null || teNum(val.max)!==null);
+  if(def.type==='select') return typeof val==='string' && val.trim()!=='';
+  if(def.type==='toggle') return val===true;
+  return false;
+}
+function teActiveCount(){ return FILTER_DEFS.reduce((n,d)=> n + (teIsActive(d, activeFilters[d.key]) ? 1 : 0), 0); }
+function teHasActiveFund(){ return FILTER_DEFS.some(d => d.fund && teIsActive(d, activeFilters[d.key])); }
+
+// ── CORE FILTERING (technical, synchronous) ──
+function applyAdvancedFilters(pool){
+  if(!Array.isArray(pool)) return pool || [];
+  let out = pool;
+  FILTER_DEFS.forEach(def => {
+    if(def.fund) return;                                  // fundamentals handled async
+    const val = activeFilters[def.key];
+    if(!teIsActive(def, val)) return;
+    out = out.filter(s => { try{ return def.eval(s, val); }catch(e){ return true; } });
+  });
+  return out;
+}
+function getScreenedData(){ return applyAdvancedFilters(applyRsiFilter(getActiveData())); }
+
+// ── FUNDAMENTALS (lazy, per-symbol, capped concurrency) ──
+let _teFundRun = 0;
+async function applyFundamentalFilters(){
+  const activeFund = FILTER_DEFS.filter(d => d.fund && teIsActive(d, activeFilters[d.key]));
+  const base = getScreenedData();                         // technical + RSI narrowed pool
+  if(!activeFund.length){ DATA = base; renderTable(); teHideFundProg(); return; }
+  const myRun = ++_teFundRun;
+  const need = base.filter(s => !s._fund);
+  let done = 0;
+  teShowFundProg(0, need.length);
+  const queue = need.slice();
+  async function worker(){
+    while(queue.length){
+      if(myRun !== _teFundRun) return;                    // superseded by newer run
+      const s = queue.shift();
+      try{
+        const r = await fetch('/fundamentals?symbol=' + encodeURIComponent(s.sym));
+        s._fund = r.ok ? await r.json() : {};             // best-effort; {} → excluded by strict evals
+      }catch(e){ s._fund = {}; }
+      done++; if(myRun===_teFundRun) teShowFundProg(done, need.length);
+    }
+  }
+  const workers = [];
+  for(let i=0; i<Math.min(6, need.length); i++) workers.push(worker());
+  await Promise.all(workers);
+  if(myRun !== _teFundRun) return;                         // a newer run took over
+  teHideFundProg();
+  let out = base;
+  activeFund.forEach(def => {
+    const val = activeFilters[def.key];
+    out = out.filter(s => { try{ return def.eval(s, val); }catch(e){ return false; } });
+  });
+  DATA = out; renderTable();
+}
+
+// ── central re-filter entrypoint ──
+function teRefilter(){
+  teSaveState();
+  teUpdateBadge();
+  DATA = getScreenedData();
+  renderTable();
+  if(teHasActiveFund()) applyFundamentalFilters();         // uses cached _fund; fetches only missing
+}
+
+// ── STATE MUTATORS (called from controls) ──
+function teSetRange(key, which, value, srcCtx){
+  const v = (activeFilters[key] && typeof activeFilters[key]==='object') ? activeFilters[key] : {min:'',max:''};
+  v[which] = value;
+  activeFilters[key] = { min: v.min||'', max: v.max||'' };
+  teSyncCounterpart(key, which, value, srcCtx);
+  teRefilter();
+}
+function teSetSelect(key, value){ activeFilters[key] = value || ''; teSyncSelect(key); teRefilter(); teRenderCustomSidebar(); teRenderDrawerBody(); }
+function teSetToggle(key){ activeFilters[key] = (activeFilters[key]===true) ? false : true; teRefilter(); teRenderCustomSidebar(); teRenderDrawerBody(); }
+function teSyncCounterpart(key, which, value, srcCtx){
+  const other = srcCtx==='dr' ? 'sb' : 'dr';
+  const el = document.getElementById('te_'+other+'_'+key+'_'+which);
+  if(el && el.value !== value) el.value = value;
+}
+function teSyncSelect(key){
+  ['dr','sb'].forEach(ctx => { const el = document.getElementById('te_'+ctx+'_'+key+'_sel'); if(el) el.value = activeFilters[key] || ''; });
+}
+function teClearAll(){ activeFilters = {}; teSaveState(); teRenderDrawerBody(); teRenderCustomSidebar(); teUpdateBadge(); DATA = getScreenedData(); renderTable(); }
+
+// ── PIN MANAGEMENT ──
+function teTogglePin(key){
+  const i = pinnedFilters.indexOf(key);
+  if(i>=0) pinnedFilters.splice(i,1); else pinnedFilters.push(key);
+  teSaveState(); teRenderDrawerBody(); teRenderCustomSidebar();
+}
+function teRemovePin(key){ const i = pinnedFilters.indexOf(key); if(i>=0){ pinnedFilters.splice(i,1); teSaveState(); teRenderDrawerBody(); teRenderCustomSidebar(); } }
+
+// ── CONTROL HTML BUILDERS ──
+function teCtlHtml(def, ctx){
+  const val = activeFilters[def.key];
+  const id = 'te_'+ctx+'_'+def.key;
+  if(def.type==='range'){
+    const mn = (val && val.min!=null) ? val.min : '';
+    const mx = (val && val.max!=null) ? val.max : '';
+    return `<div class="te-row-ctl">`+
+      `<input type="number" class="te-num" id="${id}_min" placeholder="min" value="${mn}" oninput="teSetRange('${def.key}','min',this.value,'${ctx}')">`+
+      `<span class="te-dash">–</span>`+
+      `<input type="number" class="te-num" id="${id}_max" placeholder="max" value="${mx}" oninput="teSetRange('${def.key}','max',this.value,'${ctx}')">`+
+      (def.unit ? `<span class="te-unit">${def.unit}</span>` : ``)+
+    `</div>`;
+  }
+  if(def.type==='select'){
+    const cur = (typeof val==='string') ? val : '';
+    const opts = ['<option value="">Any</option>'].concat((def.options||[]).map(o => `<option value="${o}"${o===cur?' selected':''}>${o}</option>`)).join('');
+    return `<div class="te-row-ctl"><select class="te-sel" id="${id}_sel" onchange="teSetSelect('${def.key}',this.value)">${opts}</select></div>`;
+  }
+  if(def.type==='toggle'){
+    const on = val===true;
+    return `<div class="te-row-ctl"><button type="button" class="te-toggle${on?' on':''}" id="${id}_tgl" onclick="teSetToggle('${def.key}')">${on?'ON':'Off'}</button></div>`;
+  }
+  return '';
+}
+
+// ── DRAWER BODY RENDER ──
+function teRenderDrawerBody(){
+  const body = document.getElementById('teDrawerBody');
+  if(!body) return;
+  let html = '';
+  TE_GROUPS.forEach(grp => {
+    const defs = FILTER_DEFS.filter(d => d.group===grp);
+    if(!defs.length) return;
+    html += `<div class="te-grp"><div class="te-grp-hd">${grp}</div>`;
+    defs.forEach(def => {
+      const pinned = pinnedFilters.indexOf(def.key)>=0;
+      html += `<div class="te-row">`+
+        `<button class="te-pin${pinned?' on':''}" title="${pinned?'Unpin from sidebar':'Pin to sidebar'}" onclick="teTogglePin('${def.key}')">📌</button>`+
+        `<span class="te-row-lbl">${def.label}${def.unit?` <span class="te-unit">(${def.unit})</span>`:''}</span>`+
+        teCtlHtml(def, 'dr')+
+      `</div>`;
+    });
+    if(grp==='Fundamentals'){
+      html += `<button class="te-apply-fund" onclick="applyFundamentalFilters()">Apply fundamentals</button>`+
+        `<div class="te-fundnote">Fundamentals load per-symbol (slow in bulk).</div>`;
+    }
+    html += `</div>`;
+  });
+  body.innerHTML = html;
+}
+
+// ── CUSTOM FILTERS SIDEBAR RENDER ──
+function teRenderCustomSidebar(){
+  const panel = document.getElementById('teCustomPanel');
+  const body  = document.getElementById('teCustomBody');
+  if(!panel || !body) return;
+  if(!pinnedFilters.length){ panel.style.display='none'; body.innerHTML=''; return; }
+  panel.style.display='';
+  body.innerHTML = pinnedFilters.map(key => {
+    const def = TE_DEF_BY_KEY[key]; if(!def) return '';
+    return `<div class="te-cf-item">`+
+      `<div class="te-cf-row"><span class="te-cf-lbl">${def.label}${def.unit?` (${def.unit})`:''}</span>`+
+      `<button class="te-cf-x" title="Remove" onclick="teRemovePin('${key}')">✕</button></div>`+
+      teCtlHtml(def, 'sb')+
+    `</div>`;
+  }).join('');
+}
+
+// ── BADGE + PROGRESS ──
+function teUpdateBadge(){
+  const b = document.getElementById('teAfBadge'); if(!b) return;
+  const n = teActiveCount();
+  b.textContent = n; b.style.display = n>0 ? '' : 'none';
+}
+function teShowFundProg(done, total){
+  const el = document.getElementById('teFundProg'); if(!el) return;
+  el.style.display=''; el.textContent = total ? `Fetching fundamentals ${done}/${total}…` : 'Applying fundamentals…';
+}
+function teHideFundProg(){ const el = document.getElementById('teFundProg'); if(el) el.style.display='none'; }
+
+// ── DRAWER OPEN/CLOSE ──
+function openFilterDrawer(){ teRenderDrawerBody(); const d=document.getElementById('teDrawer'), o=document.getElementById('teOverlay'); if(d) d.classList.add('open'); if(o) o.classList.add('open'); if(d) d.setAttribute('aria-hidden','false'); }
+function closeFilterDrawer(){ const d=document.getElementById('teDrawer'), o=document.getElementById('teOverlay'); if(d){ d.classList.remove('open'); d.setAttribute('aria-hidden','true'); } if(o) o.classList.remove('open'); }
+
+// ── ONE-TIME UI INJECTION + INIT ──
+(function teInit(){
+  // styles
+  const css = `
+  .te-af-btn{display:inline-flex;align-items:center;gap:6px;margin-left:auto;background:var(--bg3);border:1px solid var(--border2);color:var(--text);font-family:var(--font-sans);font-size:11px;font-weight:600;padding:5px 11px;border-radius:6px;cursor:pointer;transition:background .15s,border-color .15s;}
+  .te-af-btn:hover{background:var(--card);border-color:var(--muted2);}
+  .te-af-badge{background:var(--accent);color:var(--on-accent);border-radius:10px;min-width:17px;height:17px;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;padding:0 5px;font-family:var(--font-mono);}
+  .te-fundprog{font-size:10px;color:var(--muted2);font-family:var(--font-mono);}
+  .te-overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);opacity:0;visibility:hidden;transition:opacity .2s;z-index:1998;}
+  .te-overlay.open{opacity:1;visibility:visible;}
+  .te-drawer{position:fixed;top:0;right:0;height:100vh;width:360px;max-width:92vw;background:var(--bg2);border-left:1px solid var(--border2);box-shadow:-8px 0 30px rgba(0,0,0,.45);transform:translateX(100%);transition:transform .22s ease;z-index:1999;display:flex;flex-direction:column;font-family:var(--font-sans);}
+  .te-drawer.open{transform:translateX(0);}
+  .te-drawer-hd{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--border);background:var(--bg3);}
+  .te-drawer-hd .te-title{font-size:14px;font-weight:700;color:var(--text);letter-spacing:.3px;}
+  .te-drawer-hd-actions{display:flex;align-items:center;gap:8px;}
+  .te-clear{background:transparent;border:1px solid var(--border2);color:var(--muted2);font-size:11px;padding:4px 9px;border-radius:5px;cursor:pointer;font-family:var(--font-sans);}
+  .te-clear:hover{color:var(--text);border-color:var(--muted2);}
+  .te-close{background:transparent;border:none;color:var(--muted2);font-size:16px;cursor:pointer;line-height:1;padding:2px 6px;}
+  .te-close:hover{color:var(--text);}
+  .te-drawer-body{flex:1;overflow-y:auto;padding:6px 14px 48px;}
+  .te-grp{margin-top:14px;}
+  .te-grp-hd{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);padding:6px 2px;border-bottom:1px solid var(--border);margin-bottom:4px;}
+  .te-row{display:flex;align-items:center;gap:8px;padding:6px 2px;}
+  .te-row-lbl{flex:1;font-size:12px;color:var(--text);}
+  .te-row-lbl .te-unit{color:var(--muted);font-size:10px;}
+  .te-row-ctl{display:flex;align-items:center;gap:5px;}
+  .te-num{width:54px;background:var(--bg);border:1px solid var(--border2);color:var(--text);border-radius:5px;padding:4px 6px;font-size:11px;font-family:var(--font-mono);outline:none;}
+  .te-num:focus{border-color:var(--accent2);}
+  .te-dash{color:var(--muted);font-size:11px;}
+  .te-unit{color:var(--muted);font-size:10px;}
+  .te-sel{background:var(--bg);border:1px solid var(--border2);color:var(--text);border-radius:5px;padding:4px 6px;font-size:11px;font-family:var(--font-sans);outline:none;max-width:140px;}
+  .te-toggle{background:var(--bg);border:1px solid var(--border2);color:var(--muted2);border-radius:5px;padding:4px 12px;font-size:11px;cursor:pointer;font-family:var(--font-sans);}
+  .te-toggle.on{background:var(--accent);color:var(--on-accent);border-color:var(--accent);font-weight:600;}
+  .te-pin{background:transparent;border:none;cursor:pointer;font-size:12px;opacity:.35;padding:2px;filter:grayscale(1);}
+  .te-pin.on{opacity:1;}
+  .te-pin:hover{opacity:.75;}
+  .te-apply-fund{width:100%;margin-top:8px;background:var(--bg3);border:1px solid var(--border2);color:var(--text);font-size:11px;font-weight:600;padding:7px;border-radius:6px;cursor:pointer;font-family:var(--font-sans);}
+  .te-apply-fund:hover{background:var(--card);border-color:var(--muted2);}
+  .te-fundnote{font-size:10px;color:var(--muted);margin-top:5px;text-align:center;}
+  .te-cf-item{margin-bottom:10px;}
+  .te-cf-row{display:flex;align-items:center;gap:6px;margin-bottom:5px;}
+  .te-cf-lbl{flex:1;font-size:11px;color:var(--muted2);}
+  .te-cf-x{background:transparent;border:none;color:var(--muted);cursor:pointer;font-size:12px;padding:0 4px;}
+  .te-cf-x:hover{color:var(--text);}
+  `;
+  const st = document.createElement('style'); st.textContent = css; document.head.appendChild(st);
+
+  // "All Filters" button + fund progress → results status bar
+  const statusBar = document.querySelector('#pageResults .status-bar');
+  if(statusBar){
+    const prog = document.createElement('span'); prog.id='teFundProg'; prog.className='te-fundprog'; prog.style.display='none';
+    const btn = document.createElement('button'); btn.id='teAfBtn'; btn.className='te-af-btn'; btn.type='button';
+    btn.innerHTML = `⚙ All Filters <span id="teAfBadge" class="te-af-badge" style="display:none;">0</span>`;
+    btn.addEventListener('click', openFilterDrawer);
+    statusBar.appendChild(prog); statusBar.appendChild(btn);
+  }
+
+  // Overlay + drawer → body
+  const overlay = document.createElement('div'); overlay.id='teOverlay'; overlay.className='te-overlay';
+  overlay.addEventListener('click', closeFilterDrawer);
+  const drawer = document.createElement('aside'); drawer.id='teDrawer'; drawer.className='te-drawer'; drawer.setAttribute('aria-hidden','true');
+  drawer.innerHTML = `
+    <div class="te-drawer-hd">
+      <span class="te-title">All Filters</span>
+      <div class="te-drawer-hd-actions">
+        <button class="te-clear" type="button" onclick="teClearAll()">Clear all</button>
+        <button class="te-close" type="button" onclick="closeFilterDrawer()" aria-label="Close">✕</button>
+      </div>
+    </div>
+    <div class="te-drawer-body" id="teDrawerBody"></div>`;
+  document.body.appendChild(overlay); document.body.appendChild(drawer);
+  document.addEventListener('keydown', e => { if(e.key==='Escape') closeFilterDrawer(); });
+
+  // "Custom Filters" sidebar panel → before Run Screener button
+  const scanBtn = document.getElementById('scanBtn');
+  if(scanBtn && scanBtn.parentNode){
+    const panel = document.createElement('div'); panel.className='panel'; panel.id='teCustomPanel'; panel.style.display='none';
+    panel.innerHTML = `<div class="panel-hd"><div class="panel-hd-bar"></div>Custom Filters</div><div id="teCustomBody"></div>`;
+    scanBtn.parentNode.insertBefore(panel, scanBtn);
+  }
+
+  // restore state + initial render
+  teLoadState();
+  teRenderDrawerBody();
+  teRenderCustomSidebar();
+  teUpdateBadge();
+  if(teActiveCount() > 0){ DATA = getScreenedData(); renderTable(); if(teHasActiveFund()) applyFundamentalFilters(); }
+})();
 
 
 </script>
