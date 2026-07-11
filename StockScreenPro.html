@@ -1505,9 +1505,9 @@
       <div class="tabs">
         <div class="tab active" data-page="pageUniverse" onclick="setTab(this)">Stock Universe</div>
         <div class="tab" data-page="pageResults" onclick="setTab(this)">Screener</div>
+        <div class="tab" data-page="pageAnalysis" onclick="setTab(this)">Analysis</div>
         <div class="tab" data-page="pageTracklist" onclick="setTab(this)">Track List <span id="tlCount" style="background:var(--accent);color:var(--on-accent);border-radius:3px;padding:1px 6px;font-size:10px;margin-left:4px;display:none;">0</span></div>
         <div class="tab" data-page="pageWatchlist" onclick="setTab(this)">Watchlist</div>
-        <div class="tab" data-page="pageBacktest" onclick="setTab(this)">Backtest</div>
       </div>
       <div style="font-size:11px;color:var(--muted);font-family:var(--font-mono);padding-right:4px;" id="scanCount">
         847 stocks scanned · Mid Cap · Daily
@@ -1608,8 +1608,39 @@
       </div>
     </div>
 
-    <!-- BACKTEST PAGE -->
-    <div class="page" id="pageBacktest" style="padding:20px;overflow-y:auto;">
+    <!-- ANALYSIS PAGE (Institutional Analysis + Strategy Backtest) -->
+    <div class="page" id="pageAnalysis" style="padding:20px;overflow-y:auto;">
+
+      <!-- Sub-view toggle -->
+      <div class="seg" id="anSeg" style="max-width:380px;margin-bottom:18px;">
+        <button class="seg-btn active" onclick="setAnalysisView('inst',this)">Institutional Analysis</button>
+        <button class="seg-btn" onclick="setAnalysisView('bt',this)">Strategy Backtest</button>
+      </div>
+
+      <!-- ── INSTITUTIONAL ANALYSIS SUB-PANEL ────────────────────────────── -->
+      <div id="anInst">
+        <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:14px 16px;margin-bottom:16px;">
+          <div style="position:relative;">
+            <div style="font-size:10px;color:var(--muted);margin-bottom:4px;text-transform:uppercase;letter-spacing:0.5px;">Symbol</div>
+            <input id="iaSym" type="text" placeholder="Search symbol / index…" autocomplete="off"
+              style="background:var(--bg2);border:1px solid var(--border);color:var(--text);border-radius:5px;padding:6px 10px;font-size:13px;font-family:var(--font-mono);width:200px;outline:none;"
+              oninput="_iaSymInput(this.value)" onkeydown="_iaSymKey(event)" onfocus="_iaSymInput(this.value)">
+            <div id="iaSymDrop" style="display:none;position:fixed;background:var(--bg3);border:1px solid var(--border);border-radius:6px;z-index:9999;min-width:220px;max-height:240px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,.5);"></div>
+          </div>
+          <div>
+            <div style="font-size:10px;color:var(--muted);margin-bottom:4px;text-transform:uppercase;letter-spacing:0.5px;">Upside target %</div>
+            <input id="iaTarget" type="number" value="10" min="1" step="1"
+              style="background:var(--bg2);border:1px solid var(--border);color:var(--text);border-radius:5px;padding:6px 10px;font-size:13px;font-family:var(--font-mono);width:90px;outline:none;">
+          </div>
+          <button onclick="runInstitutional()"
+            style="background:var(--accent);border:1px solid var(--accent);color:var(--on-accent);border-radius:6px;padding:7px 20px;font-size:13px;font-family:var(--font-mono);cursor:pointer;font-weight:700;">Analyze</button>
+        </div>
+        <div id="iaResults"></div>
+        <div id="iaMsg" style="color:var(--muted);font-family:var(--font-mono);font-size:13px;padding:40px 0;text-align:center;">Enter a symbol and click Analyze to run an institutional upside-probability assessment.</div>
+      </div>
+
+      <!-- ── STRATEGY BACKTEST SUB-PANEL ─────────────────────────────────── -->
+      <div id="anBacktest" style="display:none;">
 
       <!-- Control strip -->
       <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;background:#0d1321;border:1px solid #1a2640;border-radius:8px;padding:14px 16px;margin-bottom:16px;">
@@ -1718,7 +1749,8 @@
         </div>
       </div>
       <div id="btMsg" style="color:#4a6080;font-family:'JetBrains Mono',monospace;font-size:13px;padding:40px 0;text-align:center;"></div>
-    </div>
+      </div><!-- /anBacktest -->
+    </div><!-- /pageAnalysis -->
 
     <!-- STRATEGY MANAGER MODAL -->
     <div id="btStratModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:10000;align-items:center;justify-content:center;">
@@ -7273,6 +7305,421 @@ function _btSymSelect(sym) {
   _btSymIdx = -1;
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// ANALYSIS TAB — sub-view toggle + INSTITUTIONAL ANALYSIS
+// ═══════════════════════════════════════════════════════════════════════════
+function setAnalysisView(which, btn) {
+  const seg = document.getElementById('anSeg');
+  if (seg && btn) { seg.querySelectorAll('.seg-btn').forEach(b => b.classList.remove('active')); btn.classList.add('active'); }
+  const inst = document.getElementById('anInst');
+  const bt   = document.getElementById('anBacktest');
+  if (inst) inst.style.display = which === 'inst' ? 'block' : 'none';
+  if (bt)   bt.style.display   = which === 'bt'   ? 'block' : 'none';
+}
+
+// ── Institutional symbol search (mirrors backtest autocomplete) ──────────────
+let _iaSymIdx = -1;
+let _iaYfSym  = '';
+
+function _iaPosDrop() {
+  const inp  = document.getElementById('iaSym');
+  const drop = document.getElementById('iaSymDrop');
+  if (!inp || !drop) return;
+  const r = inp.getBoundingClientRect();
+  drop.style.top   = (r.bottom + 4) + 'px';
+  drop.style.left  = r.left + 'px';
+  drop.style.width = Math.max(220, r.width) + 'px';
+}
+
+function _iaSymInput(val) {
+  _iaYfSym = '';
+  const drop = document.getElementById('iaSymDrop');
+  if (!drop) return;
+  const q = (val || '').trim().toUpperCase();
+  if (!q) { drop.style.display = 'none'; _iaSymIdx = -1; return; }
+  const idxHits   = (typeof _INDICES !== 'undefined' ? _INDICES : []).filter(x => x.sym.startsWith(q) || x.label.toUpperCase().includes(q));
+  const stockPool = window._univSymbols || [];
+  const stockHits = stockPool.filter(s => s.startsWith(q))
+                             .concat(stockPool.filter(s => !s.startsWith(q) && s.includes(q)));
+  const hits = [
+    ...idxHits.map(x => ({ sym: x.sym, label: x.label, isIdx: true })),
+    ...stockHits.slice(0, 12 - idxHits.length).map(s => ({ sym: s, label: s, isIdx: false })),
+  ];
+  if (!hits.length) { drop.style.display = 'none'; return; }
+  _iaSymIdx = -1;
+  drop.innerHTML = hits.map(h =>
+    `<div class="_iasym-opt" data-sym="${h.sym}" onmousedown="event.preventDefault();_iaSymSelect('${h.sym}')"
+      style="padding:7px 12px;font-size:12px;color:var(--text);cursor:pointer;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;"
+      onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background=''">
+      <span style="font-weight:600;">${h.sym}</span>
+      ${h.isIdx
+        ? `<span style="font-size:10px;color:var(--muted2);background:var(--bg2);padding:1px 5px;border-radius:3px;">INDEX</span>`
+        : `<span style="font-size:10px;color:var(--muted);">NSE</span>`}
+    </div>`
+  ).join('');
+  _iaPosDrop();
+  drop.style.display = 'block';
+}
+
+function _iaSymKey(e) {
+  const drop = document.getElementById('iaSymDrop');
+  if (!drop) return;
+  const opts = [...drop.querySelectorAll('._iasym-opt')];
+  if (!opts.length) {
+    if (e.key === 'Enter') { const v = document.getElementById('iaSym').value.trim().toUpperCase(); if (v) _iaSymSelect(v); }
+    return;
+  }
+  if (e.key === 'ArrowDown')      { e.preventDefault(); _iaSymIdx = Math.min(_iaSymIdx + 1, opts.length - 1); opts.forEach((o,i) => o.style.background = i === _iaSymIdx ? 'var(--bg2)' : ''); }
+  else if (e.key === 'ArrowUp')   { e.preventDefault(); _iaSymIdx = Math.max(_iaSymIdx - 1, 0); opts.forEach((o,i) => o.style.background = i === _iaSymIdx ? 'var(--bg2)' : ''); }
+  else if (e.key === 'Enter')     { e.preventDefault(); const sel = opts[_iaSymIdx] || opts[0]; if (sel) _iaSymSelect(sel.dataset.sym); }
+  else if (e.key === 'Escape')    { drop.style.display = 'none'; }
+}
+
+function _iaSymSelect(sym) {
+  const idxEntry = (typeof _INDICES !== 'undefined' ? _INDICES : []).find(x => x.sym === sym);
+  _iaYfSym = idxEntry ? idxEntry.yf : sym;
+  const inp = document.getElementById('iaSym');
+  if (inp) inp.value = idxEntry ? idxEntry.label : sym;
+  const drop = document.getElementById('iaSymDrop');
+  if (drop) drop.style.display = 'none';
+  _iaSymIdx = -1;
+}
+
+// ── Statistics helpers (exposed for unit testing) ────────────────────────────
+function teStats(C) {
+  if (!Array.isArray(C) || C.length < 2) return { mu: 0, sigma: 0 };
+  const r = [];
+  for (let i = 1; i < C.length; i++) {
+    const a = C[i - 1], b = C[i];
+    if (a > 0 && b > 0 && isFinite(a) && isFinite(b)) r.push(Math.log(b / a));
+  }
+  if (r.length < 1) return { mu: 0, sigma: 0 };
+  const mu = r.reduce((s, x) => s + x, 0) / r.length;
+  let v = 0;
+  for (const x of r) v += (x - mu) * (x - mu);
+  const sigma = r.length > 1 ? Math.sqrt(v / (r.length - 1)) : 0;
+  return { mu, sigma };
+}
+
+function _teRandN() { // Box-Muller standard normal
+  let u = 0, w = 0;
+  while (u === 0) u = Math.random();
+  while (w === 0) w = Math.random();
+  return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * w);
+}
+
+function _tePctile(sorted, p) {
+  if (!sorted.length) return 0;
+  const idx = (sorted.length - 1) * p;
+  const lo = Math.floor(idx), hi = Math.ceil(idx);
+  if (lo === hi) return sorted[lo];
+  return sorted[lo] + (sorted[hi] - sorted[lo]) * (idx - lo);
+}
+function _teMedian(arr) {
+  if (!arr.length) return 0;
+  const s = [...arr].sort((a, b) => a - b);
+  return _tePctile(s, 0.5);
+}
+
+function teMonteCarlo(C, targetPct, horizonDays, N) {
+  N = N || 5000;
+  const H = Math.max(1, Math.floor(horizonDays || 0));
+  const { mu, sigma } = teStats(C);
+  const thr = 1 + (targetPct || 0) / 100;
+  const terms = [], dds = [];
+  let reach = 0, up = 0;
+  for (let n = 0; n < N; n++) {
+    let p = 1, pmax = 1, peak = 1, maxdd = 0;
+    for (let t = 0; t < H; t++) {
+      // mu already contains the empirical −½σ² drift, so no extra correction
+      p *= Math.exp(mu + sigma * _teRandN());
+      if (p > pmax) pmax = p;
+      if (p > peak) peak = p;
+      const dd = p / peak - 1;
+      if (dd < maxdd) maxdd = dd;
+    }
+    if (pmax >= thr) reach++;
+    if (p > 1) up++;
+    terms.push(p);
+    dds.push(maxdd);
+  }
+  const sortedRet = terms.map(x => x - 1).sort((a, b) => a - b);
+  const expRet = terms.reduce((s, x) => s + x, 0) / N - 1;
+  const expMaxDD = dds.reduce((s, x) => s + x, 0) / N;
+  return {
+    pReach: reach / N,
+    pUp: up / N,
+    expRet,
+    medRet: _teMedian(terms) - 1,
+    p5: _tePctile(sortedRet, 0.05),
+    p95: _tePctile(sortedRet, 0.95),
+    expMaxDD
+  };
+}
+
+function teHistFreq(C, targetPct, horizonDays) {
+  const H = Math.max(1, Math.floor(horizonDays || 0));
+  const thr = 1 + (targetPct || 0) / 100;
+  const rets = [];
+  let reach = 0, up = 0, n = 0;
+  if (Array.isArray(C)) {
+    for (let i = 0; i + H < C.length; i++) {
+      const startP = C[i];
+      if (!(startP > 0)) continue;
+      let wmax = -Infinity;
+      for (let k = i + 1; k <= i + H; k++) if (C[k] > wmax) wmax = C[k];
+      const terminal = C[i + H];
+      if (wmax / startP >= thr) reach++;
+      if (terminal > startP) up++;
+      rets.push(terminal / startP - 1);
+      n++;
+    }
+  }
+  return { pReach: n ? reach / n : 0, pUp: n ? up / n : 0, medRet: _teMedian(rets), n };
+}
+
+// ── Institutional analysis run + render ──────────────────────────────────────
+const _IA_HORIZONS = [
+  { label: '1M', days: 21 },
+  { label: '3M', days: 63 },
+  { label: '6M', days: 126 },
+  { label: '1Y', days: 252 }
+];
+
+function _iaClamp(x) { return Math.max(0, Math.min(100, x)); }
+function _iaPct(x, d) { return (x == null || !isFinite(x)) ? '—' : (x * 100).toFixed(d == null ? 1 : d) + '%'; }
+function _iaSignedPct(x, d) {
+  if (x == null || !isFinite(x)) return '—';
+  const col = x >= 0 ? 'var(--green)' : 'var(--red)';
+  return `<span style="color:${col};">${(x >= 0 ? '+' : '') + (x * 100).toFixed(d == null ? 1 : d)}%</span>`;
+}
+function _iaNum(x, d) { return (x == null || !isFinite(x)) ? '—' : (+x).toFixed(d == null ? 2 : d); }
+
+async function runInstitutional() {
+  const typed = (document.getElementById('iaSym').value || '').trim().toUpperCase();
+  const sym   = _iaYfSym || typed;
+  const target = Math.max(0.1, parseFloat(document.getElementById('iaTarget').value) || 10);
+  const msg = document.getElementById('iaMsg');
+  const box = document.getElementById('iaResults');
+
+  if (!sym) { box.innerHTML = ''; msg.style.display = 'block'; msg.textContent = '⚠ Enter a symbol to analyze.'; return; }
+
+  box.innerHTML = '';
+  msg.style.display = 'block';
+  msg.textContent = '⟳ Fetching 5y history for ' + sym + '…';
+
+  // 1) History (required)
+  let candles = [];
+  try {
+    const res = await fetch(`/history?symbol=${encodeURIComponent(sym)}&interval=1d&period=5y`);
+    const data = await res.json();
+    candles = (data && Array.isArray(data.candles)) ? data.candles : [];
+  } catch (e) {
+    msg.textContent = '⚠ Failed to load price history for ' + sym + '.';
+    return;
+  }
+  if (candles.length < 60) {
+    msg.textContent = `⚠ Not enough history for ${sym} (${candles.length} bars, need ≥60).`;
+    return;
+  }
+
+  // 2) Fundamentals (best-effort)
+  let fund = null;
+  try {
+    const fr = await fetch(`/fundamentals?symbol=${encodeURIComponent(sym)}`);
+    if (fr.ok) fund = await fr.json();
+  } catch (e) { fund = null; }
+
+  msg.textContent = '⟳ Running Monte-Carlo simulation…';
+
+  try {
+    const C = candles.map(c => +c.c).filter(v => isFinite(v) && v > 0);
+    const last = candles[candles.length - 1] || {};
+    const price = +last.c;
+    const ema200 = (last.ema200 != null && isFinite(+last.ema200)) ? +last.ema200 : null;
+    const { mu, sigma } = teStats(C);
+    const sigmaAnn = sigma * Math.sqrt(252);
+    const driftAnn = mu * 252;
+
+    // Per-horizon MC + historical
+    const rows = _IA_HORIZONS.map(h => ({
+      label: h.label,
+      days: h.days,
+      mc: teMonteCarlo(C, target, h.days, 5000),
+      hist: teHistFreq(C, target, h.days)
+    }));
+
+    // Best horizon by MC touch probability (for the probability sub-score)
+    let bestReach = 0, bestReachRow = rows[0];
+    rows.forEach(r => { if (r.mc.pReach > bestReach) { bestReach = r.mc.pReach; bestReachRow = r; } });
+
+    // Suggested term: maximize risk-adjusted upside pReach / (sigma*sqrt(H))
+    let bestRA = -Infinity, bestTermDays = 21;
+    rows.forEach(r => {
+      const denom = sigma * Math.sqrt(r.days) || 1e-9;
+      const ra = r.mc.pReach / denom;
+      if (ra > bestRA) { bestRA = ra; bestTermDays = r.days; }
+    });
+    const termLabel = bestTermDays <= 21 ? 'Short (≤1M)' : (bestTermDays >= 252 ? 'Long (~1Y)' : 'Medium (3–6M)');
+
+    // ── Sub-scores (0–100) ──
+    // Trend (25%)
+    let trendScore = 50;
+    if (ema200 && price > 0) trendScore = _iaClamp(50 + (price / ema200 - 1) * 500);
+    // Momentum (15%): trailing 63-day return
+    let momScore = 50, mom63 = null;
+    if (C.length > 63) { mom63 = C[C.length - 1] / C[C.length - 1 - 63] - 1; momScore = _iaClamp(50 + mom63 * 250); }
+    // Volatility (15%): lower ann. vol is better
+    const volScore = _iaClamp(100 - sigmaAnn * 100 * 1.5);
+    // Quality (25%): fundamentals
+    const qual = _iaQualityScore(fund);
+    // Probability (20%): best-horizon MC touch prob
+    const probScore = _iaClamp(bestReach * 100);
+
+    const score = Math.round(
+      trendScore * 0.25 + momScore * 0.15 + volScore * 0.15 + qual.score * 0.25 + probScore * 0.20
+    );
+    const verdict = score >= 70 ? 'Strong Accumulate' : score >= 55 ? 'Accumulate' : score >= 40 ? 'Hold' : 'Avoid';
+
+    const name = (fund && (fund.name || fund.longName)) ? (fund.name || fund.longName) : sym;
+
+    _iaRender({
+      sym, name, price, target, verdict, score, termLabel,
+      driftAnn, sigmaAnn, rows, fund, ema200,
+      note: _iaBuildNote({ sym, name, price, target, verdict, score, termLabel, trendScore, momScore, volScore, qual, sigmaAnn, driftAnn, mom63, bestReachRow })
+    });
+    msg.style.display = 'none';
+  } catch (e) {
+    msg.style.display = 'block';
+    msg.textContent = '⚠ Analysis error: ' + (e && e.message ? e.message : e);
+  }
+}
+
+function _iaQualityScore(fund) {
+  const parts = [];
+  const norm = v => (v != null && Math.abs(v) <= 1) ? v * 100 : v; // fraction → percent
+  if (fund) {
+    if (fund.roe != null && isFinite(fund.roe)) { const roe = norm(fund.roe); parts.push({ k: 'ROE', s: _iaClamp(roe / 25 * 100) }); }
+    if (fund.roce != null && isFinite(fund.roce)) { const roce = norm(fund.roce); parts.push({ k: 'ROCE', s: _iaClamp(roce / 25 * 100) }); }
+    if (fund.debt_equity != null && isFinite(fund.debt_equity)) { const de = +fund.debt_equity; parts.push({ k: 'D/E', s: _iaClamp((2 - de) / 2 * 100) }); }
+    if (fund.pe != null && isFinite(fund.pe)) { const pe = +fund.pe; parts.push({ k: 'P/E', s: pe <= 0 ? 10 : _iaClamp(100 - Math.abs(pe - 20) * 3) }); }
+  }
+  const score = parts.length ? parts.reduce((a, b) => a + b.s, 0) / parts.length : 50;
+  return { score, parts, hasData: parts.length > 0 };
+}
+
+function _iaBuildNote(d) {
+  const trendTxt = d.trendScore >= 66 ? 'trades above its 200-day average, confirming a constructive long-term trend'
+    : d.trendScore <= 34 ? 'trades below its 200-day average, signalling a weak long-term trend'
+    : 'trades near its 200-day average, a neutral trend';
+  const valTxt = !d.qual.hasData ? 'Fundamental data was unavailable, so valuation was scored neutrally'
+    : d.qual.score >= 66 ? 'Fundamentals look healthy'
+    : d.qual.score <= 40 ? 'Fundamentals look stretched or weak'
+    : 'Fundamentals are mixed';
+  const volTxt = d.sigmaAnn <= 0.30 ? 'relatively low' : d.sigmaAnn >= 0.50 ? 'elevated' : 'moderate';
+  const b = d.bestReachRow;
+  const probTxt = b ? `Over its most favourable ${b.label} horizon, simulations give a ${(b.mc.pReach * 100).toFixed(0)}% chance of touching +${d.target}%` : '';
+  return `${d.name} (${d.sym}) ${trendTxt}. Annualised volatility is ${volTxt} at ${(d.sigmaAnn * 100).toFixed(0)}%, with a modelled annual drift of ${(d.driftAnn * 100).toFixed(0)}%. ${valTxt}. ${probTxt}. On a blended institutional score of ${d.score}/100 the assessment is "${d.verdict}", best expressed over a ${d.termLabel.toLowerCase()} horizon.`;
+}
+
+function _iaRender(d) {
+  const box = document.getElementById('iaResults');
+  if (!box) return;
+  const f = d.fund || {};
+  const mcap = (f.market_cap_cr != null && isFinite(f.market_cap_cr)) ? '₹' + Number(f.market_cap_cr).toLocaleString('en-IN', { maximumFractionDigits: 0 }) + ' Cr' : '—';
+  const norm = v => (v != null && Math.abs(v) <= 1) ? v * 100 : v;
+
+  // Header card
+  let html = `
+  <div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:18px 20px;margin-bottom:16px;">
+    <div style="display:flex;flex-wrap:wrap;align-items:center;gap:16px;justify-content:space-between;">
+      <div>
+        <div style="font-size:18px;font-weight:700;color:var(--text);font-family:var(--font-mono);">${d.sym}</div>
+        <div style="font-size:12px;color:var(--muted2);margin-top:2px;">${d.name}</div>
+        <div style="font-size:15px;color:var(--text);font-family:var(--font-mono);margin-top:8px;">₹${_iaNum(d.price)}</div>
+      </div>
+      <div style="text-align:right;">
+        <div style="display:inline-block;background:var(--accent);color:var(--on-accent);border-radius:6px;padding:6px 14px;font-size:13px;font-weight:700;font-family:var(--font-sans);">${d.verdict}</div>
+        <div style="font-size:22px;font-weight:700;color:var(--text);font-family:var(--font-mono);margin-top:8px;">Score ${d.score}<span style="font-size:13px;color:var(--muted);">/100</span></div>
+        <div style="font-size:11px;color:var(--muted2);margin-top:2px;">Suggested term: <b style="color:var(--text);">${d.termLabel}</b></div>
+      </div>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:22px;margin-top:14px;padding-top:12px;border-top:1px solid var(--border);font-size:11px;font-family:var(--font-mono);color:var(--muted2);">
+      <span>Ann. drift: <b style="color:var(--text);">${(d.driftAnn * 100).toFixed(1)}%</b></span>
+      <span>Ann. volatility: <b style="color:var(--text);">${(d.sigmaAnn * 100).toFixed(1)}%</b></span>
+      <span>Upside target: <b style="color:var(--text);">+${d.target}%</b></span>
+    </div>
+  </div>`;
+
+  // Probability table
+  const anyInsufficient = d.rows.some(r => r.hist.n < 20);
+  html += `
+  <div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:16px;overflow-x:auto;">
+    <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;">Upside Probability · Target +${d.target}%</div>
+    <table style="width:100%;border-collapse:collapse;font-size:11px;font-family:var(--font-mono);min-width:720px;">
+      <thead>
+        <tr style="color:var(--muted2);text-align:right;border-bottom:1px solid var(--border);">
+          <th style="text-align:left;padding:6px 8px;font-weight:600;">Horizon</th>
+          <th style="padding:6px 8px;font-weight:600;">MC P(reach)</th>
+          <th style="padding:6px 8px;font-weight:600;">Hist P(reach)</th>
+          <th style="padding:6px 8px;font-weight:600;">MC P(up)</th>
+          <th style="padding:6px 8px;font-weight:600;">Hist P(up)</th>
+          <th style="padding:6px 8px;font-weight:600;">MC exp ret</th>
+          <th style="padding:6px 8px;font-weight:600;">Hist med ret</th>
+          <th style="padding:6px 8px;font-weight:600;">MC max-DD</th>
+        </tr>
+      </thead>
+      <tbody>`;
+  d.rows.forEach(r => {
+    const insuf = r.hist.n < 20;
+    const dash = '<span style="color:var(--muted);">—</span>';
+    html += `
+        <tr style="text-align:right;border-bottom:1px solid var(--border);color:var(--text);">
+          <td style="text-align:left;padding:6px 8px;color:var(--muted2);">${r.label} <span style="color:var(--muted);font-size:10px;">(${r.days}d)</span></td>
+          <td style="padding:6px 8px;">${_iaPct(r.mc.pReach)}</td>
+          <td style="padding:6px 8px;">${insuf ? dash : _iaPct(r.hist.pReach)}</td>
+          <td style="padding:6px 8px;">${_iaPct(r.mc.pUp)}</td>
+          <td style="padding:6px 8px;">${insuf ? dash : _iaPct(r.hist.pUp)}</td>
+          <td style="padding:6px 8px;">${_iaSignedPct(r.mc.expRet)}</td>
+          <td style="padding:6px 8px;">${insuf ? dash : _iaSignedPct(r.hist.medRet)}</td>
+          <td style="padding:6px 8px;">${_iaSignedPct(r.mc.expMaxDD)}</td>
+        </tr>`;
+  });
+  html += `
+      </tbody>
+    </table>
+    ${anyInsufficient ? '<div style="font-size:10px;color:var(--muted);margin-top:8px;">— Historical cells shown as “—” where fewer than 20 historical rolling windows were available.</div>' : ''}
+  </div>`;
+
+  // Fundamentals snapshot
+  const fund = (k, v) => `<span style="margin-right:20px;">${k}: <b style="color:var(--text);">${v}</b></span>`;
+  html += `
+  <div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:16px;font-size:11px;font-family:var(--font-mono);color:var(--muted2);">
+    <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;font-family:var(--font-sans);">Fundamentals Snapshot</div>
+    ${fund('P/E', _iaNum(f.pe, 1))}
+    ${fund('P/B', _iaNum(f.pb, 2))}
+    ${fund('ROE', f.roe != null && isFinite(f.roe) ? _iaNum(norm(f.roe), 1) + '%' : '—')}
+    ${fund('ROCE', f.roce != null && isFinite(f.roce) ? _iaNum(norm(f.roce), 1) + '%' : '—')}
+    ${fund('D/E', _iaNum(f.debt_equity, 2))}
+    ${fund('Mkt Cap', mcap)}
+  </div>`;
+
+  // Institutional note
+  html += `
+  <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:16px 18px;">
+    <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">Institutional Note</div>
+    <div style="font-size:13px;line-height:1.6;color:var(--text);font-family:var(--font-sans);">${d.note}</div>
+  </div>`;
+
+  box.innerHTML = html;
+}
+
+// Expose testable globals
+window.teStats = teStats;
+window.teMonteCarlo = teMonteCarlo;
+window.teHistFreq = teHistFreq;
+window.runInstitutional = runInstitutional;
+
 // ── Custom strategies (localStorage) ─────────────────────────────────────────
 const _BT_LS_KEY = 'qh_custom_strategies';
 
@@ -7922,6 +8369,9 @@ document.addEventListener('click', e => {
     document.getElementById('chartSymDrop').style.display = 'none';
   if (!e.target.closest('#btSymSearch') && !e.target.closest('#btSymDrop'))
     document.getElementById('btSymDrop').style.display = 'none';
+  if (!e.target.closest('#iaSym') && !e.target.closest('#iaSymDrop')) {
+    const d = document.getElementById('iaSymDrop'); if (d) d.style.display = 'none';
+  }
 });
 
 // ── REPORT MODAL ────────────────────────────────────────────────────────────
