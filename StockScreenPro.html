@@ -1735,6 +1735,14 @@
       <div id="btResults" style="display:none;">
         <!-- Stat cards -->
         <div id="btStats" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;margin-bottom:16px;"></div>
+        <!-- Price chart with buy/sell signals -->
+        <div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:16px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+            <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;">Price &amp; Signals</div>
+            <div style="font-size:10px;color:var(--muted2);font-family:var(--font-mono);">▲ Buy &nbsp; ▼ Sell (green win · red loss)</div>
+          </div>
+          <div id="btChart" style="width:100%;height:340px;"></div>
+        </div>
         <!-- Equity curve -->
         <div style="background:#0d1321;border:1px solid #1a2640;border-radius:8px;padding:14px;margin-bottom:16px;">
           <div style="font-size:11px;color:#4a6080;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;">Equity Curve</div>
@@ -8157,7 +8165,7 @@ async function runBacktest() {
   }
 
   // ── Simulate trades ──
-  let equity = CAPITAL, inPos = false, buyPrice = 0, buyDate = '';
+  let equity = CAPITAL, inPos = false, buyPrice = 0, buyDate = '', buyT = 0;
   let trailPeak = 0, activeSL = 0, activeTP = 0;
   const trades = [], equityCurve = [{ date: candles[0].dt || candles[0].t, eq: CAPITAL }];
 
@@ -8170,6 +8178,7 @@ async function runBacktest() {
     if (!inPos && entrySigs[i] === 1) {
       buyPrice  = price * (1 + BROK);
       buyDate   = c.dt || new Date(c.t * 1000).toLocaleDateString('en-IN');
+      buyT      = c.t;
       activeSL  = getSLpct(i, buyPrice);
       activeTP  = getTPpct(i, buyPrice, activeSL);
       trailPeak = buyPrice;
@@ -8200,6 +8209,7 @@ async function runBacktest() {
         trades.push({
           buy: buyDate,
           sell: c.dt || new Date(c.t * 1000).toLocaleDateString('en-IN'),
+          buyT: buyT, sellT: c.t,
           buyP: buyPrice.toFixed(2), sellP: sellPrice.toFixed(2),
           ret: ret.toFixed(2), pnl: pnl.toFixed(0), exit: reason,
         });
@@ -8285,6 +8295,40 @@ async function runBacktest() {
 
   msg.style.display = 'none';
   results.style.display = 'block';
+  renderBtChart(candles, trades);
+}
+
+// ── Backtest price chart with buy/sell signal markers ──
+let _btChart = null;
+function _cssVar(n){ return getComputedStyle(document.documentElement).getPropertyValue(n).trim() || '#888'; }
+function renderBtChart(candles, trades){
+  const el = document.getElementById('btChart');
+  if(!el || typeof LightweightCharts === 'undefined') return;
+  const LW = LightweightCharts;
+  try { if(_btChart){ _btChart.remove(); } } catch(e){}
+  _btChart = null; el.innerHTML = '';
+  const grid = _cssVar('--border');
+  _btChart = LW.createChart(el, {
+    autoSize: true,
+    layout: { background: { color: 'transparent' }, textColor: _cssVar('--muted2'), fontFamily: 'JetBrains Mono, monospace' },
+    grid: { vertLines: { color: grid }, horzLines: { color: grid } },
+    rightPriceScale: { borderColor: grid },
+    timeScale: { borderColor: grid, timeVisible: false },
+    crosshair: { mode: LW.CrosshairMode.Normal },
+  });
+  const s = _btChart.addCandlestickSeries({
+    upColor:'#10b981', downColor:'#f43f5e', borderUpColor:'#10b981',
+    borderDownColor:'#f43f5e', wickUpColor:'#10b981', wickDownColor:'#f43f5e',
+  });
+  s.setData(candles.map(c => ({ time: c.t, open: c.o, high: c.h, low: c.l, close: c.c })));
+  const markers = [];
+  trades.forEach(t => {
+    if (t.buyT)  markers.push({ time: t.buyT,  position: 'belowBar', color: _cssVar('--accent'), shape: 'arrowUp',   text: 'B' });
+    if (t.sellT) markers.push({ time: t.sellT, position: 'aboveBar', color: (+t.ret > 0 ? '#10b981' : '#f43f5e'), shape: 'arrowDown', text: 'S' });
+  });
+  markers.sort((a,b) => a.time - b.time);
+  if (markers.length) s.setMarkers(markers);
+  _btChart.timeScale().fitContent();
 }
 
 // Make chart accessible from table rows
