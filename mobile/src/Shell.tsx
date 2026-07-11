@@ -10,6 +10,7 @@ import ChartScreen from './screens/ChartScreen';
 import { AnalysisHome, ChartsHome, MoreScreen } from './screens/Hosts';
 import PortfolioScreen from './screens/PortfolioScreen';
 import ScreenerScreen from './screens/ScreenerScreen';
+import TerminalScreen from './screens/TerminalScreen';
 import TradingViewScreen from './screens/TradingViewScreen';
 import TrackListScreen from './screens/TrackListScreen';
 import UniverseScreen from './screens/UniverseScreen';
@@ -22,6 +23,7 @@ type Screen = () => React.ReactElement;
 // mobile groups them into 5 bottom tabs (Analysis/Charts sub-toggle, More menu).
 const SCREEN_BY_KEY: Record<string, Screen> = {
   screener: () => <ScreenerScreen />,
+  terminal: () => <TerminalScreen />,
   universe: () => <UniverseScreen />,
   inst: () => <AnalysisScreen />,
   backtest: () => <BacktestScreen />,
@@ -38,6 +40,7 @@ const SCREEN_BY_KEY: Record<string, Screen> = {
 const PAGES: { k: string; label: string; glyph: string }[] = [
   { k: 'screener', label: 'Screener', glyph: '#' },
   { k: 'universe', label: 'Universe', glyph: '◈' },
+  { k: 'terminal', label: 'Terminal', glyph: '⌘' },
   { k: 'inst', label: 'Institutional', glyph: '%' },
   { k: 'backtest', label: 'Backtest', glyph: '▶' },
   { k: 'chart', label: 'Chart', glyph: '~' },

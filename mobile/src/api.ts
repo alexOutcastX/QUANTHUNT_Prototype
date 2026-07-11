@@ -182,6 +182,24 @@ async function scanBatch(symbols: string[]): Promise<ScanResp> {
   return getJson<ScanResp>('/scan?symbols=' + encodeURIComponent(symbols.join(',')), 60000);
 }
 
+// Company-relationship graph (Terminal tab). Shape is stable across the
+// curated demo dataset and the future AI-generated mode.
+export type GraphCompany = { name: string; listed: boolean };
+export type GraphEdge = {
+  src: string;
+  dst: string;
+  type: 'supplies' | 'group' | 'competitor' | 'finances';
+  note: string;
+  confidence: 'high' | 'medium';
+};
+export type GraphResp = {
+  companies: Record<string, GraphCompany>;
+  edges: GraphEdge[];
+  available: string[];
+  source: string;
+  disclaimer: string;
+};
+
 export const api = {
   ping: () => getJson<Ping>('/ping'),
   version: () => getJson<Version>('/version'),
@@ -199,6 +217,7 @@ export const api = {
     ),
   fundamentals: (symbol: string) =>
     getJson<Fundamentals>('/fundamentals?symbol=' + encodeURIComponent(symbol)),
+  graph: () => getJson<GraphResp>('/graph'),
   indexConstituents: (name: string) =>
     getJson<IndexResp>('/index?name=' + encodeURIComponent(name)),
   // /returns caps at 50 symbols/call; batch and merge.

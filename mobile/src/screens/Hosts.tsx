@@ -7,6 +7,7 @@ import CalculatorScreen from './CalculatorScreen';
 import ChartScreen from './ChartScreen';
 import PortfolioScreen from './PortfolioScreen';
 import TradingViewScreen from './TradingViewScreen';
+import TerminalScreen from './TerminalScreen';
 import TrackListScreen from './TrackListScreen';
 import WatchlistScreen from './WatchlistScreen';
 
@@ -61,6 +62,7 @@ export function ChartsHome() {
 // "More" menu: a list of secondary tools; tapping opens one full-screen with a
 // back header. Keeps the bottom tab bar to five primary destinations.
 const MORE_ITEMS: { key: string; label: string; hint: string; render: () => React.ReactElement }[] = [
+  { key: 'terminal', label: 'Terminal', hint: 'AI relationship graph — who supplies whom (demo)', render: () => <TerminalScreen /> },
   { key: 'track', label: 'Track List', hint: 'Your tracked BUY / SELL calls', render: () => <TrackListScreen /> },
   { key: 'portfolio', label: 'Portfolio', hint: 'Holdings with live P&L', render: () => <PortfolioScreen /> },
   { key: 'watchlist', label: 'Watchlist', hint: 'Saved symbols with live quotes', render: () => <WatchlistScreen /> },
