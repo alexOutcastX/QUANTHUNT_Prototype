@@ -76,6 +76,13 @@ feature/* ──PR──▶ main (CI, integration; does NOT deploy)
 
 Canonical per-version notes are in **[CHANGELOG.md](CHANGELOG.md)**. Summary:
 
+### v2.4.0 — top nav + fundamentals in the table
+
+| Area | Change |
+|---|---|
+| Layout | Desktop: branding bar + horizontal **pages bar** on top; full-width content (sidebar removed) |
+| Screener | 7 sortable **fundamental columns** (MCap, P/E, P/B, ROE, ROCE, D/E, Div%) always populated + in CSV |
+
 ### v2.3.0 — true cross detection
 
 | Area | Change |

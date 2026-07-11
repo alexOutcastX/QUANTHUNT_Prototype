@@ -3,6 +3,23 @@
 All notable changes are recorded here. Versioning is [SemVer](https://semver.org):
 `MAJOR.MINOR.PATCH`.
 
+## [2.4.0] — 2026-07-11
+Desktop layout rework + fundamentals in the table.
+
+### Layout (desktop/laptop)
+- The left sidebar is gone: a **branding bar** sits on top with a
+  **pages bar** below it (Screener · Universe · Institutional ·
+  Backtest · Chart · TradingView · Track List · Portfolio · Watchlist ·
+  Calculator), and content now uses the **full window width**. Phones
+  and tablets keep the native bottom-tab layout.
+
+### Screener
+- Seven **fundamental columns** fill the freed width: Mkt Cap (cr),
+  P/E, P/B, ROE%, ROCE%, D/E, Div Yield % — all sortable, exported in
+  CSV (with Sector), and populated for **every** loaded index (bulk
+  fundamentals now always stream in, not only when a fundamental
+  filter is active; missing values sort to the bottom).
+
 ## [2.3.1] — 2026-07-11
 Reliability fix: the live site's screener showed "HTTP 502 / no matches"
 when NSE Direct refused the VM's requests (datacenter IPs are routinely
@@ -153,6 +170,7 @@ Oracle Always-Free VM with push-to-deploy.
 - Embedded TradingView Advanced Chart tab, plus deep-link to the user's
   logged-in TradingView account.
 
+[2.4.0]: https://github.com/alexOutcastX/QUANTHUNT_Prototype/releases/tag/v2.4.0
 [2.3.1]: https://github.com/alexOutcastX/QUANTHUNT_Prototype/releases/tag/v2.3.1
 [2.3.0]: https://github.com/alexOutcastX/QUANTHUNT_Prototype/releases/tag/v2.3.0
 [2.2.0]: https://github.com/alexOutcastX/QUANTHUNT_Prototype/releases/tag/v2.2.0
