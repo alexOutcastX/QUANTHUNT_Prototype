@@ -93,8 +93,10 @@ tab via **Run workflow**.)
 
 ## Fundamentals data sources
 Fundamental filters work out of the box — by default they scrape **screener.in**
-(India-native ratios: P/E, P/B, ROE, ROCE, dividend yield, market cap), falling
-back to **yfinance**. Results are cached server-side for 7 days, so scraping stays
+(India-native ratios: P/E, P/B, ROE, ROCE, dividend yield, market cap, and
+debt/equity from the balance sheet). In `auto` mode the few fields screener's
+public page omits (current ratio, forward P/E, sector) are gap-filled from
+**yfinance**. Results are cached server-side for 7 days, so scraping stays
 light (each symbol ~once/week). Override the order with the `FUND_SOURCE` env var
 (`screener` | `yfinance` | `eodhd` | a comma list); default `auto` =
 `[eodhd if key] → screener → yfinance`.

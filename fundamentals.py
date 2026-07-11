@@ -188,13 +188,39 @@ def _parse_screener(html: str) -> dict | None:
         "dividend_yield": first("dividend yield"),
         "roe": first("roe"),
         "roce": first("roce"),
-        "debt_equity": None,        # not in the top-ratios box (yfinance has it)
-        "current_ratio": None,
+        "debt_equity": _screener_de(soup),      # derived from the balance sheet
+        "current_ratio": None,                   # not on screener's public page (yfinance fills it)
         "market_cap_cr": first("market cap"),
         "sector": None,
         "industry": None,
         "source": "screener.in",
     }
+
+
+def _screener_de(soup):
+    """Debt/Equity from screener.in's Balance Sheet:
+    Borrowings / (Equity Capital + Reserves), using the latest year column."""
+    try:
+        sec = soup.find(id="balance-sheet")
+        table = sec.find("table") if sec else None
+        if not table:
+            return None
+        rows = {}
+        for tr in table.find_all("tr"):
+            cells = tr.find_all(["td", "th"])
+            if len(cells) < 2:
+                continue
+            label = cells[0].get_text(" ", strip=True).lower().rstrip("+").strip()
+            vals = [v for v in (_snum(c.get_text()) for c in cells[1:]) if v is not None]
+            if vals:
+                rows[label] = vals[-1]      # latest column
+        borrow = rows.get("borrowings")
+        equity = (rows.get("equity capital") or 0) + (rows.get("reserves") or 0)
+        if borrow is not None and equity:
+            return round(borrow / equity, 2)
+    except Exception:
+        pass
+    return None
 
 
 def _fetch_screener(sym: str):
@@ -224,9 +250,15 @@ def _provider_chain() -> list:
     return chain
 
 
+# Fields screener.in can't provide from its public page — filled from yfinance
+# in 'auto' mode so those filters still work.
+_GAP_FILL = ("current_ratio", "forward_pe", "debt_equity", "sector", "industry")
+
+
 def _fetch_one(sym: str) -> None:
     global _dirty
     data = None
+    used = None
     for prov in _provider_chain():
         fn = _FETCHERS.get(prov)
         if not fn:
@@ -236,7 +268,21 @@ def _fetch_one(sym: str) -> None:
         except Exception:
             data = None
         if data:
+            used = prov
             break
+    # Gap-fill from yfinance (auto mode only) when the primary source is a scraper
+    # that lacks some fields. Cached for TTL, so this is a one-time cost per symbol.
+    if data and used and used != "yfinance" and FUND_SOURCE == "auto" \
+            and any(data.get(k) is None for k in _GAP_FILL):
+        try:
+            yf = _fetch_yf(sym)
+        except Exception:
+            yf = None
+        if yf:
+            for k in _GAP_FILL:
+                if data.get(k) is None and yf.get(k) is not None:
+                    data[k] = yf[k]
+            data["source"] = (data.get("source") or "") + "+yfinance"
     with _lock:
         _cache[sym] = {"data": data or {}, "ts": time.time()}
         _inflight.discard(sym)
