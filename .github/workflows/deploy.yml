@@ -19,7 +19,12 @@ on:
     paths-ignore:
       - "**/*.md"
       - "docs/**"
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Ref to deploy (tag/sha/branch), e.g. v1.0.0 to roll back. Blank = latest."
+        required: false
+        default: ""
 
 concurrency:
   group: deploy-vm
@@ -30,6 +35,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # On a normal push this is the pushed commit; on manual dispatch you can
+          # supply any tag/sha (e.g. a previous release) to redeploy = rollback.
+          ref: ${{ github.event.inputs.ref || github.sha }}
 
       - name: Configure SSH
         run: |
@@ -37,6 +46,21 @@ jobs:
           printf '%s\n' "${{ secrets.VM_SSH_KEY }}" > ~/.ssh/id_deploy
           chmod 600 ~/.ssh/id_deploy
           ssh-keyscan -H "${{ secrets.VM_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Snapshot current release (for instant rollback)
+        env:
+          U: ${{ secrets.VM_USER }}
+          H: ${{ secrets.VM_HOST }}
+        run: |
+          # Copy the live code (not venv/.env/cache) to /opt/quanthunt.prev so
+          # deploy/rollback.sh can restore the previous version instantly.
+          ssh -i ~/.ssh/id_deploy "$U@$H" '
+            APP=/opt/quanthunt
+            if [ -d "$APP" ]; then
+              rsync -a --delete --exclude venv --exclude .env \
+                --exclude fund_cache.json --exclude __pycache__ \
+                "$APP"/ "$APP".prev/ 2>/dev/null || true
+            fi'
 
       - name: Rsync app + restart service
         env:

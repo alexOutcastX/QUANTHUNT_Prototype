@@ -1296,7 +1296,7 @@
 <div class="topbar">
   <div class="logo">
     <div class="logo-brand"><picture><source srcset="/logo.webp" type="image/webp"><img class="logo-mark" src="/logo.png" alt="TaurEye"></picture><span class="logo-word">Taur<span class="logo-hunt">Eye</span></span></div>
-    <div class="logo-tagline">NSE · BSE · Live stock screener</div>
+    <div class="logo-tagline">NSE · BSE · Live stock screener <span id="appVersion" style="color:var(--muted);"></span></div>
   </div>
   <div class="topbar-center" id="tickerBar">
     <div class="ticker-chip" onclick="window.open('https://www.tradingview.com/chart/?symbol=NSE:NIFTY','_blank')" style="cursor:pointer;" title="Open NIFTY 50 chart">NIFTY 50 <span class="val" id="tcNifty">—</span><span id="tcNiftyChg" class="up"></span></div>
@@ -8404,6 +8404,12 @@ function openInTV(){
   window.open('https://www.tradingview.com/chart/?symbol=' + encodeURIComponent(sym), '_blank');
 }
 function initTVTab(){ if (_tvInited) return; _tvInited = true; loadTVChart(); }
+
+// Show the running app version in the header (from /version).
+fetch('/version').then(r => r.json()).then(d => {
+  const el = document.getElementById('appVersion');
+  if (el && d && d.version) el.textContent = '· v' + d.version;
+}).catch(() => {});
 
 // Make chart accessible from table rows
 function openChartFromRow(sym, name) { openChart(sym, name); }

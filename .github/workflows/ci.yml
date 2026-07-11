@@ -1,0 +1,42 @@
+name: CI
+
+# Runs on every pull request into main (and can be run manually). Kept fast and
+# dependency-free so it's a quick required status check before merging.
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch: {}
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Python syntax (compile, no imports/network)
+        run: python -m py_compile server.py fundamentals.py wsgi.py
+
+      - name: HTML / inline-JS sanity
+        run: |
+          python - <<'PY'
+          html = open('StockScreenPro.html', encoding='utf-8').read()
+          o, c = html.count('<script'), html.count('</script>')
+          assert o == c, f'unbalanced <script> tags: {o} open / {c} close'
+          assert '<title>' in html, 'missing <title>'
+          for fn in ('runInstitutional', 'getScreenedData', 'runBacktest', 'loadTVChart'):
+              assert fn in html, f'expected function {fn} missing from UI'
+          print(f'HTML OK — {o} script blocks balanced, key functions present')
+          PY
+
+      - name: VERSION present and well-formed
+        run: |
+          v=$(cat VERSION)
+          echo "VERSION=$v"
+          echo "$v" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' || { echo "VERSION must be semver X.Y.Z"; exit 1; }
+
+      - name: Shell scripts parse
+        run: bash -n deploy/setup-vm.sh && bash -n deploy/rollback.sh

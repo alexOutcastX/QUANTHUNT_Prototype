@@ -250,9 +250,23 @@ def static_files(fname):
     return _no_cache(send_from_directory(".", fname))
 
 
+def _app_version():
+    try:
+        with open(os.path.join(_BASE_DIR, "VERSION")) as f:
+            return f.read().strip()
+    except Exception:
+        return "0.0.0"
+
+
 @app.route("/ping")
 def ping():
-    return jsonify({"server": "ok", "status": "ok", "source": "NSE Direct + YF fallback"})
+    return jsonify({"server": "ok", "status": "ok", "source": "NSE Direct + YF fallback",
+                    "version": _app_version()})
+
+
+@app.route("/version")
+def version():
+    return jsonify({"version": _app_version(), "commit": os.environ.get("GIT_COMMIT", "")})
 
 
 @app.route("/ltp")
