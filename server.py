@@ -241,14 +241,37 @@ def _no_cache(response):
     response.headers["Expires"] = "0"
     return response
 
+# Exported React Native web build (Expo). When present it becomes the live UI;
+# the legacy single-file HTML stays available at /legacy and as a fallback.
+WEB_DIR = os.path.join(_BASE_DIR, "mobile", "dist")
+_WEB_INDEX = os.path.join(WEB_DIR, "index.html")
+
+
 @app.route("/")
 def index():
+    if os.path.exists(_WEB_INDEX):
+        return _no_cache(send_from_directory(WEB_DIR, "index.html"))
+    return _no_cache(send_from_directory(_BASE_DIR, "StockScreenPro.html"))
+
+
+@app.route("/legacy")
+def legacy_ui():
     return _no_cache(send_from_directory(_BASE_DIR, "StockScreenPro.html"))
 
 
 @app.route("/<path:fname>")
 def static_files(fname):
-    return _no_cache(send_from_directory(".", fname))
+    # 1) Prefer the RN-web bundle (index.html SPA shell, _expo/*, assets/*, favicon)
+    if os.path.isfile(os.path.join(WEB_DIR, fname)):
+        return _no_cache(send_from_directory(WEB_DIR, fname))
+    # 2) Fall back to repo-root files (StockScreenPro.html, VERSION, legacy assets)
+    if os.path.isfile(os.path.join(_BASE_DIR, fname)):
+        return _no_cache(send_from_directory(_BASE_DIR, fname))
+    # 3) SPA fallback: unknown non-API paths → the web shell (API routes are
+    #    matched by Flask before this catch-all, so they're unaffected)
+    if os.path.exists(_WEB_INDEX):
+        return _no_cache(send_from_directory(WEB_DIR, "index.html"))
+    return ("Not found", 404)
 
 
 def _app_version():

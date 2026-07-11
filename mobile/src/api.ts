@@ -5,8 +5,14 @@
 //
 // NOTE: iOS ATS and Android block cleartext http in release builds. For
 // production point this at an https URL. In Expo Go dev, http works.
+//
+// On web the app is served by the same Flask server that exposes the API, so
+// default to same-origin (relative URLs). Native builds hit the VM directly.
+import { Platform } from 'react-native';
+
 export const API_BASE =
-  process.env.EXPO_PUBLIC_API_BASE || 'http://161.118.174.177';
+  process.env.EXPO_PUBLIC_API_BASE ??
+  (Platform.OS === 'web' ? '' : 'http://161.118.174.177');
 
 async function getJson<T>(path: string, timeoutMs = 25000): Promise<T> {
   const ctrl = new AbortController();

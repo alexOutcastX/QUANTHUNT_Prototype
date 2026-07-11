@@ -8,9 +8,9 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { WebView } from 'react-native-webview';
 import { Candle, api } from '../api';
 import { BacktestResult, Risk, STRATEGIES, runBacktest } from '../backtest';
+import HtmlView from '../components/HtmlView';
 import { theme } from '../theme';
 
 const UP = '#10b981';
@@ -275,7 +275,7 @@ export default function BacktestScreen() {
 
           {html ? (
             <View style={styles.chartBox}>
-              <WebView originWhitelist={['*']} source={{ html }} style={styles.web} javaScriptEnabled />
+              <HtmlView html={html} style={styles.web} />
             </View>
           ) : null}
 

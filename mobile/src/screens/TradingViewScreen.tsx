@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { StyleSheet, TextInput, View } from 'react-native';
-import { WebView } from 'react-native-webview';
+import HtmlView from '../components/HtmlView';
 import { theme } from '../theme';
 
 function normSymbol(s: string): string {
@@ -46,13 +46,7 @@ export default function TradingViewScreen() {
         autoCapitalize="characters"
         returnKeyType="go"
       />
-      <WebView
-        originWhitelist={['*']}
-        source={{ html }}
-        style={styles.web}
-        javaScriptEnabled
-        domStorageEnabled
-      />
+      <HtmlView html={html} style={styles.web} />
     </View>
   );
 }

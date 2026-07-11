@@ -90,7 +90,12 @@ jobs:
           ssh -i ~/.ssh/id_deploy "$U@$H" '
             for i in $(seq 1 10); do
               if curl -fsS http://127.0.0.1/ping >/dev/null; then
-                echo "OK: app responded on attempt $i"; exit 0
+                echo "OK: /ping responded on attempt $i"
+                # Confirm the web UI shell is being served (RN-web build present)
+                if curl -fsS http://127.0.0.1/ | grep -q "id=\"root\""; then
+                  echo "OK: RN-web shell served at /"; exit 0
+                fi
+                echo "FAIL: / did not serve the web shell (is mobile/dist present?)"; exit 1
               fi
               sleep 2
             done

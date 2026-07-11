@@ -7,8 +7,8 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { WebView } from 'react-native-webview';
 import { api, Candle } from '../api';
+import HtmlView from '../components/HtmlView';
 import { theme } from '../theme';
 
 // Chart candles use the web app's palette (colour is allowed for candles).
@@ -138,13 +138,7 @@ export default function ChartScreen() {
             <Text style={styles.dim}>Loading {symbol}…</Text>
           </View>
         ) : (
-          <WebView
-            key={html.length + symbol + p.label}
-            originWhitelist={['*']}
-            source={{ html }}
-            style={styles.web}
-            javaScriptEnabled
-          />
+          <HtmlView key={html.length + symbol + p.label} html={html} style={styles.web} />
         )}
       </View>
     </View>
