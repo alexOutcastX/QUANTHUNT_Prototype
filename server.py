@@ -12,6 +12,7 @@ from flask_cors import CORS
 import requests, logging, time, threading, os, io, csv, datetime, math, sys
 import pandas as pd
 import fundamentals as _fund   # bulk fundamentals cache (EODHD + yfinance fallback)
+import scanner as _scanner     # live per-symbol technical scan for the screener
 
 # Support both normal run and PyInstaller frozen exe
 _BASE_DIR = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
@@ -724,6 +725,24 @@ def returns():
             out[sym] = data
     log.info("Returns: computed %d/%d symbols", sum(1 for v in out.values() if v), len(symbols))
     return jsonify(out)
+
+
+@app.route("/scan")
+def scan():
+    """Live technical indicators per symbol for the screener filter engine.
+
+    Query: ?symbols=A,B,C (max 60). Returns computed + cached rows; call again
+    for the same symbols within the cache TTL to get instant results.
+    """
+    raw = request.args.get("symbols", "").strip().upper()
+    if not raw:
+        return jsonify({"error": "symbols required", "data": {}}), 400
+    symbols = [s.strip() for s in raw.split(",") if s.strip()]
+    try:
+        return jsonify(_scanner.scan(symbols))
+    except Exception as e:
+        log.error("Scan error: %s", e)
+        return jsonify({"error": str(e), "data": {}}), 502
 
 
 @app.route("/report")
