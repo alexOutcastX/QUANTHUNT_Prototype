@@ -105,6 +105,27 @@ export default function StockDetail({ row, onClose }: { row: Row; onClose: () =>
             />
           </View>
 
+          {(() => {
+            const events: string[] = [];
+            if (row.golden_cross) events.push('Golden cross (50↑200)');
+            if (row.death_cross) events.push('Death cross (50↓200)');
+            if (row.cross_20_50_up) events.push('20-DMA crossed ↑ 50');
+            if (row.cross_20_50_down) events.push('20-DMA crossed ↓ 50');
+            if (row.macd_bull_cross) events.push('MACD bullish cross');
+            if (row.macd_bear_cross) events.push('MACD bearish cross');
+            if (row.gap_up) events.push('Gapped up');
+            if (row.gap_down) events.push('Gapped down');
+            if (row.new_high_52w) events.push('New 52-week high');
+            if (row.new_low_52w) events.push('New 52-week low');
+            if (row.volume_spike) events.push('Volume spike');
+            return events.length ? (
+              <>
+                <Text style={styles.section}>Signals today</Text>
+                <Text style={styles.signals}>{events.join('  ·  ')}</Text>
+              </>
+            ) : null;
+          })()}
+
           <Text style={styles.section}>Pivots</Text>
           <View style={styles.grid}>
             <Cell k="S1 / S2 / S3" v={`${num(row.s1)} / ${num(row.s2)} / ${num(row.s3)}`} wide />
@@ -200,4 +221,5 @@ const styles = StyleSheet.create({
   cellK: { color: theme.muted2, fontSize: 10, fontFamily: theme.mono },
   cellV: { fontSize: 13, fontFamily: theme.mono, marginTop: 2 },
   desc: { color: theme.muted2, fontSize: 12, lineHeight: 18, marginTop: 4 },
+  signals: { color: theme.green, fontSize: 12, fontFamily: theme.mono, lineHeight: 18 },
 });

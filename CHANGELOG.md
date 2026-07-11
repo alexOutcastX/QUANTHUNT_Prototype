@@ -3,6 +3,32 @@
 All notable changes are recorded here. Versioning is [SemVer](https://semver.org):
 `MAJOR.MINOR.PATCH`.
 
+## [2.3.0] — 2026-07-11
+True cross/event detection — real signals computed on the latest bar, not
+proxies.
+
+### Backend
+- `/scan` now detects eleven true events per symbol from real history:
+  **golden cross** and **death cross** (50-DMA crossing the 200-DMA on the
+  latest bar), 20-DMA crossing the 50-DMA (both directions), **MACD
+  bullish/bearish cross**, **gap up/down** (open vs previous bar's range),
+  **new 52-week high/low** (fresh extreme on the latest bar), and
+  **volume spike** (≥2.5× the 20-day average). Cross flags fire only on
+  the exact event bar — verified with crafted series.
+
+### Screener
+- New **Signals** filter group (11 one-tap toggles) at the top of the
+  All Filters drawer.
+- Presets upgraded to true events: Golden/Death cross today, MACD
+  bullish cross, New 52-week high, Gapped up today, Volume spike
+  (20 presets total).
+- Plain-English screener maps the idioms to real flags — "golden
+  crossover" is no longer a proxy; also understands "death cross",
+  "20 dma crossed above 50", "macd bullish cross", "gapped up",
+  "new 52 week high", "breakout", "volume spike".
+- Stock detail view shows a "Signals today" line when events fired.
+- CSV export includes all 11 flags (42 columns).
+
 ## [2.2.0] — 2026-07-11
 Filter selection made taureye-easy: one-tap preset scans and a
 plain-English screener.
@@ -112,6 +138,7 @@ Oracle Always-Free VM with push-to-deploy.
 - Embedded TradingView Advanced Chart tab, plus deep-link to the user's
   logged-in TradingView account.
 
+[2.3.0]: https://github.com/alexOutcastX/QUANTHUNT_Prototype/releases/tag/v2.3.0
 [2.2.0]: https://github.com/alexOutcastX/QUANTHUNT_Prototype/releases/tag/v2.2.0
 [2.1.0]: https://github.com/alexOutcastX/QUANTHUNT_Prototype/releases/tag/v2.1.0
 [2.0.0]: https://github.com/alexOutcastX/QUANTHUNT_Prototype/releases/tag/v2.0.0

@@ -17,6 +17,8 @@ export type Preset = {
 
 export const PRESETS: Preset[] = [
   // ── Trend ──
+  { id: 'golden-cross', name: 'Golden cross today', desc: '50-DMA crossed above the 200-DMA on the latest bar', group: 'Trend', filters: { golden_cross: true } },
+  { id: 'death-cross', name: 'Death cross today', desc: '50-DMA crossed below the 200-DMA on the latest bar', group: 'Trend', filters: { death_cross: true } },
   { id: 'above-200dma', name: 'Above 200-DMA', desc: 'Price above the 200-day moving average', group: 'Trend', filters: { d200: { min: 0 } } },
   { id: 'above-all-dmas', name: 'Above 20/50/200-DMA', desc: 'Price above all three moving averages', group: 'Trend', filters: { d20: { min: 0 }, d50: { min: 0 }, d200: { min: 0 } } },
   { id: 'below-200dma', name: 'Below 200-DMA', desc: 'Price below the 200-day moving average', group: 'Trend', filters: { d200: { max: 0 } } },
@@ -24,12 +26,15 @@ export const PRESETS: Preset[] = [
   { id: 'rsi-oversold', name: 'RSI below 30', desc: '14-day RSI in the oversold zone', group: 'Momentum', filters: { rsi: { max: 30 } } },
   { id: 'rsi-overbought', name: 'RSI above 70', desc: '14-day RSI in the overbought zone', group: 'Momentum', filters: { rsi: { min: 70 } } },
   { id: 'up3-2x-volume', name: 'Up 3%+ on 2× volume', desc: 'Day change above +3% with twice the average volume', group: 'Momentum', filters: { chg: { min: 3 }, relvol: { min: 2 } } },
-  { id: 'macd-positive', name: 'MACD positive', desc: 'MACD histogram above zero', group: 'Momentum', filters: { macd: { min: 0 } } },
+  { id: 'macd-bull-cross', name: 'MACD bullish cross', desc: 'MACD line crossed above its signal line on the latest bar', group: 'Momentum', filters: { macd_bull_cross: true } },
   // ── Breakouts ──
+  { id: 'new-52w-high', name: 'New 52-week high', desc: 'Made a fresh 52-week high on the latest bar', group: 'Breakouts', filters: { new_high_52w: true } },
   { id: 'near-52w-high', name: 'Within 5% of 52w high', desc: 'Closing price within 5% of the 52-week high', group: 'Breakouts', filters: { pct_from_high: { min: -5 } } },
+  { id: 'gap-up', name: 'Gapped up today', desc: "Opened above the previous bar's high", group: 'Breakouts', filters: { gap_up: true } },
   { id: 'near-52w-low', name: 'Within 10% of 52w low', desc: 'Closing price within 10% of the 52-week low', group: 'Breakouts', filters: { pct_from_low: { max: 10 } } },
   { id: 'squeeze-fired', name: 'Squeeze fired', desc: 'TTM squeeze released on the latest bar', group: 'Breakouts', filters: { sqzFire: true } },
   // ── Volume ──
+  { id: 'volume-spike', name: 'Volume spike', desc: "Today's volume at least 2.5× the 20-day average", group: 'Volume', filters: { volume_spike: true } },
   { id: '3x-rel-volume', name: '3× relative volume', desc: 'Volume at least three times the 20-day average', group: 'Volume', filters: { relvol: { min: 3 } } },
   { id: 'squeeze-on', name: 'Squeeze ON', desc: 'Bollinger bands inside Keltner channel (coiling)', group: 'Volume', filters: { sqzOn: true } },
   // ── Fundamentals (fetches company data on first use) ──

@@ -116,6 +116,18 @@ export const FILTER_DEFS: FilterDef[] = [
   { key: 'sqzOn', label: 'Squeeze ON', group: 'Volatility', type: 'toggle', get: (s) => s.sqzOn === true },
   { key: 'sqzFire', label: 'Squeeze Fired', group: 'Volatility', type: 'toggle', get: (s) => s.sqzFire === true },
   { key: 'sqzMom', label: 'Squeeze Momentum', group: 'Volatility', type: 'range', get: (s) => n(s.sqzMom) },
+  // Signals — true events detected on the latest bar
+  { key: 'golden_cross', label: 'Golden cross (50↑200)', group: 'Signals', type: 'toggle', get: (s) => s.golden_cross === true },
+  { key: 'death_cross', label: 'Death cross (50↓200)', group: 'Signals', type: 'toggle', get: (s) => s.death_cross === true },
+  { key: 'cross_20_50_up', label: '20-DMA crossed ↑ 50', group: 'Signals', type: 'toggle', get: (s) => s.cross_20_50_up === true },
+  { key: 'cross_20_50_down', label: '20-DMA crossed ↓ 50', group: 'Signals', type: 'toggle', get: (s) => s.cross_20_50_down === true },
+  { key: 'macd_bull_cross', label: 'MACD bullish cross', group: 'Signals', type: 'toggle', get: (s) => s.macd_bull_cross === true },
+  { key: 'macd_bear_cross', label: 'MACD bearish cross', group: 'Signals', type: 'toggle', get: (s) => s.macd_bear_cross === true },
+  { key: 'gap_up', label: 'Gapped up', group: 'Signals', type: 'toggle', get: (s) => s.gap_up === true },
+  { key: 'gap_down', label: 'Gapped down', group: 'Signals', type: 'toggle', get: (s) => s.gap_down === true },
+  { key: 'new_high_52w', label: 'New 52-week high', group: 'Signals', type: 'toggle', get: (s) => s.new_high_52w === true },
+  { key: 'new_low_52w', label: 'New 52-week low', group: 'Signals', type: 'toggle', get: (s) => s.new_low_52w === true },
+  { key: 'volume_spike', label: 'Volume spike (≥2.5×)', group: 'Signals', type: 'toggle', get: (s) => s.volume_spike === true },
   // Volume
   { key: 'volume', label: 'Volume', group: 'Volume', type: 'range', get: (s) => n(s.volume) },
   { key: 'avgvol', label: 'Avg Volume', group: 'Volume', type: 'range', get: (s) => n(s.avgvol) },
@@ -146,7 +158,7 @@ export const FILTER_DEFS: FilterDef[] = [
   },
 ];
 
-export const TE_GROUPS = ['Trend', 'Momentum', 'Volatility', 'Volume', 'Structure', 'Fundamentals'];
+export const TE_GROUPS = ['Signals', 'Trend', 'Momentum', 'Volatility', 'Volume', 'Structure', 'Fundamentals'];
 export const DEF_BY_KEY: Record<string, FilterDef> = {};
 FILTER_DEFS.forEach((d) => {
   DEF_BY_KEY[d.key] = d;
