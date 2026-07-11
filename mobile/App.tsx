@@ -5,24 +5,13 @@ import React, { useEffect, useState } from 'react';
 import { Text } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { api } from './src/api';
+import AnalysisScreen from './src/screens/AnalysisScreen';
 import ChartScreen from './src/screens/ChartScreen';
-import Placeholder from './src/screens/Placeholder';
 import ScreenerScreen from './src/screens/ScreenerScreen';
+import WatchlistScreen from './src/screens/WatchlistScreen';
 import { theme } from './src/theme';
 
 const Tab = createBottomTabNavigator();
-
-function AnalysisScreen() {
-  return (
-    <Placeholder
-      title="Analysis"
-      note="Upside-probability model (Monte Carlo + historical) and backtesting — porting next."
-    />
-  );
-}
-function WatchlistScreen() {
-  return <Placeholder title="Watchlist" note="Your saved symbols — coming soon." />;
-}
 
 function HeaderTitle() {
   const [version, setVersion] = useState<string>('');

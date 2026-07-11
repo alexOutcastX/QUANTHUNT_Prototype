@@ -54,6 +54,45 @@ export type FundamentalsBulk = {
   total: number;
 };
 
+// A single OHLCV candle with TA overlays (from /history).
+export type Candle = {
+  t: number;
+  o: number | null;
+  h: number | null;
+  l: number | null;
+  c: number | null;
+  v: number;
+  ema9?: number | null;
+  ema20?: number | null;
+  ema50?: number | null;
+  ema200?: number | null;
+  rsi?: number | null;
+};
+export type HistoryResp = {
+  symbol: string;
+  period: string;
+  interval: string;
+  count: number;
+  candles: Candle[];
+  error?: string;
+};
+
+// Single-symbol fundamentals (from /fundamentals). All fields best-effort.
+export type Fundamentals = {
+  symbol: string;
+  name?: string;
+  longName?: string;
+  sector?: string | null;
+  pe?: number | null;
+  forward_pe?: number | null;
+  pb?: number | null;
+  roe?: number | null;
+  roce?: number | null;
+  debt_equity?: number | null;
+  current_ratio?: number | null;
+  error?: string;
+};
+
 export const api = {
   ping: () => getJson<Ping>('/ping'),
   version: () => getJson<Version>('/version'),
@@ -64,4 +103,11 @@ export const api = {
     getJson<FundamentalsBulk>(
       '/fundamentals/bulk?symbols=' + encodeURIComponent(symbols.join(',')),
     ),
+  history: (symbol: string, period = '5y', interval = '1d') =>
+    getJson<HistoryResp>(
+      `/history?symbol=${encodeURIComponent(symbol)}&interval=${interval}&period=${period}`,
+      40000,
+    ),
+  fundamentals: (symbol: string) =>
+    getJson<Fundamentals>('/fundamentals?symbol=' + encodeURIComponent(symbol)),
 };
