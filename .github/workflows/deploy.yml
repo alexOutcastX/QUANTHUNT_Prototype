@@ -73,6 +73,7 @@ jobs:
           rsync -az --delete \
             --exclude venv --exclude .git --exclude node_modules \
             --exclude '__pycache__' --exclude '.env' \
+            --exclude 'fund_cache.json' --exclude 'index_cache.json' \
             -e "ssh -i ~/.ssh/id_deploy" ./ "$U@$H:$APP/"
           # Install any new deps, then restart gunicorn and reload nginx.
           ssh -i ~/.ssh/id_deploy "$U@$H" "\

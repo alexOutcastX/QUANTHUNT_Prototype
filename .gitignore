@@ -19,3 +19,4 @@ node_modules/
 # runtime fundamentals cache
 fund_cache.json
 fund_cache.json.tmp
+index_cache.json

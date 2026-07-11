@@ -9,7 +9,7 @@ QuantHunt NSE Direct backend.
 """
 from flask import Flask, jsonify, request, render_template, send_from_directory
 from flask_cors import CORS
-import requests, logging, time, threading, os, io, csv, datetime, math, sys
+import requests, logging, time, threading, os, io, csv, datetime, json, math, sys
 import pandas as pd
 import fundamentals as _fund   # bulk fundamentals cache (EODHD + yfinance fallback)
 import scanner as _scanner     # live per-symbol technical scan for the screener
@@ -336,12 +336,91 @@ NSE_INDEX_MAP = {
 }
 
 
+# niftyindices.com publishes official constituent CSVs (Symbol column). It is
+# a separate host from nseindia.com and far less aggressive about blocking
+# datacenter IPs — NSE Direct routinely 401/403s cloud VMs, which used to make
+# /index 502 and blank the screener.
+NIFTYINDICES_CSV = {
+    "NIFTY 50": "ind_nifty50list.csv",
+    "NIFTY 100": "ind_nifty100list.csv",
+    "NIFTY 200": "ind_nifty200list.csv",
+    "NIFTY 500": "ind_nifty500list.csv",
+    "NIFTY BANK": "ind_niftybanklist.csv",
+    "NIFTY IT": "ind_niftyitlist.csv",
+    "NIFTY MIDCAP 100": "ind_niftymidcap100list.csv",
+    "NIFTY MIDCAP 150": "ind_niftymidcap150list.csv",
+    "NIFTY SMALLCAP 100": "ind_niftysmallcap100list.csv",
+    "NIFTY SMALLCAP 250": "ind_niftysmallcap250list.csv",
+    "NIFTY MICROCAP 250": "ind_niftymicrocap250_list.csv",
+    "NIFTY AUTO": "ind_niftyautolist.csv",
+    "NIFTY PHARMA": "ind_niftypharmalist.csv",
+    "NIFTY FMCG": "ind_niftyfmcglist.csv",
+    "NIFTY METAL": "ind_niftymetallist.csv",
+}
+
+_INDEX_CACHE_FILE = os.path.join(_BASE_DIR, "index_cache.json")
+_INDEX_MEM = {}          # name -> (ts, rows, source)
+_INDEX_MEM_TTL = 60      # NSE live quotes go stale fast; CSV lists barely change
+
+
+def _index_cache_write(name, rows, source):
+    _INDEX_MEM[name] = (time.time(), rows, source)
+    try:
+        disk = {}
+        if os.path.exists(_INDEX_CACHE_FILE):
+            with open(_INDEX_CACHE_FILE) as f:
+                disk = json.load(f)
+        disk[name] = {"rows": rows, "source": source, "ts": time.time()}
+        with open(_INDEX_CACHE_FILE, "w") as f:
+            json.dump(disk, f)
+    except Exception as e:
+        log.warning("index cache write failed: %s", e)
+
+
+def _index_cache_read(name):
+    try:
+        if os.path.exists(_INDEX_CACHE_FILE):
+            with open(_INDEX_CACHE_FILE) as f:
+                entry = json.load(f).get(name)
+            if entry and entry.get("rows"):
+                return entry["rows"], entry.get("source", "cache")
+    except Exception:
+        pass
+    return None, None
+
+
+def _fetch_niftyindices_csv(name):
+    """Constituent symbols from niftyindices.com (no live quotes)."""
+    fname = NIFTYINDICES_CSV.get(name)
+    if not fname:
+        return None
+    url = f"https://niftyindices.com/IndexConstituent/{fname}"
+    r = requests.get(url, headers={"User-Agent": HEADERS["User-Agent"],
+                                   "Referer": "https://niftyindices.com/"}, timeout=15)
+    r.raise_for_status()
+    rows = []
+    reader = csv.DictReader(io.StringIO(r.text))
+    for rec in reader:
+        sym = (rec.get("Symbol") or rec.get("symbol") or "").strip().upper()
+        if sym:
+            rows.append({"symbol": sym, "price": None, "prevClose": None, "chg": None,
+                         "absChg": None, "open": None, "high": None, "low": None,
+                         "volume": None})
+    return rows or None
+
+
 @app.route("/index")
 def index_constituents():
     name = request.args.get("name", "").strip().upper()
     key  = NSE_INDEX_MAP.get(name)
     if not key:
         return jsonify({"error": f"Unknown index '{name}'", "available": list(NSE_INDEX_MAP)}), 400
+
+    hit = _INDEX_MEM.get(name)
+    if hit and (time.time() - hit[0]) < _INDEX_MEM_TTL:
+        return jsonify({"index": name, "count": len(hit[1]), "data": hit[1], "source": hit[2]})
+
+    # 1) NSE Direct — live quotes (often blocked from cloud IPs)
     try:
         data = nse_get("/api/equity-stockIndices", params={"index": key})
         rows = []
@@ -360,9 +439,30 @@ def index_constituents():
                 "low":       item.get("dayLow"),
                 "volume":    item.get("totalTradedVolume"),
             })
-        return jsonify({"index": name, "count": len(rows), "data": rows})
+        if rows:
+            _index_cache_write(name, rows, "nse")
+            return jsonify({"index": name, "count": len(rows), "data": rows, "source": "nse"})
     except Exception as e:
-        return jsonify({"error": str(e)}), 502
+        log.warning("NSE index fetch failed for %s: %s", name, e)
+
+    # 2) niftyindices.com constituent CSV — symbols only; the frontend backfills
+    #    prices and technicals from /scan, so the screener stays fully live.
+    try:
+        rows = _fetch_niftyindices_csv(name)
+        if rows:
+            _index_cache_write(name, rows, "niftyindices-csv")
+            return jsonify({"index": name, "count": len(rows), "data": rows,
+                            "source": "niftyindices-csv"})
+    except Exception as e:
+        log.warning("niftyindices CSV fetch failed for %s: %s", name, e)
+
+    # 3) last-good disk cache (survives restarts)
+    rows, source = _index_cache_read(name)
+    if rows:
+        return jsonify({"index": name, "count": len(rows), "data": rows,
+                        "source": f"stale-{source}"})
+
+    return jsonify({"error": f"All constituent sources failed for {name}", "data": []}), 502
 
 
 @app.route("/universe")

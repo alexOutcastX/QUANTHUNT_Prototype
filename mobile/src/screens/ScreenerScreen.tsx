@@ -188,7 +188,9 @@ export default function ScreenerScreen() {
       setLoading(false);
       setRefreshing(false);
       const total = cons.length;
-      setNote(`${total} live quotes · technicals 0/${total}…`);
+      // CSV/cache fallback returns symbols without quotes — /scan fills prices.
+      const seedLabel = seeded.some((r) => r.price != null) ? 'live quotes' : 'symbols';
+      setNote(`${total} ${seedLabel} · technicals 0/${total}…`);
       // 2) Technicals stream in batch by batch. Keep the fresher NSE live quote
       //    over the scan's daily-bar figures.
       let got = 0;
@@ -213,12 +215,12 @@ export default function ScreenerScreen() {
                 };
               }),
             );
-            setNote(`${total} live quotes · technicals ${Math.min(done, total)}/${total}`);
+            setNote(`${total} ${seedLabel} · technicals ${Math.min(done, total)}/${total}`);
           },
         },
       );
       if (seq === loadSeq.current) {
-        setNote(`${total} live quotes · ${got}/${total} technicals`);
+        setNote(`${total} ${seedLabel} · ${got}/${total} technicals`);
       }
     } catch (e) {
       if (seq !== loadSeq.current) return;
