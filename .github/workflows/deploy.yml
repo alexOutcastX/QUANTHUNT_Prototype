@@ -18,10 +18,7 @@ name: Deploy to VM
 
 on:
   push:
-    branches: [production]
-    paths-ignore:
-      - "**/*.md"
-      - "docs/**"
+    branches: [production]   # every promotion to production deploys (deterministic go-live)
   workflow_dispatch:
     inputs:
       ref:
