@@ -152,10 +152,26 @@ function matchClause(clause: string, filters: ActiveFilters, recognized: string[
     recognized.push('Squeeze ON');
     hit = true;
   }
-  if (/\bgolden\s*cross(?:over)?\b/.test(c)) {
-    add('d50', { min: 0 }, 'Above 50 DMA');
-    add('d200', { min: 0 }, 'Above 200 DMA (golden-cross proxy)');
-  }
+  // true event flags detected by /scan on the latest bar
+  const flag = (key: string, label: string) => {
+    filters[key] = true;
+    recognized.push(label);
+    hit = true;
+  };
+  if (/\bgolden\s*cross(?:over)?\b/.test(c)) flag('golden_cross', 'Golden cross today');
+  if (/\bdeath\s*cross(?:over)?\b/.test(c)) flag('death_cross', 'Death cross today');
+  if (/\b20\s*(?:dma|sma|ema|ma)?\s*(?:cross(?:es|ed|ing)?\s*)?(?:above|over|up)\s*(?:the\s*)?50\b/.test(c)) flag('cross_20_50_up', '20 crossed above 50');
+  else if (/\b20\s*(?:dma|sma|ema|ma)?\s*(?:cross(?:es|ed|ing)?\s*)?(?:below|under|down)\s*(?:the\s*)?50\b/.test(c)) flag('cross_20_50_down', '20 crossed below 50');
+  if (/\bmacd\b[^,]*\b(?:bullish|cross(?:es|ed)?\s*up|turned?\s*positive|positive\s*cross)\b|\bbullish\s*macd\b/.test(c)) flag('macd_bull_cross', 'MACD bullish cross');
+  else if (/\bmacd\b[^,]*\b(?:bearish|cross(?:es|ed)?\s*down|turned?\s*negative|negative\s*cross)\b|\bbearish\s*macd\b/.test(c)) flag('macd_bear_cross', 'MACD bearish cross');
+  if (/\bgap(?:s|ped|ping)?\s*(?:up|higher)\b/.test(c)) flag('gap_up', 'Gapped up');
+  if (/\bgap(?:s|ped|ping)?\s*(?:down|lower)\b/.test(c)) flag('gap_down', 'Gapped down');
+  if (/\b(?:volume\s*spike|unusual\s*volume|heavy\s*volume|volume\s*surge)\b/.test(c)) flag('volume_spike', 'Volume spike');
+  if (/\b(?:new|fresh|record|all[\s-]*time)\b[^,]*\bhigh\b/.test(c) && !/\bvolume\b/.test(c)) flag('new_high_52w', 'New 52-week high');
+  else if (/\bbreak(?:ing)?\s*out\b|\bbreakout\b/.test(c)) flag('new_high_52w', 'Breakout (new high)');
+  if (/\b(?:new|fresh|record|all[\s-]*time)\b[^,]*\blow\b/.test(c)) flag('new_low_52w', 'New 52-week low');
+  else if (/\bbreak(?:ing)?\s*down\b|\bbreakdown\b/.test(c)) flag('new_low_52w', 'Breakdown (new low)');
+
   if (/\boversold\b/.test(c)) add('rsi', { max: 30 }, 'Oversold (RSI < 30)');
   else if (/\boverbought\b/.test(c)) add('rsi', { min: 70 }, 'Overbought (RSI > 70)');
 
@@ -206,9 +222,10 @@ function matchClause(clause: string, filters: ActiveFilters, recognized: string[
     else if (near.test(c)) add('pct_from_low', { max: 10 }, 'Near 52w low');
   }
 
-  // price vs a moving average (20 / 50 / 200)
+  // price vs a moving average (20 / 50 / 200) — skip when the clause is a
+  // MA-vs-MA cross (handled by the flags above)
   const sm = c.match(/\b(20|50|200)\s*(?:dma|sma|ema|ma|day (?:moving )?average|moving average)\b/);
-  if (sm) {
+  if (sm && !(filters.cross_20_50_up || filters.cross_20_50_down || /\bcross/.test(c))) {
     const key = 'd' + sm[1];
     const label = sm[1] + ' DMA';
     const pm = c.match(new RegExp(NUM + String.raw`\s*%\s*(above|below|over|under)`));

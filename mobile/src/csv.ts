@@ -34,6 +34,17 @@ const FIELDS: { header: string; get: (r: Row) => unknown }[] = [
   { header: 'R1', get: (r) => r.r1 },
   { header: 'R2', get: (r) => r.r2 },
   { header: 'R3', get: (r) => r.r3 },
+  { header: 'GoldenCross', get: (r) => r.golden_cross },
+  { header: 'DeathCross', get: (r) => r.death_cross },
+  { header: 'Cross20/50Up', get: (r) => r.cross_20_50_up },
+  { header: 'Cross20/50Down', get: (r) => r.cross_20_50_down },
+  { header: 'MACDBullCross', get: (r) => r.macd_bull_cross },
+  { header: 'MACDBearCross', get: (r) => r.macd_bear_cross },
+  { header: 'GapUp', get: (r) => r.gap_up },
+  { header: 'GapDown', get: (r) => r.gap_down },
+  { header: 'New52wHigh', get: (r) => r.new_high_52w },
+  { header: 'New52wLow', get: (r) => r.new_low_52w },
+  { header: 'VolumeSpike', get: (r) => r.volume_spike },
   { header: 'Signal', get: (r) => calcSignal(r).toUpperCase() },
 ];
 

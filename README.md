@@ -76,6 +76,13 @@ feature/* ──PR──▶ main (CI, integration; does NOT deploy)
 
 Canonical per-version notes are in **[CHANGELOG.md](CHANGELOG.md)**. Summary:
 
+### v2.3.0 — true cross detection
+
+| Area | Change |
+|---|---|
+| Backend | `/scan` detects 11 real events on the latest bar: golden/death cross, 20/50 cross, MACD cross, gaps, new 52w high/low, volume spike |
+| Screener | "Signals" filter group, true-event presets, NL idioms mapped to real flags, signals in stock detail + CSV |
+
 ### v2.2.0 — easy filter selection
 
 | Area | Change |
