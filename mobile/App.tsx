@@ -8,6 +8,7 @@ import { api } from './src/api';
 import AnalysisScreen from './src/screens/AnalysisScreen';
 import ChartScreen from './src/screens/ChartScreen';
 import ScreenerScreen from './src/screens/ScreenerScreen';
+import TradingViewScreen from './src/screens/TradingViewScreen';
 import WatchlistScreen from './src/screens/WatchlistScreen';
 import { theme } from './src/theme';
 
@@ -66,6 +67,7 @@ export default function App() {
           <Tab.Screen name="Screener" component={ScreenerScreen} options={{ tabBarIcon: icon('#') }} />
           <Tab.Screen name="Chart" component={ChartScreen} options={{ tabBarIcon: icon('~') }} />
           <Tab.Screen name="Analysis" component={AnalysisScreen} options={{ tabBarIcon: icon('%') }} />
+          <Tab.Screen name="TradingView" component={TradingViewScreen} options={{ tabBarIcon: icon('TV'), title: 'TradingView' }} />
           <Tab.Screen name="Watchlist" component={WatchlistScreen} options={{ tabBarIcon: icon('*') }} />
         </Tab.Navigator>
       </NavigationContainer>
