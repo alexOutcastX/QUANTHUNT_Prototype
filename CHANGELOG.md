@@ -3,6 +3,34 @@
 All notable changes are recorded here. Versioning is [SemVer](https://semver.org):
 `MAJOR.MINOR.PATCH`.
 
+## [2.6.0] — 2026-07-12
+Terminal workspace: node menu, inputs/outputs highlighting, and a
+floating multi-tab research window with comparison scoring.
+
+### Terminal
+- **INPUTS / OUTPUTS / ALL** buttons on the graph: highlight what flows
+  into the centre company (suppliers, financiers) or out of it
+  (customers, financed demand), dimming everything else.
+- **Node menu**: clicking a bubble now offers ⌾ Open graph · ▤ Open in
+  window · ⇄ Add to compare (instead of instantly re-centring).
+- **Floating research window** docked in the graph area — draggable,
+  resizable, closeable, with a tab strip. Each company tab shows a
+  6-month candle chart plus fundamentals from the **screener.in
+  provider chain** (P/E, P/B, ROE, ROCE, D/E, dividend yield, market
+  cap, 52-week range, sector, company profile, source shown).
+- **Compare tab**: add companies from the node menu and a COMPARE (n)
+  tab builds a metric table (price, day %, market cap, P/E, P/B, ROE,
+  ROCE, D/E, dividend yield, RSI, vs 200-DMA) with transparent
+  Quality / Trend / Momentum sub-scores and a **FINAL SCORE** row —
+  best company starred. Factual composite, not advice.
+- Window tabs, compare list, position and size persist across reloads
+  (localStorage).
+
+### Backend
+- `/fundamentals` now overlays the screener.in provider chain
+  (synchronous `fundamentals.get_one`, disk-cached 7 days) over the
+  yfinance payload, and reports the source used.
+
 ## [2.5.0] — 2026-07-11
 New **Terminal** tab — Bloomberg-style company relationship graph
 (supply-chain intelligence), demo dataset now, AI mode ready.
@@ -190,6 +218,7 @@ Oracle Always-Free VM with push-to-deploy.
 - Embedded TradingView Advanced Chart tab, plus deep-link to the user's
   logged-in TradingView account.
 
+[2.6.0]: https://github.com/alexOutcastX/QUANTHUNT_Prototype/releases/tag/v2.6.0
 [2.5.0]: https://github.com/alexOutcastX/QUANTHUNT_Prototype/releases/tag/v2.5.0
 [2.4.0]: https://github.com/alexOutcastX/QUANTHUNT_Prototype/releases/tag/v2.4.0
 [2.3.1]: https://github.com/alexOutcastX/QUANTHUNT_Prototype/releases/tag/v2.3.1
