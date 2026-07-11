@@ -5477,12 +5477,22 @@ function getScreenedData(){ return applyAdvancedFilters(applyRsiFilter(getActive
 
 // ── FUNDAMENTALS (lazy, per-symbol, capped concurrency) ──
 let _teFundRun = 0;
-async function applyFundamentalFilters(){
+const TE_FUND_CONFIRM = 25;   // ask before fetching fundamentals for more than this many stocks
+async function applyFundamentalFilters(opts){
+  opts = opts || {};
   const activeFund = FILTER_DEFS.filter(d => d.fund && teIsActive(d, activeFilters[d.key]));
   const base = getScreenedData();                         // technical + RSI narrowed pool
   if(!activeFund.length){ DATA = base; renderTable(); teHideFundProg(); return; }
   const myRun = ++_teFundRun;
   const need = base.filter(s => !s._fund);
+  // Guard against a surprise network storm: confirm before a large per-symbol fetch.
+  if(need.length > TE_FUND_CONFIRM && opts.confirm){
+    const est = Math.max(1, Math.ceil(need.length / 6 * 0.7));   // ~0.7s/call, 6 in parallel
+    const ok = window.confirm('Fetch fundamentals for ' + need.length + ' stocks?\n\n'
+      + 'This makes ' + need.length + ' live requests to the data source (~' + est + 's).\n'
+      + 'Tip: add a technical filter first to narrow the list.');
+    if(!ok){ DATA = base; renderTable(); teHideFundProg(); return; }   // keep technical results
+  }
   let done = 0;
   teShowFundProg(0, need.length);
   const queue = need.slice();
@@ -5516,7 +5526,9 @@ function teRefilter(){
   teUpdateBadge();
   DATA = getScreenedData();
   renderTable();
-  if(teHasActiveFund()) applyFundamentalFilters();         // uses cached _fund; fetches only missing
+  // Only auto-apply fundamentals when nothing needs fetching (all cached → instant).
+  // A fetch that would hit the network waits for an explicit, confirmed "Apply fundamentals".
+  if(teHasActiveFund() && DATA.filter(s => !s._fund).length === 0) applyFundamentalFilters();
 }
 
 // ── STATE MUTATORS (called from controls) ──
@@ -5591,8 +5603,8 @@ function teRenderDrawerBody(){
       `</div>`;
     });
     if(grp==='Fundamentals'){
-      html += `<button class="te-apply-fund" onclick="applyFundamentalFilters()">Apply fundamentals</button>`+
-        `<div class="te-fundnote">Fundamentals load per-symbol (slow in bulk).</div>`;
+      html += `<button class="te-apply-fund" onclick="applyFundamentalFilters({confirm:true})">Apply fundamentals</button>`+
+        `<div class="te-fundnote">Fundamentals load per-symbol (slow in bulk) — you'll be asked to confirm large fetches.</div>`;
     }
     html += `</div>`;
   });
@@ -5718,7 +5730,7 @@ function closeFilterDrawer(){ const d=document.getElementById('teDrawer'), o=doc
   teRenderDrawerBody();
   teRenderCustomSidebar();
   teUpdateBadge();
-  if(teActiveCount() > 0){ DATA = getScreenedData(); renderTable(); if(teHasActiveFund()) applyFundamentalFilters(); }
+  if(teActiveCount() > 0){ DATA = getScreenedData(); renderTable(); if(teHasActiveFund() && DATA.filter(s => !s._fund).length === 0) applyFundamentalFilters(); }
 })();
 
 
