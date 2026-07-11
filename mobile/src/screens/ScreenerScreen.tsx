@@ -79,29 +79,77 @@ export default function ScreenerScreen() {
   const [track, setTrack] = useState<TrackEntry[]>([]);
   const [fundBusy, setFundBusy] = useState(false);
 
+  // Monotonic token so a stale in-flight scan can't write into a newer index's rows.
+  const loadSeq = React.useRef(0);
+
   const load = useCallback(async (name: string) => {
+    const seq = ++loadSeq.current;
     setError(null);
     setNote('');
     try {
       const idx = await api.indexConstituents(name);
-      const syms = (idx.data || []).map((c) => c.symbol).filter(Boolean);
-      if (!syms.length) {
+      if (seq !== loadSeq.current) return;
+      const cons = (idx.data || []).filter((c) => c.symbol);
+      if (!cons.length) {
         setRows([]);
         setNote(idx.error || 'No constituents returned.');
         return;
       }
-      setNote(`Scanning ${syms.length} symbols…`);
-      const scan = await api.scan(syms);
-      const merged: Row[] = syms.map((sym) => ({ sym, exchange: 'NSE', ...(scan.data[sym] || {}) }));
-      setRows(merged);
-      const withData = merged.filter((r) => r.price != null).length;
-      setNote(`${withData}/${syms.length} scanned live`);
+      // 1) The index feed already carries live NSE quotes — show them instantly.
+      const seeded: Row[] = cons.map((c) => ({
+        sym: c.symbol,
+        exchange: 'NSE',
+        price: c.price,
+        prevClose: c.prevClose,
+        chg: c.chg,
+        absChg: c.absChg,
+        volume: c.volume,
+      }));
+      setRows(seeded);
+      setLoading(false);
+      setRefreshing(false);
+      const total = cons.length;
+      setNote(`${total} live quotes · technicals 0/${total}…`);
+      // 2) Technicals stream in batch by batch. Keep the fresher NSE live quote
+      //    over the scan's daily-bar figures.
+      let got = 0;
+      await api.scan(
+        cons.map((c) => c.symbol),
+        {
+          onBatch: (data, done) => {
+            if (seq !== loadSeq.current) return;
+            got += Object.keys(data).length;
+            setRows((prev) =>
+              prev.map((r) => {
+                const s = data[r.sym];
+                if (!s) return r;
+                return {
+                  ...r,
+                  ...s,
+                  price: r.price ?? s.price,
+                  prevClose: r.prevClose ?? s.prevClose,
+                  chg: r.chg ?? s.chg,
+                  absChg: r.absChg ?? s.absChg,
+                  volume: r.volume ?? s.volume,
+                };
+              }),
+            );
+            setNote(`${total} live quotes · technicals ${Math.min(done, total)}/${total}`);
+          },
+        },
+      );
+      if (seq === loadSeq.current) {
+        setNote(`${total} live quotes · ${got}/${total} technicals`);
+      }
     } catch (e) {
+      if (seq !== loadSeq.current) return;
       setError(e instanceof Error ? e.message : 'Failed to load');
       setRows([]);
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (seq === loadSeq.current) {
+        setLoading(false);
+        setRefreshing(false);
+      }
     }
   }, []);
 

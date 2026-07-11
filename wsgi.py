@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import threading
 
-from server import _prefetch_universe, app
+from server import _prefetch_universe, app, start_scan_warm
 
 # Warm the universe cache in the background so the first /universe request is
 # fast, mirroring server.py's __main__ behaviour. Daemon so it never blocks
@@ -20,5 +20,9 @@ from server import _prefetch_universe, app
 threading.Thread(
     target=_prefetch_universe, name="universe-prefetch", daemon=True
 ).start()
+
+# Keep the screener's technical scan cache hot for the default index so the
+# first /scan responses are instant (see server.start_scan_warm).
+start_scan_warm()
 
 __all__ = ["app"]
