@@ -5493,23 +5493,29 @@ async function applyFundamentalFilters(opts){
       + 'Tip: add a technical filter first to narrow the list.');
     if(!ok){ DATA = base; renderTable(); teHideFundProg(); return; }   // keep technical results
   }
-  let done = 0;
-  teShowFundProg(0, need.length);
-  const queue = need.slice();
-  async function worker(){
-    while(queue.length){
-      if(myRun !== _teFundRun) return;                    // superseded by newer run
-      const s = queue.shift();
-      try{
-        const r = await fetch('/fundamentals?symbol=' + encodeURIComponent(s.sym));
-        s._fund = r.ok ? await r.json() : {};             // best-effort; {} → excluded by strict evals
-      }catch(e){ s._fund = {}; }
-      done++; if(myRun===_teFundRun) teShowFundProg(done, need.length);
+  // Bulk-load via the server cache (EODHD w/ yfinance fallback). One request
+  // fans out server-side; poll to collect symbols as their fetches land. Cached
+  // symbols come back immediately, so repeat filtering is instant.
+  if(need.length){
+    teShowFundProg(0, need.length);
+    const bySym = {}; base.forEach(s => bySym[s.sym] = s);
+    let remaining = need.map(s => s.sym);
+    for(let round=0; remaining.length && round < 40; round++){
+      if(myRun !== _teFundRun) return;                     // superseded by a newer run
+      let res = null;
+      try{ res = await fetch('/fundamentals/bulk?symbols=' + encodeURIComponent(remaining.join(','))).then(r=>r.json()); }
+      catch(e){ res = null; }
+      if(!res) break;
+      const data = res.data || {};
+      Object.keys(data).forEach(sym => { if(bySym[sym]) bySym[sym]._fund = data[sym] || {}; });
+      remaining = res.pending || [];
+      teShowFundProg(need.length - remaining.length, need.length);
+      if(!remaining.length) break;
+      await new Promise(r => setTimeout(r, 900));          // let background fetches land
     }
+    // Still unresolved after the poll window → treat as empty (excluded by strict evals).
+    remaining.forEach(sym => { if(bySym[sym] && !bySym[sym]._fund) bySym[sym]._fund = {}; });
   }
-  const workers = [];
-  for(let i=0; i<Math.min(6, need.length); i++) workers.push(worker());
-  await Promise.all(workers);
   if(myRun !== _teFundRun) return;                         // a newer run took over
   teHideFundProg();
   let out = base;
@@ -5641,7 +5647,28 @@ function teShowFundProg(done, total){
 function teHideFundProg(){ const el = document.getElementById('teFundProg'); if(el) el.style.display='none'; }
 
 // ── DRAWER OPEN/CLOSE ──
-function openFilterDrawer(){ teRenderDrawerBody(); const d=document.getElementById('teDrawer'), o=document.getElementById('teOverlay'); if(d) d.classList.add('open'); if(o) o.classList.add('open'); if(d) d.setAttribute('aria-hidden','false'); }
+// Pre-warm the server-side fundamentals cache for the current pool in the
+// background so fundamental filters run instantly once the user sets them.
+// Cheap after the first pass (server caches for 7 days, persisted to disk).
+async function teWarmFundamentals(){
+  try{
+    const pool = (typeof getScreenedData==='function') ? getScreenedData() : (typeof DATA!=='undefined'?DATA:[]);
+    const bySym = {}; pool.forEach(s => bySym[s.sym]=s);
+    let remaining = pool.filter(s => !s._fund).map(s=>s.sym).slice(0,600);
+    for(let round=0; remaining.length && round < 40; round++){
+      let res=null;
+      try{ res = await fetch('/fundamentals/bulk?symbols=' + encodeURIComponent(remaining.join(','))).then(r=>r.json()); }
+      catch(e){ break; }
+      if(!res) break;
+      const data = res.data || {};
+      Object.keys(data).forEach(sym => { if(bySym[sym]) bySym[sym]._fund = data[sym] || {}; });
+      remaining = res.pending || [];
+      if(!remaining.length) break;
+      await new Promise(r => setTimeout(r, 1500));
+    }
+  }catch(e){}
+}
+function openFilterDrawer(){ teRenderDrawerBody(); const d=document.getElementById('teDrawer'), o=document.getElementById('teOverlay'); if(d) d.classList.add('open'); if(o) o.classList.add('open'); if(d) d.setAttribute('aria-hidden','false'); teWarmFundamentals(); }
 function closeFilterDrawer(){ const d=document.getElementById('teDrawer'), o=document.getElementById('teOverlay'); if(d){ d.classList.remove('open'); d.setAttribute('aria-hidden','true'); } if(o) o.classList.remove('open'); }
 
 // ── ONE-TIME UI INJECTION + INIT ──

@@ -14,6 +14,9 @@ Type=simple
 User=__DEPLOY_USER__
 WorkingDirectory=/opt/quanthunt
 Environment=PORT=5000
+# Optional secrets/config (e.g. EODHD_API_KEY=...) — the leading '-' means the
+# service still starts if the file is absent. Deploys never overwrite it.
+EnvironmentFile=-/opt/quanthunt/.env
 # One worker, many threads: the universe/price caches are per-process in memory,
 # so multiple workers would each re-fetch from NSE and defeat the 6-hour cache.
 ExecStart=/opt/quanthunt/venv/bin/gunicorn --bind 127.0.0.1:5000 --workers 1 --threads 8 --timeout 120 wsgi:app

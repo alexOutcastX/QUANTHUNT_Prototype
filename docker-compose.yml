@@ -14,6 +14,8 @@ services:
       - "5000:5000"
     environment:
       PORT: 5000
+      # Optional: EODHD fundamentals API key (falls back to yfinance if unset).
+      EODHD_API_KEY: ${EODHD_API_KEY:-}
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:5000/ping"]
       interval: 30s

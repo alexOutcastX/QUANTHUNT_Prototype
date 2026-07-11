@@ -11,3 +11,5 @@ dist/
 *.spec
 .env
 *.log
+
+fund_cache.json

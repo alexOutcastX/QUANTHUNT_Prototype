@@ -15,3 +15,7 @@ node_modules/
 # Local/env
 .env
 *.log
+
+# runtime fundamentals cache
+fund_cache.json
+fund_cache.json.tmp

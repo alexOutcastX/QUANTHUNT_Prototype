@@ -91,6 +91,23 @@ tab via **Run workflow**.)
 
 ---
 
+## Optional: EODHD fundamentals (faster fundamental screening)
+The screener's fundamental filters work out of the box using yfinance, but you can
+plug in **EODHD** (https://eodhd.com) for fundamentals that load reliably from a
+datacenter IP. On the VM:
+```bash
+echo "EODHD_API_KEY=your_key_here" >> /opt/quanthunt/.env
+bash /opt/quanthunt/deploy/setup-vm.sh   # refreshes the systemd unit so it reads .env
+```
+(Re-running `setup-vm.sh` is idempotent; it reinstalls the unit — now with
+`EnvironmentFile=-/opt/quanthunt/.env` — and restarts. After that first refresh,
+a plain `sudo systemctl restart quanthunt` picks up later `.env` edits.) Deploys
+never overwrite `.env`.
+Without a key it uses yfinance. Either way, fundamentals are cached server-side for
+7 days (`fund_cache.json`, survives restarts), so after the first warm-up the
+`/fundamentals/bulk` screener path is effectively instant. Note: EODHD fundamentals
+need a plan that includes the India (`.NSE`) Fundamentals feed.
+
 ## Replacing TaurEye on the SAME VM
 If this VM currently runs TaurEye's static site and you want QuantHunt to take
 over the domain:

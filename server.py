@@ -11,6 +11,7 @@ from flask import Flask, jsonify, request, render_template, send_from_directory
 from flask_cors import CORS
 import requests, logging, time, threading, os, io, csv, datetime, math, sys
 import pandas as pd
+import fundamentals as _fund   # bulk fundamentals cache (EODHD + yfinance fallback)
 
 # Support both normal run and PyInstaller frozen exe
 _BASE_DIR = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
@@ -660,6 +661,17 @@ def fundamentals():
     except Exception as e:
         log.error("Fundamentals error for %s: %s", sym, e)
         return jsonify({"error": str(e)}), 502
+
+
+@app.route("/fundamentals/bulk")
+def fundamentals_bulk():
+    """Bulk fundamentals for the screener. Returns cached rows immediately and
+    warms the rest in the background (poll again to collect `pending`)."""
+    syms = [s.strip().upper() for s in request.args.get("symbols", "").split(",") if s.strip()]
+    if not syms:
+        return jsonify({"data": {}, "pending": [], "provider": _fund.EODHD_KEY and "EODHD" or "yfinance",
+                        "cached": 0, "total": 0})
+    return jsonify(_fund.bulk(syms))
 
 
 @app.route("/returns")
