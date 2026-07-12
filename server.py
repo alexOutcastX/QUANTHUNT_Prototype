@@ -1241,16 +1241,55 @@ _MAJOR_INDICES = [
     ("NIFTYMIDCAP", "NIFTY Midcap 100", "^CRSMID"),
     ("NIFTYNEXT50", "NIFTY Next 50",    "^NSMIDCP"),
 ]
-_indices_cache = {"ts": 0.0, "data": None}
+# Major international indices (Global tab). Same (key, name, yf_sym) shape.
+_INTL_INDICES = [
+    ("SP500",      "S&P 500",        "^GSPC"),
+    ("DJIA",       "Dow Jones",      "^DJI"),
+    ("NASDAQ",     "Nasdaq",         "^IXIC"),
+    ("FTSE100",    "FTSE 100",       "^FTSE"),
+    ("DAX",        "DAX",            "^GDAXI"),
+    ("CAC40",      "CAC 40",         "^FCHI"),
+    ("NIKKEI225",  "Nikkei 225",     "^N225"),
+    ("HANGSENG",   "Hang Seng",      "^HSI"),
+    ("SHANGHAI",   "Shanghai",       "000001.SS"),
+    ("STOXX50E",   "Euro Stoxx 50",  "^STOXX50E"),
+]
+# US-listed depository receipts (ADRs) of Indian companies (Depository tab).
+# Plain US tickers — priced in USD, no .NS suffix.
+_DR_INDICES = [
+    ("INFY",  "Infosys",     "INFY"),
+    ("WIT",   "Wipro",       "WIT"),
+    ("IBN",   "ICICI Bank",  "IBN"),
+    ("HDB",   "HDFC Bank",   "HDB"),
+    ("RDY",   "Dr Reddy's",  "RDY"),
+    ("MMYT",  "MakeMyTrip",  "MMYT"),
+    ("WNS",   "WNS",         "WNS"),
+    ("SIFY",  "Sify",        "SIFY"),
+]
+# Category → index list. "domestic" keeps the historic default behaviour.
+_INDEX_LISTS = {
+    "domestic":      _MAJOR_INDICES,
+    "international": _INTL_INDICES,
+    "depository":    _DR_INDICES,
+}
+# Per-category cache: category → {"ts": float, "data": [...]}
+_indices_cache = {}
 _INDICES_TTL = 300   # 5 minutes
 
 
 def _fetch_index_row(key, name, yf_sym):
-    """One index snapshot: last close, % day change, % 1-year return."""
+    """One index snapshot: last close, % day change, % 1-year return.
+
+    Tolerates short-history symbols (some ADRs/foreign tickers): `level` is
+    always computed, while `chg`/`y1` fall back to None when there aren't
+    enough closes to compute them.
+    """
     import yfinance as yf
     df = yf.Ticker(yf_sym).history(period="1y", interval="1d")
     closes = df["Close"].dropna()
-    last, prev, first = float(closes.iloc[-1]), float(closes.iloc[-2]), float(closes.iloc[0])
+    last = float(closes.iloc[-1])
+    prev = float(closes.iloc[-2]) if len(closes) >= 2 else None
+    first = float(closes.iloc[0]) if len(closes) >= 2 else None
     return {"key": key, "name": name, "symbol": yf_sym,
             "level": round(last, 2),
             "chg": round((last / prev - 1) * 100, 2) if prev else None,
@@ -1259,28 +1298,42 @@ def _fetch_index_row(key, name, yf_sym):
 
 @app.route("/indices")
 def indices_live():
-    """Major NSE/BSE index levels for the dashboard, cached 5 minutes."""
+    """Index levels, cached 5 minutes per category.
+
+    ?category= selects the list: domestic (default — NSE/BSE sectors the
+    Dashboard depends on), international (major global indices), or depository
+    (US-listed Indian ADRs). Each category is cached separately; only the
+    domestic set is persisted as a daily snapshot.
+    """
+    category = request.args.get("category", "domestic").strip().lower()
+    if category not in _INDEX_LISTS:
+        category = "domestic"
     now = time.time()
-    cached = _indices_cache["data"] is not None and (now - _indices_cache["ts"]) < _INDICES_TTL
+    entry = _indices_cache.get(category)
+    cached = entry is not None and entry["data"] is not None and (now - entry["ts"]) < _INDICES_TTL
     if not cached:
         rows = []
-        for key, name, yf_sym in _MAJOR_INDICES:
+        for key, name, yf_sym in _INDEX_LISTS[category]:
             try:
-                rows.append(_fetch_index_row(key, name, yf_sym))
+                row = _fetch_index_row(key, name, yf_sym)
+                row["category"] = category
+                rows.append(row)
             except Exception as e:
                 log.debug("Index fetch failed for %s: %s", yf_sym, e)
-        _indices_cache["ts"], _indices_cache["data"] = now, rows
-        # Persist a daily history point per index (throttled to once/hour) so the
-        # app builds a real long-run series over time.
-        try:
-            last = _store.kv_get("indices_snap_ts", 0)
-            if now - last > 3600:
-                for r in rows:
-                    _store.snap_put("index", r["key"], {"level": r.get("level"), "chg": r.get("chg")})
-                _store.kv_set("indices_snap_ts", int(now))
-        except Exception as e:
-            log.debug("index snapshot failed: %s", e)
-    return jsonify({"indices": _indices_cache["data"],
+        entry = {"ts": now, "data": rows}
+        _indices_cache[category] = entry
+        # Persist a daily history point per index (domestic only, throttled to
+        # once/hour) so the app builds a real long-run series over time.
+        if category == "domestic":
+            try:
+                last = _store.kv_get("indices_snap_ts", 0)
+                if now - last > 3600:
+                    for r in rows:
+                        _store.snap_put("index", r["key"], {"level": r.get("level"), "chg": r.get("chg")})
+                    _store.kv_set("indices_snap_ts", int(now))
+            except Exception as e:
+                log.debug("index snapshot failed: %s", e)
+    return jsonify({"indices": entry["data"],
                     "asof": int(time.time()), "cached": cached})
 
 
