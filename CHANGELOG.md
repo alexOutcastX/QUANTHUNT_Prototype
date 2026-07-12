@@ -3,6 +3,37 @@
 All notable changes are recorded here. Versioning is [SemVer](https://semver.org):
 `MAJOR.MINOR.PATCH`.
 
+## [2.9.0] — 2026-07-12
+Terminal wired to real data: AI-generated relationship graphs for **any**
+company (bring your Anthropic API key), with the curated cluster as the
+always-available fallback.
+
+### Terminal
+- Type **any NSE symbol** and GO: `/graph?symbol=X` generates the
+  company's relationship graph with Claude (suppliers, customers,
+  financiers, competitors, group companies with notes + confidence),
+  validated server-side and **disk-cached for 30 days** — first request
+  ~15s, then instant. The whole workspace works on AI graphs: node menu,
+  research window, compare, news panel, pop-outs, live quotes.
+- Header badge shows the data mode (CURATED + AI / AI GRAPH / DEMO
+  DATA); AI graphs carry their own disclaimer; generation shows a
+  progress state and failures surface the server's reason without
+  losing the current graph.
+- Without a key everything still works on the curated demo cluster, and
+  the prompt tells you exactly what to configure.
+
+### Backend
+- New `ai_graph.py`: Claude Messages API over plain HTTPS (no SDK),
+  strict JSON prompt, sanitising validator (edge types, confidence,
+  self-edges, unknown endpoints, sparse graphs rejected), concurrent
+  requests for the same symbol deduped to one generation.
+- **Enable it**: add `ANTHROPIC_API_KEY=sk-ant-…` to
+  `/opt/quanthunt/.env` on the VM and restart the service
+  (`sudo systemctl restart quanthunt`). Optional: `GRAPH_AI_MODEL`
+  (default `claude-sonnet-5`).
+- `graph_cache.json` survives deploys (rsync-excluded) and is
+  git-ignored.
+
 ## [2.8.0] — 2026-07-12
 Terminal news panel + toolbar toggles + full-chart pop-out.
 
@@ -270,6 +301,7 @@ Oracle Always-Free VM with push-to-deploy.
 - Embedded TradingView Advanced Chart tab, plus deep-link to the user's
   logged-in TradingView account.
 
+[2.9.0]: https://github.com/alexOutcastX/QUANTHUNT_Prototype/releases/tag/v2.9.0
 [2.8.0]: https://github.com/alexOutcastX/QUANTHUNT_Prototype/releases/tag/v2.8.0
 [2.7.0]: https://github.com/alexOutcastX/QUANTHUNT_Prototype/releases/tag/v2.7.0
 [2.6.0]: https://github.com/alexOutcastX/QUANTHUNT_Prototype/releases/tag/v2.6.0

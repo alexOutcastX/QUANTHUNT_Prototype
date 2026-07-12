@@ -16,7 +16,9 @@ node_modules/
 .env
 *.log
 
-# runtime fundamentals cache
+# runtime caches
 fund_cache.json
 fund_cache.json.tmp
 index_cache.json
+graph_cache.json
+graph_cache.json.tmp
