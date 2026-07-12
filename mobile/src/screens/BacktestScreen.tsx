@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   ScrollView,
@@ -8,8 +8,9 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Candle, api } from '../api';
-import { BacktestResult, Risk, STRATEGIES, runBacktest } from '../backtest';
+import { BacktestResult, CUSTOM_KEY, CustomRule, Risk, STRATEGIES, runBacktest } from '../backtest';
 import HtmlView from '../components/HtmlView';
 import { theme } from '../theme';
 
@@ -24,6 +25,77 @@ const PERIODS = ['3mo', '6mo', '1y', '2y', '5y'];
 
 const money = (v: number) => '₹' + Math.round(v).toLocaleString('en-IN');
 const signed = (v: number, d = 2) => (v >= 0 ? '+' : '') + v.toFixed(d);
+
+// ── Custom rule builder ──────────────────────────────────────────────────────
+const RULES_KEY = 'te_custom_rules_v1';
+const IND_OPTS: CustomRule['ind'][] = ['close', 'rsi', 'ema', 'sma', 'macd_hist', 'volume'];
+const OP_OPTS: CustomRule['op'][] = ['gt', 'lt', 'cross_above', 'cross_below'];
+const TGT_OPTS: CustomRule['target'][] = ['value', 'ema', 'sma', 'close'];
+const IND_LBL: Record<CustomRule['ind'], string> = {
+  close: 'CLOSE', rsi: 'RSI', ema: 'EMA', sma: 'SMA', macd_hist: 'MACD-H', volume: 'VOL',
+};
+const OP_LBL: Record<CustomRule['op'], string> = {
+  gt: '>', lt: '<', cross_above: 'X↑', cross_below: 'X↓',
+};
+const TGT_LBL: Record<CustomRule['target'], string> = {
+  value: 'VALUE', ema: 'EMA', sma: 'SMA', close: 'CLOSE',
+};
+const hasPeriod = (ind: CustomRule['ind']) => ind === 'rsi' || ind === 'ema' || ind === 'sma';
+const defaultBuyRule = (): CustomRule => ({ ind: 'rsi', period: 14, op: 'lt', target: 'value', value: 30 });
+const defaultSellRule = (): CustomRule => ({ ind: 'rsi', period: 14, op: 'gt', target: 'value', value: 70 });
+const cycle = <T,>(opts: readonly T[], cur: T): T => opts[(opts.indexOf(cur) + 1) % opts.length];
+
+function RuleRow({
+  rule,
+  onChange,
+  onRemove,
+}: {
+  rule: CustomRule;
+  onChange: (r: CustomRule) => void;
+  onRemove: () => void;
+}) {
+  const cycleInd = () => {
+    const ind = cycle(IND_OPTS, rule.ind);
+    onChange({ ...rule, ind, period: hasPeriod(ind) ? rule.period ?? (ind === 'rsi' ? 14 : 20) : rule.period });
+  };
+  const cycleTgt = () => {
+    const target = cycle(TGT_OPTS, rule.target);
+    const value = target === 'ema' || target === 'sma' ? rule.value || 20 : rule.value;
+    onChange({ ...rule, target, value });
+  };
+  return (
+    <View style={styles.ruleRow}>
+      <TouchableOpacity style={styles.ruleSeg} onPress={cycleInd}>
+        <Text style={styles.ruleSegTxt}>{IND_LBL[rule.ind]}</Text>
+      </TouchableOpacity>
+      {hasPeriod(rule.ind) ? (
+        <TextInput
+          style={styles.ruleInput}
+          value={String(rule.period ?? '')}
+          onChangeText={(t) => onChange({ ...rule, period: parseFloat(t) || 0 })}
+          keyboardType="numeric"
+        />
+      ) : null}
+      <TouchableOpacity style={styles.ruleSeg} onPress={() => onChange({ ...rule, op: cycle(OP_OPTS, rule.op) })}>
+        <Text style={[styles.ruleSegTxt, styles.ruleOpTxt]}>{OP_LBL[rule.op]}</Text>
+      </TouchableOpacity>
+      <TouchableOpacity style={styles.ruleSeg} onPress={cycleTgt}>
+        <Text style={styles.ruleSegTxt}>{TGT_LBL[rule.target]}</Text>
+      </TouchableOpacity>
+      {rule.target !== 'close' ? (
+        <TextInput
+          style={styles.ruleInput}
+          value={String(rule.value ?? '')}
+          onChangeText={(t) => onChange({ ...rule, value: parseFloat(t) || 0 })}
+          keyboardType="numeric"
+        />
+      ) : null}
+      <TouchableOpacity style={styles.ruleDel} onPress={onRemove}>
+        <Text style={styles.ruleDelTxt}>✕</Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
 
 function resultHtml(candles: Candle[], result: BacktestResult): string {
   const cData = JSON.stringify(
@@ -112,12 +184,43 @@ export default function BacktestScreen() {
   const [trailOn, setTrailOn] = useState(false);
   const [trailPct, setTrailPct] = useState('1.5');
 
+  const [buyRules, setBuyRules] = useState<CustomRule[]>([defaultBuyRule()]);
+  const [sellRules, setSellRules] = useState<CustomRule[]>([defaultSellRule()]);
+  const [rulesRestored, setRulesRestored] = useState(false);
+
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [result, setResult] = useState<BacktestResult | null>(null);
   const [html, setHtml] = useState('');
 
+  // Restore persisted custom rules once, before saving anything back.
+  useEffect(() => {
+    (async () => {
+      try {
+        const raw = await AsyncStorage.getItem(RULES_KEY);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed && Array.isArray(parsed.buy) && Array.isArray(parsed.sell)) {
+            setBuyRules(parsed.buy);
+            setSellRules(parsed.sell);
+          }
+        }
+      } catch {
+        /* fresh start */
+      } finally {
+        setRulesRestored(true);
+      }
+    })();
+  }, []);
+
+  useEffect(() => {
+    if (!rulesRestored) return;
+    AsyncStorage.setItem(RULES_KEY, JSON.stringify({ buy: buyRules, sell: sellRules })).catch(() => {});
+  }, [buyRules, sellRules, rulesRestored]);
+
   const strat = STRATEGIES.find((s) => s.key === stratKey) || STRATEGIES[0];
+  const isCustom = stratKey === CUSTOM_KEY;
+  const stratLabel = isCustom ? 'Custom' : strat.label;
 
   const pickStrat = (key: string) => {
     setStratKey(key);
@@ -134,6 +237,10 @@ export default function BacktestScreen() {
       setMsg('⚠ Enter a symbol to backtest.');
       return;
     }
+    if (isCustom && buyRules.length === 0 && sellRules.length === 0) {
+      setMsg('⚠ Add at least one rule.');
+      return;
+    }
     setBusy(true);
     setResult(null);
     setHtml('');
@@ -146,7 +253,7 @@ export default function BacktestScreen() {
         setBusy(false);
         return;
       }
-      setMsg(`⟳ Running ${strat.label} on ${candles.length} bars…`);
+      setMsg(`⟳ Running ${stratLabel} on ${candles.length} bars…`);
       await new Promise((r) => setTimeout(r, 16));
       const risk: Risk = {
         capital: parseFloat(capital) || 100000,
@@ -157,7 +264,13 @@ export default function BacktestScreen() {
         trailOn,
         trailPct: parseFloat(trailPct) || 1.5,
       };
-      const res = runBacktest(candles, stratKey, params, risk);
+      const res = runBacktest(
+        candles,
+        stratKey,
+        params,
+        risk,
+        isCustom ? { buy: buyRules, sell: sellRules } : undefined,
+      );
       setResult(res);
       setHtml(resultHtml(candles, res));
       setMsg(null);
@@ -193,21 +306,60 @@ export default function BacktestScreen() {
             <Text style={[styles.chipTxt, s.key === stratKey && styles.chipTxtOn]}>{s.label}</Text>
           </TouchableOpacity>
         ))}
+        <TouchableOpacity
+          key={CUSTOM_KEY}
+          style={[styles.chip, isCustom && styles.chipOn]}
+          onPress={() => pickStrat(CUSTOM_KEY)}
+        >
+          <Text style={[styles.chipTxt, isCustom && styles.chipTxtOn]}>Custom</Text>
+        </TouchableOpacity>
       </ScrollView>
 
-      <View style={styles.paramRow}>
-        {strat.params.map((p, i) => (
-          <View key={p.label} style={styles.paramCell}>
-            <Text style={styles.lblSm}>{p.label}</Text>
-            <TextInput
-              style={styles.paramInput}
-              value={String(params[i] ?? '')}
-              onChangeText={(t) => setParam(i, t)}
-              keyboardType="numeric"
+      {isCustom ? (
+        <View>
+          <Text style={styles.lblSm}>
+            Tap a segment to cycle it. X↑ / X↓ = crosses above / below.
+          </Text>
+          <Text style={styles.ruleSection}>BUY WHEN (all true)</Text>
+          {buyRules.map((r, i) => (
+            <RuleRow
+              key={'b' + i}
+              rule={r}
+              onChange={(nr) => setBuyRules((p) => p.map((x, j) => (j === i ? nr : x)))}
+              onRemove={() => setBuyRules((p) => p.filter((_, j) => j !== i))}
             />
-          </View>
-        ))}
-      </View>
+          ))}
+          <TouchableOpacity style={styles.addRule} onPress={() => setBuyRules((p) => [...p, defaultBuyRule()])}>
+            <Text style={styles.addRuleTxt}>+ ADD RULE</Text>
+          </TouchableOpacity>
+          <Text style={styles.ruleSection}>SELL WHEN (all true)</Text>
+          {sellRules.map((r, i) => (
+            <RuleRow
+              key={'s' + i}
+              rule={r}
+              onChange={(nr) => setSellRules((p) => p.map((x, j) => (j === i ? nr : x)))}
+              onRemove={() => setSellRules((p) => p.filter((_, j) => j !== i))}
+            />
+          ))}
+          <TouchableOpacity style={styles.addRule} onPress={() => setSellRules((p) => [...p, defaultSellRule()])}>
+            <Text style={styles.addRuleTxt}>+ ADD RULE</Text>
+          </TouchableOpacity>
+        </View>
+      ) : (
+        <View style={styles.paramRow}>
+          {strat.params.map((p, i) => (
+            <View key={p.label} style={styles.paramCell}>
+              <Text style={styles.lblSm}>{p.label}</Text>
+              <TextInput
+                style={styles.paramInput}
+                value={String(params[i] ?? '')}
+                onChangeText={(t) => setParam(i, t)}
+                keyboardType="numeric"
+              />
+            </View>
+          ))}
+        </View>
+      )}
 
       <View style={styles.row2}>
         <View style={styles.half}>
@@ -327,6 +479,28 @@ const styles = StyleSheet.create({
   chipScroll: { marginVertical: 2 },
   chip: { borderColor: theme.border2, borderWidth: 1, borderRadius: 6, paddingHorizontal: 12, paddingVertical: 7, marginRight: 6 },
   chipOn: { backgroundColor: theme.accent, borderColor: theme.accent },
+  ruleSection: { color: theme.muted2, fontSize: 10, fontFamily: theme.mono, letterSpacing: 1, marginTop: 10, marginBottom: 6 },
+  ruleRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6, flexWrap: 'wrap' },
+  ruleSeg: { backgroundColor: theme.surface2, borderColor: theme.border2, borderWidth: 1, borderRadius: 5, paddingHorizontal: 10, paddingVertical: 7 },
+  ruleSegTxt: { color: theme.text, fontSize: 11, fontFamily: theme.mono, fontWeight: '700' },
+  ruleOpTxt: { color: theme.accent },
+  ruleInput: {
+    backgroundColor: theme.surface,
+    borderColor: theme.border2,
+    borderWidth: 1,
+    borderRadius: 5,
+    color: theme.text,
+    fontFamily: theme.mono,
+    fontSize: 11,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    minWidth: 52,
+    textAlign: 'center',
+  },
+  ruleDel: { paddingHorizontal: 6, paddingVertical: 6 },
+  ruleDelTxt: { color: theme.muted, fontSize: 12 },
+  addRule: { alignSelf: 'flex-start', borderColor: theme.border2, borderWidth: 1, borderRadius: 5, paddingHorizontal: 10, paddingVertical: 6, marginBottom: 4 },
+  addRuleTxt: { color: theme.muted2, fontSize: 10, fontFamily: theme.mono, letterSpacing: 1 },
   chipTxt: { color: theme.muted2, fontFamily: theme.mono, fontSize: 12 },
   chipTxtOn: { color: theme.bg, fontWeight: '700' },
   paramRow: { flexDirection: 'row', gap: 10, marginTop: 12, flexWrap: 'wrap' },

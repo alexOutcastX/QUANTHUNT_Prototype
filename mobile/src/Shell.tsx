@@ -15,6 +15,9 @@ import TradingViewScreen from './screens/TradingViewScreen';
 import TrackListScreen from './screens/TrackListScreen';
 import UniverseScreen from './screens/UniverseScreen';
 import WatchlistScreen from './screens/WatchlistScreen';
+import HolidaysScreen from './screens/HolidaysScreen';
+import IndicesScreen from './screens/IndicesScreen';
+import TickerStrip from './components/TickerStrip';
 import { theme } from './theme';
 
 type Screen = () => React.ReactElement;
@@ -33,6 +36,8 @@ const SCREEN_BY_KEY: Record<string, Screen> = {
   portfolio: () => <PortfolioScreen />,
   watchlist: () => <WatchlistScreen />,
   calc: () => <CalculatorScreen />,
+  indices: () => <IndicesScreen />,
+  holidays: () => <HolidaysScreen />,
 };
 
 // Desktop pages bar: every destination flat in one horizontal row, in the
@@ -49,6 +54,8 @@ const PAGES: { k: string; label: string; glyph: string }[] = [
   { k: 'portfolio', label: 'Portfolio', glyph: 'Pf' },
   { k: 'watchlist', label: 'Watchlist', glyph: '☆' },
   { k: 'calc', label: 'Calculator', glyph: '=' },
+  { k: 'indices', label: 'Indices', glyph: '∿' },
+  { k: 'holidays', label: 'Holidays', glyph: '⌚' },
 ];
 
 const TABS: { k: string; label: string; glyph: string; render: () => React.ReactElement }[] = [
@@ -92,6 +99,7 @@ function DesktopShell({ version }: { version: string }) {
           <Text style={styles.legalTxt}>DISCLAIMER</Text>
         </TouchableOpacity>
       </View>
+      <TickerStrip />
       <View style={styles.pagesBar}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pagesRow}>
           {PAGES.map((it) => {

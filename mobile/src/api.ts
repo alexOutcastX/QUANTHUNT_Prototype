@@ -147,6 +147,12 @@ export type ScanRow = {
   new_high_52w?: boolean | null;
   new_low_52w?: boolean | null;
   volume_spike?: boolean | null;
+  cam_h3?: number | null;
+  cam_h4?: number | null;
+  cam_l3?: number | null;
+  cam_l4?: number | null;
+  cam_break_up?: boolean | null;
+  cam_break_down?: boolean | null;
 };
 export type ScanResp = {
   data: Record<string, ScanRow>;
@@ -220,7 +226,21 @@ async function fetchGraph(symbol?: string): Promise<GraphResp> {
   }
 }
 
+// Live index levels + market holidays (Indices / Holidays pages, ticker strip).
+export type IndexQuote = { key: string; name: string; level: number; chg: number; y1: number };
+export type IndicesResp = { indices: IndexQuote[]; asof: number; cached?: boolean };
+export type Holiday = { date: string; name: string; day: string };
+export type HolidaysResp = {
+  open: boolean;
+  now_ist: string;
+  next_holiday: Holiday | null;
+  holidays: Holiday[];
+  note: string;
+};
+
 export const api = {
+  indices: () => getJson<IndicesResp>('/indices'),
+  holidays: () => getJson<HolidaysResp>('/holidays'),
   ping: () => getJson<Ping>('/ping'),
   version: () => getJson<Version>('/version'),
   universe: () => getJson<UniverseResp>('/universe'),
