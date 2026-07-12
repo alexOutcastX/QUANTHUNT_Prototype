@@ -76,6 +76,14 @@ feature/* ──PR──▶ main (CI, integration; does NOT deploy)
 
 Canonical per-version notes are in **[CHANGELOG.md](CHANGELOG.md)**. Summary:
 
+### v2.9.0 — Terminal wired to real data (AI graphs)
+
+| Area | Change |
+|---|---|
+| Terminal | `/graph?symbol=X` generates a relationship graph for **any company** via the Claude API (`ai_graph.py`), validated + disk-cached 30 days; curated cluster remains the fallback |
+| Terminal | GO on any NSE symbol; data-mode badge; generation progress + error surfacing; whole workspace (window/compare/news/pop-outs/quotes) works on AI graphs |
+| Ops | Enable with `ANTHROPIC_API_KEY` in `/opt/quanthunt/.env` (+ optional `GRAPH_AI_MODEL`); `graph_cache.json` survives deploys |
+
 ### v2.8.0 — Terminal news panel
 
 | Area | Change |

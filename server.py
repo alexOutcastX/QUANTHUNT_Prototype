@@ -15,6 +15,7 @@ import fundamentals as _fund   # bulk fundamentals cache (EODHD + yfinance fallb
 import scanner as _scanner     # live per-symbol technical scan for the screener
 import relations as _relations # curated company-relationship graph (Terminal tab)
 import news as _news           # RSS news aggregation (Terminal news panel)
+import ai_graph as _ai         # AI-generated relationship graphs (any symbol)
 
 # Support both normal run and PyInstaller frozen exe
 _BASE_DIR = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
@@ -900,14 +901,38 @@ def start_scan_warm():
         threading.Thread(target=_warm_scan_loop, name="scan-warm", daemon=True).start()
 
 
+AI_DISCLAIMER = ("AI-generated relationship map from model knowledge — indicative, "
+                 "not verified filings data. Not investment advice.")
+
+
 @app.route("/graph")
 def relationship_graph():
     """Company-relationship graph for the Terminal tab.
 
-    Currently serves the curated demo dataset; the response shape is stable so
-    an AI-generated (Claude) graph per symbol can replace it transparently.
+    No ?symbol → the curated demo dataset (also the fallback universe).
+    ?symbol=X → AI-generated graph for any company when ANTHROPIC_API_KEY is
+    configured (30-day disk cache); curated data still wins for symbols it
+    covers so the hand-checked cluster stays authoritative.
     """
-    return jsonify(_relations.graph())
+    sym = request.args.get("symbol", "").strip().upper()
+    base = _relations.graph()
+    base["ai"] = _ai.available()
+    if not sym or sym in base["companies"]:
+        return jsonify(base)
+    if not _ai.available():
+        return jsonify({"error": "ai-unavailable", "ai": False,
+                        "detail": "Set ANTHROPIC_API_KEY on the server to unlock "
+                                  "AI graphs for any company."}), 404
+    try:
+        g = _ai.get_graph(sym)
+    except Exception as e:
+        logging.warning("AI graph generation failed for %s: %s", sym, e)
+        return jsonify({"error": "generation-failed", "ai": True,
+                        "detail": "Could not generate a graph for %s — try again." % sym}), 502
+    listed = sorted(k for k, v in g["companies"].items() if v.get("listed"))
+    return jsonify({"companies": g["companies"], "edges": g["edges"],
+                    "available": listed, "source": "ai", "ai": True,
+                    "disclaimer": AI_DISCLAIMER})
 
 
 @app.route("/news")

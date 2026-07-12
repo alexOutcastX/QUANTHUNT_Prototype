@@ -1,0 +1,165 @@
+# AI-generated company-relationship graphs for the Terminal tab.
+#
+# When ANTHROPIC_API_KEY is set (VM: /opt/quanthunt/.env), /graph?symbol=X
+# generates a relationship graph for ANY Indian listed company by asking
+# Claude for a strictly-shaped JSON graph, validating it, and caching it on
+# disk for 30 days. Without a key the Terminal falls back to the curated
+# demo dataset in relations.py. Plain HTTPS via requests — no SDK needed.
+
+import json
+import os
+import re
+import threading
+import time
+
+import requests
+
+API_KEY = os.environ.get("ANTHROPIC_API_KEY", "").strip()
+MODEL = os.environ.get("GRAPH_AI_MODEL", "claude-sonnet-5").strip()
+CACHE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "graph_cache.json")
+TTL = 30 * 86400          # regenerate monthly — relationships move slowly
+TIMEOUT = 75              # generation can take a while on big graphs
+EDGE_TYPES = {"supplies", "group", "competitor", "finances"}
+
+_lock = threading.Lock()
+_cache = None             # symbol -> {"ts": epoch, "companies": {...}, "edges": [...]}
+_inflight: dict = {}      # symbol -> threading.Event, so concurrent requests wait
+
+
+def available() -> bool:
+    return bool(API_KEY)
+
+
+def _load() -> dict:
+    global _cache
+    if _cache is None:
+        try:
+            with open(CACHE_FILE) as f:
+                _cache = json.load(f)
+        except Exception:
+            _cache = {}
+    return _cache
+
+
+def _save():
+    try:
+        with open(CACHE_FILE + ".tmp", "w") as f:
+            json.dump(_cache, f)
+        os.replace(CACHE_FILE + ".tmp", CACHE_FILE)
+    except Exception:
+        pass
+
+
+PROMPT = """You are an equity analyst mapping business relationships for an Indian-markets terminal.
+
+Produce the business-relationship graph for the Indian listed company with NSE symbol "%s".
+
+Return ONLY a JSON object, no prose, exactly this shape:
+{"companies": {"<ID>": {"name": "<full name>", "listed": true|false}, ...},
+ "edges": [{"src": "<ID>", "dst": "<ID>", "type": "supplies|group|competitor|finances",
+            "note": "<short factual note>", "confidence": "high|medium|low"}, ...]}
+
+Rules:
+- Include the centre company "%s" itself plus 8-16 genuinely related companies:
+  its major suppliers, customers / demand drivers, financiers, listed competitors,
+  and group/parent companies.
+- IDs: use the exact NSE trading symbol for listed companies (listed: true);
+  short uppercase identifiers for unlisted entities (listed: false).
+- type semantics: "supplies" means src supplies goods/services to dst;
+  "finances" means src finances dst or dst's customers; "group" = same
+  promoter group / parent-subsidiary; "competitor" = direct competitor.
+- Every edge endpoint must exist in companies. No self-edges.
+- notes: <= 90 characters, concrete and factual (what is supplied / the nature
+  of the tie). confidence reflects how well-established the relationship is.
+- Only include relationships you are reasonably confident actually exist."""
+
+
+def _extract_json(text: str) -> dict:
+    m = re.search(r"\{.*\}", text, re.S)
+    if not m:
+        raise ValueError("no JSON in model output")
+    return json.loads(m.group(0))
+
+
+def _validate(symbol: str, data: dict) -> dict:
+    companies, edges = {}, []
+    for k, v in (data.get("companies") or {}).items():
+        k = re.sub(r"[^A-Z0-9&-]", "", str(k).upper())[:20]
+        if not k or not isinstance(v, dict):
+            continue
+        companies[k] = {"name": str(v.get("name") or k)[:90], "listed": bool(v.get("listed"))}
+    for e in data.get("edges") or []:
+        if not isinstance(e, dict):
+            continue
+        src = re.sub(r"[^A-Z0-9&-]", "", str(e.get("src", "")).upper())[:20]
+        dst = re.sub(r"[^A-Z0-9&-]", "", str(e.get("dst", "")).upper())[:20]
+        etype = e.get("type")
+        if src not in companies or dst not in companies or src == dst or etype not in EDGE_TYPES:
+            continue
+        conf = e.get("confidence")
+        edges.append({
+            "src": src, "dst": dst, "type": etype,
+            "note": str(e.get("note") or "")[:120],
+            "confidence": conf if conf in ("high", "medium", "low") else "medium",
+        })
+    if symbol not in companies:
+        raise ValueError("centre company missing from AI graph")
+    if len(edges) < 3:
+        raise ValueError("AI graph too sparse (%d edges)" % len(edges))
+    return {"companies": companies, "edges": edges}
+
+
+def _generate(symbol: str) -> dict:
+    r = requests.post(
+        "https://api.anthropic.com/v1/messages",
+        headers={
+            "x-api-key": API_KEY,
+            "anthropic-version": "2023-06-01",
+            "content-type": "application/json",
+        },
+        json={
+            "model": MODEL,
+            "max_tokens": 3000,
+            "messages": [{"role": "user", "content": PROMPT % (symbol, symbol)}],
+        },
+        timeout=TIMEOUT,
+    )
+    r.raise_for_status()
+    text = "".join(
+        b.get("text", "") for b in r.json().get("content", []) if b.get("type") == "text"
+    )
+    return _validate(symbol, _extract_json(text))
+
+
+def get_graph(symbol: str) -> dict:
+    """Cached AI graph for a symbol. Raises on generation/validation failure."""
+    symbol = symbol.upper().strip()
+    with _lock:
+        cache = _load()
+        c = cache.get(symbol)
+        if c and time.time() - c.get("ts", 0) < TTL:
+            return {"companies": c["companies"], "edges": c["edges"]}
+        ev = _inflight.get(symbol)
+        if ev is None:
+            ev = _inflight[symbol] = threading.Event()
+            owner = True
+        else:
+            owner = False
+    if not owner:
+        # another request is already generating this symbol — wait for it
+        ev.wait(TIMEOUT + 5)
+        with _lock:
+            c = _load().get(symbol)
+        if c:
+            return {"companies": c["companies"], "edges": c["edges"]}
+        raise RuntimeError("graph generation failed")
+    try:
+        g = _generate(symbol)
+        with _lock:
+            _cache[symbol] = {"ts": int(time.time()), **g}
+            _save()
+        return g
+    finally:
+        with _lock:
+            _inflight.pop(symbol, None)
+        ev.set()

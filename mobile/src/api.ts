@@ -183,14 +183,14 @@ async function scanBatch(symbols: string[]): Promise<ScanResp> {
 }
 
 // Company-relationship graph (Terminal tab). Shape is stable across the
-// curated demo dataset and the future AI-generated mode.
+// curated demo dataset and AI-generated graphs (?symbol= with a server key).
 export type GraphCompany = { name: string; listed: boolean };
 export type GraphEdge = {
   src: string;
   dst: string;
   type: 'supplies' | 'group' | 'competitor' | 'finances';
   note: string;
-  confidence: 'high' | 'medium';
+  confidence: 'high' | 'medium' | 'low';
 };
 export type GraphResp = {
   companies: Record<string, GraphCompany>;
@@ -198,7 +198,27 @@ export type GraphResp = {
   available: string[];
   source: string;
   disclaimer: string;
+  ai?: boolean;
 };
+
+// Graph fetch is special-cased: AI generation can take ~15s+ on a cache miss,
+// and error responses carry a user-facing `detail` worth surfacing.
+async function fetchGraph(symbol?: string): Promise<GraphResp> {
+  const path = '/graph' + (symbol ? '?symbol=' + encodeURIComponent(symbol) : '');
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 120000);
+  try {
+    const res = await fetch(API_BASE + path, { signal: ctrl.signal });
+    const body = (await res.json().catch(() => null)) as
+      | (GraphResp & { detail?: string })
+      | null;
+    if (!res.ok) throw new Error(body?.detail || 'HTTP ' + res.status);
+    if (!body) throw new Error('Empty response');
+    return body;
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 export const api = {
   ping: () => getJson<Ping>('/ping'),
@@ -217,7 +237,7 @@ export const api = {
     ),
   fundamentals: (symbol: string) =>
     getJson<Fundamentals>('/fundamentals?symbol=' + encodeURIComponent(symbol)),
-  graph: () => getJson<GraphResp>('/graph'),
+  graph: (symbol?: string) => fetchGraph(symbol),
   indexConstituents: (name: string) =>
     getJson<IndexResp>('/index?name=' + encodeURIComponent(name)),
   // /returns caps at 50 symbols/call; batch and merge.
