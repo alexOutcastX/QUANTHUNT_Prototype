@@ -1,6 +1,6 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Linking, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { API_BASE, HolidaysResp, IndexQuote, Quote, api } from '../api';
+import { API_BASE, HolidaysResp, IndexConstituent, IndexQuote, Quote, api } from '../api';
 import { loadWatchlist } from '../watchlist';
 import { Card, EmptyState, Loading, SectionTitle, StatTile } from '../ui';
 import { theme } from '../theme';
@@ -17,6 +17,8 @@ export default function DashboardScreen({ onNavigate }: { onNavigate?: (page: st
   const [indices, setIndices] = useState<IndexQuote[] | null>(null);
   const [market, setMarket] = useState<HolidaysResp | null>(null);
   const [movers, setMovers] = useState<Mover[] | null>(null);
+  // Broad universe (NIFTY 500) powers breadth + gainers/losers — one extra fetch.
+  const [broad, setBroad] = useState<IndexConstituent[] | null>(null);
   const [watch, setWatch] = useState<{ symbol: string; q?: Quote }[] | null>(null);
   const [news, setNews] = useState<NewsItem[] | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -32,6 +34,12 @@ export default function DashboardScreen({ onNavigate }: { onNavigate?: (page: st
         setMovers([...rows.slice(0, 4), ...rows.slice(-4)]);
       })
       .catch(() => setMovers([]));
+    // Broad breadth universe — NIFTY 500 carries per-symbol chg/volume when the
+    // NSE feed is live; keep only rows with a real % change (CSV fallback → empty).
+    api
+      .indexConstituents('NIFTY 500')
+      .then((idx) => setBroad((idx.data || []).filter((r) => r.chg != null)))
+      .catch(() => setBroad([]));
     try {
       const wl = await loadWatchlist();
       const syms = wl.slice(0, 8);
@@ -59,6 +67,63 @@ export default function DashboardScreen({ onNavigate }: { onNavigate?: (page: st
   }, [load]);
 
   const go = (page: string) => onNavigate?.(page);
+
+  // Advance/decline breadth from the broad universe.
+  const breadth = useMemo(() => {
+    const rows = broad || [];
+    let up = 0,
+      down = 0,
+      flat = 0;
+    for (const r of rows) {
+      const c = r.chg as number;
+      if (c > 0) up++;
+      else if (c < 0) down++;
+      else flat++;
+    }
+    const total = rows.length || 1;
+    return { up, down, flat, total, ratio: down ? up / down : up };
+  }, [broad]);
+
+  // Top gainers / losers from the broad universe, skipping obviously illiquid
+  // rows when volume is reported.
+  const liquid = useMemo(
+    () => (broad || []).filter((r) => r.chg != null && (r.volume == null || r.volume > 10000)),
+    [broad],
+  );
+  const gainers = useMemo(
+    () => [...liquid].sort((a, b) => (b.chg as number) - (a.chg as number)).slice(0, 6),
+    [liquid],
+  );
+  const losers = useMemo(
+    () => [...liquid].sort((a, b) => (a.chg as number) - (b.chg as number)).slice(0, 6),
+    [liquid],
+  );
+
+  // Sector performance uses the live NSE sector sub-indices from /indices as
+  // proxies (NIFTY IT / Auto / Pharma / FMCG / Metal / Energy / Realty / Bank),
+  // ranked best→worst by day change. Chosen over per-symbol sector aggregation
+  // because it needs zero extra calls and no heavy /scan fan-out.
+  const sectors = useMemo(() => {
+    const keys = new Set([
+      'BANKNIFTY',
+      'NIFTYIT',
+      'NIFTYAUTO',
+      'NIFTYPHARMA',
+      'NIFTYFMCG',
+      'NIFTYMETAL',
+      'NIFTYENERGY',
+      'NIFTYREALTY',
+    ]);
+    return (indices || [])
+      .filter((i) => keys.has(i.key) && i.chg != null)
+      .slice()
+      .sort((a, b) => b.chg - a.chg);
+  }, [indices]);
+
+  const upPct = (breadth.up / breadth.total) * 100;
+  const downPct = (breadth.down / breadth.total) * 100;
+  const flatPct = Math.max(0, 100 - upPct - downPct);
+  const sectorMax = Math.max(1, ...sectors.map((s) => Math.abs(s.chg)));
 
   if (!indices) return <Loading label="Loading market overview…" />;
 
@@ -110,6 +175,108 @@ export default function DashboardScreen({ onNavigate }: { onNavigate?: (page: st
           <Text style={styles.moreLink}>All indices ›</Text>
         </TouchableOpacity>
       ) : null}
+
+      <Card style={{ marginTop: theme.sp.lg }}>
+        <SectionTitle>Market breadth · NIFTY 500</SectionTitle>
+        {!broad ? (
+          <Loading />
+        ) : broad.length ? (
+          <View>
+            <View style={styles.breadthNums}>
+              <Text style={[styles.breadthN, { color: theme.green }]}>{breadth.up} advancing</Text>
+              <Text style={styles.breadthMid}>A/D {breadth.ratio.toFixed(2)}</Text>
+              <Text style={[styles.breadthN, { color: theme.red, textAlign: 'right' }]}>
+                {breadth.down} declining
+              </Text>
+            </View>
+            <View style={styles.breadthBar}>
+              <View style={{ width: (upPct.toFixed(2) + '%') as `${number}%`, backgroundColor: theme.green }} />
+              <View style={{ width: (flatPct.toFixed(2) + '%') as `${number}%`, backgroundColor: theme.border2 }} />
+              <View style={{ width: (downPct.toFixed(2) + '%') as `${number}%`, backgroundColor: theme.red }} />
+            </View>
+            <Text style={styles.breadthFoot}>
+              {upPct >= downPct
+                ? `Advancers lead — ${upPct.toFixed(0)}% of the index is green`
+                : `Decliners lead — ${downPct.toFixed(0)}% of the index is red`}
+              {breadth.flat ? ` · ${breadth.flat} unchanged` : ''}
+            </Text>
+          </View>
+        ) : (
+          <EmptyState title="Breadth unavailable" hint="Constituent quotes are briefly unreachable — pull to refresh." />
+        )}
+      </Card>
+
+      <View style={styles.cols}>
+        <Card style={styles.col}>
+          <SectionTitle>Top gainers</SectionTitle>
+          {!broad ? (
+            <Loading />
+          ) : gainers.length ? (
+            gainers.map((m, i) => (
+              <TouchableOpacity
+                key={m.symbol}
+                style={[styles.mrow, i === 0 && { borderTopWidth: 0 }]}
+                onPress={() => go('screener')}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.msym}>{m.symbol}</Text>
+                <Text style={styles.mprice}>{m.price != null ? m.price.toFixed(1) : '—'}</Text>
+                <Text style={[styles.mchg, { color: colorOf(m.chg) }]}>{pct(m.chg)}</Text>
+              </TouchableOpacity>
+            ))
+          ) : (
+            <EmptyState title="Gainers unavailable" hint="Pull to refresh." />
+          )}
+        </Card>
+
+        <Card style={styles.col}>
+          <SectionTitle>Top losers</SectionTitle>
+          {!broad ? (
+            <Loading />
+          ) : losers.length ? (
+            losers.map((m, i) => (
+              <TouchableOpacity
+                key={m.symbol}
+                style={[styles.mrow, i === 0 && { borderTopWidth: 0 }]}
+                onPress={() => go('screener')}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.msym}>{m.symbol}</Text>
+                <Text style={styles.mprice}>{m.price != null ? m.price.toFixed(1) : '—'}</Text>
+                <Text style={[styles.mchg, { color: colorOf(m.chg) }]}>{pct(m.chg)}</Text>
+              </TouchableOpacity>
+            ))
+          ) : (
+            <EmptyState title="Losers unavailable" hint="Pull to refresh." />
+          )}
+        </Card>
+      </View>
+
+      <Card style={{ marginTop: theme.sp.lg }}>
+        <SectionTitle>Sector performance</SectionTitle>
+        {sectors.length ? (
+          sectors.map((sct, i) => (
+            <View key={sct.key} style={[styles.srow, i === 0 && { borderTopWidth: 0 }]}>
+              <Text style={styles.sname} numberOfLines={1}>
+                {sct.name.replace(/^NIFTY\s*/i, '')}
+              </Text>
+              <View style={styles.sbarWrap}>
+                <View
+                  style={{
+                    width: ((Math.abs(sct.chg) / sectorMax) * 100).toFixed(1) + '%' as `${number}%`,
+                    height: '100%',
+                    borderRadius: 3,
+                    backgroundColor: colorOf(sct.chg),
+                  }}
+                />
+              </View>
+              <Text style={[styles.schg, { color: colorOf(sct.chg) }]}>{pct(sct.chg)}</Text>
+            </View>
+          ))
+        ) : (
+          <EmptyState title="Sector data unavailable" hint="Sector indices are briefly unreachable — pull to refresh." />
+        )}
+      </Card>
 
       <View style={styles.cols}>
         <Card style={styles.col}>
@@ -215,6 +382,29 @@ const styles = StyleSheet.create({
   msym: { flex: 1, color: theme.text, fontFamily: theme.mono, fontSize: theme.fs.sm + 1, fontWeight: '700' },
   mprice: { color: theme.muted2, fontFamily: theme.mono, fontSize: theme.fs.sm + 1 },
   mchg: { fontFamily: theme.mono, fontSize: theme.fs.sm + 1, minWidth: 76, textAlign: 'right' },
+  breadthNums: { flexDirection: 'row', alignItems: 'center', marginTop: theme.sp.xs },
+  breadthN: { flex: 1, fontFamily: theme.mono, fontSize: theme.fs.sm + 1, fontWeight: '700' },
+  breadthMid: { flex: 1, color: theme.muted, fontFamily: theme.mono, fontSize: theme.fs.sm, textAlign: 'center' },
+  breadthBar: {
+    flexDirection: 'row',
+    height: 10,
+    borderRadius: 5,
+    overflow: 'hidden',
+    marginTop: theme.sp.sm,
+    backgroundColor: theme.surface2,
+  },
+  breadthFoot: { color: theme.muted, fontSize: theme.fs.sm, marginTop: theme.sp.sm },
+  srow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 11,
+    borderTopColor: theme.border,
+    borderTopWidth: 1,
+    gap: theme.sp.md,
+  },
+  sname: { width: 96, color: theme.text, fontSize: theme.fs.sm + 1, fontWeight: '600' },
+  sbarWrap: { flex: 1, height: 6, borderRadius: 3, backgroundColor: theme.surface2, overflow: 'hidden' },
+  schg: { fontFamily: theme.mono, fontSize: theme.fs.sm + 1, minWidth: 68, textAlign: 'right' },
   nrow: { paddingVertical: 12, borderTopColor: theme.border, borderTopWidth: 1 },
   ntitle: { color: theme.text, fontSize: theme.fs.md, lineHeight: 20 },
   nmeta: { color: theme.muted, fontSize: theme.fs.xs + 1, marginTop: 4 },
