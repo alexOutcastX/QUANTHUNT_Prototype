@@ -17,7 +17,7 @@ import { theme } from '../theme';
 // draggable, resizable, closeable multi-tab window (company chart +
 // screener.in fundamentals, and a comparison report). All interaction lives
 // inside the frame; state persists to localStorage across frame rebuilds.
-function graphHtml(data: GraphResp, quotes: LtpResp, centre: string, openIdx: string | null): string {
+function graphHtml(data: GraphResp, quotes: LtpResp, centre: string, openIdx: string | null, autoWin: boolean): string {
   return `<!DOCTYPE html><html><head>
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
 <style>
@@ -166,6 +166,7 @@ function graphHtml(data: GraphResp, quotes: LtpResp, centre: string, openIdx: st
   if (typeof d3 === 'undefined') { document.getElementById('panel').innerHTML = '<div class="wmsg">⚠ Graph library unavailable (no network).</div>'; return; }
   var DATA = ${JSON.stringify({ companies: data.companies, edges: data.edges })};
   var OPENIDX = ${JSON.stringify(openIdx)};
+  var AUTOWIN = ${JSON.stringify(!!autoWin)};
   var QUOTES = ${JSON.stringify(quotes)};
   var API = ${JSON.stringify(API_BASE)};
   var centre = ${JSON.stringify(centre)};
@@ -233,6 +234,11 @@ function graphHtml(data: GraphResp, quotes: LtpResp, centre: string, openIdx: st
       return s;
     }
     var E = DATA.edges;
+    var hasEdges = E.some(function(e){ return e.src === c || e.dst === c; });
+    if (!hasEdges) {
+      h += '<div class="en" style="border:1px solid ${theme.border};border-radius:6px;padding:9px 10px;margin-top:8px">' +
+'No relationship map for this company yet. Its live chart, fundamentals and news are in the window and news panel — open the CHART toggle or click the node. Set an AI key on the server for full relationship graphs.' + '</div>';
+    }
     h += block('Suppliers', E.filter(function(e){ return e.dst === c && e.type === 'supplies'; }), function(e){ return e.src; });
     h += block('Customers / demand', E.filter(function(e){ return e.src === c && e.type === 'supplies'; }), function(e){ return e.dst; });
     h += block('Financiers', E.filter(function(e){ return e.dst === c && e.type === 'finances'; }), function(e){ return e.src; });
@@ -806,6 +812,13 @@ function graphHtml(data: GraphResp, quotes: LtpResp, centre: string, openIdx: st
 
   layoutNews();
   render();
+  if (AUTOWIN) {
+    // Minimal graph (no relationship edges): show the company's workspace so
+    // the chart/fundamentals/news are immediately useful.
+    if (W.tabs.indexOf(centre) < 0) W.tabs.push(centre);
+    W.active = centre; W.open = true; if (!W.rect) W.rect = defaultRect();
+    saveW();
+  }
   if (OPENIDX) openIdxTab(OPENIDX);
   layoutWin(); renderTabs(); renderBody();
   loadNews(false);
@@ -866,10 +879,6 @@ export default function TerminalScreen() {
       setCentre(sym);
       return;
     }
-    if (!aiOn && !chips.includes(sym)) {
-      setNotFound(sym);
-      return;
-    }
     setGenerating(sym);
     api
       .graph(sym)
@@ -885,7 +894,7 @@ export default function TerminalScreen() {
   const go = () => select(input);
 
   const html = useMemo(
-    () => (data ? graphHtml(data, quotes, centre, idxCmd?.name || null) : ''),
+    () => (data ? graphHtml(data, quotes, centre, idxCmd?.name || null, data.source === 'minimal') : ''),
     [data, quotes, centre, idxCmd],
   );
 
@@ -901,7 +910,7 @@ export default function TerminalScreen() {
           TAUREYE TERMINAL{' '}
           <Text style={styles.titleDim}>
             · RELATIONSHIP GRAPH ·{' '}
-            {data?.source === 'ai' ? 'AI GRAPH' : aiOn ? 'CURATED + AI' : 'DEMO DATA'}
+            {data?.source === 'ai' ? 'AI GRAPH' : data?.source === 'minimal' ? 'LIVE DATA' : aiOn ? 'CURATED + AI' : 'DEMO DATA'}
           </Text>
         </Text>
       </View>
@@ -955,8 +964,7 @@ export default function TerminalScreen() {
           <View style={styles.center}>
             <ActivityIndicator color={theme.accent} />
             <Text style={styles.genTxt}>
-              Generating relationship graph for {generating} — first time takes ~15s, then it's
-              cached.
+              Loading {generating}…{aiOn ? ' generating its relationship graph (first time ~15s, then cached).' : ''}
             </Text>
           </View>
         ) : !data ? (

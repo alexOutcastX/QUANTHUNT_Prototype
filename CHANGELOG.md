@@ -3,6 +3,21 @@
 All notable changes are recorded here. Versioning is [SemVer](https://semver.org):
 `MAJOR.MINOR.PATCH`.
 
+## [3.1.1] — 2026-07-12
+Fix: the Terminal loads **any** NSE company, not just the curated 29.
+
+### Fixed
+- Typing a company outside the curated set (e.g. HDFCBANK, SBIN) no
+  longer sat on TMCV. `/graph?symbol=X` now returns a **minimal graph**
+  (the company as the centre node, no edges) when relationship data
+  isn't available — instead of a 404 the client refused to navigate on.
+  The Terminal centres on the company and **auto-opens its workspace**
+  (live chart + fundamentals) with the news panel following it; a
+  "LIVE DATA" badge and a note explain that full relationship edges need
+  the AI key.
+- With an AI key set, a failed generation also falls back to the minimal
+  graph (company still loads) instead of erroring.
+
 ## [3.1.0] — 2026-07-12
 The Terminal absorbs the Universe: indices and market-cap segments are
 now first-class Terminal commands.
@@ -442,6 +457,7 @@ Oracle Always-Free VM with push-to-deploy.
 - Embedded TradingView Advanced Chart tab, plus deep-link to the user's
   logged-in TradingView account.
 
+[3.1.1]: https://github.com/alexOutcastX/QUANTHUNT_Prototype/releases/tag/v3.1.1
 [3.1.0]: https://github.com/alexOutcastX/QUANTHUNT_Prototype/releases/tag/v3.1.0
 [3.0.0]: https://github.com/alexOutcastX/QUANTHUNT_Prototype/releases/tag/v3.0.0
 [2.13.0]: https://github.com/alexOutcastX/QUANTHUNT_Prototype/releases/tag/v2.13.0
