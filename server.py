@@ -18,11 +18,15 @@ import news as _news           # RSS news aggregation (Terminal news panel)
 import ai_graph as _ai         # AI-generated relationship graphs (any symbol)
 import broker as _broker       # BYOB Zerodha connect (read-only, single user)
 import holidays as _holidays   # NSE trading holidays + market open/closed status
+import auth as _auth           # owner passcode gate for owner-only endpoints
 
 # Support both normal run and PyInstaller frozen exe
 _BASE_DIR = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
 app = Flask(__name__, template_folder=_BASE_DIR, static_folder=_BASE_DIR)
-CORS(app, origins="*")
+# Same-origin by default; set CORS_ORIGINS (comma-separated) to allow specific
+# cross-origin callers. The SPA is served same-origin, so no wildcard needed.
+_CORS_ORIGINS = [o.strip() for o in os.environ.get("CORS_ORIGINS", "").split(",") if o.strip()]
+CORS(app, origins=_CORS_ORIGINS or [], supports_credentials=True)
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("quanthunt")
 
@@ -333,6 +337,52 @@ def _security_headers(resp):
     resp.headers.setdefault("X-Content-Type-Options", "nosniff")
     resp.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
     resp.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    return resp
+
+
+# ── owner authentication (protects broker + future per-user endpoints) ──
+def require_owner(fn):
+    import functools
+
+    @functools.wraps(fn)
+    def wrapper(*a, **kw):
+        if not _auth.configured():
+            return jsonify({"error": "owner-auth-required",
+                            "detail": "This feature needs an owner passcode. Set "
+                                      "APP_PASSWORD on the server to enable it."}), 403
+        if not _auth.is_owner(request.cookies.get(_auth.COOKIE, "")):
+            return jsonify({"error": "unauthorized",
+                            "detail": "Owner login required."}), 401
+        return fn(*a, **kw)
+    return wrapper
+
+
+@app.route("/auth/status")
+def auth_status():
+    return jsonify({"configured": _auth.configured(),
+                    "owner": _auth.is_owner(request.cookies.get(_auth.COOKIE, ""))})
+
+
+@app.route("/auth/login", methods=["POST"])
+@rate_limit("auth-login", 8, 300)
+def auth_login():
+    body = request.get_json(silent=True) or {}
+    if not _auth.configured():
+        return jsonify({"error": "not-configured",
+                        "detail": "No owner passcode is set on this server."}), 403
+    if not _auth.check_password(body.get("password", "")):
+        return jsonify({"error": "bad-password"}), 401
+    resp = jsonify({"owner": True})
+    resp.set_cookie(_auth.COOKIE, _auth.make_cookie(), max_age=_auth.TTL,
+                    httponly=True, samesite="Lax",
+                    secure=request.headers.get("X-Forwarded-Proto") == "https")
+    return resp
+
+
+@app.route("/auth/logout", methods=["POST"])
+def auth_logout():
+    resp = jsonify({"owner": False})
+    resp.delete_cookie(_auth.COOKIE)
     return resp
 
 
@@ -1061,6 +1111,7 @@ def broker_callback():
 
 
 @app.route("/broker/holdings")
+@require_owner
 @rate_limit("broker", 60, 300)
 def broker_holdings():
     if not _broker.connected():
@@ -1072,6 +1123,7 @@ def broker_holdings():
 
 
 @app.route("/broker/ltp")
+@require_owner
 @rate_limit("broker", 120, 300)
 def broker_ltp():
     if not _broker.connected():
@@ -1084,6 +1136,7 @@ def broker_ltp():
 
 
 @app.route("/broker/logout", methods=["POST"])
+@require_owner
 @rate_limit("broker-login", 10, 600)
 def broker_logout():
     _broker.logout()

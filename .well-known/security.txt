@@ -1,0 +1,4 @@
+Contact: mailto:alexmurur@gmail.com
+Preferred-Languages: en
+Policy: This is a self-hosted, open-source research tool. Report security
+ issues by email. No bug-bounty; good-faith disclosure appreciated.

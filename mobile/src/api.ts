@@ -18,12 +18,26 @@ async function getJson<T>(path: string, timeoutMs = 25000): Promise<T> {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
-    const res = await fetch(API_BASE + path, { signal: ctrl.signal });
+    // credentials: 'include' so the owner session cookie rides along (needed
+    // for the broker endpoints, and cross-origin/native).
+    const res = await fetch(API_BASE + path, { signal: ctrl.signal, credentials: 'include' });
     if (!res.ok) throw new Error('HTTP ' + res.status);
     return (await res.json()) as T;
   } finally {
     clearTimeout(timer);
   }
+}
+
+async function postJson<T>(path: string, body: unknown): Promise<T> {
+  const res = await fetch(API_BASE + path, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body ?? {}),
+  });
+  const data = (await res.json().catch(() => ({}))) as T & { error?: string };
+  if (!res.ok) throw new Error((data as { error?: string }).error || 'HTTP ' + res.status);
+  return data;
 }
 
 export type Ping = { server: string; status: string; source?: string; version?: string };
@@ -255,7 +269,12 @@ export type BrokerHolding = {
   pnl?: number | null;
 };
 
+export type AuthStatus = { configured: boolean; owner: boolean };
+
 export const api = {
+  authStatus: () => getJson<AuthStatus>('/auth/status'),
+  authLogin: (password: string) => postJson<{ owner: boolean }>('/auth/login', { password }),
+  authLogout: () => postJson<{ owner: boolean }>('/auth/logout', {}),
   brokerStatus: () => getJson<BrokerStatus>('/broker/status'),
   brokerHoldings: () => getJson<{ holdings: BrokerHolding[] }>('/broker/holdings'),
   indices: () => getJson<IndicesResp>('/indices'),

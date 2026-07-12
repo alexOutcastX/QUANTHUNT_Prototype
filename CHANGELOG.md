@@ -3,6 +3,29 @@
 All notable changes are recorded here. Versioning is [SemVer](https://semver.org):
 `MAJOR.MINOR.PATCH`.
 
+## [3.2.0] — 2026-07-12
+Security foundation: owner authentication + broker lockdown + tighter CORS.
+
+### Security
+- **Owner passcode** (`APP_PASSWORD`): a stdlib signed-cookie session
+  (`auth.py`, no new deps). `/auth/login|logout|status`.
+- **Broker endpoints are now private** — `/broker/holdings`, `/broker/ltp`
+  and `/broker/logout` require the owner session. Previously anyone who
+  could reach a connected instance could read the owner's holdings. With
+  no passcode set, broker features are disabled entirely rather than left
+  publicly reachable.
+- **CORS** tightened from `*` to same-origin (configurable via
+  `CORS_ORIGINS`); credentials enabled for the owner cookie.
+- Portfolio broker card gains an **UNLOCK** step (passcode) before
+  connect/sync.
+
+### CI / tests
+- New CI **security** job: `pip-audit` + `npm audit` (non-blocking).
+- First real **unit tests** (stdlib-only: auth cookie/rotation, market
+  open/closed logic) run as a CI gate; more follow in v3.3.0.
+- `.env.example`, `.well-known/security.txt`, and a committed **ROADMAP.md**
+  tracking the institutional/Bloomberg-Palantir build-out.
+
 ## [3.1.1] — 2026-07-12
 Fix: the Terminal loads **any** NSE company, not just the curated 29.
 
@@ -457,6 +480,7 @@ Oracle Always-Free VM with push-to-deploy.
 - Embedded TradingView Advanced Chart tab, plus deep-link to the user's
   logged-in TradingView account.
 
+[3.2.0]: https://github.com/alexOutcastX/QUANTHUNT_Prototype/releases/tag/v3.2.0
 [3.1.1]: https://github.com/alexOutcastX/QUANTHUNT_Prototype/releases/tag/v3.1.1
 [3.1.0]: https://github.com/alexOutcastX/QUANTHUNT_Prototype/releases/tag/v3.1.0
 [3.0.0]: https://github.com/alexOutcastX/QUANTHUNT_Prototype/releases/tag/v3.0.0
