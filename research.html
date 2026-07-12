@@ -10,7 +10,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>TaurEye Research</title>
 <style>
-  :root{--bg:#0a0c0f;--s:#11141a;--s2:#161a22;--b:#232a35;--b2:#2f3845;--t:#e7eaef;--m:#5e6776;--m2:#9aa4b2;--g:#18c98c;--r:#f0506e}
+  :root{--bg:#08090c;--s:#0e1116;--s2:#141821;--b:#1d232e;--b2:#2b3441;--t:#edf0f5;--m:#68748a;--m2:#a9b3c2;--g:#22c993;--r:#f4587a}
   html,body{margin:0;background:var(--bg);color:var(--t);font-family:ui-monospace,Menlo,Consolas,monospace}
   #top{display:flex;align-items:baseline;gap:12px;padding:14px 18px;background:var(--s);border-bottom:1px solid var(--b)}
   #top b{font-size:16px;letter-spacing:1px}
@@ -59,9 +59,9 @@
     if (!candles || !candles.length || typeof LightweightCharts === 'undefined') { el.innerHTML = '<div class="msg">Chart unavailable</div>'; return; }
     el.innerHTML = '';
     var ch = LightweightCharts.createChart(el, { autoSize: true,
-      layout: { background: { color: '#0a0c0f' }, textColor: '#9aa4b2', fontFamily: 'inherit' },
-      grid: { vertLines: { color: '#232a35' }, horzLines: { color: '#232a35' } },
-      rightPriceScale: { borderColor: '#2f3845' }, timeScale: { borderColor: '#2f3845' } });
+      layout: { background: { color: '#08090c' }, textColor: '#a9b3c2', fontFamily: 'inherit' },
+      grid: { vertLines: { color: '#1d232e' }, horzLines: { color: '#1d232e' } },
+      rightPriceScale: { borderColor: '#2b3441' }, timeScale: { borderColor: '#2b3441' } });
     var cs = ch.addCandlestickSeries({ upColor: '#10b981', downColor: '#f43f5e', borderUpColor: '#10b981', borderDownColor: '#f43f5e', wickUpColor: '#10b981', wickDownColor: '#f43f5e' });
     cs.setData(candles.map(function(c){ return { time: c.t, open: c.o, high: c.h, low: c.l, close: c.c }; }));
     var vs = ch.addHistogramSeries({ priceFormat: { type: 'volume' }, priceScaleId: 'vol' });
