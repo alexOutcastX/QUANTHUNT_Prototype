@@ -3,6 +3,30 @@
 All notable changes are recorded here. Versioning is [SemVer](https://semver.org):
 `MAJOR.MINOR.PATCH`.
 
+## [3.6.0] — 2026-07-12
+The Palantir layer — a **grounded entity graph** of institutional
+activity, where every link is traceable to a real NSE record.
+
+### New
+- **Entity graph** (Tools → Entities): institution ⇄ company **link
+  analysis** built *only* from NSE **bulk/block deal** records — nothing
+  model-inferred. Two lenses: **Institutions** (ranked by how many stocks
+  they touch, each expandable to their positions) and **By stock** (who's
+  accumulating vs distributing a name). Every edge carries **citations**
+  (the raw dated deal rows: side / qty / price) and a **time range**, with
+  **entity resolution** collapsing account-string variants (e.g.
+  "ABC Mutual Fund A/C Growth" → ABC).
+- New endpoint `GET /entity-graph` (`entity_graph.py`) with `?entity=` and
+  `?symbol=` pivots; company nodes enriched with time-stamped shareholding.
+- Honest scope: board interlocks / promoter-group / related-party edges
+  need structured filings parsing and are **not** faked — tracked as a
+  follow-up in ROADMAP.md.
+
+### Tests
+- `entity_graph.py` unit-tested (entity resolution, deal aggregation,
+  net-flow, breadth, symbol/entity pivots, citations, as-of range) — CI
+  now runs 48 Python cases + the JS engine tests.
+
 ## [3.5.0] — 2026-07-12
 Derivatives desk + portfolio risk — two new **Analysis** surfaces.
 
