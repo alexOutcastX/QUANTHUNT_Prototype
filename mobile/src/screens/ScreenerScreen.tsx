@@ -15,7 +15,7 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { api } from '../api';
 import StockDetail from '../components/StockDetail';
-import { exportCsv } from '../csv';
+import { exportCsv, exportExcel, exportPdf } from '../csv';
 import { parseNL } from '../nlScreen';
 import { PRESETS, presetActive, togglePreset } from '../presets';
 import {
@@ -30,7 +30,17 @@ import {
   calcSignal,
   sortRows,
 } from '../screener';
+import {
+  SavedScreen,
+  ScreenState,
+  decodeScreen,
+  deleteScreen,
+  encodeScreen,
+  loadSavedScreens,
+  saveScreen,
+} from '../savedScreens';
 import { TrackDir, TrackEntry, addTrack, loadTrack, removeTrack } from '../tracklist';
+import { addSymbol, loadWatchlist, normSymbol, removeSymbol } from '../watchlist';
 import { theme } from '../theme';
 import { Btn, EmptyState, Loading } from '../ui';
 
@@ -125,10 +135,24 @@ const COLS: Col[] = [
   { key: 'dividend_yield', label: 'Div%', w: 48, render: (r) => <Text style={styles.cell}>{fnum2(r, 'dividend_yield')}</Text> },
   { key: 'signal', label: 'Signal', w: 64, render: (r) => { const s = calcSignal(r); return <Text style={[styles.cell, styles.sig, { color: sigColor(s) }]}>{s.toUpperCase()}</Text>; } },
 ];
-const TABLE_W = COLS.reduce((a, c) => a + c.w, 0) + 120; // + track column
+const ACTIONS_W = 328; // per-row action cell (B / S / Chart / ★ / Report)
+const COL_META = COLS.map((c) => ({ key: c.key, label: c.label }));
 
 const FILTERS_KEY = 'taureye.screener.filters.v1';
 const INDEX_KEY = 'taureye.screener.index.v1';
+const COLS_KEY = 'taureye.screener.cols.v1';
+const PAGE_KEY = 'taureye.screener.pagesize.v1';
+
+const PAGE_SIZES: (number | 'all')[] = [25, 50, 100, 'all'];
+type PageSize = number | 'all';
+
+// Reads a shared screen state from `#screen=` on the web URL, if present.
+function readSharedScreen(): ScreenState | null {
+  const g = globalThis as { location?: { hash?: string } };
+  const hash = g.location?.hash || '';
+  const m = hash.match(/#screen=([^&]+)/);
+  return m ? decodeScreen(m[1]) : null;
+}
 
 export default function ScreenerScreen() {
   const [indexName, setIndexName] = useState('NIFTY 50');
@@ -145,26 +169,93 @@ export default function ScreenerScreen() {
   const [fundBusy, setFundBusy] = useState(false);
   const [detail, setDetail] = useState<Row | null>(null);
   const [restored, setRestored] = useState(false);
+  // Column show/hide + order prefs.
+  const [colOrder, setColOrder] = useState<string[]>(COLS.map((c) => c.key));
+  const [colHidden, setColHidden] = useState<string[]>([]);
+  const [colMenu, setColMenu] = useState(false);
+  const [prefsRestored, setPrefsRestored] = useState(false);
+  // Saved screens + watchlist + pagination.
+  const [saved, setSaved] = useState<SavedScreen[]>([]);
+  const [savedModal, setSavedModal] = useState(false);
+  const [watch, setWatch] = useState<string[]>([]);
+  const [pageSize, setPageSize] = useState<PageSize>(100);
+  const [page, setPage] = useState(0);
+  const [flash, setFlash] = useState('');
+  const flashTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const toast = useCallback((msg: string) => {
+    setFlash(msg);
+    if (flashTimer.current) clearTimeout(flashTimer.current);
+    flashTimer.current = setTimeout(() => setFlash(''), 1900);
+  }, []);
 
-  // Restore persisted filters + index once, before saving anything back.
+  // Restore persisted filters + index once, before saving anything back. A
+  // shared `#screen=` link (web) takes precedence over persisted state.
   useEffect(() => {
     (async () => {
       try {
-        const [f, idx] = await Promise.all([
-          AsyncStorage.getItem(FILTERS_KEY),
-          AsyncStorage.getItem(INDEX_KEY),
-        ]);
-        if (f) {
-          const parsed = JSON.parse(f);
-          if (parsed && typeof parsed === 'object') setActive(parsed);
+        const shared = readSharedScreen();
+        if (shared) {
+          if (INDICES.includes(shared.indexName)) setIndexName(shared.indexName);
+          setActive(shared.active);
+          setSortCol(shared.sortCol);
+          setSortDir(shared.sortDir);
+        } else {
+          const [f, idx] = await Promise.all([
+            AsyncStorage.getItem(FILTERS_KEY),
+            AsyncStorage.getItem(INDEX_KEY),
+          ]);
+          if (f) {
+            const parsed = JSON.parse(f);
+            if (parsed && typeof parsed === 'object') setActive(parsed);
+          }
+          if (idx && INDICES.includes(idx)) setIndexName(idx);
         }
-        if (idx && INDICES.includes(idx)) setIndexName(idx);
       } catch {
         /* fresh start */
       } finally {
         setRestored(true);
       }
     })();
+  }, []);
+
+  // Restore column prefs + page size once (independent of index/filters).
+  useEffect(() => {
+    (async () => {
+      try {
+        const [rawCols, rawPage] = await Promise.all([
+          AsyncStorage.getItem(COLS_KEY),
+          AsyncStorage.getItem(PAGE_KEY),
+        ]);
+        if (rawCols) {
+          const p = JSON.parse(rawCols);
+          if (Array.isArray(p?.order)) setColOrder(p.order.filter((k: unknown) => typeof k === 'string'));
+          if (Array.isArray(p?.hidden)) setColHidden(p.hidden.filter((k: unknown) => typeof k === 'string'));
+        }
+        if (rawPage) {
+          const v = JSON.parse(rawPage);
+          if (v === 'all' || (typeof v === 'number' && [25, 50, 100].includes(v))) setPageSize(v);
+        }
+      } catch {
+        /* defaults */
+      } finally {
+        setPrefsRestored(true);
+      }
+    })();
+  }, []);
+
+  useEffect(() => {
+    if (!prefsRestored) return;
+    AsyncStorage.setItem(COLS_KEY, JSON.stringify({ order: colOrder, hidden: colHidden })).catch(() => {});
+  }, [colOrder, colHidden, prefsRestored]);
+
+  useEffect(() => {
+    if (!prefsRestored) return;
+    AsyncStorage.setItem(PAGE_KEY, JSON.stringify(pageSize)).catch(() => {});
+  }, [pageSize, prefsRestored]);
+
+  useEffect(() => {
+    loadSavedScreens().then(setSaved);
+    loadWatchlist().then(setWatch);
   }, []);
 
   useEffect(() => {
@@ -326,6 +417,42 @@ export default function ScreenerScreen() {
   const filtered = useMemo(() => applyFilters(rows, active), [rows, active]);
   const sorted = useMemo(() => sortRows(filtered, sortCol, sortDir), [filtered, sortCol, sortDir]);
 
+  // Visible/ordered columns from prefs (Symbol always first, hidden dropped).
+  const visibleCols = useMemo(() => {
+    const byKey = new Map(COLS.map((c) => [c.key, c]));
+    const seen = new Set<string>();
+    const ordered: Col[] = [];
+    colOrder.forEach((k) => {
+      const c = byKey.get(k);
+      if (c && !seen.has(k)) {
+        seen.add(k);
+        ordered.push(c);
+      }
+    });
+    COLS.forEach((c) => {
+      if (!seen.has(c.key)) ordered.push(c);
+    });
+    const symIdx = ordered.findIndex((c) => c.key === 'sym');
+    if (symIdx > 0) ordered.unshift(ordered.splice(symIdx, 1)[0]);
+    const hidden = new Set(colHidden.filter((k) => k !== 'sym'));
+    return ordered.filter((c) => !hidden.has(c.key));
+  }, [colOrder, colHidden]);
+
+  const tableW = useMemo(() => visibleCols.reduce((a, c) => a + c.w, 0) + ACTIONS_W, [visibleCols]);
+
+  // Client-side pagination over the sorted set (stats + export use the full set).
+  const pageCount = pageSize === 'all' ? 1 : Math.max(1, Math.ceil(sorted.length / pageSize));
+  useEffect(() => {
+    setPage(0);
+  }, [indexName, active, sortCol, sortDir, pageSize]);
+  useEffect(() => {
+    if (page > pageCount - 1) setPage(0);
+  }, [page, pageCount]);
+  const pageRows = useMemo(
+    () => (pageSize === 'all' ? sorted : sorted.slice(page * pageSize, page * pageSize + pageSize)),
+    [sorted, page, pageSize],
+  );
+
   const stats = useMemo(() => {
     let buy = 0;
     let sell = 0;
@@ -361,11 +488,71 @@ export default function ScreenerScreen() {
     }
   };
 
+  const isWatched = (sym: string) => watch.includes(normSymbol(sym));
+  const onToggleWatch = async (r: Row) => {
+    if (isWatched(r.sym)) {
+      setWatch(await removeSymbol(watch, normSymbol(r.sym)));
+      toast(`${r.sym} removed from watchlist`);
+    } else {
+      setWatch(await addSymbol(watch, r.sym));
+      toast(`${r.sym} added to watchlist`);
+    }
+  };
+
+  // No cross-tab navigation exists (Hosts.tsx sub-tabs are locally-stateful and
+  // don't accept a target symbol). TODO: wire a shared symbol bus so "Chart" can
+  // jump to the Charts tab; until then, open the detail modal (which renders a
+  // 6-month chart) as the fallback.
+  const onChart = (r: Row) => setDetail(r);
+
+  const curState = (): ScreenState => ({ indexName, active, sortCol, sortDir });
+
+  const onShare = async () => {
+    const enc = encodeScreen(curState());
+    if (!enc) {
+      toast('Sharing not supported here');
+      return;
+    }
+    const g = globalThis as {
+      location?: { origin?: string; pathname?: string };
+      navigator?: { clipboard?: { writeText?: (t: string) => Promise<void> } };
+    };
+    const loc = g.location;
+    const url = loc ? `${loc.origin ?? ''}${loc.pathname ?? ''}#screen=${enc}` : `#screen=${enc}`;
+    try {
+      if (g.navigator?.clipboard?.writeText) {
+        await g.navigator.clipboard.writeText(url);
+        toast('Share link copied to clipboard');
+      } else {
+        toast('Clipboard unavailable');
+      }
+    } catch {
+      toast('Copy failed');
+    }
+  };
+
+  const doSaveScreen = async (name: string) => {
+    setSaved(await saveScreen(saved, name, curState()));
+    toast(`Saved "${name.trim()}"`);
+  };
+  const doDeleteScreen = async (name: string) => {
+    setSaved(await deleteScreen(saved, name));
+  };
+  const applySaved = (s: SavedScreen) => {
+    if (INDICES.includes(s.indexName)) setIndexName(s.indexName);
+    setActive(s.active);
+    setSortCol(s.sortCol);
+    setSortDir(s.sortDir);
+    setSavedModal(false);
+    toast(`Applied "${s.name}"`);
+  };
+
   const renderRow = ({ item }: { item: Row }) => {
     const dir = trackDirOf(item.sym);
+    const starred = isWatched(item.sym);
     return (
       <View style={styles.dataRow}>
-        {COLS.map((c) =>
+        {visibleCols.map((c) =>
           c.key === 'sym' ? (
             <TouchableOpacity
               key={c.key}
@@ -381,7 +568,7 @@ export default function ScreenerScreen() {
             </View>
           ),
         )}
-        <View style={styles.trackCell}>
+        <View style={styles.actionsCell}>
           <TouchableOpacity
             style={[styles.tBtn, dir === 'buy' && styles.tBuyOn]}
             onPress={() => onTrack(item, 'buy')}
@@ -395,6 +582,15 @@ export default function ScreenerScreen() {
             activeOpacity={0.75}
           >
             <Text style={[styles.tBtnTxt, dir === 'sell' && styles.tOnTxt]}>{dir === 'sell' ? '✓S' : 'S'}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.aBtn} onPress={() => onChart(item)} activeOpacity={0.75}>
+            <Text style={styles.aBtnTxt}>Chart</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.aBtn} onPress={() => onToggleWatch(item)} activeOpacity={0.75}>
+            <Text style={[styles.aBtnTxt, starred && styles.starOn]}>{starred ? '★' : '☆'}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.aBtn} onPress={() => setDetail(item)} activeOpacity={0.75}>
+            <Text style={styles.aBtnTxt}>Report</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -447,16 +643,46 @@ export default function ScreenerScreen() {
         <Stat v={stats.buy} l="Bullish" c={theme.green} />
         <Stat v={stats.sell} l="Bearish" c={theme.red} />
         <Stat v={stats.neutral} l="Neutral" c={theme.muted2} />
-        <TouchableOpacity
-          style={[styles.filterBtn, { marginLeft: 'auto' }]}
-          onPress={() => exportCsv(sorted, indexName).catch(() => {})}
-          activeOpacity={0.75}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.actionsScroll}
+          contentContainerStyle={styles.actionsScrollInner}
         >
-          <Text style={styles.filterTxt}>⇩ CSV</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.filterBtn} onPress={() => setDrawer(true)} activeOpacity={0.75}>
-          <Text style={styles.filterTxt}>⚙ Filters{activeCount ? ` (${activeCount})` : ''}</Text>
-        </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.filterBtn}
+            onPress={() => exportCsv(sorted, indexName).catch(() => {})}
+            activeOpacity={0.75}
+          >
+            <Text style={styles.filterTxt}>⇩ CSV</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.filterBtn}
+            onPress={() => exportExcel(sorted, indexName).catch(() => {})}
+            activeOpacity={0.75}
+          >
+            <Text style={styles.filterTxt}>⇩ Excel</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.filterBtn}
+            onPress={() => exportPdf(sorted, indexName).catch(() => {})}
+            activeOpacity={0.75}
+          >
+            <Text style={styles.filterTxt}>⇩ PDF</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.filterBtn} onPress={() => setSavedModal(true)} activeOpacity={0.75}>
+            <Text style={styles.filterTxt}>💾 Save{saved.length ? ` (${saved.length})` : ''}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.filterBtn} onPress={onShare} activeOpacity={0.75}>
+            <Text style={styles.filterTxt}>↗ Share</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.filterBtn} onPress={() => setColMenu(true)} activeOpacity={0.75}>
+            <Text style={styles.filterTxt}>▤ Columns</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.filterBtn} onPress={() => setDrawer(true)} activeOpacity={0.75}>
+            <Text style={styles.filterTxt}>⚙ Filters{activeCount ? ` (${activeCount})` : ''}</Text>
+          </TouchableOpacity>
+        </ScrollView>
       </View>
 
       <Text style={styles.note}>
@@ -465,10 +691,47 @@ export default function ScreenerScreen() {
         {error ? ` · ${error}` : ''}
       </Text>
 
+      <View style={styles.pageBar}>
+        <View style={styles.pageSizes}>
+          <Text style={styles.pageLabel}>Rows</Text>
+          {PAGE_SIZES.map((sz) => (
+            <TouchableOpacity
+              key={String(sz)}
+              style={[styles.pageChip, pageSize === sz && styles.pageChipOn]}
+              onPress={() => setPageSize(sz)}
+              activeOpacity={0.75}
+            >
+              <Text style={[styles.pageChipTxt, pageSize === sz && styles.pageChipTxtOn]}>
+                {sz === 'all' ? 'All' : sz}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+        <View style={styles.pageNav}>
+          <TouchableOpacity
+            style={[styles.pageBtn, page <= 0 && styles.pageBtnOff]}
+            onPress={() => setPage((p) => Math.max(0, p - 1))}
+            disabled={page <= 0}
+            activeOpacity={0.75}
+          >
+            <Text style={styles.pageBtnTxt}>‹ Prev</Text>
+          </TouchableOpacity>
+          <Text style={styles.pageInfo}>{sorted.length ? `${page + 1} / ${pageCount}` : '0 / 0'}</Text>
+          <TouchableOpacity
+            style={[styles.pageBtn, page >= pageCount - 1 && styles.pageBtnOff]}
+            onPress={() => setPage((p) => Math.min(pageCount - 1, p + 1))}
+            disabled={page >= pageCount - 1}
+            activeOpacity={0.75}
+          >
+            <Text style={styles.pageBtnTxt}>Next ›</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
       <ScrollView horizontal showsHorizontalScrollIndicator>
-        <View style={{ width: TABLE_W }}>
+        <View style={{ width: tableW }}>
           <View style={styles.headerRow}>
-            {COLS.map((c) => (
+            {visibleCols.map((c) => (
               <TouchableOpacity
                 key={c.key}
                 style={[styles.th, { width: c.w, alignItems: c.align === 'left' ? 'flex-start' : 'flex-end' }]}
@@ -481,12 +744,12 @@ export default function ScreenerScreen() {
                 </Text>
               </TouchableOpacity>
             ))}
-            <View style={styles.trackCell}>
-              <Text style={styles.thTxt}>Track</Text>
+            <View style={styles.actionsCell}>
+              <Text style={styles.thTxt}>Actions</Text>
             </View>
           </View>
           <FlatList
-            data={sorted}
+            data={pageRows}
             keyExtractor={(r) => r.sym}
             renderItem={renderRow}
             refreshControl={
@@ -512,7 +775,39 @@ export default function ScreenerScreen() {
         onApply={setActive}
       />
 
+      <ColumnMenu
+        visible={colMenu}
+        order={colOrder}
+        hidden={colHidden}
+        onClose={() => setColMenu(false)}
+        onApply={(order, hidden) => {
+          setColOrder(order);
+          setColHidden(hidden);
+          setColMenu(false);
+        }}
+        onReset={() => {
+          setColOrder(COLS.map((c) => c.key));
+          setColHidden([]);
+          setColMenu(false);
+        }}
+      />
+
+      <SavedScreensModal
+        visible={savedModal}
+        saved={saved}
+        onClose={() => setSavedModal(false)}
+        onSave={doSaveScreen}
+        onDelete={doDeleteScreen}
+        onApply={applySaved}
+      />
+
       {detail ? <StockDetail row={detail} onClose={() => setDetail(null)} /> : null}
+
+      {flash ? (
+        <View style={styles.toast} pointerEvents="none">
+          <Text style={styles.toastTxt}>{flash}</Text>
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -722,6 +1017,201 @@ function FilterDrawer({
   );
 }
 
+// ── Column show/hide + reorder ────────────────────────────────────────────────
+type ColDraft = { key: string; label: string; visible: boolean };
+
+function ColumnMenu({
+  visible,
+  order,
+  hidden,
+  onClose,
+  onApply,
+  onReset,
+}: {
+  visible: boolean;
+  order: string[];
+  hidden: string[];
+  onClose: () => void;
+  onApply: (order: string[], hidden: string[]) => void;
+  onReset: () => void;
+}) {
+  const [draft, setDraft] = useState<ColDraft[]>([]);
+  useEffect(() => {
+    if (!visible) return;
+    const byKey = new Map(COL_META.map((c) => [c.key, c.label]));
+    const seen = new Set<string>();
+    const list: ColDraft[] = [];
+    order.forEach((k) => {
+      const label = byKey.get(k);
+      if (label != null && !seen.has(k)) {
+        seen.add(k);
+        list.push({ key: k, label, visible: !hidden.includes(k) });
+      }
+    });
+    COL_META.forEach((c) => {
+      if (!seen.has(c.key)) list.push({ key: c.key, label: c.label, visible: !hidden.includes(c.key) });
+    });
+    const symIdx = list.findIndex((c) => c.key === 'sym');
+    if (symIdx > 0) list.unshift(list.splice(symIdx, 1)[0]);
+    setDraft(list);
+  }, [visible, order, hidden]);
+
+  const move = (i: number, delta: number) => {
+    const j = i + delta;
+    if (i < 1 || j < 1 || j >= draft.length) return; // Symbol (index 0) is locked first
+    setDraft((d) => {
+      const next = [...d];
+      [next[i], next[j]] = [next[j], next[i]];
+      return next;
+    });
+  };
+  const toggle = (key: string) =>
+    setDraft((d) => d.map((c) => (c.key === key && key !== 'sym' ? { ...c, visible: !c.visible } : c)));
+
+  const apply = () => onApply(draft.map((c) => c.key), draft.filter((c) => !c.visible).map((c) => c.key));
+
+  return (
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+      <Pressable style={styles.backdrop} onPress={onClose} />
+      <View style={styles.drawer}>
+        <View style={styles.drawerHead}>
+          <Text style={styles.drawerTitle}>Columns</Text>
+          <TouchableOpacity onPress={onReset} activeOpacity={0.75}>
+            <Text style={styles.clearAll}>Reset</Text>
+          </TouchableOpacity>
+        </View>
+        <ScrollView>
+          {draft.map((c, i) => {
+            const locked = c.key === 'sym';
+            return (
+              <View key={c.key} style={styles.colRow}>
+                <TouchableOpacity
+                  style={styles.colCheck}
+                  onPress={() => toggle(c.key)}
+                  disabled={locked}
+                  activeOpacity={0.75}
+                >
+                  <Text style={[styles.colBox, c.visible && styles.colBoxOn]}>{c.visible ? '☑' : '☐'}</Text>
+                  <Text style={[styles.colLabel, locked && { color: theme.muted }]}>
+                    {c.label}
+                    {locked ? ' (locked)' : ''}
+                  </Text>
+                </TouchableOpacity>
+                <View style={styles.colMoves}>
+                  <TouchableOpacity
+                    style={[styles.moveBtn, (locked || i <= 1) && styles.moveBtnOff]}
+                    onPress={() => move(i, -1)}
+                    disabled={locked || i <= 1}
+                    activeOpacity={0.75}
+                  >
+                    <Text style={styles.moveTxt}>↑</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.moveBtn, (locked || i >= draft.length - 1) && styles.moveBtnOff]}
+                    onPress={() => move(i, 1)}
+                    disabled={locked || i >= draft.length - 1}
+                    activeOpacity={0.75}
+                  >
+                    <Text style={styles.moveTxt}>↓</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            );
+          })}
+        </ScrollView>
+        <View style={styles.drawerFoot}>
+          <Btn label="Cancel" kind="ghost" onPress={onClose} style={{ flex: 1 }} />
+          <Btn label="Apply" onPress={apply} style={{ flex: 2 }} />
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+// ── Saved screens (save current + reopen / delete) ────────────────────────────
+function SavedScreensModal({
+  visible,
+  saved,
+  onClose,
+  onSave,
+  onDelete,
+  onApply,
+}: {
+  visible: boolean;
+  saved: SavedScreen[];
+  onClose: () => void;
+  onSave: (name: string) => void;
+  onDelete: (name: string) => void;
+  onApply: (s: SavedScreen) => void;
+}) {
+  const [name, setName] = useState('');
+  useEffect(() => {
+    if (visible) setName('');
+  }, [visible]);
+
+  return (
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+      <Pressable style={styles.backdrop} onPress={onClose} />
+      <View style={styles.drawer}>
+        <View style={styles.drawerHead}>
+          <Text style={styles.drawerTitle}>Saved Screens</Text>
+        </View>
+        <View style={styles.saveBox}>
+          <TextInput
+            style={styles.saveInput}
+            value={name}
+            onChangeText={setName}
+            placeholder="Name this screen…"
+            placeholderTextColor={theme.muted}
+            returnKeyType="done"
+            onSubmitEditing={() => {
+              if (name.trim()) {
+                onSave(name);
+                setName('');
+              }
+            }}
+          />
+          <TouchableOpacity
+            style={[styles.nlAdd, !name.trim() && styles.nlAddOff]}
+            onPress={() => {
+              if (name.trim()) {
+                onSave(name);
+                setName('');
+              }
+            }}
+            disabled={!name.trim()}
+            activeOpacity={0.75}
+          >
+            <Text style={[styles.nlAddTxt, !name.trim() && { color: theme.muted }]}>Save</Text>
+          </TouchableOpacity>
+        </View>
+        <ScrollView keyboardShouldPersistTaps="handled">
+          {saved.length === 0 ? (
+            <EmptyState icon="◇" title="No saved screens" hint="Name the current scan above to save it." />
+          ) : (
+            saved.map((s) => (
+              <View key={s.name} style={styles.savedRow}>
+                <TouchableOpacity style={{ flex: 1 }} onPress={() => onApply(s)} activeOpacity={0.75}>
+                  <Text style={styles.savedName}>{s.name}</Text>
+                  <Text style={styles.savedMeta}>
+                    {s.indexName} · {Object.keys(s.active).length} filter{Object.keys(s.active).length === 1 ? '' : 's'} · sort {s.sortCol} {s.sortDir === 1 ? '↑' : '↓'}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => onDelete(s.name)} hitSlop={10} activeOpacity={0.75}>
+                  <Text style={styles.savedDel}>✕</Text>
+                </TouchableOpacity>
+              </View>
+            ))
+          )}
+        </ScrollView>
+        <View style={styles.drawerFoot}>
+          <Btn label="Close" kind="ghost" onPress={onClose} style={{ flex: 1 }} />
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.bg },
   center: { flex: 1, backgroundColor: theme.bg },
@@ -825,7 +1315,6 @@ const styles = StyleSheet.create({
   zoneDim: { color: theme.muted2, fontFamily: theme.mono, fontSize: theme.fs.xs, textAlign: 'right' },
   symTxt: { color: theme.accent, fontFamily: theme.mono, fontWeight: '700', fontSize: theme.fs.sm + 1 },
   sig: { fontWeight: '700', fontSize: theme.fs.sm, letterSpacing: 0.4 },
-  trackCell: { width: 120, flexDirection: 'row', gap: 6, paddingHorizontal: 6, justifyContent: 'center' },
   tBtn: {
     borderColor: theme.border2,
     borderWidth: 1,
@@ -839,6 +1328,133 @@ const styles = StyleSheet.create({
   tSellOn: { backgroundColor: theme.red, borderColor: theme.red },
   tBtnTxt: { color: theme.muted2, fontFamily: theme.mono, fontSize: theme.fs.sm, fontWeight: '700' },
   tOnTxt: { color: theme.onAccent },
+  // per-row actions
+  actionsCell: {
+    width: ACTIONS_W,
+    flexDirection: 'row',
+    gap: 5,
+    paddingHorizontal: 6,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  aBtn: {
+    borderColor: theme.border2,
+    borderWidth: 1,
+    borderRadius: theme.radius.sm,
+    paddingHorizontal: theme.sp.sm,
+    paddingVertical: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  aBtnTxt: { color: theme.muted2, fontSize: theme.fs.sm, fontWeight: '700' },
+  starOn: { color: theme.green },
+  actionsScroll: { marginLeft: 'auto', flexGrow: 0 },
+  actionsScrollInner: { gap: theme.sp.sm, alignItems: 'center' },
+  // pagination
+  pageBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: theme.sp.md,
+    paddingBottom: theme.sp.sm,
+    gap: theme.sp.sm,
+  },
+  pageSizes: { flexDirection: 'row', alignItems: 'center', gap: theme.sp.xs },
+  pageLabel: {
+    color: theme.muted,
+    fontSize: theme.fs.xs + 1,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+    marginRight: theme.sp.xs,
+  },
+  pageChip: {
+    backgroundColor: theme.surface2,
+    borderColor: theme.border,
+    borderWidth: 1,
+    borderRadius: theme.radius.sm,
+    paddingHorizontal: theme.sp.sm + 2,
+    paddingVertical: 5,
+  },
+  pageChipOn: { backgroundColor: theme.accent, borderColor: theme.accent },
+  pageChipTxt: { color: theme.muted2, fontSize: theme.fs.sm, fontFamily: theme.mono },
+  pageChipTxtOn: { color: theme.onAccent, fontWeight: '700' },
+  pageNav: { flexDirection: 'row', alignItems: 'center', gap: theme.sp.sm },
+  pageBtn: {
+    backgroundColor: theme.surface2,
+    borderColor: theme.border2,
+    borderWidth: 1,
+    borderRadius: theme.radius.sm,
+    paddingHorizontal: theme.sp.md,
+    paddingVertical: 5,
+  },
+  pageBtnOff: { opacity: 0.4 },
+  pageBtnTxt: { color: theme.text, fontSize: theme.fs.sm, fontWeight: '600' },
+  pageInfo: { color: theme.muted2, fontSize: theme.fs.sm, fontFamily: theme.mono, minWidth: 48, textAlign: 'center' },
+  // toast
+  toast: {
+    position: 'absolute',
+    bottom: theme.sp.xl,
+    alignSelf: 'center',
+    backgroundColor: theme.surface3,
+    borderColor: theme.border2,
+    borderWidth: 1,
+    borderRadius: theme.radius.md,
+    paddingHorizontal: theme.sp.lg,
+    paddingVertical: theme.sp.sm + 2,
+  },
+  toastTxt: { color: theme.text, fontSize: theme.fs.sm + 1, fontWeight: '600' },
+  // column menu
+  colRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: theme.sp.lg,
+    paddingVertical: theme.sp.sm + 2,
+    borderBottomColor: theme.border,
+    borderBottomWidth: 1,
+  },
+  colCheck: { flexDirection: 'row', alignItems: 'center', gap: theme.sp.md, flex: 1 },
+  colBox: { color: theme.muted, fontSize: theme.fs.lg },
+  colBoxOn: { color: theme.green },
+  colLabel: { color: theme.text, fontSize: theme.fs.md },
+  colMoves: { flexDirection: 'row', gap: theme.sp.sm },
+  moveBtn: {
+    borderColor: theme.border2,
+    borderWidth: 1,
+    borderRadius: theme.radius.sm,
+    paddingHorizontal: theme.sp.md,
+    paddingVertical: 4,
+    minWidth: 38,
+    alignItems: 'center',
+  },
+  moveBtnOff: { opacity: 0.35 },
+  moveTxt: { color: theme.text, fontSize: theme.fs.md, fontWeight: '700' },
+  // saved screens
+  saveBox: { flexDirection: 'row', gap: theme.sp.sm, padding: theme.sp.lg },
+  saveInput: {
+    flex: 1,
+    backgroundColor: theme.surface2,
+    borderColor: theme.border2,
+    borderWidth: 1,
+    borderRadius: theme.radius.sm + 2,
+    color: theme.text,
+    paddingHorizontal: theme.sp.md,
+    paddingVertical: 10,
+    fontSize: theme.fs.md,
+  },
+  savedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: theme.sp.lg,
+    paddingVertical: theme.sp.md,
+    borderBottomColor: theme.border,
+    borderBottomWidth: 1,
+    gap: theme.sp.md,
+  },
+  savedName: { color: theme.text, fontSize: theme.fs.md, fontWeight: '700' },
+  savedMeta: { color: theme.muted, fontSize: theme.fs.sm, marginTop: 2 },
+  savedDel: { color: theme.red, fontSize: theme.fs.lg, fontWeight: '700', paddingHorizontal: theme.sp.sm },
   // drawer
   backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)' },
   drawer: {
