@@ -3,6 +3,32 @@
 All notable changes are recorded here. Versioning is [SemVer](https://semver.org):
 `MAJOR.MINOR.PATCH`.
 
+## [3.7.0] — 2026-07-12
+Accuracy, alerts, and a public API — the roadmap's final phase.
+
+### New
+- **Backtest accuracy**: an India transaction-cost model (`costs.ts`) —
+  brokerage, STT (delivery/intraday), exchange txn, SEBI turnover, GST,
+  stamp duty, plus per-side **slippage** — applied per trade. Backtest
+  gains a **Realistic costs** toggle and a **Costs (charges)** stat, so
+  strategy returns are net of what you'd actually pay.
+- **Server-side alerts** (`alerts.py`, Lists → Alerts): price ≥/≤,
+  day-% ≥/≤, RSI ≥/≤ rules per symbol, stored server-side, evaluated
+  against live quotes ("Check now"), with pause / re-arm / delete.
+  Owner-only; fired alerts POST to an `ALERT_WEBHOOK` if configured
+  (push/email plug in via the same seam).
+- **Public data API** (`apikeys.py`, Tools → API): `/api/v1/quote` and
+  `/api/v1/indices`, gated by a hashed **X-API-Key** and rate-limited.
+  The owner issues keys (shown once, stored as SHA-256) and can revoke.
+- New `OwnerGate` component gates the owner-only surfaces behind the
+  passcode.
+
+### Tests
+- `costs.ts` (charge model + slippage) added to the JS engine suite;
+  `alerts.py` + `apikeys.py` unit-tested (rule eval, CRUD, fire-once,
+  key issue/verify/revoke, hashing). CI now runs 61 Python cases + the
+  JS engine tests.
+
 ## [3.6.0] — 2026-07-12
 The Palantir layer — a **grounded entity graph** of institutional
 activity, where every link is traceable to a real NSE record.

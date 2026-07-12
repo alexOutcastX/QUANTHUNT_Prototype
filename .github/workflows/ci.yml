@@ -33,6 +33,7 @@ jobs:
           mkdir -p tests/build
           npx --yes esbuild src/backtest.ts --bundle --format=cjs --platform=node --outfile=tests/build/backtest.js --log-level=error
           npx --yes esbuild src/screener.ts --bundle --format=cjs --platform=node --outfile=tests/build/screener.js --log-level=error
+          npx --yes esbuild src/costs.ts --bundle --format=cjs --platform=node --outfile=tests/build/costs.js --log-level=error
           node tests/engines.test.js
 
       - name: HTML / inline-JS sanity
