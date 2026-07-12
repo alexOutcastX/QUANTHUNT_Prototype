@@ -3,6 +3,33 @@
 All notable changes are recorded here. Versioning is [SemVer](https://semver.org):
 `MAJOR.MINOR.PATCH`.
 
+## [3.1.0] — 2026-07-12
+The Terminal absorbs the Universe: indices and market-cap segments are
+now first-class Terminal commands.
+
+### Terminal
+- Type an **index or segment** in the command line — `NIFTY 50`, `BANK`,
+  `MIDCAP 100`, `LARGE CAP` — and a **market-browser tab** opens in the
+  workspace window (dockable/floatable like every tab): constituents
+  with live CMP, day %, 1Y/3Y/5Y returns, heat-tinted rows, sortable
+  columns; segments classify the NIFTY 500 by market-cap rank with an
+  MCap column.
+- Every row acts: click the **symbol → its relationship graph**, ▤ opens
+  the company research tab, ⇄ adds it to compare. Quick ∿ index chips
+  sit ahead of the company chips; autocomplete suggests indices too.
+- ↗ pops any index tab out to a standalone browser page
+  (`/research.html?view=index&name=…`) with the same sortable table,
+  symbols linking to research pages.
+
+### Navigation
+- **Universe leaves the top-level nav** (now redundant) — the page
+  survives under Tools for anyone who wants the old table. Desktop is
+  down to 7 groups.
+
+### Plumbing
+- HtmlView gains a message channel (iframe postMessage / WebView
+  onMessage) so embedded workspace rows can drive app navigation.
+
 ## [3.0.0] — 2026-07-12
 Complete UI/UX overhaul — same features, redesigned app. Major version
 because the navigation and visual language changed.
@@ -415,6 +442,7 @@ Oracle Always-Free VM with push-to-deploy.
 - Embedded TradingView Advanced Chart tab, plus deep-link to the user's
   logged-in TradingView account.
 
+[3.1.0]: https://github.com/alexOutcastX/QUANTHUNT_Prototype/releases/tag/v3.1.0
 [3.0.0]: https://github.com/alexOutcastX/QUANTHUNT_Prototype/releases/tag/v3.0.0
 [2.13.0]: https://github.com/alexOutcastX/QUANTHUNT_Prototype/releases/tag/v2.13.0
 [2.12.0]: https://github.com/alexOutcastX/QUANTHUNT_Prototype/releases/tag/v2.12.0

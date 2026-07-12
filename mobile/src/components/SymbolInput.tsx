@@ -9,6 +9,7 @@ import {
   View,
 } from 'react-native';
 import { UniverseSymbol, api } from '../api';
+import { INDEX_NAMES, SEGMENT_NAMES } from '../indices';
 import { theme } from '../theme';
 
 // Module-level cache — the universe list is fetched at most once per app
@@ -100,6 +101,12 @@ export default function SymbolInput({
     // Ignore an exchange prefix ("NSE:RELI") so matching still works.
     const q = value.trim().toUpperCase().replace(/^[A-Z]+:/, '');
     if (q.length < 1) return [];
+    // Indices and market-cap segments rank first — the Terminal command line
+    // opens them as market-browser tabs.
+    const idx: UniverseSymbol[] = [...INDEX_NAMES, ...SEGMENT_NAMES]
+      .filter((n) => n !== q && (n.includes(q) || n.replace(/ /g, '').includes(q.replace(/ /g, ''))))
+      .slice(0, 3)
+      .map((n) => ({ symbol: n, name: '∿ Index / segment — opens the market browser', exchange: 'IDX' }));
     const prefix: UniverseSymbol[] = [];
     const substr: UniverseSymbol[] = [];
     const byName: UniverseSymbol[] = [];
@@ -114,7 +121,7 @@ export default function SymbolInput({
         else if ((s.name || '').toUpperCase().includes(q)) byName.push(s);
       }
     }
-    return [...prefix, ...substr, ...byName].slice(0, MAX_SUGGESTIONS);
+    return [...idx, ...prefix, ...substr, ...byName].slice(0, MAX_SUGGESTIONS);
   }, [open, symbols, value]);
 
   return (

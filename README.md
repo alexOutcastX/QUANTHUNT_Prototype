@@ -76,6 +76,13 @@ feature/* ──PR──▶ main (CI, integration; does NOT deploy)
 
 Canonical per-version notes are in **[CHANGELOG.md](CHANGELOG.md)**. Summary:
 
+### v3.1.0 — Terminal market browser
+
+| Area | Change |
+|---|---|
+| Terminal | Command line opens **indices & cap segments** as sortable market-browser tabs (live CMP/returns/heatmap); rows drill into graphs, research, compare; ↗ pop-out (`?view=index`) |
+| Navigation | Universe demoted to Tools (Terminal makes it redundant); 7 top-level groups |
+
 ### v3.0.0 — UI/UX overhaul
 
 | Area | Change |

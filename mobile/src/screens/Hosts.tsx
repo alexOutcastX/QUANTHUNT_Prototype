@@ -69,6 +69,7 @@ export function ToolsHome() {
   return (
     <SubTabs
       tabs={[
+        { key: 'universe', label: 'Universe', render: () => <UniverseScreen /> },
         { key: 'calc', label: 'Calculator', render: () => <CalculatorScreen /> },
         { key: 'indices', label: 'Indices', render: () => <IndicesScreen /> },
         { key: 'holidays', label: 'Holidays', render: () => <HolidaysScreen /> },
