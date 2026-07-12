@@ -155,6 +155,28 @@ sudo systemctl restart quanthunt
 Optional: `GRAPH_AI_MODEL=claude-sonnet-5` (default). Generations are cached
 in `graph_cache.json` for 30 days and rate-limited to 10/hour per IP.
 
+## Broker connect (BYOB, read-only)
+
+Optional: sync your Zerodha demat holdings into the Portfolio tab.
+
+1. Subscribe to **Kite Connect** on developers.kite.trade (Zerodha charges
+   for API apps) and create an app with redirect URL
+   `http(s)://<your-host>/broker/callback`.
+2. On the VM:
+
+```bash
+printf 'KITE_API_KEY=xxx\nKITE_API_SECRET=yyy\n' | sudo tee -a /opt/quanthunt/.env
+sudo systemctl restart quanthunt
+```
+
+3. In the app: Portfolio → CONNECT → log in on zerodha.com (daily, Kite
+   tokens expire every morning) → SYNC HOLDINGS.
+
+**Read-only by design**: TaurEye only ever calls session/token,
+portfolio/holdings and quote/ltp — there is no order code. The API secret
+stays in `.env`; the daily access token lives in `broker_token.json`
+(0600, git-ignored, never rsynced).
+
 ## Backups & monitoring
 
 - **Backups**: `deploy/backup.sh` archives `.env` + runtime caches nightly.
