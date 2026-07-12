@@ -3,6 +3,27 @@
 All notable changes are recorded here. Versioning is [SemVer](https://semver.org):
 `MAJOR.MINOR.PATCH`.
 
+## [2.13.0] — 2026-07-12
+BYOB broker connect (Phase 1): Zerodha Kite, strictly read-only.
+
+### Portfolio
+- **Connect your own Zerodha account** (bring-your-own Kite Connect app
+  key): a broker card in Portfolio handles the daily Kite login, then
+  **SYNC HOLDINGS** imports your demat holdings (qty + average price)
+  into the live-P&L portfolio — broker rows win by symbol, manual rows
+  are kept.
+
+### Backend (broker.py — read-only by design)
+- `/broker/status`, `/broker/callback` (token exchange with SHA-256
+  checksum), `/broker/holdings`, `/broker/ltp`, `/broker/logout`. Only
+  session/token, portfolio/holdings and quote/ltp are ever called —
+  **no order code exists**.
+- API secret never leaves `.env`; the daily access token is held in
+  memory + a 0600 file (`broker_token.json`, git-ignored,
+  deploy-excluded); expired sessions auto-disconnect cleanly.
+- All broker endpoints rate-limited; login failures logged without
+  token contents.
+
 ## [2.12.0] — 2026-07-12
 Native mobile build setup (EAS).
 
@@ -364,6 +385,7 @@ Oracle Always-Free VM with push-to-deploy.
 - Embedded TradingView Advanced Chart tab, plus deep-link to the user's
   logged-in TradingView account.
 
+[2.13.0]: https://github.com/alexOutcastX/QUANTHUNT_Prototype/releases/tag/v2.13.0
 [2.12.0]: https://github.com/alexOutcastX/QUANTHUNT_Prototype/releases/tag/v2.12.0
 [2.11.0]: https://github.com/alexOutcastX/QUANTHUNT_Prototype/releases/tag/v2.11.0
 [2.10.0]: https://github.com/alexOutcastX/QUANTHUNT_Prototype/releases/tag/v2.10.0
