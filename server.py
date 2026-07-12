@@ -989,14 +989,35 @@ def relationship_graph():
     covers so the hand-checked cluster stays authoritative.
     """
     sym = request.args.get("symbol", "").strip().upper()
+    ai_ok = _ai.available()
     base = _relations.graph()
-    base["ai"] = _ai.available()
+    base["ai"] = ai_ok
     if not sym or sym in base["companies"]:
         return jsonify(base)
-    if not _ai.available():
-        return jsonify({"error": "ai-unavailable", "ai": False,
-                        "detail": "Set ANTHROPIC_API_KEY on the server to unlock "
-                                  "AI graphs for any company."}), 404
+
+    # A minimal graph so the Terminal can centre on ANY listed company and use
+    # its workspace (chart, fundamentals, news, compare) even when relationship
+    # edges aren't available — those need either the curated set or an AI key.
+    def _minimal(reason):
+        name = sym
+        try:
+            f = _fund.get_one(sym) or {}
+            name = f.get("name") or sym
+        except Exception:
+            pass
+        note = ("Relationship edges for this company need the AI graph — set "
+                "ANTHROPIC_API_KEY on the server to unlock them." if reason == "no-key"
+                else "Couldn't build a relationship graph right now — showing the "
+                     "company's live data instead.")
+        return jsonify({
+            "companies": {sym: {"name": name, "listed": True}},
+            "edges": [], "available": [sym], "source": "minimal", "ai": ai_ok,
+            "disclaimer": note,
+        })
+
+    if not ai_ok:
+        return _minimal("no-key")
+
     # Uncached generations burn API tokens — cap them per IP.
     cached = _ai._load().get(sym)
     if not (cached and time.time() - cached.get("ts", 0) < _ai.TTL):
@@ -1009,8 +1030,7 @@ def relationship_graph():
         g = _ai.get_graph(sym)
     except Exception as e:
         logging.warning("AI graph generation failed for %s: %s", sym, e)
-        return jsonify({"error": "generation-failed", "ai": True,
-                        "detail": "Could not generate a graph for %s — try again." % sym}), 502
+        return _minimal("gen-failed")  # still centre on the company with its data
     listed = sorted(k for k, v in g["companies"].items() if v.get("listed"))
     return jsonify({"companies": g["companies"], "edges": g["edges"],
                     "available": listed, "source": "ai", "ai": True,
