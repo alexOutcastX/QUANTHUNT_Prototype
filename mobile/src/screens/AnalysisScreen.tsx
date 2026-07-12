@@ -12,6 +12,7 @@ import { api } from '../api';
 import { Assessment, assess } from '../analysis';
 import SymbolInput from '../components/SymbolInput';
 import { theme } from '../theme';
+import { Card, Loading, ScreenTitle, SectionTitle, StatTile } from '../ui';
 
 function verdictColor(v: string): string {
   if (v.startsWith('Strong')) return theme.green;
@@ -79,222 +80,229 @@ export default function AnalysisScreen() {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Text style={styles.h1}>Institutional Analysis</Text>
-      <Text style={styles.sub}>
-        Upside-probability model — Monte-Carlo (GBM) + historical frequency over 5y of daily data.
-      </Text>
+      <ScreenTitle
+        title="Institutional Analysis"
+        sub="Upside-probability model — Monte-Carlo (GBM) + historical frequency over 5y of daily data."
+      />
+      <View style={styles.body}>
+        <Card style={styles.setupCard}>
+          <SectionTitle>Setup</SectionTitle>
+          <View style={styles.inputs}>
+            <View style={styles.field}>
+              <Text style={styles.label}>Symbol</Text>
+              <SymbolInput
+                inputStyle={styles.input}
+                value={sym}
+                onChangeText={setSym}
+                onSelect={(s) => run(s)}
+                onSubmit={() => run()}
+                placeholder="RELIANCE"
+              />
+            </View>
+            <View style={styles.fieldSm}>
+              <Text style={styles.label}>Target %</Text>
+              <TextInput
+                style={styles.input}
+                value={target}
+                onChangeText={setTarget}
+                keyboardType="numeric"
+                placeholder="10"
+                placeholderTextColor={theme.muted}
+              />
+            </View>
+          </View>
+          <TouchableOpacity style={styles.btn} onPress={() => run()} disabled={busy} activeOpacity={0.75}>
+            {busy ? (
+              <ActivityIndicator color={theme.onAccent} />
+            ) : (
+              <Text style={styles.btnText}>Analyse</Text>
+            )}
+          </TouchableOpacity>
+        </Card>
 
-      <View style={styles.inputs}>
-        <View style={styles.field}>
-          <Text style={styles.label}>Symbol</Text>
-          <SymbolInput
-            inputStyle={styles.input}
-            value={sym}
-            onChangeText={setSym}
-            onSelect={(s) => run(s)}
-            onSubmit={() => run()}
-            placeholder="RELIANCE"
-          />
-        </View>
-        <View style={styles.fieldSm}>
-          <Text style={styles.label}>Target %</Text>
-          <TextInput
-            style={styles.input}
-            value={target}
-            onChangeText={setTarget}
-            keyboardType="numeric"
-            placeholder="10"
-            placeholderTextColor={theme.muted}
-          />
-        </View>
-      </View>
+        {busy && msg ? (
+          <View style={styles.loadingBox}>
+            <Loading label={msg.replace(/^[⟳⚠]\s*/, '')} />
+          </View>
+        ) : msg ? (
+          <Text style={styles.msg}>{msg.replace(/^[⟳⚠]\s*/, '')}</Text>
+        ) : null}
 
-      <TouchableOpacity style={styles.btn} onPress={() => run()} disabled={busy}>
-        {busy ? (
-          <ActivityIndicator color={theme.bg} />
-        ) : (
-          <Text style={styles.btnText}>Analyse</Text>
-        )}
-      </TouchableOpacity>
-
-      {msg ? <Text style={styles.msg}>{msg}</Text> : null}
-
-      {result ? (
-        <View style={styles.result}>
-          <View style={styles.verdictRow}>
-            <View style={{ flex: 1 }}>
+        {result ? (
+          <View style={styles.result}>
+            <View style={styles.nameRow}>
               <Text style={styles.name}>{result.name}</Text>
               <Text style={styles.symSmall}>
                 {result.sym} · ₹{result.price.toLocaleString('en-IN')}
               </Text>
             </View>
-            <View style={styles.scoreBox}>
-              <Text style={[styles.verdict, { color: verdictColor(result.verdict) }]}>
-                {result.verdict}
-              </Text>
-              <Text style={styles.score}>{result.score}/100</Text>
+
+            <View style={styles.tiles}>
+              <StatTile
+                label="Verdict"
+                value={result.verdict}
+                mono={false}
+                color={verdictColor(result.verdict)}
+              />
+              <StatTile label="Score" value={`${result.score}/100`} />
+              <StatTile
+                label="Ann. drift"
+                value={signed(result.driftAnn)}
+                color={result.driftAnn >= 0 ? theme.green : theme.red}
+              />
+              <StatTile label="Ann. vol" value={pct(result.sigmaAnn)} />
+              <StatTile label="Term" value={result.termLabel} mono={false} />
             </View>
-          </View>
 
-          <View style={styles.metaRow}>
-            <Meta label="Ann. drift" value={signed(result.driftAnn)} />
-            <Meta label="Ann. vol" value={pct(result.sigmaAnn)} />
-            <Meta label="Term" value={result.termLabel} />
-          </View>
-
-          <Text style={styles.tableTitle}>
-            Probability of touching +{result.target}% by horizon
-          </Text>
-          <View style={styles.tHead}>
-            <Text style={[styles.th, styles.cH]}>Horizon</Text>
-            <Text style={[styles.th, styles.cN]}>MC touch</Text>
-            <Text style={[styles.th, styles.cN]}>Hist touch</Text>
-            <Text style={[styles.th, styles.cN]}>MC med ret</Text>
-          </View>
-          {result.rows.map((r) => (
-            <View style={styles.tRow} key={r.label}>
-              <Text style={[styles.td, styles.cH]}>{r.label}</Text>
-              <Text style={[styles.td, styles.cN, styles.strong]}>{pct(r.mc.pReach)}</Text>
-              <Text style={[styles.td, styles.cN]}>
-                {r.hist.n ? pct(r.hist.pReach) : '—'}
-              </Text>
-              <Text
-                style={[
-                  styles.td,
-                  styles.cN,
-                  { color: r.mc.medRet >= 0 ? theme.green : theme.red },
-                ]}
-              >
-                {signed(r.mc.medRet)}
-              </Text>
+            <SectionTitle>Probability of touching +{result.target}% by horizon</SectionTitle>
+            <View style={styles.tHead}>
+              <Text style={[styles.th, styles.cH]}>Horizon</Text>
+              <Text style={[styles.th, styles.cN]}>MC touch</Text>
+              <Text style={[styles.th, styles.cN]}>Hist touch</Text>
+              <Text style={[styles.th, styles.cN]}>MC med ret</Text>
             </View>
-          ))}
-
-          {result.qual.hasData ? (
-            <>
-              <Text style={styles.tableTitle}>Fundamental quality</Text>
-              <View style={styles.chips}>
-                {result.qual.parts.map((p) => (
-                  <View style={styles.chip} key={p.k}>
-                    <Text style={styles.chipK}>{p.k}</Text>
-                    <Text style={styles.chipV}>{Math.round(p.s)}</Text>
-                  </View>
-                ))}
+            {result.rows.map((r) => (
+              <View style={styles.tRow} key={r.label}>
+                <Text style={[styles.td, styles.cH]}>{r.label}</Text>
+                <Text style={[styles.td, styles.cN, styles.strong]}>{pct(r.mc.pReach)}</Text>
+                <Text style={[styles.td, styles.cN]}>
+                  {r.hist.n ? pct(r.hist.pReach) : '—'}
+                </Text>
+                <Text
+                  style={[
+                    styles.td,
+                    styles.cN,
+                    { color: r.mc.medRet >= 0 ? theme.green : theme.red },
+                  ]}
+                >
+                  {signed(r.mc.medRet)}
+                </Text>
               </View>
-            </>
-          ) : (
-            <Text style={styles.noFund}>Fundamentals unavailable — valuation scored neutrally.</Text>
-          )}
+            ))}
 
-          <Text style={styles.note}>{result.note}</Text>
-          <Text style={styles.disclaimer}>
-            Model output, not investment advice. Simulations assume returns are log-normal and
-            stationary — real markets are neither.
-          </Text>
-        </View>
-      ) : null}
+            {result.qual.hasData ? (
+              <>
+                <SectionTitle>Fundamental quality</SectionTitle>
+                <View style={styles.chips}>
+                  {result.qual.parts.map((p) => (
+                    <View style={styles.chip} key={p.k}>
+                      <Text style={styles.chipK}>{p.k}</Text>
+                      <Text style={styles.chipV}>{Math.round(p.s)}</Text>
+                    </View>
+                  ))}
+                </View>
+              </>
+            ) : (
+              <Text style={styles.noFund}>Fundamentals unavailable — valuation scored neutrally.</Text>
+            )}
+
+            <Card style={styles.noteCard}>
+              <Text style={styles.note}>{result.note}</Text>
+            </Card>
+            <Text style={styles.disclaimer}>
+              Model output, not investment advice. Simulations assume returns are log-normal and
+              stationary — real markets are neither.
+            </Text>
+          </View>
+        ) : null}
+      </View>
     </ScrollView>
-  );
-}
-
-function Meta({ label, value }: { label: string; value: string }) {
-  return (
-    <View style={styles.meta}>
-      <Text style={styles.metaLabel}>{label}</Text>
-      <Text style={styles.metaValue}>{value}</Text>
-    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.bg },
-  content: { padding: 16, paddingBottom: 48, width: '100%', maxWidth: 760, alignSelf: 'center' },
-  h1: { color: theme.text, fontSize: 18, fontWeight: '700' },
-  sub: { color: theme.muted, fontSize: 12, marginTop: 4, marginBottom: 16, lineHeight: 17 },
-  inputs: { flexDirection: 'row', gap: 10, zIndex: 50 },
+  content: { paddingBottom: 48, width: '100%', maxWidth: 760, alignSelf: 'center' },
+  body: { paddingHorizontal: theme.sp.lg },
+  setupCard: { zIndex: 50 },
+  inputs: { flexDirection: 'row', gap: theme.sp.md, zIndex: 50 },
   field: { flex: 1, zIndex: 50 },
-  fieldSm: { width: 90 },
-  label: { color: theme.muted, fontSize: 11, marginBottom: 4, fontFamily: theme.mono },
+  fieldSm: { width: 96 },
+  label: { color: theme.muted2, fontSize: theme.fs.sm, marginBottom: theme.sp.xs },
   input: {
-    backgroundColor: theme.surface2,
+    backgroundColor: theme.surface,
     borderColor: theme.border2,
     borderWidth: 1,
-    borderRadius: 8,
+    borderRadius: theme.radius.sm + 2,
     color: theme.text,
-    paddingHorizontal: 12,
+    paddingHorizontal: theme.sp.md,
     paddingVertical: 10,
     fontFamily: theme.mono,
-    fontSize: 14,
+    fontSize: theme.fs.md,
   },
   btn: {
     backgroundColor: theme.accent,
-    borderRadius: 8,
-    paddingVertical: 12,
+    borderRadius: theme.radius.sm + 2,
+    paddingVertical: 11,
     alignItems: 'center',
-    marginTop: 14,
+    marginTop: theme.sp.lg,
   },
-  btnText: { color: theme.bg, fontWeight: '700', fontSize: 14 },
-  msg: { color: theme.muted, fontFamily: theme.mono, fontSize: 12, marginTop: 16, textAlign: 'center' },
-  result: { marginTop: 20 },
-  verdictRow: { flexDirection: 'row', alignItems: 'flex-start' },
-  name: { color: theme.text, fontSize: 16, fontWeight: '700' },
-  symSmall: { color: theme.muted, fontFamily: theme.mono, fontSize: 12, marginTop: 2 },
-  scoreBox: { alignItems: 'flex-end' },
-  verdict: { fontSize: 14, fontWeight: '700' },
-  score: { color: theme.muted, fontFamily: theme.mono, fontSize: 12, marginTop: 2 },
-  metaRow: {
-    flexDirection: 'row',
-    marginTop: 16,
-    borderTopColor: theme.border,
-    borderBottomColor: theme.border,
-    borderTopWidth: 1,
-    borderBottomWidth: 1,
-    paddingVertical: 12,
+  btnText: { color: theme.onAccent, fontWeight: '700', fontSize: theme.fs.sm + 1, letterSpacing: 0.3 },
+  loadingBox: { paddingVertical: theme.sp.xl },
+  msg: {
+    color: theme.muted2,
+    fontSize: theme.fs.sm,
+    marginTop: theme.sp.lg,
+    textAlign: 'center',
+    lineHeight: 18,
   },
-  meta: { flex: 1 },
-  metaLabel: { color: theme.muted2, fontSize: 10, fontFamily: theme.mono },
-  metaValue: { color: theme.text, fontSize: 14, fontWeight: '600', marginTop: 3 },
-  tableTitle: { color: theme.text, fontSize: 13, fontWeight: '700', marginTop: 22, marginBottom: 8 },
+  result: { marginTop: theme.sp.xl },
+  nameRow: { marginBottom: theme.sp.lg },
+  name: { color: theme.text, fontSize: theme.fs.lg, fontWeight: '700' },
+  symSmall: { color: theme.muted, fontFamily: theme.mono, fontSize: theme.fs.sm, marginTop: 2 },
+  tiles: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.sp.md },
   tHead: {
     flexDirection: 'row',
-    paddingBottom: 6,
+    alignItems: 'center',
+    backgroundColor: theme.surface2,
+    borderTopColor: theme.border,
+    borderTopWidth: 1,
     borderBottomColor: theme.border2,
     borderBottomWidth: 1,
+    paddingVertical: theme.sp.sm,
+    paddingHorizontal: theme.sp.sm,
   },
-  th: { color: theme.muted2, fontSize: 10, fontFamily: theme.mono, textTransform: 'uppercase' },
+  th: {
+    color: theme.muted2,
+    fontSize: theme.fs.xs + 1,
+    fontWeight: '700',
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
+  },
   tRow: {
     flexDirection: 'row',
-    paddingVertical: 10,
+    alignItems: 'center',
+    minHeight: 44,
+    paddingHorizontal: theme.sp.sm,
     borderBottomColor: theme.border,
     borderBottomWidth: 1,
   },
-  td: { color: theme.text, fontFamily: theme.mono, fontSize: 12 },
+  td: { color: theme.text, fontFamily: theme.mono, fontSize: theme.fs.sm },
   strong: { fontWeight: '700' },
   cH: { flex: 1 },
   cN: { width: 84, textAlign: 'right' },
-  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.sp.sm },
   chip: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: theme.surface2,
+    backgroundColor: theme.surface,
     borderColor: theme.border2,
     borderWidth: 1,
-    borderRadius: 6,
-    paddingHorizontal: 10,
+    borderRadius: 999,
+    paddingHorizontal: theme.sp.md,
     paddingVertical: 6,
   },
-  chipK: { color: theme.muted, fontFamily: theme.mono, fontSize: 11 },
-  chipV: { color: theme.text, fontWeight: '700', fontSize: 13 },
-  noFund: { color: theme.muted, fontFamily: theme.mono, fontSize: 11, marginTop: 4 },
-  note: {
-    color: theme.text,
-    fontSize: 13,
-    lineHeight: 20,
-    marginTop: 22,
-    backgroundColor: theme.surface2,
-    borderRadius: 8,
-    padding: 14,
+  chipK: { color: theme.muted, fontSize: theme.fs.xs + 1, letterSpacing: 0.6, textTransform: 'uppercase' },
+  chipV: { color: theme.text, fontWeight: '700', fontSize: theme.fs.md, fontFamily: theme.mono },
+  noFund: { color: theme.muted, fontSize: theme.fs.sm, marginTop: theme.sp.lg },
+  noteCard: { marginTop: theme.sp.xl },
+  note: { color: theme.text, fontSize: theme.fs.md, lineHeight: 21 },
+  disclaimer: {
+    color: theme.muted,
+    fontSize: theme.fs.xs,
+    lineHeight: 15,
+    marginTop: theme.sp.md,
+    fontStyle: 'italic',
   },
-  disclaimer: { color: theme.muted2, fontSize: 10, lineHeight: 15, marginTop: 12, fontStyle: 'italic' },
 });

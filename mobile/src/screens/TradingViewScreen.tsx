@@ -53,17 +53,17 @@ export default function TradingViewScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.bg },
-  searchWrap: { margin: 12 },
+  searchWrap: { margin: theme.sp.md },
   search: {
-    backgroundColor: theme.surface2,
+    backgroundColor: theme.surface,
     borderColor: theme.border2,
     borderWidth: 1,
-    borderRadius: 8,
+    borderRadius: theme.radius.sm + 2,
     color: theme.text,
-    paddingHorizontal: 12,
-    paddingVertical: 9,
+    paddingHorizontal: theme.sp.md,
+    paddingVertical: 10,
     fontFamily: theme.mono,
-    fontSize: 13,
+    fontSize: theme.fs.md,
   },
   web: { flex: 1, backgroundColor: theme.bg },
 });

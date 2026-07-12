@@ -13,6 +13,7 @@ import { Candle, api } from '../api';
 import { BacktestResult, CUSTOM_KEY, CustomRule, Risk, STRATEGIES, runBacktest } from '../backtest';
 import HtmlView from '../components/HtmlView';
 import { theme } from '../theme';
+import { Card, ChipBtn, EmptyState, Loading, ScreenTitle, SectionTitle, StatTile } from '../ui';
 
 const UP = '#10b981';
 const DOWN = '#f43f5e';
@@ -65,7 +66,7 @@ function RuleRow({
   };
   return (
     <View style={styles.ruleRow}>
-      <TouchableOpacity style={styles.ruleSeg} onPress={cycleInd}>
+      <TouchableOpacity style={styles.ruleSeg} onPress={cycleInd} activeOpacity={0.75}>
         <Text style={styles.ruleSegTxt}>{IND_LBL[rule.ind]}</Text>
       </TouchableOpacity>
       {hasPeriod(rule.ind) ? (
@@ -76,10 +77,14 @@ function RuleRow({
           keyboardType="numeric"
         />
       ) : null}
-      <TouchableOpacity style={styles.ruleSeg} onPress={() => onChange({ ...rule, op: cycle(OP_OPTS, rule.op) })}>
+      <TouchableOpacity
+        style={styles.ruleSeg}
+        onPress={() => onChange({ ...rule, op: cycle(OP_OPTS, rule.op) })}
+        activeOpacity={0.75}
+      >
         <Text style={[styles.ruleSegTxt, styles.ruleOpTxt]}>{OP_LBL[rule.op]}</Text>
       </TouchableOpacity>
-      <TouchableOpacity style={styles.ruleSeg} onPress={cycleTgt}>
+      <TouchableOpacity style={styles.ruleSeg} onPress={cycleTgt} activeOpacity={0.75}>
         <Text style={styles.ruleSegTxt}>{TGT_LBL[rule.target]}</Text>
       </TouchableOpacity>
       {rule.target !== 'close' ? (
@@ -90,7 +95,7 @@ function RuleRow({
           keyboardType="numeric"
         />
       ) : null}
-      <TouchableOpacity style={styles.ruleDel} onPress={onRemove}>
+      <TouchableOpacity style={styles.ruleDel} onPress={onRemove} activeOpacity={0.75}>
         <Text style={styles.ruleDelTxt}>✕</Text>
       </TouchableOpacity>
     </View>
@@ -156,13 +161,12 @@ function Segmented<T extends string>({
   return (
     <View style={styles.seg}>
       {options.map((o) => (
-        <TouchableOpacity
+        <ChipBtn
           key={o}
-          style={[styles.segBtn, value === o && styles.segBtnOn]}
+          label={labelOf ? labelOf(o) : o}
+          on={value === o}
           onPress={() => onChange(o)}
-        >
-          <Text style={[styles.segTxt, value === o && styles.segTxtOn]}>{labelOf ? labelOf(o) : o}</Text>
-        </TouchableOpacity>
+        />
       ))}
     </View>
   );
@@ -283,174 +287,217 @@ export default function BacktestScreen() {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-      <Text style={styles.h1}>Strategy Backtest</Text>
+      <ScreenTitle title="Backtest" sub="Test a strategy against historical data before risking capital." />
+      <View style={styles.body}>
+        <SectionTitle>Strategy</SectionTitle>
+        <Card>
+          <Text style={[styles.lbl, styles.lblFirst]}>Symbol</Text>
+          <TextInput
+            style={styles.input}
+            value={sym}
+            onChangeText={setSym}
+            autoCapitalize="characters"
+            placeholder="RELIANCE"
+            placeholderTextColor={theme.muted}
+          />
 
-      <Text style={styles.lbl}>Symbol</Text>
-      <TextInput
-        style={styles.input}
-        value={sym}
-        onChangeText={setSym}
-        autoCapitalize="characters"
-        placeholder="RELIANCE"
-        placeholderTextColor={theme.muted}
-      />
-
-      <Text style={styles.lbl}>Strategy</Text>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipScroll}>
-        {STRATEGIES.map((s) => (
-          <TouchableOpacity
-            key={s.key}
-            style={[styles.chip, s.key === stratKey && styles.chipOn]}
-            onPress={() => pickStrat(s.key)}
+          <Text style={styles.lbl}>Strategy</Text>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.chipScroll}
+            contentContainerStyle={styles.chipRow}
           >
-            <Text style={[styles.chipTxt, s.key === stratKey && styles.chipTxtOn]}>{s.label}</Text>
-          </TouchableOpacity>
-        ))}
-        <TouchableOpacity
-          key={CUSTOM_KEY}
-          style={[styles.chip, isCustom && styles.chipOn]}
-          onPress={() => pickStrat(CUSTOM_KEY)}
-        >
-          <Text style={[styles.chipTxt, isCustom && styles.chipTxtOn]}>Custom</Text>
-        </TouchableOpacity>
-      </ScrollView>
+            {STRATEGIES.map((s) => (
+              <ChipBtn key={s.key} label={s.label} on={s.key === stratKey} onPress={() => pickStrat(s.key)} />
+            ))}
+            <ChipBtn key={CUSTOM_KEY} label="Custom" on={isCustom} onPress={() => pickStrat(CUSTOM_KEY)} />
+          </ScrollView>
 
-      {isCustom ? (
-        <View>
-          <Text style={styles.lblSm}>
-            Tap a segment to cycle it. X↑ / X↓ = crosses above / below.
-          </Text>
-          <Text style={styles.ruleSection}>BUY WHEN (all true)</Text>
-          {buyRules.map((r, i) => (
-            <RuleRow
-              key={'b' + i}
-              rule={r}
-              onChange={(nr) => setBuyRules((p) => p.map((x, j) => (j === i ? nr : x)))}
-              onRemove={() => setBuyRules((p) => p.filter((_, j) => j !== i))}
+          {isCustom ? (
+            <View>
+              <Text style={styles.hint}>
+                Tap a segment to cycle it. X↑ / X↓ = crosses above / below.
+              </Text>
+              <SectionTitle>BUY WHEN (all true)</SectionTitle>
+              {buyRules.map((r, i) => (
+                <RuleRow
+                  key={'b' + i}
+                  rule={r}
+                  onChange={(nr) => setBuyRules((p) => p.map((x, j) => (j === i ? nr : x)))}
+                  onRemove={() => setBuyRules((p) => p.filter((_, j) => j !== i))}
+                />
+              ))}
+              <TouchableOpacity
+                style={styles.addRule}
+                onPress={() => setBuyRules((p) => [...p, defaultBuyRule()])}
+                activeOpacity={0.75}
+              >
+                <Text style={styles.addRuleTxt}>+ ADD RULE</Text>
+              </TouchableOpacity>
+              <SectionTitle>SELL WHEN (all true)</SectionTitle>
+              {sellRules.map((r, i) => (
+                <RuleRow
+                  key={'s' + i}
+                  rule={r}
+                  onChange={(nr) => setSellRules((p) => p.map((x, j) => (j === i ? nr : x)))}
+                  onRemove={() => setSellRules((p) => p.filter((_, j) => j !== i))}
+                />
+              ))}
+              <TouchableOpacity
+                style={styles.addRule}
+                onPress={() => setSellRules((p) => [...p, defaultSellRule()])}
+                activeOpacity={0.75}
+              >
+                <Text style={styles.addRuleTxt}>+ ADD RULE</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <View style={styles.paramRow}>
+              {strat.params.map((p, i) => (
+                <View key={p.label} style={styles.paramCell}>
+                  <Text style={styles.paramLbl}>{p.label}</Text>
+                  <TextInput
+                    style={styles.paramInput}
+                    value={String(params[i] ?? '')}
+                    onChangeText={(t) => setParam(i, t)}
+                    keyboardType="numeric"
+                  />
+                </View>
+              ))}
+            </View>
+          )}
+        </Card>
+
+        <SectionTitle>Data</SectionTitle>
+        <Card>
+          <Text style={[styles.lbl, styles.lblFirst]}>Interval</Text>
+          <Segmented
+            options={INTERVALS.map((x) => x.v)}
+            value={interval}
+            onChange={setInterval}
+            labelOf={(v) => INTERVALS.find((x) => x.v === v)?.label || v}
+          />
+          <Text style={styles.lbl}>Period</Text>
+          <Segmented options={PERIODS} value={period} onChange={setPeriod} />
+        </Card>
+
+        <SectionTitle>Risk</SectionTitle>
+        <Card>
+          <Text style={[styles.lbl, styles.lblFirst]}>Capital ₹</Text>
+          <TextInput style={styles.input} value={capital} onChangeText={setCapital} keyboardType="numeric" />
+
+          <Text style={styles.lbl}>Stop Loss</Text>
+          <View style={styles.riskRow}>
+            <Segmented
+              options={['none', 'pct', 'atr'] as Risk['slType'][]}
+              value={slType}
+              onChange={setSlType}
+              labelOf={(v) => (v === 'none' ? 'Off' : v === 'pct' ? '%' : 'ATR×')}
             />
-          ))}
-          <TouchableOpacity style={styles.addRule} onPress={() => setBuyRules((p) => [...p, defaultBuyRule()])}>
-            <Text style={styles.addRuleTxt}>+ ADD RULE</Text>
-          </TouchableOpacity>
-          <Text style={styles.ruleSection}>SELL WHEN (all true)</Text>
-          {sellRules.map((r, i) => (
-            <RuleRow
-              key={'s' + i}
-              rule={r}
-              onChange={(nr) => setSellRules((p) => p.map((x, j) => (j === i ? nr : x)))}
-              onRemove={() => setSellRules((p) => p.filter((_, j) => j !== i))}
+            {slType !== 'none' ? (
+              <TextInput style={styles.smInput} value={slVal} onChangeText={setSlVal} keyboardType="numeric" />
+            ) : null}
+          </View>
+
+          <Text style={styles.lbl}>Target</Text>
+          <View style={styles.riskRow}>
+            <Segmented
+              options={['none', 'pct', 'rr'] as Risk['tpType'][]}
+              value={tpType}
+              onChange={setTpType}
+              labelOf={(v) => (v === 'none' ? 'Off' : v === 'pct' ? '%' : 'R:R')}
             />
-          ))}
-          <TouchableOpacity style={styles.addRule} onPress={() => setSellRules((p) => [...p, defaultSellRule()])}>
-            <Text style={styles.addRuleTxt}>+ ADD RULE</Text>
-          </TouchableOpacity>
-        </View>
-      ) : (
-        <View style={styles.paramRow}>
-          {strat.params.map((p, i) => (
-            <View key={p.label} style={styles.paramCell}>
-              <Text style={styles.lblSm}>{p.label}</Text>
-              <TextInput
-                style={styles.paramInput}
-                value={String(params[i] ?? '')}
-                onChangeText={(t) => setParam(i, t)}
-                keyboardType="numeric"
+            {tpType !== 'none' ? (
+              <TextInput style={styles.smInput} value={tpVal} onChangeText={setTpVal} keyboardType="numeric" />
+            ) : null}
+          </View>
+
+          <Text style={styles.lbl}>Trailing Stop</Text>
+          <View style={styles.riskRow}>
+            <ChipBtn
+              label={trailOn ? 'On' : 'Off'}
+              on={trailOn}
+              onPress={() => setTrailOn((v) => !v)}
+              style={styles.trailChip}
+            />
+            {trailOn ? (
+              <TextInput style={styles.smInput} value={trailPct} onChangeText={setTrailPct} keyboardType="numeric" />
+            ) : null}
+          </View>
+        </Card>
+
+        <TouchableOpacity style={styles.runBtn} onPress={run} disabled={busy} activeOpacity={0.75}>
+          {busy ? <ActivityIndicator color={theme.onAccent} /> : <Text style={styles.runTxt}>Run Backtest</Text>}
+        </TouchableOpacity>
+
+        {busy && msg ? (
+          <View style={styles.loadingBox}>
+            <Loading label={msg.replace(/^[⟳⚠]\s*/, '')} />
+          </View>
+        ) : msg ? (
+          <Text style={styles.msg}>{msg.replace(/^[⟳⚠]\s*/, '')}</Text>
+        ) : null}
+
+        {result ? (
+          <View style={styles.results}>
+            <View style={styles.statGrid}>
+              <StatTile
+                label="Total Return"
+                value={signed(result.stats.totalRet) + '%'}
+                color={result.stats.totalRet >= 0 ? theme.green : theme.red}
+              />
+              <StatTile
+                label="Final Capital"
+                value={money(result.stats.finalCapital)}
+                color={result.stats.totalRet >= 0 ? theme.green : theme.red}
+              />
+              <StatTile label="Win Rate" value={result.stats.winRate.toFixed(0) + '%'} />
+              <StatTile label="Trades" value={String(result.stats.trades)} />
+              <StatTile label="Wins / Losses" value={`${result.stats.wins} / ${result.stats.losses}`} />
+              <StatTile label="Max Drawdown" value={result.stats.maxDD.toFixed(1) + '%'} />
+              <StatTile
+                label="Profit Factor"
+                value={result.stats.profitFactor == null ? '∞' : result.stats.profitFactor.toFixed(2)}
+              />
+              <StatTile
+                label="Avg Trade"
+                value={signed(result.stats.avgRet) + '%'}
+                color={result.stats.avgRet >= 0 ? theme.green : theme.red}
               />
             </View>
-          ))}
-        </View>
-      )}
 
-      <View style={styles.row2}>
-        <View style={styles.half}>
-          <Text style={styles.lbl}>Interval</Text>
-          <Segmented options={INTERVALS.map((x) => x.v)} value={interval} onChange={setInterval} labelOf={(v) => INTERVALS.find((x) => x.v === v)?.label || v} />
-        </View>
-      </View>
-      <Text style={styles.lbl}>Period</Text>
-      <Segmented options={PERIODS} value={period} onChange={setPeriod} />
+            {html ? (
+              <View style={styles.chartBox}>
+                <HtmlView html={html} style={styles.web} />
+              </View>
+            ) : null}
 
-      <View style={styles.row2}>
-        <View style={styles.half}>
-          <Text style={styles.lbl}>Capital ₹</Text>
-          <TextInput style={styles.input} value={capital} onChangeText={setCapital} keyboardType="numeric" />
-        </View>
-      </View>
-
-      <Text style={styles.lbl}>Stop Loss</Text>
-      <View style={styles.riskRow}>
-        <Segmented options={['none', 'pct', 'atr'] as Risk['slType'][]} value={slType} onChange={setSlType} labelOf={(v) => (v === 'none' ? 'Off' : v === 'pct' ? '%' : 'ATR×')} />
-        {slType !== 'none' ? (
-          <TextInput style={styles.smInput} value={slVal} onChangeText={setSlVal} keyboardType="numeric" />
-        ) : null}
-      </View>
-
-      <Text style={styles.lbl}>Target</Text>
-      <View style={styles.riskRow}>
-        <Segmented options={['none', 'pct', 'rr'] as Risk['tpType'][]} value={tpType} onChange={setTpType} labelOf={(v) => (v === 'none' ? 'Off' : v === 'pct' ? '%' : 'R:R')} />
-        {tpType !== 'none' ? (
-          <TextInput style={styles.smInput} value={tpVal} onChangeText={setTpVal} keyboardType="numeric" />
-        ) : null}
-      </View>
-
-      <Text style={styles.lbl}>Trailing Stop</Text>
-      <View style={styles.riskRow}>
-        <TouchableOpacity
-          style={[styles.segBtn, trailOn && styles.segBtnOn, { minWidth: 70 }]}
-          onPress={() => setTrailOn((v) => !v)}
-        >
-          <Text style={[styles.segTxt, trailOn && styles.segTxtOn]}>{trailOn ? 'On' : 'Off'}</Text>
-        </TouchableOpacity>
-        {trailOn ? (
-          <TextInput style={styles.smInput} value={trailPct} onChangeText={setTrailPct} keyboardType="numeric" />
-        ) : null}
-      </View>
-
-      <TouchableOpacity style={styles.runBtn} onPress={run} disabled={busy}>
-        {busy ? <ActivityIndicator color={theme.bg} /> : <Text style={styles.runTxt}>▶ Run Backtest</Text>}
-      </TouchableOpacity>
-
-      {msg ? <Text style={styles.msg}>{msg}</Text> : null}
-
-      {result ? (
-        <View style={styles.results}>
-          <View style={styles.statGrid}>
-            <StatCard label="Total Return" value={signed(result.stats.totalRet) + '%'} color={result.stats.totalRet >= 0 ? theme.green : theme.red} />
-            <StatCard label="Final Capital" value={money(result.stats.finalCapital)} color={result.stats.totalRet >= 0 ? theme.green : theme.red} />
-            <StatCard label="Win Rate" value={result.stats.winRate.toFixed(0) + '%'} />
-            <StatCard label="Trades" value={String(result.stats.trades)} />
-            <StatCard label="Wins / Losses" value={`${result.stats.wins} / ${result.stats.losses}`} />
-            <StatCard label="Max Drawdown" value={result.stats.maxDD.toFixed(1) + '%'} />
-            <StatCard label="Profit Factor" value={result.stats.profitFactor == null ? '∞' : result.stats.profitFactor.toFixed(2)} />
-            <StatCard label="Avg Trade" value={signed(result.stats.avgRet) + '%'} color={result.stats.avgRet >= 0 ? theme.green : theme.red} />
-          </View>
-
-          {html ? (
-            <View style={styles.chartBox}>
-              <HtmlView html={html} style={styles.web} />
+            <SectionTitle>Trade Log ({result.trades.length})</SectionTitle>
+            <View style={styles.tHead}>
+              <Text style={[styles.th, styles.cDate]}>Buy</Text>
+              <Text style={[styles.th, styles.cDate]}>Sell</Text>
+              <Text style={[styles.th, styles.cNum]}>Ret%</Text>
+              <Text style={[styles.th, styles.cExit]}>Exit</Text>
             </View>
-          ) : null}
-
-          <Text style={styles.tradeTitle}>Trade Log ({result.trades.length})</Text>
-          <View style={styles.tHead}>
-            <Text style={[styles.tCell, styles.cDate]}>Buy</Text>
-            <Text style={[styles.tCell, styles.cDate]}>Sell</Text>
-            <Text style={[styles.tCell, styles.cNum]}>Ret%</Text>
-            <Text style={[styles.tCell, styles.cExit]}>Exit</Text>
+            {result.trades.slice(-50).reverse().map((t, i) => (
+              <View style={styles.tRow} key={i}>
+                <Text style={[styles.tCell, styles.cDate]}>{fmtT(t.buyT)}</Text>
+                <Text style={[styles.tCell, styles.cDate]}>{fmtT(t.sellT)}</Text>
+                <Text style={[styles.tCell, styles.cNum, { color: t.ret >= 0 ? theme.green : theme.red }]}>{signed(t.ret)}</Text>
+                <Text style={[styles.tCell, styles.cExit]}>{t.exit}</Text>
+              </View>
+            ))}
+            {result.trades.length === 0 ? (
+              <EmptyState
+                icon="▤"
+                title="No trades generated"
+                hint="Try a longer period or looser parameters."
+              />
+            ) : null}
           </View>
-          {result.trades.slice(-50).reverse().map((t, i) => (
-            <View style={styles.tRow} key={i}>
-              <Text style={[styles.tCell, styles.cDate]}>{fmtT(t.buyT)}</Text>
-              <Text style={[styles.tCell, styles.cDate]}>{fmtT(t.sellT)}</Text>
-              <Text style={[styles.tCell, styles.cNum, { color: t.ret >= 0 ? theme.green : theme.red }]}>{signed(t.ret)}</Text>
-              <Text style={[styles.tCell, styles.cExit]}>{t.exit}</Text>
-            </View>
-          ))}
-          {result.trades.length === 0 ? (
-            <Text style={styles.noTrades}>No trades generated — try a longer period or looser params.</Text>
-          ) : null}
-        </View>
-      ) : null}
+        ) : null}
+      </View>
     </ScrollView>
   );
 }
@@ -460,77 +507,149 @@ function fmtT(t: number): string {
   return `${d.getDate()}/${d.getMonth() + 1}/${String(d.getFullYear()).slice(2)}`;
 }
 
-function StatCard({ label, value, color }: { label: string; value: string; color?: string }) {
-  return (
-    <View style={styles.statCard}>
-      <Text style={styles.statCardLabel}>{label}</Text>
-      <Text style={[styles.statCardValue, color ? { color } : null]}>{value}</Text>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.bg },
-  content: { padding: 16, paddingBottom: 48, width: '100%', maxWidth: 820, alignSelf: 'center' },
-  h1: { color: theme.text, fontSize: 18, fontWeight: '700', marginBottom: 12 },
-  lbl: { color: theme.muted2, fontSize: 11, fontFamily: theme.mono, marginTop: 14, marginBottom: 5 },
-  lblSm: { color: theme.muted2, fontSize: 10, fontFamily: theme.mono, marginBottom: 4 },
-  input: { backgroundColor: theme.surface2, borderColor: theme.border2, borderWidth: 1, borderRadius: 8, color: theme.text, paddingHorizontal: 12, paddingVertical: 10, fontFamily: theme.mono, fontSize: 14 },
-  chipScroll: { marginVertical: 2 },
-  chip: { borderColor: theme.border2, borderWidth: 1, borderRadius: 6, paddingHorizontal: 12, paddingVertical: 7, marginRight: 6 },
-  chipOn: { backgroundColor: theme.accent, borderColor: theme.accent },
-  ruleSection: { color: theme.muted2, fontSize: 10, fontFamily: theme.mono, letterSpacing: 1, marginTop: 10, marginBottom: 6 },
-  ruleRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6, flexWrap: 'wrap' },
-  ruleSeg: { backgroundColor: theme.surface2, borderColor: theme.border2, borderWidth: 1, borderRadius: 5, paddingHorizontal: 10, paddingVertical: 7 },
-  ruleSegTxt: { color: theme.text, fontSize: 11, fontFamily: theme.mono, fontWeight: '700' },
-  ruleOpTxt: { color: theme.accent },
-  ruleInput: {
+  content: { paddingBottom: 48, width: '100%', maxWidth: 820, alignSelf: 'center' },
+  body: { paddingHorizontal: theme.sp.lg },
+  lbl: { color: theme.muted2, fontSize: theme.fs.sm, marginTop: theme.sp.lg, marginBottom: theme.sp.xs },
+  lblFirst: { marginTop: 0 },
+  input: {
     backgroundColor: theme.surface,
     borderColor: theme.border2,
     borderWidth: 1,
-    borderRadius: 5,
+    borderRadius: theme.radius.sm + 2,
+    color: theme.text,
+    paddingHorizontal: theme.sp.md,
+    paddingVertical: 10,
+    fontFamily: theme.mono,
+    fontSize: theme.fs.md,
+  },
+  chipScroll: { marginVertical: 2 },
+  chipRow: { gap: theme.sp.sm, paddingVertical: 2 },
+  hint: { color: theme.muted, fontSize: theme.fs.sm, marginTop: theme.sp.md, lineHeight: 17 },
+  ruleRow: { flexDirection: 'row', alignItems: 'center', gap: theme.sp.sm, marginBottom: theme.sp.sm, flexWrap: 'wrap' },
+  ruleSeg: {
+    height: 38,
+    justifyContent: 'center',
+    backgroundColor: theme.surface2,
+    borderColor: theme.border2,
+    borderWidth: 1,
+    borderRadius: theme.radius.sm + 2,
+    paddingHorizontal: theme.sp.md,
+  },
+  ruleSegTxt: { color: theme.text, fontSize: theme.fs.sm, fontWeight: '600' },
+  ruleOpTxt: { color: theme.accent, fontWeight: '700' },
+  ruleInput: {
+    height: 38,
+    backgroundColor: theme.surface,
+    borderColor: theme.border2,
+    borderWidth: 1,
+    borderRadius: theme.radius.sm + 2,
     color: theme.text,
     fontFamily: theme.mono,
-    fontSize: 11,
-    paddingHorizontal: 8,
-    paddingVertical: 6,
+    fontSize: theme.fs.sm,
+    paddingHorizontal: theme.sp.sm,
     minWidth: 52,
     textAlign: 'center',
   },
-  ruleDel: { paddingHorizontal: 6, paddingVertical: 6 },
-  ruleDelTxt: { color: theme.muted, fontSize: 12 },
-  addRule: { alignSelf: 'flex-start', borderColor: theme.border2, borderWidth: 1, borderRadius: 5, paddingHorizontal: 10, paddingVertical: 6, marginBottom: 4 },
-  addRuleTxt: { color: theme.muted2, fontSize: 10, fontFamily: theme.mono, letterSpacing: 1 },
-  chipTxt: { color: theme.muted2, fontFamily: theme.mono, fontSize: 12 },
-  chipTxtOn: { color: theme.bg, fontWeight: '700' },
-  paramRow: { flexDirection: 'row', gap: 10, marginTop: 12, flexWrap: 'wrap' },
-  paramCell: { width: 90 },
-  paramInput: { backgroundColor: theme.surface2, borderColor: theme.border2, borderWidth: 1, borderRadius: 6, color: theme.text, paddingHorizontal: 8, paddingVertical: 8, fontFamily: theme.mono, fontSize: 13, textAlign: 'center' },
-  row2: { flexDirection: 'row', gap: 12 },
-  half: { flex: 1 },
-  seg: { flexDirection: 'row', gap: 6, flexWrap: 'wrap' },
-  segBtn: { borderColor: theme.border2, borderWidth: 1, borderRadius: 6, paddingHorizontal: 12, paddingVertical: 7 },
-  segBtnOn: { backgroundColor: theme.accent, borderColor: theme.accent },
-  segTxt: { color: theme.muted2, fontFamily: theme.mono, fontSize: 12 },
-  segTxtOn: { color: theme.bg, fontWeight: '700' },
-  riskRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  smInput: { backgroundColor: theme.surface2, borderColor: theme.border2, borderWidth: 1, borderRadius: 6, color: theme.text, paddingHorizontal: 10, paddingVertical: 7, width: 70, fontFamily: theme.mono, fontSize: 13, textAlign: 'center' },
-  runBtn: { backgroundColor: theme.accent, borderRadius: 8, paddingVertical: 13, alignItems: 'center', marginTop: 20 },
-  runTxt: { color: theme.bg, fontWeight: '700', fontSize: 14 },
-  msg: { color: theme.muted, fontFamily: theme.mono, fontSize: 12, marginTop: 16, textAlign: 'center' },
-  results: { marginTop: 20 },
-  statGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  statCard: { width: '48%', backgroundColor: theme.surface2, borderColor: theme.border, borderWidth: 1, borderRadius: 8, padding: 12, alignItems: 'center' },
-  statCardLabel: { color: theme.muted2, fontSize: 10, fontFamily: theme.mono, textTransform: 'uppercase' },
-  statCardValue: { color: theme.text, fontSize: 17, fontWeight: '700', fontFamily: theme.mono, marginTop: 5 },
-  chartBox: { height: 380, marginTop: 16, borderColor: theme.border, borderWidth: 1, borderRadius: 8, overflow: 'hidden' },
+  ruleDel: { height: 38, width: 30, alignItems: 'center', justifyContent: 'center' },
+  ruleDelTxt: { color: theme.muted, fontSize: theme.fs.md },
+  addRule: {
+    alignSelf: 'flex-start',
+    borderColor: theme.border2,
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: theme.sp.md,
+    paddingVertical: 8,
+    marginBottom: theme.sp.xs,
+  },
+  addRuleTxt: { color: theme.muted2, fontSize: theme.fs.sm, fontWeight: '600', letterSpacing: 1 },
+  paramRow: { flexDirection: 'row', gap: theme.sp.md, marginTop: theme.sp.lg, flexWrap: 'wrap' },
+  paramCell: { width: 96 },
+  paramLbl: { color: theme.muted2, fontSize: theme.fs.sm, marginBottom: theme.sp.xs },
+  paramInput: {
+    height: 38,
+    backgroundColor: theme.surface,
+    borderColor: theme.border2,
+    borderWidth: 1,
+    borderRadius: theme.radius.sm + 2,
+    color: theme.text,
+    paddingHorizontal: theme.sp.sm,
+    fontFamily: theme.mono,
+    fontSize: theme.fs.md,
+    textAlign: 'center',
+  },
+  seg: { flexDirection: 'row', gap: theme.sp.sm, flexWrap: 'wrap' },
+  riskRow: { flexDirection: 'row', alignItems: 'center', gap: theme.sp.sm },
+  trailChip: { minWidth: 70, alignItems: 'center' },
+  smInput: {
+    height: 38,
+    backgroundColor: theme.surface,
+    borderColor: theme.border2,
+    borderWidth: 1,
+    borderRadius: theme.radius.sm + 2,
+    color: theme.text,
+    paddingHorizontal: theme.sp.sm,
+    width: 72,
+    fontFamily: theme.mono,
+    fontSize: theme.fs.md,
+    textAlign: 'center',
+  },
+  runBtn: {
+    backgroundColor: theme.accent,
+    borderRadius: theme.radius.sm + 2,
+    paddingVertical: 13,
+    alignItems: 'center',
+    marginTop: theme.sp.xl,
+  },
+  runTxt: { color: theme.onAccent, fontWeight: '700', fontSize: theme.fs.sm + 1, letterSpacing: 0.3 },
+  loadingBox: { paddingVertical: theme.sp.xl },
+  msg: {
+    color: theme.muted2,
+    fontSize: theme.fs.sm,
+    marginTop: theme.sp.lg,
+    textAlign: 'center',
+    lineHeight: 18,
+  },
+  results: { marginTop: theme.sp.xl },
+  statGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.sp.md },
+  chartBox: {
+    height: 380,
+    marginTop: theme.sp.lg,
+    borderColor: theme.border,
+    borderWidth: 1,
+    borderRadius: theme.radius.md,
+    overflow: 'hidden',
+  },
   web: { flex: 1, backgroundColor: theme.bg },
-  tradeTitle: { color: theme.text, fontSize: 13, fontWeight: '700', marginTop: 20, marginBottom: 8 },
-  tHead: { flexDirection: 'row', borderBottomColor: theme.border2, borderBottomWidth: 1, paddingBottom: 6 },
-  tRow: { flexDirection: 'row', borderBottomColor: theme.border, borderBottomWidth: 1, paddingVertical: 8 },
-  tCell: { color: theme.text, fontFamily: theme.mono, fontSize: 12 },
+  tHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: theme.surface2,
+    borderTopColor: theme.border,
+    borderTopWidth: 1,
+    borderBottomColor: theme.border2,
+    borderBottomWidth: 1,
+    paddingVertical: theme.sp.sm,
+    paddingHorizontal: theme.sp.sm,
+  },
+  th: {
+    color: theme.muted2,
+    fontSize: theme.fs.xs + 1,
+    fontWeight: '700',
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
+  },
+  tRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    minHeight: 44,
+    paddingHorizontal: theme.sp.sm,
+    borderBottomColor: theme.border,
+    borderBottomWidth: 1,
+  },
+  tCell: { color: theme.text, fontFamily: theme.mono, fontSize: theme.fs.sm },
   cDate: { flex: 1 },
   cNum: { width: 64, textAlign: 'right' },
   cExit: { width: 60, textAlign: 'right', color: theme.muted2 },
-  noTrades: { color: theme.muted, fontFamily: theme.mono, fontSize: 12, marginTop: 12, textAlign: 'center' },
 });

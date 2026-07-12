@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { IndexQuote, api } from '../api';
 import { theme } from '../theme';
+import { EmptyState, Loading, ScreenTitle } from '../ui';
 
 export default function IndicesScreen() {
   const [rows, setRows] = useState<IndexQuote[] | null>(null);
@@ -30,24 +31,25 @@ export default function IndicesScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.head}>
-        <Text style={styles.title}>
-          INDICES <Text style={styles.titleDim}>· LIVE LEVELS · 5-MIN REFRESH</Text>
-        </Text>
-        {asof ? (
-          <Text style={styles.asof}>
-            as of {new Date(asof * 1000).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
-          </Text>
-        ) : null}
-      </View>
+      <ScreenTitle
+        title="Indices"
+        sub="Live levels · refreshes every 5 min"
+        right={
+          asof ? (
+            <Text style={styles.asof}>
+              as of{' '}
+              {new Date(asof * 1000).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
+            </Text>
+          ) : undefined
+        }
+      />
       {err ? (
-        <View style={styles.center}>
-          <Text style={styles.dim}>{err}</Text>
-        </View>
+        <EmptyState
+          title="Couldn't load index levels"
+          hint={`${err} — pull to refresh once the backend is reachable.`}
+        />
       ) : !rows ? (
-        <View style={styles.center}>
-          <ActivityIndicator color={theme.accent} />
-        </View>
+        <Loading label="Loading index levels…" />
       ) : (
         <ScrollView
           refreshControl={
@@ -62,10 +64,10 @@ export default function IndicesScreen() {
             />
           }
         >
-          <View style={styles.row}>
-            <Text style={[styles.hcell, styles.nameCol]}>INDEX</Text>
-            <Text style={styles.hcell}>LEVEL</Text>
-            <Text style={styles.hcell}>DAY %</Text>
+          <View style={styles.headRow}>
+            <Text style={[styles.hcell, styles.nameCol]}>Index</Text>
+            <Text style={styles.hcell}>Level</Text>
+            <Text style={styles.hcell}>Day %</Text>
             <Text style={styles.hcell}>1Y %</Text>
           </View>
           {rows.map((r) => (
@@ -81,9 +83,10 @@ export default function IndicesScreen() {
             </View>
           ))}
           {!rows.length ? (
-            <Text style={[styles.dim, { padding: 24 }]}>
-              No index data right now — sources may be briefly unavailable.
-            </Text>
+            <EmptyState
+              title="No index data right now"
+              hint="Sources may be briefly unavailable — pull to refresh in a moment."
+            />
           ) : null}
         </ScrollView>
       )}
@@ -93,24 +96,39 @@ export default function IndicesScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.bg },
-  head: { paddingHorizontal: 14, paddingVertical: 12, flexDirection: 'row', alignItems: 'baseline', gap: 10 },
-  title: { color: theme.text, fontFamily: theme.mono, fontSize: 12, fontWeight: '700', letterSpacing: 1 },
-  titleDim: { color: theme.muted, fontWeight: '400' },
-  asof: { color: theme.muted, fontFamily: theme.mono, fontSize: 10, marginLeft: 'auto' },
-  row: {
+  asof: { color: theme.muted, fontFamily: theme.mono, fontSize: theme.fs.xs },
+  headRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 11,
+    paddingHorizontal: theme.sp.lg,
+    paddingVertical: theme.sp.sm,
+    backgroundColor: theme.surface2,
+    borderTopColor: theme.border,
+    borderTopWidth: 1,
     borderBottomColor: theme.border,
     borderBottomWidth: 1,
   },
-  hcell: { flex: 1, color: theme.muted2, fontFamily: theme.mono, fontSize: 9, letterSpacing: 1, textAlign: 'right' },
-  cell: { flex: 1, color: theme.text, fontFamily: theme.mono, fontSize: 12, textAlign: 'right' },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    minHeight: 44,
+    paddingHorizontal: theme.sp.lg,
+    paddingVertical: theme.sp.md,
+    borderBottomColor: theme.border,
+    borderBottomWidth: 1,
+  },
+  hcell: {
+    flex: 1,
+    color: theme.muted2,
+    fontSize: theme.fs.xs + 1,
+    fontWeight: '700',
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+    textAlign: 'right',
+  },
+  cell: { flex: 1, color: theme.text, fontFamily: theme.mono, fontSize: theme.fs.sm, textAlign: 'right' },
   nameCol: { flex: 2, textAlign: 'left' },
   name: { fontWeight: '700' },
   up: { color: theme.green },
   dn: { color: theme.red },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  dim: { color: theme.muted, fontFamily: theme.mono, fontSize: 12 },
 });

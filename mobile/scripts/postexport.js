@@ -18,7 +18,7 @@ const META = `
 <meta property="og:description" content="Screener, relationship graph, backtesting and charts for Indian markets."/>
 <meta property="og:type" content="website"/>
 <meta property="og:image" content="/icons/icon-512.png"/>
-<meta name="theme-color" content="#0a0c0f"/>
+<meta name="theme-color" content="#08090c"/>
 <link rel="manifest" href="/manifest.json"/>
 <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>

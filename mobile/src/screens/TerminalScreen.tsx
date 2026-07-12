@@ -25,42 +25,42 @@ function graphHtml(data: GraphResp, quotes: LtpResp, centre: string): string {
   #gfx{flex:1;position:relative;overflow:hidden;display:flex}
   #gwrap{flex:1;position:relative;overflow:hidden;min-width:120px;min-height:120px}
   svg{width:100%;height:100%;display:block}
-  #panel{width:310px;border-left:1px solid ${theme.border};overflow-y:auto;padding:14px;box-sizing:border-box}
-  .ph{color:${theme.text};font-size:15px;font-weight:700;margin:0 0 2px}
-  .ps{color:${theme.muted};font-size:10px;margin:0 0 12px}
-  .sec{color:${theme.muted2};font-size:10px;letter-spacing:1px;text-transform:uppercase;margin:14px 0 6px;border-bottom:1px solid ${theme.border};padding-bottom:4px}
-  .edge{padding:7px 8px;border:1px solid ${theme.border};border-radius:6px;margin-bottom:6px;cursor:pointer}
+  #panel{width:330px;border-left:1px solid ${theme.border};overflow-y:auto;padding:16px;box-sizing:border-box}
+  .ph{color:${theme.text};font-size:16px;font-weight:700;margin:0 0 2px}
+  .ps{color:${theme.muted};font-size:11px;margin:0 0 12px}
+  .sec{color:${theme.muted2};font-size:11px;letter-spacing:1px;text-transform:uppercase;margin:14px 0 6px;border-bottom:1px solid ${theme.border};padding-bottom:4px}
+  .edge{padding:9px 10px;border:1px solid ${theme.border};border-radius:6px;margin-bottom:6px;cursor:pointer}
   .edge:hover{border-color:${theme.border2}}
-  .et{color:${theme.text};font-size:12px;font-weight:700}
-  .en{color:${theme.muted2};font-size:11px;line-height:1.45;margin-top:3px}
-  .conf{color:${theme.muted};font-size:9px;float:right}
+  .et{color:${theme.text};font-size:13px;font-weight:700}
+  .en{color:${theme.muted2};font-size:12px;line-height:1.55;margin-top:3px}
+  .conf{color:${theme.muted};font-size:10px;float:right}
   .price-up{fill:${theme.green}} .price-dn{fill:${theme.red}}
-  #legend{position:absolute;left:10px;bottom:10px;color:${theme.muted};font-size:10px;line-height:1.9;background:${theme.bg}cc;padding:6px 10px;border:1px solid ${theme.border};border-radius:6px;z-index:5}
+  #legend{position:absolute;left:10px;bottom:10px;color:${theme.muted};font-size:11px;line-height:1.9;background:${theme.bg}cc;padding:6px 10px;border:1px solid ${theme.border};border-radius:6px;z-index:5}
   .lg-line{display:inline-block;width:26px;height:0;border-top:2px solid ${theme.muted2};vertical-align:middle;margin-right:6px}
-  #crumb{position:absolute;top:10px;left:12px;color:${theme.muted};font-size:11px;z-index:5}
+  #crumb{position:absolute;top:12px;left:14px;color:${theme.muted};font-size:12px;z-index:5}
   #crumb b{color:${theme.text}}
   #hl{position:absolute;top:8px;right:10px;z-index:5;display:flex;gap:6px}
-  .hlb{background:${theme.surface2};border:1px solid ${theme.border2};color:${theme.muted2};font-family:inherit;font-size:10px;letter-spacing:1px;padding:5px 10px;border-radius:5px;cursor:pointer}
+  .hlb{background:${theme.surface2};border:1px solid ${theme.border2};color:${theme.muted2};font-family:inherit;font-size:11px;letter-spacing:1px;padding:7px 12px;border-radius:999px;cursor:pointer}
   .hlb.on{background:${theme.accent};border-color:${theme.accent};color:${theme.bg};font-weight:700}
   .dim{opacity:0.12}
   #menu{position:absolute;z-index:30;background:${theme.surface};border:1px solid ${theme.border2};border-radius:8px;min-width:170px;display:none;box-shadow:0 8px 30px #000a}
-  #menu div{padding:9px 13px;color:${theme.text};font-size:12px;cursor:pointer;border-bottom:1px solid ${theme.border}}
+  #menu div{padding:11px 15px;color:${theme.text};font-size:13px;cursor:pointer;border-bottom:1px solid ${theme.border}}
   #menu div:last-child{border-bottom:none}
   #menu div:hover{background:${theme.surface2}}
-  #menu .mh{color:${theme.muted};font-size:10px;cursor:default;letter-spacing:1px}
+  #menu .mh{color:${theme.muted};font-size:11px;cursor:default;letter-spacing:1px}
   #menu .mh:hover{background:none}
   /* ── news panel ── */
-  #news{width:290px;border-right:1px solid ${theme.border};display:none;flex-direction:column;overflow:hidden;flex:none}
+  #news{width:312px;border-right:1px solid ${theme.border};display:none;flex-direction:column;overflow:hidden;flex:none}
   #newshead{display:flex;align-items:center;gap:2px;padding:6px 8px 6px 12px;border-bottom:1px solid ${theme.border};background:${theme.surface2}}
-  #newstitle{color:${theme.text};font-size:11px;font-weight:700;letter-spacing:1px;flex:1}
-  #newsmeta{color:${theme.muted};font-size:9px;padding:5px 12px;border-bottom:1px solid ${theme.border}}
+  #newstitle{color:${theme.text};font-size:12px;font-weight:700;letter-spacing:1px;flex:1}
+  #newsmeta{color:${theme.muted};font-size:10px;padding:5px 12px;border-bottom:1px solid ${theme.border}}
   #newsbody{flex:1;overflow-y:auto}
-  .nitem{padding:9px 12px;border-bottom:1px solid ${theme.border};cursor:pointer}
+  .nitem{padding:11px 14px;border-bottom:1px solid ${theme.border};cursor:pointer}
   .nitem:hover{background:${theme.surface2}}
-  .nt{color:${theme.text};font-size:11px;line-height:1.45}
-  .nm{color:${theme.muted};font-size:9px;margin-top:4px}
+  .nt{color:${theme.text};font-size:12px;line-height:1.55}
+  .nm{color:${theme.muted};font-size:10px;margin-top:5px}
   .ntag{color:${theme.accent};font-weight:700}
-  .wfull{position:absolute;top:6px;right:8px;z-index:5;background:${theme.surface2};border:1px solid ${theme.border2};color:${theme.muted2};font-size:9px;letter-spacing:1px;padding:4px 8px;border-radius:4px;cursor:pointer}
+  .wfull{position:absolute;top:8px;right:10px;z-index:5;background:${theme.surface2};border:1px solid ${theme.border2};color:${theme.muted2};font-size:10px;letter-spacing:1px;padding:4px 8px;border-radius:4px;cursor:pointer}
   .wfull:hover{color:${theme.text}}
   /* ── floating window ── */
   #win{z-index:20;background:${theme.surface};border:1px solid ${theme.border2};display:none;flex-direction:column;overflow:hidden;min-width:250px;min-height:170px}
@@ -72,13 +72,13 @@ function graphHtml(data: GraphResp, quotes: LtpResp, centre: string): string {
   #win.dockr #windiv{display:block;position:absolute;left:0;top:0;bottom:0;width:5px;cursor:ew-resize;z-index:23}
   #win.dockr #winhead,#win.dockr #winbody{margin-left:5px}
   #winbtns{display:flex;align-items:center;flex:none}
-  .wbtn{color:${theme.muted2};padding:6px 6px;cursor:pointer;font-size:12px;line-height:1}
+  .wbtn{color:${theme.muted2};padding:8px 7px;cursor:pointer;font-size:13px;line-height:1}
   .wbtn:hover{color:${theme.text}}
   .wbtn.on{color:${theme.accent}}
   #winhead{display:flex;align-items:center;background:${theme.surface2};border-bottom:1px solid ${theme.border};cursor:move;user-select:none;padding:0 6px 0 0}
   #win.dockb #winhead,#win.dockr #winhead{cursor:default}
   #wintabs{display:flex;flex:1;overflow-x:auto;scrollbar-width:none}
-  .wtab{padding:8px 10px;color:${theme.muted2};font-size:11px;cursor:pointer;border-right:1px solid ${theme.border};white-space:nowrap;display:flex;gap:7px;align-items:center}
+  .wtab{padding:10px 12px;color:${theme.muted2};font-size:12px;cursor:pointer;border-right:1px solid ${theme.border};white-space:nowrap;display:flex;gap:7px;align-items:center}
   .wtab.on{color:${theme.text};background:${theme.surface};font-weight:700}
   .wtab .x{color:${theme.muted};font-size:10px;padding:1px 3px}
   .wtab .x:hover{color:${theme.text}}
@@ -89,17 +89,17 @@ function graphHtml(data: GraphResp, quotes: LtpResp, centre: string): string {
   .wchart{height:200px;border-bottom:1px solid ${theme.border}}
   .fgrid{display:flex;flex-wrap:wrap;padding:10px 12px}
   .fc{width:25%;min-width:100px;margin-bottom:10px}
-  .fk{color:${theme.muted2};font-size:9px;letter-spacing:0.5px}
-  .fv{color:${theme.text};font-size:12px;margin-top:2px}
-  .fdesc{color:${theme.muted2};font-size:10px;line-height:1.5;padding:2px 12px 12px}
-  .wmsg{color:${theme.muted};font-size:11px;padding:24px;text-align:center}
-  table.cmp{border-collapse:collapse;width:100%;font-size:11px}
+  .fk{color:${theme.muted2};font-size:10px;letter-spacing:0.5px}
+  .fv{color:${theme.text};font-size:13px;margin-top:2px}
+  .fdesc{color:${theme.muted2};font-size:12px;line-height:1.6;padding:2px 12px 12px}
+  .wmsg{color:${theme.muted};font-size:12px;padding:24px;text-align:center}
+  table.cmp{border-collapse:collapse;width:100%;font-size:12px}
   table.cmp th,table.cmp td{border-bottom:1px solid ${theme.border};padding:6px 10px;text-align:right;color:${theme.text}}
-  table.cmp th{color:${theme.muted2};font-size:10px;letter-spacing:0.5px;text-transform:uppercase}
+  table.cmp th{color:${theme.muted2};font-size:11px;letter-spacing:0.5px;text-transform:uppercase}
   table.cmp td:first-child,table.cmp th:first-child{text-align:left;color:${theme.muted2}}
   tr.score td{font-weight:700;border-top:2px solid ${theme.border2};font-size:13px}
   .best{color:${theme.green} !important}
-  .cmpnote{color:${theme.muted};font-size:9px;padding:8px 10px;line-height:1.5}
+  .cmpnote{color:${theme.muted};font-size:10px;padding:8px 10px;line-height:1.5}
 </style></head><body>
 <div id="wrap">
   <div id="news">
@@ -809,7 +809,7 @@ export default function TerminalScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.bg },
   head: { paddingHorizontal: 14, paddingTop: 12 },
-  title: { color: theme.text, fontFamily: theme.mono, fontSize: 12, fontWeight: '700', letterSpacing: 1 },
+  title: { color: theme.text, fontFamily: theme.mono, fontSize: 13, fontWeight: '700', letterSpacing: 1 },
   titleDim: { color: theme.muted, fontWeight: '400' },
   cmdRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14, paddingTop: 10, zIndex: 50 },
   prompt: { color: theme.accent, fontFamily: theme.mono, fontSize: 16, fontWeight: '700' },
@@ -832,9 +832,9 @@ const styles = StyleSheet.create({
   chips: { paddingHorizontal: 14, paddingVertical: 8, gap: 6 },
   chip: { borderColor: theme.border, borderWidth: 1, borderRadius: 4, paddingHorizontal: 8, paddingVertical: 3 },
   chipOn: { backgroundColor: theme.accent, borderColor: theme.accent },
-  chipTxt: { color: theme.muted2, fontFamily: theme.mono, fontSize: 10 },
+  chipTxt: { color: theme.muted2, fontFamily: theme.mono, fontSize: 11 },
   chipTxtOn: { color: theme.bg, fontWeight: '700' },
-  warn: { color: theme.muted2, fontFamily: theme.mono, fontSize: 11, paddingHorizontal: 14, paddingBottom: 4 },
+  warn: { color: theme.muted2, fontSize: 13, paddingHorizontal: 14, paddingBottom: 4 },
   graphWrap: { flex: 1, borderTopColor: theme.border, borderTopWidth: 1, marginTop: 4 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   dim: { color: theme.muted, fontFamily: theme.mono, fontSize: 12 },
@@ -849,8 +849,7 @@ const styles = StyleSheet.create({
   web: { flex: 1, backgroundColor: theme.bg },
   disclaimer: {
     color: theme.muted,
-    fontFamily: theme.mono,
-    fontSize: 9,
+    fontSize: 11,
     paddingHorizontal: 14,
     paddingVertical: 6,
     borderTopColor: theme.border,

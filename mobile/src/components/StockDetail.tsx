@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
   Modal,
   Pressable,
   ScrollView,
@@ -13,6 +12,7 @@ import { Candle, Fundamentals, api } from '../api';
 import { chartHtml } from '../chartHtml';
 import { Row, calcSignal } from '../screener';
 import { theme } from '../theme';
+import { Card, EmptyState, Loading, SectionTitle } from '../ui';
 import HtmlView from './HtmlView';
 
 const num = (v: number | null | undefined, d = 2) =>
@@ -66,7 +66,7 @@ export default function StockDetail({ row, onClose }: { row: Row; onClose: () =>
               <Text style={{ color: chgColor }}>{pct(row.chg, 2)}</Text>
             </Text>
           </View>
-          <TouchableOpacity onPress={onClose} hitSlop={12}>
+          <TouchableOpacity onPress={onClose} hitSlop={12} activeOpacity={0.75}>
             <Text style={styles.close}>✕</Text>
           </TouchableOpacity>
         </View>
@@ -74,36 +74,40 @@ export default function StockDetail({ row, onClose }: { row: Row; onClose: () =>
         <ScrollView contentContainerStyle={styles.body}>
           <View style={styles.chartBox}>
             {busy ? (
-              <View style={styles.center}>
-                <ActivityIndicator color={theme.accent} />
-              </View>
+              <Loading label={`Loading ${row.sym} chart…`} />
             ) : candles.length ? (
               <HtmlView html={chartHtml(candles, 86400)} style={styles.web} />
             ) : (
               <View style={styles.center}>
-                <Text style={styles.dim}>{err || 'No chart data'}</Text>
+                <EmptyState
+                  icon="◫"
+                  title={err || 'No chart data'}
+                  hint="Price history could not be fetched — close and reopen to retry."
+                />
               </View>
             )}
           </View>
 
-          <Text style={styles.section}>Technicals (live)</Text>
-          <View style={styles.grid}>
-            <Cell k="RSI (14)" v={num(row.rsi, 0)} />
-            <Cell k="MACD hist" v={num(row.macd, 2)} />
-            <Cell k="W%R" v={num(row.willr, 0)} />
-            <Cell k="Boll %B" v={num(row.bollb, 2)} />
-            <Cell k="vs 20 DMA" v={pct(row.d20)} c />
-            <Cell k="vs 50 DMA" v={pct(row.d50)} c />
-            <Cell k="vs 200 DMA" v={pct(row.d200)} c />
-            <Cell k="Rel. volume" v={row.relvol != null ? row.relvol.toFixed(1) + 'x' : '—'} />
-            <Cell k="Beta (1Y)" v={num(row.beta)} />
-            <Cell k="52w high" v={money(row.high52)} />
-            <Cell k="52w low" v={money(row.low52)} />
-            <Cell
-              k="Squeeze"
-              v={row.sqzFire ? 'FIRED' : row.sqzOn ? 'ON' : row.sqzOn === false ? 'off' : '—'}
-            />
-          </View>
+          <SectionTitle>Technicals (live)</SectionTitle>
+          <Card style={styles.sectionCard}>
+            <View style={styles.grid}>
+              <Cell k="RSI (14)" v={num(row.rsi, 0)} />
+              <Cell k="MACD hist" v={num(row.macd, 2)} />
+              <Cell k="W%R" v={num(row.willr, 0)} />
+              <Cell k="Boll %B" v={num(row.bollb, 2)} />
+              <Cell k="vs 20 DMA" v={pct(row.d20)} c />
+              <Cell k="vs 50 DMA" v={pct(row.d50)} c />
+              <Cell k="vs 200 DMA" v={pct(row.d200)} c />
+              <Cell k="Rel. volume" v={row.relvol != null ? row.relvol.toFixed(1) + 'x' : '—'} />
+              <Cell k="Beta (1Y)" v={num(row.beta)} />
+              <Cell k="52w high" v={money(row.high52)} />
+              <Cell k="52w low" v={money(row.low52)} />
+              <Cell
+                k="Squeeze"
+                v={row.sqzFire ? 'FIRED' : row.sqzOn ? 'ON' : row.sqzOn === false ? 'off' : '—'}
+              />
+            </View>
+          </Card>
 
           {(() => {
             const events: string[] = [];
@@ -122,23 +126,27 @@ export default function StockDetail({ row, onClose }: { row: Row; onClose: () =>
             if (row.cam_break_down) events.push('Camarilla L4 breakdown');
             return events.length ? (
               <>
-                <Text style={styles.section}>Signals today</Text>
-                <Text style={styles.signals}>{events.join('  ·  ')}</Text>
+                <SectionTitle>Signals today</SectionTitle>
+                <Card style={styles.sectionCard}>
+                  <Text style={styles.signals}>{events.join('  ·  ')}</Text>
+                </Card>
               </>
             ) : null;
           })()}
 
-          <Text style={styles.section}>Pivots</Text>
-          <View style={styles.grid}>
-            <Cell k="S1 / S2 / S3" v={`${num(row.s1)} / ${num(row.s2)} / ${num(row.s3)}`} wide />
-            <Cell k="R1 / R2 / R3" v={`${num(row.r1)} / ${num(row.r2)} / ${num(row.r3)}`} wide />
-            <Cell k="Camarilla H3 / H4" v={`${num(row.cam_h3)} / ${num(row.cam_h4)}`} wide />
-            <Cell k="Camarilla L3 / L4" v={`${num(row.cam_l3)} / ${num(row.cam_l4)}`} wide />
-          </View>
+          <SectionTitle>Pivots</SectionTitle>
+          <Card style={styles.sectionCard}>
+            <View style={styles.grid}>
+              <Cell k="S1 / S2 / S3" v={`${num(row.s1)} / ${num(row.s2)} / ${num(row.s3)}`} wide />
+              <Cell k="R1 / R2 / R3" v={`${num(row.r1)} / ${num(row.r2)} / ${num(row.r3)}`} wide />
+              <Cell k="Camarilla H3 / H4" v={`${num(row.cam_h3)} / ${num(row.cam_h4)}`} wide />
+              <Cell k="Camarilla L3 / L4" v={`${num(row.cam_l3)} / ${num(row.cam_l4)}`} wide />
+            </View>
+          </Card>
 
-          <Text style={styles.section}>Fundamentals</Text>
+          <SectionTitle>Fundamentals</SectionTitle>
           {fund ? (
-            <>
+            <Card style={styles.sectionCard}>
               <View style={styles.grid}>
                 <Cell k="P/E" v={num(fund.pe)} />
                 <Cell k="Fwd P/E" v={num(fund.forward_pe)} />
@@ -152,9 +160,13 @@ export default function StockDetail({ row, onClose }: { row: Row; onClose: () =>
                 <Cell k="Sector" v={fund.sector || '—'} wide />
               </View>
               {fund.description ? <Text style={styles.desc}>{fund.description}</Text> : null}
-            </>
+            </Card>
           ) : (
-            <Text style={styles.dim}>{busy ? 'Loading…' : 'Fundamentals unavailable.'}</Text>
+            <Card style={styles.sectionCard}>
+              <Text style={styles.dim}>
+                {busy ? 'Loading fundamentals…' : 'Fundamentals unavailable for this stock right now.'}
+              </Text>
+            </Card>
           )}
         </ScrollView>
       </View>
@@ -183,47 +195,43 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     top: 50,
-    backgroundColor: theme.surface,
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
+    backgroundColor: theme.bg,
+    borderColor: theme.border2,
+    borderWidth: 1,
+    borderTopLeftRadius: theme.radius.lg + 2,
+    borderTopRightRadius: theme.radius.lg + 2,
     overflow: 'hidden',
   },
   head: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 16,
+    padding: theme.sp.lg,
+    backgroundColor: theme.surface,
     borderBottomColor: theme.border,
     borderBottomWidth: 1,
   },
-  sym: { color: theme.text, fontSize: 17, fontWeight: '800' },
-  sig: { fontSize: 12, fontFamily: theme.mono, fontWeight: '700' },
-  price: { color: theme.text, fontFamily: theme.mono, fontSize: 14, marginTop: 3 },
-  close: { color: theme.muted2, fontSize: 17, padding: 4 },
-  body: { padding: 16, paddingBottom: 40 },
+  sym: { color: theme.text, fontFamily: theme.mono, fontSize: theme.fs.lg + 2, fontWeight: '800' },
+  sig: { fontSize: theme.fs.sm, fontFamily: theme.mono, fontWeight: '700', letterSpacing: 0.4 },
+  price: { color: theme.text, fontFamily: theme.mono, fontSize: theme.fs.md, marginTop: theme.sp.xs },
+  close: { color: theme.muted2, fontSize: theme.fs.lg + 1, padding: theme.sp.xs },
+  body: { padding: theme.sp.lg, paddingBottom: theme.sp.xl + 16 },
   chartBox: {
     height: 260,
+    backgroundColor: theme.surface,
     borderColor: theme.border,
     borderWidth: 1,
-    borderRadius: 10,
+    borderRadius: theme.radius.md,
     overflow: 'hidden',
   },
   web: { flex: 1, backgroundColor: theme.bg },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  dim: { color: theme.muted, fontFamily: theme.mono, fontSize: 12 },
-  section: {
-    color: theme.accent,
-    fontSize: 11,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-    marginTop: 18,
-    marginBottom: 8,
-  },
+  dim: { color: theme.muted, fontSize: theme.fs.sm, lineHeight: 18, marginBottom: theme.sp.sm },
+  sectionCard: { paddingBottom: theme.sp.xs },
   grid: { flexDirection: 'row', flexWrap: 'wrap' },
-  cell: { width: '33.33%', marginBottom: 12, paddingRight: 8 },
+  cell: { width: '33.33%', marginBottom: theme.sp.md, paddingRight: theme.sp.sm },
   cellWide: { width: '66.66%' },
-  cellK: { color: theme.muted2, fontSize: 10, fontFamily: theme.mono },
-  cellV: { fontSize: 13, fontFamily: theme.mono, marginTop: 2 },
-  desc: { color: theme.muted2, fontSize: 12, lineHeight: 18, marginTop: 4 },
-  signals: { color: theme.green, fontSize: 12, fontFamily: theme.mono, lineHeight: 18 },
+  cellK: { color: theme.muted2, fontSize: theme.fs.xs + 1, letterSpacing: 0.3 },
+  cellV: { fontSize: theme.fs.md, fontFamily: theme.mono, marginTop: 3 },
+  desc: { color: theme.muted2, fontSize: theme.fs.sm, lineHeight: 19, marginTop: theme.sp.xs, marginBottom: theme.sp.sm },
+  signals: { color: theme.green, fontSize: theme.fs.sm, lineHeight: 19, marginBottom: theme.sp.sm },
 });
