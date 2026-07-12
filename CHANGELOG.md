@@ -3,6 +3,34 @@
 All notable changes are recorded here. Versioning is [SemVer](https://semver.org):
 `MAJOR.MINOR.PATCH`.
 
+## [2.8.0] — 2026-07-12
+Terminal news panel + toolbar toggles + full-chart pop-out.
+
+### Terminal
+- **News panel** fixed to the left of the graph (mirror of the right
+  relations panel): latest headlines for the centred company (tagged)
+  merged with market-wide news, each linking to the article. Refreshes
+  on the ⟳ **update button** and **automatically every hour**; shows
+  when it last updated. ↗ opens the feed as a standalone browser tab.
+- **Toolbar toggles** next to INPUTS/OUTPUTS/ALL: **◧ NEWS** shows/hides
+  the news panel, **▤ CHART** shows/hides the research window (opens it
+  on the centre company if no tabs yet). Both persist across reloads.
+- **⛶ FULL CHART** button on the research window's chart opens a
+  full-screen chart (`/research.html?view=chart`) in a browser tab —
+  previously the small in-window chart had no full view.
+- Graph now **auto-zooms to fit** once forces settle, so nodes never
+  land off-canvas when the news panel or a docked window shrinks the
+  graph area.
+
+### Backend
+- New **`/news`** endpoint (`news.py`): merges a symbol-specific Google
+  News India feed with ET Markets / Moneycontrol / Livemint market RSS —
+  deduped, newest first, no API keys. Cached an hour per symbol;
+  `force=1` (the update button) refetches with server-side rate
+  limiting; keeps last-good items if every feed fails.
+- `research.html` gains `?view=news` (feed page with UPDATE button +
+  hourly auto-refresh) and `?view=chart` (full-screen 1-year chart).
+
 ## [2.7.0] — 2026-07-12
 Terminal window docking + open-anything-as-a-browser-tab.
 
@@ -242,6 +270,7 @@ Oracle Always-Free VM with push-to-deploy.
 - Embedded TradingView Advanced Chart tab, plus deep-link to the user's
   logged-in TradingView account.
 
+[2.8.0]: https://github.com/alexOutcastX/QUANTHUNT_Prototype/releases/tag/v2.8.0
 [2.7.0]: https://github.com/alexOutcastX/QUANTHUNT_Prototype/releases/tag/v2.7.0
 [2.6.0]: https://github.com/alexOutcastX/QUANTHUNT_Prototype/releases/tag/v2.6.0
 [2.5.0]: https://github.com/alexOutcastX/QUANTHUNT_Prototype/releases/tag/v2.5.0

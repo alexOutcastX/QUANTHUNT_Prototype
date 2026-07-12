@@ -1,7 +1,9 @@
 <!DOCTYPE html>
 <!-- Standalone research page — the Terminal window's pop-out target.
-     ?symbol=TATASTEEL          → company research (chart + fundamentals)
-     ?symbols=JSWSTEEL,TMCV,... → comparison report (table + final score)
+     ?symbol=TATASTEEL               → company research (chart + fundamentals)
+     ?symbols=JSWSTEEL,TMCV,...      → comparison report (table + final score)
+     ?view=chart&symbol=TATASTEEL    → full-screen chart
+     ?view=news&symbol=TMCV&q=name   → news feed (update button + hourly auto)
      Served by Flask's static fallback; fetches the same API endpoints. -->
 <html><head>
 <meta charset="utf-8">
@@ -32,6 +34,16 @@
   .best{color:var(--g) !important}
   .note{color:var(--m);font-size:10px;padding:10px 0;line-height:1.6}
   .up{color:var(--g)} .dn{color:var(--r)}
+  #chart.full{height:calc(100vh - 120px);border:none;border-radius:0}
+  .btn{background:var(--s2);border:1px solid var(--b2);color:var(--m2);font-family:inherit;font-size:10px;letter-spacing:1px;padding:6px 12px;border-radius:5px;cursor:pointer}
+  .btn:hover{color:var(--t)}
+  .nitem{display:block;padding:12px 2px;border-bottom:1px solid var(--b);text-decoration:none}
+  .nitem:hover{background:var(--s)}
+  .nt{color:var(--t);font-size:13px;line-height:1.5}
+  .nm{color:var(--m);font-size:10px;margin-top:5px}
+  .ntag{color:var(--g);font-weight:700}
+  #newsbar{display:flex;align-items:center;gap:12px;margin:6px 0 4px}
+  #newsmeta{color:var(--m);font-size:10px}
 </style></head><body>
 <div id="top"><b>Taur<span style="color:#fff;font-size:16px">Eye</span> TERMINAL</b><span id="crumbs">research</span></div>
 <div id="main"><div class="msg">Loading…</div></div>
@@ -43,6 +55,21 @@
   var num = function(v, d){ return (v == null || !isFinite(v)) ? '—' : (+v).toFixed(d == null ? 1 : d); };
   var clamp = function(x){ return Math.max(0, Math.min(100, x)); };
 
+  function drawCandles(el, candles) {
+    if (!candles || !candles.length || typeof LightweightCharts === 'undefined') { el.innerHTML = '<div class="msg">Chart unavailable</div>'; return; }
+    el.innerHTML = '';
+    var ch = LightweightCharts.createChart(el, { autoSize: true,
+      layout: { background: { color: '#0a0c0f' }, textColor: '#9aa4b2', fontFamily: 'inherit' },
+      grid: { vertLines: { color: '#232a35' }, horzLines: { color: '#232a35' } },
+      rightPriceScale: { borderColor: '#2f3845' }, timeScale: { borderColor: '#2f3845' } });
+    var cs = ch.addCandlestickSeries({ upColor: '#10b981', downColor: '#f43f5e', borderUpColor: '#10b981', borderDownColor: '#f43f5e', wickUpColor: '#10b981', wickDownColor: '#f43f5e' });
+    cs.setData(candles.map(function(c){ return { time: c.t, open: c.o, high: c.h, low: c.l, close: c.c }; }));
+    var vs = ch.addHistogramSeries({ priceFormat: { type: 'volume' }, priceScaleId: 'vol' });
+    ch.priceScale('vol').applyOptions({ scaleMargins: { top: 0.8, bottom: 0 } });
+    vs.setData(candles.map(function(c){ return { time: c.t, value: c.v, color: c.c >= c.o ? 'rgba(16,185,129,0.3)' : 'rgba(244,63,94,0.3)' }; }));
+    ch.timeScale().fitContent();
+  }
+
   function company(sym) {
     document.title = sym + ' · TaurEye Research';
     document.getElementById('crumbs').textContent = 'research · ' + sym;
@@ -53,21 +80,8 @@
       '<div class="note">Indicative data for research; not investment advice.</div>';
     fetch('/history?symbol=' + encodeURIComponent(sym) + '&interval=1d&period=1y')
       .then(function(r){ return r.json(); })
-      .then(function(d){
-        var el = document.getElementById('chart');
-        if (!d || !d.candles || !d.candles.length || typeof LightweightCharts === 'undefined') { el.innerHTML = '<div class="msg">Chart unavailable</div>'; return; }
-        el.innerHTML = '';
-        var ch = LightweightCharts.createChart(el, { autoSize: true,
-          layout: { background: { color: '#0a0c0f' }, textColor: '#9aa4b2', fontFamily: 'inherit' },
-          grid: { vertLines: { color: '#232a35' }, horzLines: { color: '#232a35' } },
-          rightPriceScale: { borderColor: '#2f3845' }, timeScale: { borderColor: '#2f3845' } });
-        var cs = ch.addCandlestickSeries({ upColor: '#10b981', downColor: '#f43f5e', borderUpColor: '#10b981', borderDownColor: '#f43f5e', wickUpColor: '#10b981', wickDownColor: '#f43f5e' });
-        cs.setData(d.candles.map(function(c){ return { time: c.t, open: c.o, high: c.h, low: c.l, close: c.c }; }));
-        var vs = ch.addHistogramSeries({ priceFormat: { type: 'volume' }, priceScaleId: 'vol' });
-        ch.priceScale('vol').applyOptions({ scaleMargins: { top: 0.8, bottom: 0 } });
-        vs.setData(d.candles.map(function(c){ return { time: c.t, value: c.v, color: c.c >= c.o ? 'rgba(16,185,129,0.3)' : 'rgba(244,63,94,0.3)' }; }));
-        ch.timeScale().fitContent();
-      }).catch(function(){ document.getElementById('chart').innerHTML = '<div class="msg">Chart unavailable</div>'; });
+      .then(function(d){ drawCandles(document.getElementById('chart'), d && d.candles); })
+      .catch(function(){ document.getElementById('chart').innerHTML = '<div class="msg">Chart unavailable</div>'; });
     fetch('/fundamentals?symbol=' + encodeURIComponent(sym))
       .then(function(r){ return r.json(); })
       .then(function(f){
@@ -151,9 +165,66 @@
     });
   }
 
+  // ── full-screen chart (?view=chart) ──
+  function fullChart(sym) {
+    document.title = sym + ' · Chart';
+    document.getElementById('crumbs').textContent = 'full chart · ' + sym;
+    main.style.maxWidth = 'none';
+    main.innerHTML = '<h1>' + sym + ' <span style="color:var(--m);font-size:11px;font-weight:400">· 1Y daily</span></h1>' +
+      '<div id="chart" class="full"><div class="msg">Loading chart…</div></div>';
+    fetch('/history?symbol=' + encodeURIComponent(sym) + '&interval=1d&period=1y')
+      .then(function(r){ return r.json(); })
+      .then(function(d){ drawCandles(document.getElementById('chart'), d && d.candles); })
+      .catch(function(){ document.getElementById('chart').innerHTML = '<div class="msg">Chart unavailable</div>'; });
+  }
+
+  // ── news feed (?view=news) — update button + hourly auto-refresh ──
+  function esc(s){ return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;'); }
+  function timeAgo(ts) {
+    if (!ts) return '';
+    var m = Math.max(0, Math.round(Date.now() / 1000 / 60 - ts / 60));
+    if (m < 60) return m + 'm ago';
+    var h = Math.round(m / 60);
+    return h < 48 ? h + 'h ago' : Math.round(h / 24) + 'd ago';
+  }
+  function newsView(sym, q) {
+    document.title = (sym || 'Markets') + ' · News';
+    document.getElementById('crumbs').textContent = 'latest news · ' + (sym || 'markets');
+    main.innerHTML = '<h1>Latest news' + (sym ? ' · ' + sym : '') + '</h1>' +
+      '<div id="newsbar"><button class="btn" id="upd">⟳ UPDATE</button><span id="newsmeta"></span></div>' +
+      '<div id="list" class="msg">Loading news…</div>';
+    function load(force) {
+      document.getElementById('newsmeta').textContent = 'updating…';
+      fetch('/news?symbol=' + encodeURIComponent(sym) + '&q=' + encodeURIComponent(q || '') + (force ? '&force=1' : ''))
+        .then(function(r){ return r.json(); })
+        .then(function(d) {
+          var items = (d && d.items) || [];
+          var h = '';
+          items.forEach(function(it) {
+            h += '<a class="nitem" href="' + esc(it.link || '#') + '" target="_blank" rel="noopener">' +
+                 '<div class="nt">' + esc(it.title) + '</div>' +
+                 '<div class="nm">' + (it.sym && sym ? '<span class="ntag">' + esc(sym) + '</span> · ' : '') +
+                 esc(it.source || '') + (it.ts ? ' · ' + timeAgo(it.ts) : '') + '</div></a>';
+          });
+          var el = document.getElementById('list');
+          el.className = ''; el.innerHTML = h || '<div class="msg">No news available.</div>';
+          var dt = new Date((d.fetched || 0) * 1000);
+          document.getElementById('newsmeta').textContent = 'updated ' + ('0' + dt.getHours()).slice(-2) + ':' +
+            ('0' + dt.getMinutes()).slice(-2) + (d.cached ? ' (cached)' : '') + ' · auto-refresh hourly';
+        })
+        .catch(function(){ document.getElementById('newsmeta').textContent = 'news unavailable'; });
+    }
+    document.getElementById('upd').onclick = function(){ load(true); };
+    load(false);
+    setInterval(function(){ load(false); }, 3600 * 1000);
+  }
+
   var syms = (P.get('symbols') || '').split(',').map(function(s){ return s.trim().toUpperCase(); }).filter(Boolean);
   var sym = (P.get('symbol') || '').trim().toUpperCase();
-  if (syms.length >= 2) compare(syms);
+  var view = (P.get('view') || '').toLowerCase();
+  if (view === 'chart' && (sym || syms.length)) fullChart(sym || syms[0]);
+  else if (view === 'news') newsView(sym, P.get('q') || '');
+  else if (syms.length >= 2) compare(syms);
   else if (sym || syms.length === 1) company(sym || syms[0]);
   else main.innerHTML = '<div class="msg">Usage: research.html?symbol=TATASTEEL or ?symbols=JSWSTEEL,TMCV</div>';
 })();
