@@ -14,6 +14,7 @@ import pandas as pd
 import fundamentals as _fund   # bulk fundamentals cache (EODHD + yfinance fallback)
 import scanner as _scanner     # live per-symbol technical scan for the screener
 import relations as _relations # curated company-relationship graph (Terminal tab)
+import news as _news           # RSS news aggregation (Terminal news panel)
 
 # Support both normal run and PyInstaller frozen exe
 _BASE_DIR = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
@@ -907,6 +908,20 @@ def relationship_graph():
     an AI-generated (Claude) graph per symbol can replace it transparently.
     """
     return jsonify(_relations.graph())
+
+
+@app.route("/news")
+def latest_news():
+    """Latest news for the Terminal news panel.
+
+    Merges a symbol-specific Google News feed (query = company name via ?q=)
+    with market-wide RSS feeds. Cached an hour per symbol; ?force=1 (the
+    panel's update button) refetches, rate-limited server-side.
+    """
+    sym = request.args.get("symbol", "").strip().upper()
+    q = request.args.get("q", "").strip()
+    force = request.args.get("force") == "1"
+    return jsonify(_news.get_news(sym, q, force))
 
 
 @app.route("/scan")

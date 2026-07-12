@@ -76,6 +76,14 @@ feature/* ──PR──▶ main (CI, integration; does NOT deploy)
 
 Canonical per-version notes are in **[CHANGELOG.md](CHANGELOG.md)**. Summary:
 
+### v2.8.0 — Terminal news panel
+
+| Area | Change |
+|---|---|
+| Terminal | Left-docked **news panel** — company + market headlines (`/news`: Google News + ET/Moneycontrol/Livemint RSS), ⟳ update button, hourly auto-refresh, ↗ pop-out |
+| Terminal | Toolbar **◧ NEWS / ▤ CHART toggles** show/hide the news panel and research window (persisted) |
+| Terminal | **⛶ FULL CHART** on the window chart opens a full-screen chart in a browser tab; graph auto-zooms to fit |
+
 ### v2.7.0 — Terminal docking & pop-outs
 
 | Area | Change |
