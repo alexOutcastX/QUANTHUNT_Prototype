@@ -3,6 +3,32 @@
 All notable changes are recorded here. Versioning is [SemVer](https://semver.org):
 `MAJOR.MINOR.PATCH`.
 
+## [3.5.0] — 2026-07-12
+Derivatives desk + portfolio risk — two new **Analysis** surfaces.
+
+### New
+- **Derivatives screen** (Analysis → Derivatives): live F&O **option
+  chain** for indices (NIFTY / BANKNIFTY / FINNIFTY / MIDCPNIFTY) and
+  equities, with the analytics a desk reads — **PCR**, **max-pain**,
+  **ATM IV**, per-strike OI / change-in-OI / IV / LTP ladder (ATM
+  highlighted), and an expiry switcher. Plus a multi-leg **payoff
+  builder**: tap CALL/PUT LTPs to stage legs, flip buy/sell, and see net
+  premium, breakeven(s), max profit/loss and an at-expiry payoff chart.
+- **Portfolio risk screen** (Analysis → Risk): enter holdings and get
+  **1-day VaR** (historical + parametric, 90/95/99%), annualised
+  **volatility**, **beta vs NIFTY**, **max drawdown**, **Sharpe**,
+  position **weights**, and per-symbol **correlation** to the portfolio.
+- New endpoints: `GET /derivatives/option-chain` (`derivatives.py`,
+  PCR/max-pain/ATM from NSE's public option-chain feed) and
+  `POST /risk/portfolio` (`risk.py`, pure-maths analytics over 1Y daily
+  closes + NIFTY benchmark).
+
+### Tests
+- `derivatives.py` (chain parsing, PCR, max-pain math, expiry selection,
+  endpoint routing) and `risk.py` (returns, VaR, beta, correlation,
+  drawdown, portfolio weights, full report) unit-tested — CI now runs 39
+  Python cases + the JS engine tests.
+
 ## [3.4.0] — 2026-07-12
 Institutional data from free public NSE feeds — a new **Corporate** surface.
 
