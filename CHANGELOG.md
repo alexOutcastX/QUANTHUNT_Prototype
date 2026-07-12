@@ -3,6 +3,36 @@
 All notable changes are recorded here. Versioning is [SemVer](https://semver.org):
 `MAJOR.MINOR.PATCH`.
 
+## [3.0.0] — 2026-07-12
+Complete UI/UX overhaul — same features, redesigned app. Major version
+because the navigation and visual language changed.
+
+### Design system (DESIGN.md, theme.ts, ui.tsx)
+- Readable type scale (nothing under 10px; body 12–14px): system sans
+  for labels/headings, mono reserved for data — prices, symbols,
+  numbers. Refined dark palette with surface elevation, consistent
+  spacing/radius tokens, shared primitives (Card, StatTile, ChipBtn,
+  Btn, ScreenTitle, EmptyState, Loading).
+
+### Navigation
+- New **Dashboard** landing page: market open/closed, index tiles,
+  NIFTY 50 movers, your watchlist with live quotes, latest headlines —
+  each linking onward.
+- Desktop pages bar consolidated 13 → **8 groups** (Dashboard ·
+  Screener · Universe · Terminal · Analysis · Charts · Lists · Tools)
+  with an underline active state; mobile tabs: Home / Screener /
+  Terminal / Analysis / More.
+
+### Screens
+- Every screen restyled: pill chips with white active fill, 44px table
+  rows with surface-band headers, card-grouped forms (Backtest is now
+  Strategy/Data/Risk cards), StatTile result rows (backtest stats,
+  portfolio summary, analysis verdict), press feedback everywhere,
+  helpful empty/loading/error states instead of bare spinners.
+- Terminal workspace typography enlarged throughout (panels, news,
+  window, menus); standalone research/legal pages and PWA colours
+  synced to the new palette.
+
 ## [2.13.0] — 2026-07-12
 BYOB broker connect (Phase 1): Zerodha Kite, strictly read-only.
 
@@ -385,6 +415,7 @@ Oracle Always-Free VM with push-to-deploy.
 - Embedded TradingView Advanced Chart tab, plus deep-link to the user's
   logged-in TradingView account.
 
+[3.0.0]: https://github.com/alexOutcastX/QUANTHUNT_Prototype/releases/tag/v3.0.0
 [2.13.0]: https://github.com/alexOutcastX/QUANTHUNT_Prototype/releases/tag/v2.13.0
 [2.12.0]: https://github.com/alexOutcastX/QUANTHUNT_Prototype/releases/tag/v2.12.0
 [2.11.0]: https://github.com/alexOutcastX/QUANTHUNT_Prototype/releases/tag/v2.11.0

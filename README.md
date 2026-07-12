@@ -76,6 +76,14 @@ feature/* ──PR──▶ main (CI, integration; does NOT deploy)
 
 Canonical per-version notes are in **[CHANGELOG.md](CHANGELOG.md)**. Summary:
 
+### v3.0.0 — UI/UX overhaul
+
+| Area | Change |
+|---|---|
+| Design | New design system (DESIGN.md): readable type scale, sans + mono-for-data, surface elevation, shared primitives |
+| Navigation | **Dashboard** landing page (indices, movers, watchlist, news); pages consolidated into 8 groups |
+| Screens | Every screen restyled — cards, pill chips, 44px rows, StatTiles, proper empty/loading states |
+
 ### v2.13.0 — broker connect (read-only)
 
 | Area | Change |
