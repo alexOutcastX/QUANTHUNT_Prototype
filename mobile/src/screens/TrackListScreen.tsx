@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  ActivityIndicator,
   FlatList,
   RefreshControl,
   StyleSheet,
@@ -12,6 +11,7 @@ import { Quote, ScanRow, api } from '../api';
 import { Row, calcSignal } from '../screener';
 import { TrackDir, TrackEntry, loadTrack, removeTrack } from '../tracklist';
 import { theme } from '../theme';
+import { Card, ChipBtn, EmptyState, Loading, ScreenTitle } from '../ui';
 
 type Filter = 'all' | 'buy' | 'sell';
 
@@ -115,7 +115,7 @@ export default function TrackListScreen() {
     const hint = exitHint(item.dir, scan[item.sym]);
     const isBuy = item.dir === 'buy';
     return (
-      <View style={styles.card}>
+      <Card style={styles.card}>
         <View style={styles.cardTop}>
           <View style={styles.symWrap}>
             <Text style={styles.sym}>{item.sym}</Text>
@@ -125,7 +125,7 @@ export default function TrackListScreen() {
               </Text>
             </View>
           </View>
-          <TouchableOpacity onPress={() => onRemove(item.sym)} hitSlop={10}>
+          <TouchableOpacity onPress={() => onRemove(item.sym)} hitSlop={10} activeOpacity={0.75}>
             <Text style={styles.remove}>✕</Text>
           </TouchableOpacity>
         </View>
@@ -152,14 +152,14 @@ export default function TrackListScreen() {
         ) : cur != null ? (
           <Text style={styles.ok}>Holding — no exit signal</Text>
         ) : null}
-      </View>
+      </Card>
     );
   };
 
   if (loading) {
     return (
       <View style={styles.center}>
-        <ActivityIndicator color={theme.accent} />
+        <Loading label="Loading your track list…" />
       </View>
     );
   }
@@ -172,17 +172,16 @@ export default function TrackListScreen() {
 
   return (
     <View style={styles.container}>
+      <ScreenTitle title="Track List" sub="Tracked BUY / SELL calls · live return since entry" />
+
       <View style={styles.filterRow}>
         {(['all', 'buy', 'sell'] as Filter[]).map((f) => (
-          <TouchableOpacity
+          <ChipBtn
             key={f}
-            style={[styles.fChip, filter === f && styles.fChipOn]}
+            label={`${f.toUpperCase()} ${counts[f]}`}
+            on={filter === f}
             onPress={() => setFilter(f)}
-          >
-            <Text style={[styles.fTxt, filter === f && styles.fTxtOn]}>
-              {f.toUpperCase()} {counts[f]}
-            </Text>
-          </TouchableOpacity>
+          />
         ))}
       </View>
 
@@ -197,10 +196,10 @@ export default function TrackListScreen() {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.accent} />
         }
         ListEmptyComponent={
-          <Text style={styles.empty}>
-            Nothing tracked yet. In the Screener, tap the B / S buttons on a row to track a stock as
-            BUY or SELL — it shows up here with live return since entry.
-          </Text>
+          <EmptyState
+            title="Nothing tracked yet"
+            hint="In the Screener, tap the B / S buttons on a row to track a stock as BUY or SELL — it shows up here with live return since entry."
+          />
         }
       />
     </View>
@@ -219,27 +218,22 @@ function Cell({ label, value, color }: { label: string; value: string; color?: s
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.bg },
   center: { flex: 1, backgroundColor: theme.bg, alignItems: 'center', justifyContent: 'center' },
-  filterRow: { flexDirection: 'row', gap: 8, padding: 12 },
-  fChip: { borderColor: theme.border2, borderWidth: 1, borderRadius: 6, paddingHorizontal: 14, paddingVertical: 7 },
-  fChipOn: { backgroundColor: theme.accent, borderColor: theme.accent },
-  fTxt: { color: theme.muted2, fontFamily: theme.mono, fontSize: 12 },
-  fTxtOn: { color: theme.bg, fontWeight: '700' },
-  err: { color: theme.red, fontFamily: theme.mono, fontSize: 11, paddingHorizontal: 12 },
-  listPad: { paddingHorizontal: 12, paddingBottom: 24 },
-  card: { backgroundColor: theme.surface2, borderColor: theme.border, borderWidth: 1, borderRadius: 10, padding: 14, marginBottom: 10 },
+  filterRow: { flexDirection: 'row', gap: theme.sp.sm, paddingHorizontal: theme.sp.lg, paddingBottom: theme.sp.md },
+  err: { color: theme.red, fontSize: theme.fs.sm, paddingHorizontal: theme.sp.lg, paddingBottom: theme.sp.sm },
+  listPad: { paddingHorizontal: theme.sp.lg, paddingBottom: theme.sp.xl },
+  card: { marginBottom: theme.sp.md },
   cardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  symWrap: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  sym: { color: theme.text, fontWeight: '700', fontSize: 15 },
+  symWrap: { flexDirection: 'row', alignItems: 'center', gap: theme.sp.sm },
+  sym: { color: theme.text, fontWeight: '700', fontSize: theme.fs.md + 1, fontFamily: theme.mono },
   dirBadge: { borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2, borderWidth: 1 },
   buyBadge: { borderColor: theme.green },
   sellBadge: { borderColor: theme.red },
-  dirTxt: { fontSize: 10, fontWeight: '700', fontFamily: theme.mono },
-  remove: { color: theme.muted2, fontSize: 15 },
-  grid: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 12 },
-  cell: { width: '33.33%', marginBottom: 10 },
-  cellLabel: { color: theme.muted2, fontSize: 10, fontFamily: theme.mono },
-  cellValue: { color: theme.text, fontSize: 14, fontFamily: theme.mono, marginTop: 2 },
-  hint: { color: theme.red, fontSize: 12, marginTop: 4, borderTopColor: theme.border, borderTopWidth: 1, paddingTop: 10 },
-  ok: { color: theme.muted, fontSize: 11, fontFamily: theme.mono, marginTop: 4, borderTopColor: theme.border, borderTopWidth: 1, paddingTop: 10 },
-  empty: { color: theme.muted, fontFamily: theme.mono, fontSize: 12, textAlign: 'center', marginTop: 30, lineHeight: 18, paddingHorizontal: 16 },
+  dirTxt: { fontSize: theme.fs.xs, fontWeight: '700', letterSpacing: 0.6 },
+  remove: { color: theme.muted, fontSize: theme.fs.md + 1 },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', marginTop: theme.sp.md },
+  cell: { width: '33.33%', marginBottom: theme.sp.md - 2 },
+  cellLabel: { color: theme.muted, fontSize: theme.fs.xs + 1, letterSpacing: 0.4, textTransform: 'uppercase' },
+  cellValue: { color: theme.text, fontSize: theme.fs.md, fontFamily: theme.mono, marginTop: 2 },
+  hint: { color: theme.red, fontSize: theme.fs.sm, marginTop: 4, borderTopColor: theme.border, borderTopWidth: 1, paddingTop: theme.sp.md - 2 },
+  ok: { color: theme.muted, fontSize: theme.fs.sm, marginTop: 4, borderTopColor: theme.border, borderTopWidth: 1, paddingTop: theme.sp.md - 2 },
 });
