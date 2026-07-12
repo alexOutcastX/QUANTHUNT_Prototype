@@ -3,6 +3,30 @@
 All notable changes are recorded here. Versioning is [SemVer](https://semver.org):
 `MAJOR.MINOR.PATCH`.
 
+## [2.7.0] — 2026-07-12
+Terminal window docking + open-anything-as-a-browser-tab.
+
+### Terminal
+- The research window is now **dockable inside the graph layout**: three
+  header buttons switch between ❐ floating (drag/resize anywhere), ⬓
+  docked to the bottom, and ◨ docked to the right of the graph. Docked
+  modes reflow the graph into the remaining space and add a drag divider
+  to resize the split; the chosen mode, split size, and floating
+  position/size all persist across reloads.
+- **Open as browser tab**: an ↗ button on the window header — and on
+  every individual window tab — opens that view as a full browser
+  tab/window. Company tabs open a standalone research page
+  (`/research.html?symbol=…`: 1-year candle+volume chart, screener.in
+  provider-chain fundamentals, company profile); the COMPARE tab opens a
+  standalone comparison report (`/research.html?symbols=…`) with the
+  same metric table, sub-scores and FINAL SCORE.
+
+### Backend
+- New static **`/research.html`** page (served by the existing Flask
+  static fallback) powering the pop-outs — same `/history`,
+  `/fundamentals` and `/scan` APIs, TaurEye terminal styling, works as a
+  shareable deep link.
+
 ## [2.6.0] — 2026-07-12
 Terminal workspace: node menu, inputs/outputs highlighting, and a
 floating multi-tab research window with comparison scoring.
@@ -218,6 +242,7 @@ Oracle Always-Free VM with push-to-deploy.
 - Embedded TradingView Advanced Chart tab, plus deep-link to the user's
   logged-in TradingView account.
 
+[2.7.0]: https://github.com/alexOutcastX/QUANTHUNT_Prototype/releases/tag/v2.7.0
 [2.6.0]: https://github.com/alexOutcastX/QUANTHUNT_Prototype/releases/tag/v2.6.0
 [2.5.0]: https://github.com/alexOutcastX/QUANTHUNT_Prototype/releases/tag/v2.5.0
 [2.4.0]: https://github.com/alexOutcastX/QUANTHUNT_Prototype/releases/tag/v2.4.0

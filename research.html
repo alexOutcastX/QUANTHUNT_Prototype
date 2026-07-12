@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<!-- Standalone research page — the Terminal window's pop-out target.
+     ?symbol=TATASTEEL          → company research (chart + fundamentals)
+     ?symbols=JSWSTEEL,TMCV,... → comparison report (table + final score)
+     Served by Flask's static fallback; fetches the same API endpoints. -->
+<html><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TaurEye Research</title>
+<style>
+  :root{--bg:#0a0c0f;--s:#11141a;--s2:#161a22;--b:#232a35;--b2:#2f3845;--t:#e7eaef;--m:#5e6776;--m2:#9aa4b2;--g:#18c98c;--r:#f0506e}
+  html,body{margin:0;background:var(--bg);color:var(--t);font-family:ui-monospace,Menlo,Consolas,monospace}
+  #top{display:flex;align-items:baseline;gap:12px;padding:14px 18px;background:var(--s);border-bottom:1px solid var(--b)}
+  #top b{font-size:16px;letter-spacing:1px}
+  #top span{color:var(--m);font-size:10px}
+  #main{max-width:1100px;margin:0 auto;padding:16px}
+  h1{font-size:17px;margin:4px 0 2px}
+  .sub{color:var(--m);font-size:11px;margin-bottom:14px}
+  #chart{height:340px;border:1px solid var(--b);border-radius:10px;overflow:hidden}
+  .sec{color:var(--m2);font-size:10px;letter-spacing:1px;text-transform:uppercase;margin:18px 0 8px;border-bottom:1px solid var(--b);padding-bottom:5px}
+  .fgrid{display:flex;flex-wrap:wrap}
+  .fc{width:16.6%;min-width:130px;margin-bottom:14px}
+  .fk{color:var(--m2);font-size:9px;letter-spacing:.5px}
+  .fv{font-size:13px;margin-top:3px}
+  .desc{color:var(--m2);font-size:11px;line-height:1.6}
+  .msg{color:var(--m);font-size:12px;padding:30px;text-align:center}
+  table{border-collapse:collapse;width:100%;font-size:12px}
+  th,td{border-bottom:1px solid var(--b);padding:8px 12px;text-align:right}
+  th{color:var(--m2);font-size:10px;letter-spacing:.5px;text-transform:uppercase}
+  td:first-child,th:first-child{text-align:left;color:var(--m2)}
+  tr.score td{font-weight:700;border-top:2px solid var(--b2);font-size:14px}
+  .best{color:var(--g) !important}
+  .note{color:var(--m);font-size:10px;padding:10px 0;line-height:1.6}
+  .up{color:var(--g)} .dn{color:var(--r)}
+</style></head><body>
+<div id="top"><b>Taur<span style="color:#fff;font-size:16px">Eye</span> TERMINAL</b><span id="crumbs">research</span></div>
+<div id="main"><div class="msg">Loading…</div></div>
+<script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
+<script>
+(function(){
+  var P = new URLSearchParams(location.search);
+  var main = document.getElementById('main');
+  var num = function(v, d){ return (v == null || !isFinite(v)) ? '—' : (+v).toFixed(d == null ? 1 : d); };
+  var clamp = function(x){ return Math.max(0, Math.min(100, x)); };
+
+  function company(sym) {
+    document.title = sym + ' · TaurEye Research';
+    document.getElementById('crumbs').textContent = 'research · ' + sym;
+    main.innerHTML = '<h1 id="nm">' + sym + '</h1><div class="sub" id="sb">loading…</div>' +
+      '<div id="chart"><div class="msg">Loading chart…</div></div>' +
+      '<div class="sec">Fundamentals (screener.in chain)</div><div id="fund" class="msg">Loading…</div>' +
+      '<div id="about"></div>' +
+      '<div class="note">Indicative data for research; not investment advice.</div>';
+    fetch('/history?symbol=' + encodeURIComponent(sym) + '&interval=1d&period=1y')
+      .then(function(r){ return r.json(); })
+      .then(function(d){
+        var el = document.getElementById('chart');
+        if (!d || !d.candles || !d.candles.length || typeof LightweightCharts === 'undefined') { el.innerHTML = '<div class="msg">Chart unavailable</div>'; return; }
+        el.innerHTML = '';
+        var ch = LightweightCharts.createChart(el, { autoSize: true,
+          layout: { background: { color: '#0a0c0f' }, textColor: '#9aa4b2', fontFamily: 'inherit' },
+          grid: { vertLines: { color: '#232a35' }, horzLines: { color: '#232a35' } },
+          rightPriceScale: { borderColor: '#2f3845' }, timeScale: { borderColor: '#2f3845' } });
+        var cs = ch.addCandlestickSeries({ upColor: '#10b981', downColor: '#f43f5e', borderUpColor: '#10b981', borderDownColor: '#f43f5e', wickUpColor: '#10b981', wickDownColor: '#f43f5e' });
+        cs.setData(d.candles.map(function(c){ return { time: c.t, open: c.o, high: c.h, low: c.l, close: c.c }; }));
+        var vs = ch.addHistogramSeries({ priceFormat: { type: 'volume' }, priceScaleId: 'vol' });
+        ch.priceScale('vol').applyOptions({ scaleMargins: { top: 0.8, bottom: 0 } });
+        vs.setData(d.candles.map(function(c){ return { time: c.t, value: c.v, color: c.c >= c.o ? 'rgba(16,185,129,0.3)' : 'rgba(244,63,94,0.3)' }; }));
+        ch.timeScale().fitContent();
+      }).catch(function(){ document.getElementById('chart').innerHTML = '<div class="msg">Chart unavailable</div>'; });
+    fetch('/fundamentals?symbol=' + encodeURIComponent(sym))
+      .then(function(r){ return r.json(); })
+      .then(function(f){
+        if (!f || f.error) { document.getElementById('fund').textContent = 'Fundamentals unavailable'; return; }
+        document.getElementById('nm').textContent = f.name || sym;
+        document.getElementById('sb').textContent = sym + (f.sector ? ' · ' + f.sector : '') + ' · source: ' + (f.fund_source || 'yfinance');
+        var cells = [
+          ['MKT CAP (CR)', f.market_cap_cr != null ? (+f.market_cap_cr).toLocaleString('en-IN') : '—'],
+          ['P/E', num(f.pe)], ['FWD P/E', num(f.forward_pe)], ['P/B', num(f.pb)], ['EPS', num(f.eps)],
+          ['ROE %', num(f.roe)], ['ROCE %', num(f.roce)], ['D/E', num(f.debt_equity, 2)],
+          ['CURR RATIO', num(f.current_ratio, 2)], ['DIV YIELD %', num(f.dividend_yield)], ['BETA', num(f.beta, 2)],
+          ['52W HIGH', f.week52_high != null ? '₹' + (+f.week52_high).toLocaleString('en-IN') : '—'],
+          ['52W LOW', f.week52_low != null ? '₹' + (+f.week52_low).toLocaleString('en-IN') : '—'],
+        ];
+        var h = '<div class="fgrid">';
+        cells.forEach(function(c){ h += '<div class="fc"><div class="fk">' + c[0] + '</div><div class="fv">' + c[1] + '</div></div>'; });
+        h += '</div>';
+        document.getElementById('fund').className = '';
+        document.getElementById('fund').innerHTML = h;
+        if (f.description) document.getElementById('about').innerHTML = '<div class="sec">About</div><div class="desc">' + f.description + '</div>';
+      }).catch(function(){ document.getElementById('fund').textContent = 'Fundamentals unavailable'; });
+  }
+
+  function scoreOf(f, s) {
+    var parts = [];
+    if (f) {
+      if (f.roe != null) parts.push(clamp(f.roe / 25 * 100));
+      if (f.roce != null) parts.push(clamp(f.roce / 25 * 100));
+      if (f.debt_equity != null) parts.push(clamp((2 - f.debt_equity) / 2 * 100));
+      if (f.pe != null) parts.push(f.pe <= 0 ? 10 : clamp(100 - Math.abs(f.pe - 20) * 3));
+    }
+    var qual = parts.length ? parts.reduce(function(a, b){ return a + b; }, 0) / parts.length : 50;
+    var trend = (s && s.d200 != null) ? clamp(50 + s.d200 * 2.5) : 50;
+    var mom = (s && s.rsi != null) ? clamp(s.rsi) : 50;
+    return { qual: qual, trend: trend, mom: mom, final: Math.round(qual * 0.5 + trend * 0.3 + mom * 0.2) };
+  }
+
+  function compare(syms) {
+    document.title = 'Compare · ' + syms.join(' vs ');
+    document.getElementById('crumbs').textContent = 'comparison report · ' + syms.join(' vs ');
+    main.innerHTML = '<h1>Comparison report</h1><div class="sub">' + syms.join(' · ') + '</div><div id="tbl" class="msg">Fetching fundamentals + technicals…</div>';
+    var qs = encodeURIComponent(syms.join(','));
+    Promise.all([
+      fetch('/fundamentals/bulk?symbols=' + qs).then(function(r){ return r.json(); }).catch(function(){ return { data: {} }; }),
+      fetch('/scan?symbols=' + qs).then(function(r){ return r.json(); }).catch(function(){ return { data: {} }; })
+    ]).then(function(res){
+      var F = res[0].data || {}, S = res[1].data || {};
+      var rows = [
+        ['Price', function(sym){ var s = S[sym] || {}; return s.price != null ? '₹' + (+s.price).toLocaleString('en-IN') : '—'; }],
+        ['Day %', function(sym){ var s = S[sym] || {}; return s.chg != null ? '<span class="' + (s.chg >= 0 ? 'up' : 'dn') + '">' + (s.chg >= 0 ? '+' : '') + s.chg.toFixed(1) + '%</span>' : '—'; }],
+        ['Mkt cap (cr)', function(sym){ var f = F[sym] || {}; return f.market_cap_cr != null ? (+f.market_cap_cr).toLocaleString('en-IN') : '—'; }],
+        ['P/E', function(sym){ return num((F[sym] || {}).pe); }],
+        ['P/B', function(sym){ return num((F[sym] || {}).pb); }],
+        ['ROE %', function(sym){ return num((F[sym] || {}).roe); }],
+        ['ROCE %', function(sym){ return num((F[sym] || {}).roce); }],
+        ['D/E', function(sym){ return num((F[sym] || {}).debt_equity, 2); }],
+        ['Div yield %', function(sym){ return num((F[sym] || {}).dividend_yield); }],
+        ['RSI (14)', function(sym){ return num((S[sym] || {}).rsi, 0); }],
+        ['vs 200-DMA %', function(sym){ var s = S[sym] || {}; return s.d200 != null ? ((s.d200 >= 0 ? '+' : '') + s.d200.toFixed(1)) : '—'; }],
+      ];
+      var scores = {}; syms.forEach(function(sym){ scores[sym] = scoreOf(F[sym], S[sym]); });
+      var best = syms.slice().sort(function(a, b){ return scores[b].final - scores[a].final; })[0];
+      var h = '<table><tr><th>Metric</th>';
+      syms.forEach(function(sym){ h += '<th>' + sym + (sym === best ? ' ★' : '') + '</th>'; });
+      h += '</tr>';
+      rows.forEach(function(r){
+        h += '<tr><td>' + r[0] + '</td>';
+        syms.forEach(function(sym){ h += '<td>' + r[1](sym) + '</td>'; });
+        h += '</tr>';
+      });
+      [['Quality score', 'qual'], ['Trend score', 'trend'], ['Momentum score', 'mom']].forEach(function(sr){
+        h += '<tr><td>' + sr[0] + '</td>';
+        syms.forEach(function(sym){ h += '<td>' + Math.round(scores[sym][sr[1]]) + '</td>'; });
+        h += '</tr>';
+      });
+      h += '<tr class="score"><td>FINAL SCORE</td>';
+      syms.forEach(function(sym){ h += '<td class="' + (sym === best ? 'best' : '') + '">' + scores[sym].final + (sym === best ? ' ★' : '') + '</td>'; });
+      h += '</tr></table>';
+      h += '<div class="note">Final = 50% quality (ROE/ROCE/D-E/P-E) + 30% trend (vs 200-DMA) + 20% momentum (RSI). Factual composite of the metrics above — not investment advice.</div>';
+      var t = document.getElementById('tbl'); t.className = ''; t.innerHTML = h;
+    });
+  }
+
+  var syms = (P.get('symbols') || '').split(',').map(function(s){ return s.trim().toUpperCase(); }).filter(Boolean);
+  var sym = (P.get('symbol') || '').trim().toUpperCase();
+  if (syms.length >= 2) compare(syms);
+  else if (sym || syms.length === 1) company(sym || syms[0]);
+  else main.innerHTML = '<div class="msg">Usage: research.html?symbol=TATASTEEL or ?symbols=JSWSTEEL,TMCV</div>';
+})();
+</script></body></html>
