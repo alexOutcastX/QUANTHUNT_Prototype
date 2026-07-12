@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { HolidaysResp, api } from '../api';
 import { theme } from '../theme';
+import { Card, EmptyState, Loading, ScreenTitle } from '../ui';
 
 export default function HolidaysScreen() {
   const [data, setData] = useState<HolidaysResp | null>(null);
@@ -15,24 +16,19 @@ export default function HolidaysScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.head}>
-        <Text style={styles.title}>
-          MARKET HOLIDAYS <Text style={styles.titleDim}>· NSE · 2026</Text>
-        </Text>
-      </View>
+      <ScreenTitle title="Holidays" sub="NSE market holidays · 2026" />
       {err ? (
-        <View style={styles.center}>
-          <Text style={styles.dim}>{err}</Text>
-        </View>
+        <EmptyState
+          title="Couldn't load the holiday calendar"
+          hint={`${err} — check that the backend is reachable and try again.`}
+        />
       ) : !data ? (
-        <View style={styles.center}>
-          <ActivityIndicator color={theme.accent} />
-        </View>
+        <Loading label="Loading holiday calendar…" />
       ) : (
         <ScrollView>
-          <View style={styles.statusCard}>
+          <Card style={styles.statusCard}>
             <View style={[styles.dot, { backgroundColor: data.open ? theme.green : theme.red }]} />
-            <View>
+            <View style={{ flex: 1 }}>
               <Text style={styles.statusTxt}>
                 Market is {data.open ? 'OPEN' : 'CLOSED'}
               </Text>
@@ -43,7 +39,7 @@ export default function HolidaysScreen() {
                   : ''}
               </Text>
             </View>
-          </View>
+          </Card>
           {data.holidays.map((h) => {
             const past = h.date < today;
             return (
@@ -63,39 +59,30 @@ export default function HolidaysScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.bg },
-  head: { paddingHorizontal: 14, paddingVertical: 12 },
-  title: { color: theme.text, fontFamily: theme.mono, fontSize: 12, fontWeight: '700', letterSpacing: 1 },
-  titleDim: { color: theme.muted, fontWeight: '400' },
   statusCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    marginHorizontal: 14,
-    marginBottom: 14,
-    padding: 14,
-    backgroundColor: theme.surface,
-    borderColor: theme.border2,
-    borderWidth: 1,
-    borderRadius: 8,
+    gap: theme.sp.md,
+    marginHorizontal: theme.sp.lg,
+    marginBottom: theme.sp.lg,
   },
   dot: { width: 10, height: 10, borderRadius: 5 },
-  statusTxt: { color: theme.text, fontFamily: theme.mono, fontSize: 14, fontWeight: '700' },
-  statusSub: { color: theme.muted, fontFamily: theme.mono, fontSize: 10, marginTop: 3 },
+  statusTxt: { color: theme.text, fontSize: theme.fs.md, fontWeight: '700' },
+  statusSub: { color: theme.muted, fontSize: theme.fs.sm, marginTop: 3 },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    minHeight: 44,
+    paddingHorizontal: theme.sp.lg,
+    paddingVertical: theme.sp.md - 2,
     borderBottomColor: theme.border,
     borderBottomWidth: 1,
-    gap: 12,
+    gap: theme.sp.md,
   },
   past: { opacity: 0.45 },
   pastTxt: {},
-  date: { color: theme.text, fontFamily: theme.mono, fontSize: 12, width: 100 },
-  day: { color: theme.muted2, fontFamily: theme.mono, fontSize: 11, width: 90 },
-  name: { color: theme.text, fontFamily: theme.mono, fontSize: 12, flex: 1 },
-  note: { color: theme.muted, fontFamily: theme.mono, fontSize: 9, padding: 14, lineHeight: 14 },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  dim: { color: theme.muted, fontFamily: theme.mono, fontSize: 12 },
+  date: { color: theme.text, fontFamily: theme.mono, fontSize: theme.fs.sm, width: 100 },
+  day: { color: theme.muted2, fontSize: theme.fs.sm, width: 90 },
+  name: { color: theme.text, fontSize: theme.fs.md, flex: 1 },
+  note: { color: theme.muted, fontSize: theme.fs.sm, padding: theme.sp.lg, lineHeight: 17 },
 });

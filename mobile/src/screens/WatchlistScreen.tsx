@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
   FlatList,
   RefreshControl,
   StyleSheet,
@@ -11,6 +10,7 @@ import {
 } from 'react-native';
 import { api, Quote } from '../api';
 import { theme } from '../theme';
+import { Btn, EmptyState, Loading, ScreenTitle } from '../ui';
 import { addSymbol, loadWatchlist, removeSymbol } from '../watchlist';
 
 export default function WatchlistScreen() {
@@ -80,7 +80,12 @@ export default function WatchlistScreen() {
           </Text>
           <Text style={[styles.chg, { color: chgColor }]}>{chgText}</Text>
         </View>
-        <TouchableOpacity onPress={() => onRemove(item)} style={styles.del} hitSlop={10}>
+        <TouchableOpacity
+          onPress={() => onRemove(item)}
+          style={styles.del}
+          hitSlop={10}
+          activeOpacity={0.75}
+        >
           <Text style={styles.delText}>✕</Text>
         </TouchableOpacity>
       </View>
@@ -90,93 +95,81 @@ export default function WatchlistScreen() {
   if (loading) {
     return (
       <View style={styles.center}>
-        <ActivityIndicator color={theme.accent} />
+        <Loading label="Loading your watchlist…" />
       </View>
     );
   }
 
   return (
     <View style={styles.container}>
-      <View style={styles.addRow}>
-        <TextInput
-          style={styles.input}
-          value={input}
-          onChangeText={setInput}
-          placeholder="Add symbol — e.g. TCS"
-          placeholderTextColor={theme.muted}
-          autoCapitalize="characters"
-          returnKeyType="done"
-          onSubmitEditing={onAdd}
+      <ScreenTitle title="Watchlist" sub="Saved symbols with live quotes" />
+
+      <View style={styles.body}>
+        <View style={styles.addRow}>
+          <TextInput
+            style={styles.input}
+            value={input}
+            onChangeText={setInput}
+            placeholder="Add symbol — e.g. TCS"
+            placeholderTextColor={theme.muted}
+            autoCapitalize="characters"
+            returnKeyType="done"
+            onSubmitEditing={onAdd}
+          />
+          <Btn label="Add" onPress={onAdd} />
+        </View>
+
+        {error ? <Text style={styles.error}>{error} — is the backend reachable?</Text> : null}
+
+        <FlatList
+          data={list}
+          keyExtractor={(s) => s}
+          renderItem={renderRow}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.accent} />
+          }
+          ListEmptyComponent={
+            <EmptyState
+              title="Your watchlist is empty — add a symbol above."
+              hint="Symbols are saved on this device and show live quotes."
+            />
+          }
         />
-        <TouchableOpacity style={styles.addBtn} onPress={onAdd}>
-          <Text style={styles.addBtnText}>Add</Text>
-        </TouchableOpacity>
       </View>
-
-      {error ? <Text style={styles.error}>{error} — is the backend reachable?</Text> : null}
-
-      <FlatList
-        data={list}
-        keyExtractor={(s) => s}
-        renderItem={renderRow}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.accent} />
-        }
-        ListEmptyComponent={
-          <Text style={styles.empty}>
-            Your watchlist is empty. Add a symbol above — it's saved on this device and shows live
-            quotes.
-          </Text>
-        }
-      />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: theme.bg, paddingHorizontal: 12 },
+  container: { flex: 1, backgroundColor: theme.bg },
+  body: { flex: 1, paddingHorizontal: theme.sp.lg },
   center: { flex: 1, backgroundColor: theme.bg, alignItems: 'center', justifyContent: 'center' },
-  addRow: { flexDirection: 'row', gap: 8, marginTop: 12, marginBottom: 4 },
+  addRow: { flexDirection: 'row', gap: theme.sp.sm, marginBottom: theme.sp.xs },
   input: {
     flex: 1,
     backgroundColor: theme.surface2,
     borderColor: theme.border2,
     borderWidth: 1,
-    borderRadius: 8,
+    borderRadius: theme.radius.sm + 2,
     color: theme.text,
-    paddingHorizontal: 12,
-    paddingVertical: 9,
+    paddingHorizontal: theme.sp.md,
+    paddingVertical: 10,
     fontFamily: theme.mono,
-    fontSize: 13,
+    fontSize: theme.fs.sm + 1,
   },
-  addBtn: {
-    backgroundColor: theme.accent,
-    borderRadius: 8,
-    paddingHorizontal: 18,
-    justifyContent: 'center',
-  },
-  addBtnText: { color: theme.bg, fontWeight: '700', fontSize: 13 },
-  error: { color: theme.red, fontFamily: theme.mono, fontSize: 11, marginTop: 8 },
+  error: { color: theme.red, fontSize: theme.fs.sm, marginTop: theme.sp.sm },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 13,
+    minHeight: 44,
+    paddingVertical: theme.sp.md,
     borderBottomColor: theme.border,
     borderBottomWidth: 1,
   },
-  sym: { color: theme.text, fontWeight: '700', fontSize: 14, flex: 1 },
-  priceWrap: { alignItems: 'flex-end', marginRight: 16 },
-  price: { color: theme.text, fontFamily: theme.mono, fontSize: 13 },
-  chg: { fontFamily: theme.mono, fontSize: 11, marginTop: 2 },
-  del: { padding: 4 },
-  delText: { color: theme.muted2, fontSize: 15 },
-  empty: {
-    color: theme.muted,
-    fontFamily: theme.mono,
-    fontSize: 12,
-    textAlign: 'center',
-    marginTop: 30,
-    lineHeight: 18,
-    paddingHorizontal: 16,
-  },
+  sym: { color: theme.text, fontWeight: '700', fontSize: theme.fs.md, fontFamily: theme.mono, flex: 1 },
+  priceWrap: { alignItems: 'flex-end', marginRight: theme.sp.lg },
+  price: { color: theme.text, fontFamily: theme.mono, fontSize: theme.fs.sm + 1, textAlign: 'right' },
+  chg: { fontFamily: theme.mono, fontSize: theme.fs.sm, marginTop: 2, textAlign: 'right' },
+  del: { padding: theme.sp.xs },
+  delText: { color: theme.muted, fontSize: theme.fs.md + 1 },
 });

@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  ActivityIndicator,
   FlatList,
   Modal,
   Pressable,
@@ -33,6 +32,7 @@ import {
 } from '../screener';
 import { TrackDir, TrackEntry, addTrack, loadTrack, removeTrack } from '../tracklist';
 import { theme } from '../theme';
+import { Btn, EmptyState, Loading } from '../ui';
 
 const INDICES = [
   'NIFTY 50', 'NIFTY 100', 'NIFTY BANK', 'NIFTY IT', 'NIFTY AUTO',
@@ -371,6 +371,7 @@ export default function ScreenerScreen() {
               key={c.key}
               style={[styles.td, { width: c.w, alignItems: 'flex-start' }]}
               onPress={() => setDetail(item)}
+              activeOpacity={0.75}
             >
               {c.render(item)}
             </TouchableOpacity>
@@ -384,12 +385,14 @@ export default function ScreenerScreen() {
           <TouchableOpacity
             style={[styles.tBtn, dir === 'buy' && styles.tBuyOn]}
             onPress={() => onTrack(item, 'buy')}
+            activeOpacity={0.75}
           >
             <Text style={[styles.tBtnTxt, dir === 'buy' && styles.tOnTxt]}>{dir === 'buy' ? '✓B' : 'B'}</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.tBtn, dir === 'sell' && styles.tSellOn]}
             onPress={() => onTrack(item, 'sell')}
+            activeOpacity={0.75}
           >
             <Text style={[styles.tBtnTxt, dir === 'sell' && styles.tOnTxt]}>{dir === 'sell' ? '✓S' : 'S'}</Text>
           </TouchableOpacity>
@@ -401,8 +404,7 @@ export default function ScreenerScreen() {
   if (loading) {
     return (
       <View style={styles.center}>
-        <ActivityIndicator color={theme.accent} />
-        <Text style={styles.dim}>Loading {indexName}…</Text>
+        <Loading label={`Loading ${indexName} constituents…`} />
       </View>
     );
   }
@@ -416,6 +418,7 @@ export default function ScreenerScreen() {
               key={idx}
               style={[styles.idxChip, idx === indexName && styles.idxChipOn]}
               onPress={() => setIndexName(idx)}
+              activeOpacity={0.75}
             >
               <Text style={[styles.idxTxt, idx === indexName && styles.idxTxtOn]}>{idx.replace('NIFTY ', '')}</Text>
             </TouchableOpacity>
@@ -430,6 +433,7 @@ export default function ScreenerScreen() {
                 key={p.id}
                 style={[styles.presetChip, on && styles.presetChipOn]}
                 onPress={() => setActive(togglePreset(active, p))}
+                activeOpacity={0.75}
               >
                 <Text style={[styles.presetTxt, on && styles.presetTxtOn]}>{on ? '✓ ' : ''}{p.name}</Text>
               </TouchableOpacity>
@@ -446,10 +450,11 @@ export default function ScreenerScreen() {
         <TouchableOpacity
           style={[styles.filterBtn, { marginLeft: 'auto' }]}
           onPress={() => exportCsv(sorted, indexName).catch(() => {})}
+          activeOpacity={0.75}
         >
           <Text style={styles.filterTxt}>⇩ CSV</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.filterBtn} onPress={() => setDrawer(true)}>
+        <TouchableOpacity style={styles.filterBtn} onPress={() => setDrawer(true)} activeOpacity={0.75}>
           <Text style={styles.filterTxt}>⚙ Filters{activeCount ? ` (${activeCount})` : ''}</Text>
         </TouchableOpacity>
       </View>
@@ -468,6 +473,7 @@ export default function ScreenerScreen() {
                 key={c.key}
                 style={[styles.th, { width: c.w, alignItems: c.align === 'left' ? 'flex-start' : 'flex-end' }]}
                 onPress={() => onSort(c.key)}
+                activeOpacity={0.75}
               >
                 <Text style={styles.thTxt}>
                   {c.label}
@@ -486,7 +492,13 @@ export default function ScreenerScreen() {
             refreshControl={
               <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.accent} />
             }
-            ListEmptyComponent={<Text style={styles.dim}>No matches. Loosen your filters.</Text>}
+            ListEmptyComponent={
+              <EmptyState
+                icon="⌕"
+                title="No matches"
+                hint="Loosen or clear a filter to see more of this index."
+              />
+            }
             initialNumToRender={20}
             windowSize={11}
           />
@@ -600,6 +612,7 @@ function FilterDrawer({
                 key={opt || 'any'}
                 style={[styles.optChip, val === opt && styles.optChipOn]}
                 onPress={() => setSelect(def.key, opt)}
+                activeOpacity={0.75}
               >
                 <Text style={[styles.optTxt, val === opt && styles.optTxtOn]}>{opt || 'Any'}</Text>
               </TouchableOpacity>
@@ -651,6 +664,7 @@ function FilterDrawer({
               setDraft({});
               setExtVersion((v) => v + 1);
             }}
+            activeOpacity={0.75}
           >
             <Text style={styles.clearAll}>Clear all</Text>
           </TouchableOpacity>
@@ -672,6 +686,7 @@ function FilterDrawer({
                 style={[styles.nlAdd, !nlParsed?.matchedAny && styles.nlAddOff]}
                 onPress={applyNl}
                 disabled={!nlParsed?.matchedAny}
+                activeOpacity={0.75}
               >
                 <Text style={[styles.nlAddTxt, !nlParsed?.matchedAny && { color: theme.muted }]}>Add</Text>
               </TouchableOpacity>
@@ -692,18 +707,15 @@ function FilterDrawer({
           <Text style={styles.fundNote}>·f = fundamental filter; applying one fetches company financials (may take a moment).</Text>
         </ScrollView>
         <View style={styles.drawerFoot}>
-          <TouchableOpacity style={styles.footBtnGhost} onPress={onClose}>
-            <Text style={styles.footGhostTxt}>Cancel</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.footBtn}
+          <Btn label="Cancel" kind="ghost" onPress={onClose} style={{ flex: 1 }} />
+          <Btn
+            label="Apply"
             onPress={() => {
               onApply(draft);
               onClose();
             }}
-          >
-            <Text style={styles.footBtnTxt}>Apply</Text>
-          </TouchableOpacity>
+            style={{ flex: 2 }}
+          />
         </View>
       </View>
     </Modal>
@@ -712,72 +724,193 @@ function FilterDrawer({
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.bg },
-  center: { flex: 1, backgroundColor: theme.bg, alignItems: 'center', justifyContent: 'center', gap: 10 },
-  dim: { color: theme.muted, fontFamily: theme.mono, fontSize: 12, textAlign: 'center', marginTop: 20 },
+  center: { flex: 1, backgroundColor: theme.bg },
   topBar: { borderBottomColor: theme.border, borderBottomWidth: 1 },
-  idxChips: { paddingHorizontal: 10, paddingVertical: 8, gap: 6 },
-  idxChip: { borderColor: theme.border2, borderWidth: 1, borderRadius: 6, paddingHorizontal: 10, paddingVertical: 5 },
+  idxChips: { paddingHorizontal: theme.sp.md, paddingVertical: theme.sp.md, gap: theme.sp.sm },
+  idxChip: {
+    backgroundColor: theme.surface2,
+    borderColor: theme.border,
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 13,
+    paddingVertical: 7,
+  },
   idxChipOn: { backgroundColor: theme.accent, borderColor: theme.accent },
-  idxTxt: { color: theme.muted2, fontFamily: theme.mono, fontSize: 11 },
-  idxTxtOn: { color: theme.bg, fontWeight: '700' },
-  presetRow: { paddingHorizontal: 10, paddingBottom: 8, gap: 6, alignItems: 'center' },
-  presetLabel: { color: theme.muted, fontSize: 10, fontFamily: theme.mono, textTransform: 'uppercase', marginRight: 2 },
-  presetChip: { backgroundColor: theme.surface2, borderColor: theme.border, borderWidth: 1, borderRadius: 12, paddingHorizontal: 10, paddingVertical: 4 },
+  idxTxt: { color: theme.muted2, fontSize: theme.fs.sm },
+  idxTxtOn: { color: theme.onAccent, fontWeight: '700' },
+  presetRow: { paddingHorizontal: theme.sp.md, paddingBottom: theme.sp.md, gap: theme.sp.sm, alignItems: 'center' },
+  presetLabel: {
+    color: theme.muted,
+    fontSize: theme.fs.xs + 1,
+    fontWeight: '700',
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+    marginRight: theme.sp.xs,
+  },
+  presetChip: {
+    backgroundColor: theme.surface2,
+    borderColor: theme.border,
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 13,
+    paddingVertical: 7,
+  },
   presetChipOn: { backgroundColor: theme.accent, borderColor: theme.accent },
-  presetTxt: { color: theme.muted2, fontSize: 11 },
-  presetTxtOn: { color: theme.bg, fontWeight: '700' },
-  nlBox: { paddingHorizontal: 16, paddingTop: 14 },
-  nlLabel: { color: theme.muted2, fontSize: 11, fontFamily: theme.mono, marginBottom: 6 },
-  nlRow: { flexDirection: 'row', gap: 8 },
-  nlInput: { flex: 1, backgroundColor: theme.surface2, borderColor: theme.border2, borderWidth: 1, borderRadius: 8, color: theme.text, paddingHorizontal: 12, paddingVertical: 9, fontFamily: theme.mono, fontSize: 13 },
-  nlAdd: { backgroundColor: theme.accent, borderRadius: 8, paddingHorizontal: 16, justifyContent: 'center' },
+  presetTxt: { color: theme.muted2, fontSize: theme.fs.sm },
+  presetTxtOn: { color: theme.onAccent, fontWeight: '700' },
+  nlBox: { paddingHorizontal: theme.sp.lg, paddingTop: theme.sp.lg },
+  nlLabel: { color: theme.muted2, fontSize: theme.fs.sm, marginBottom: theme.sp.sm },
+  nlRow: { flexDirection: 'row', gap: theme.sp.sm },
+  nlInput: {
+    flex: 1,
+    backgroundColor: theme.surface2,
+    borderColor: theme.border2,
+    borderWidth: 1,
+    borderRadius: theme.radius.sm + 2,
+    color: theme.text,
+    paddingHorizontal: theme.sp.md,
+    paddingVertical: 10,
+    fontSize: theme.fs.md,
+  },
+  nlAdd: { backgroundColor: theme.accent, borderRadius: theme.radius.sm + 2, paddingHorizontal: theme.sp.lg, justifyContent: 'center' },
   nlAddOff: { backgroundColor: theme.surface2, borderColor: theme.border2, borderWidth: 1 },
-  nlAddTxt: { color: theme.bg, fontWeight: '700', fontSize: 13 },
-  nlFeedback: { color: theme.green, fontSize: 11, fontFamily: theme.mono, marginTop: 8, lineHeight: 16 },
-  statsRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 8, gap: 6 },
-  stat: { alignItems: 'center', minWidth: 46 },
-  statV: { fontSize: 16, fontWeight: '700' },
-  statL: { color: theme.muted, fontSize: 9, fontFamily: theme.mono },
-  filterBtn: { backgroundColor: theme.surface2, borderColor: theme.border2, borderWidth: 1, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8 },
-  filterTxt: { color: theme.text, fontSize: 12, fontWeight: '600' },
-  note: { color: theme.muted, fontFamily: theme.mono, fontSize: 10, paddingHorizontal: 12, paddingBottom: 6 },
-  headerRow: { flexDirection: 'row', borderBottomColor: theme.border2, borderBottomWidth: 1, backgroundColor: theme.surface, paddingVertical: 8 },
-  th: { justifyContent: 'center', paddingHorizontal: 4 },
-  thTxt: { color: theme.muted2, fontSize: 10, fontFamily: theme.mono, textTransform: 'uppercase' },
-  dataRow: { flexDirection: 'row', alignItems: 'center', borderBottomColor: theme.border, borderBottomWidth: 1, paddingVertical: 9 },
-  td: { justifyContent: 'center', paddingHorizontal: 4 },
-  cell: { color: theme.text, fontFamily: theme.mono, fontSize: 12 },
-  zone: { color: theme.text, fontFamily: theme.mono, fontSize: 10, textAlign: 'right' },
-  zoneDim: { color: theme.muted2, fontFamily: theme.mono, fontSize: 10, textAlign: 'right' },
-  symTxt: { color: theme.accent, fontWeight: '700', fontSize: 13 },
-  sig: { fontWeight: '700', fontSize: 11 },
+  nlAddTxt: { color: theme.onAccent, fontWeight: '700', fontSize: theme.fs.sm + 1 },
+  nlFeedback: { color: theme.green, fontSize: theme.fs.sm, marginTop: theme.sp.sm, lineHeight: 17 },
+  statsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: theme.sp.md,
+    paddingVertical: theme.sp.md,
+    gap: theme.sp.sm,
+  },
+  stat: { alignItems: 'center', minWidth: 48 },
+  statV: { fontSize: theme.fs.lg, fontWeight: '700', fontFamily: theme.mono },
+  statL: { color: theme.muted, fontSize: theme.fs.xs + 1, letterSpacing: 0.5, textTransform: 'uppercase', marginTop: 1 },
+  filterBtn: {
+    backgroundColor: theme.surface2,
+    borderColor: theme.border2,
+    borderWidth: 1,
+    borderRadius: theme.radius.sm + 2,
+    paddingHorizontal: theme.sp.md,
+    paddingVertical: theme.sp.sm + 1,
+  },
+  filterTxt: { color: theme.text, fontSize: theme.fs.sm + 1, fontWeight: '600' },
+  note: { color: theme.muted, fontSize: theme.fs.sm, paddingHorizontal: theme.sp.md, paddingBottom: theme.sp.sm },
+  headerRow: {
+    flexDirection: 'row',
+    borderBottomColor: theme.border2,
+    borderBottomWidth: 1,
+    backgroundColor: theme.surface2,
+    paddingVertical: theme.sp.md,
+  },
+  th: { justifyContent: 'center', paddingHorizontal: theme.sp.xs },
+  thTxt: {
+    color: theme.muted2,
+    fontSize: theme.fs.xs + 1,
+    fontWeight: '600',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+  },
+  dataRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderBottomColor: theme.border,
+    borderBottomWidth: 1,
+    paddingVertical: theme.sp.md,
+    minHeight: 44,
+  },
+  td: { justifyContent: 'center', paddingHorizontal: theme.sp.xs },
+  cell: { color: theme.text, fontFamily: theme.mono, fontSize: theme.fs.sm },
+  zone: { color: theme.text, fontFamily: theme.mono, fontSize: theme.fs.xs, textAlign: 'right' },
+  zoneDim: { color: theme.muted2, fontFamily: theme.mono, fontSize: theme.fs.xs, textAlign: 'right' },
+  symTxt: { color: theme.accent, fontFamily: theme.mono, fontWeight: '700', fontSize: theme.fs.sm + 1 },
+  sig: { fontWeight: '700', fontSize: theme.fs.sm, letterSpacing: 0.4 },
   trackCell: { width: 120, flexDirection: 'row', gap: 6, paddingHorizontal: 6, justifyContent: 'center' },
-  tBtn: { borderColor: theme.border2, borderWidth: 1, borderRadius: 5, paddingHorizontal: 12, paddingVertical: 5, minWidth: 40, alignItems: 'center' },
+  tBtn: {
+    borderColor: theme.border2,
+    borderWidth: 1,
+    borderRadius: theme.radius.sm,
+    paddingHorizontal: theme.sp.md,
+    paddingVertical: 6,
+    minWidth: 40,
+    alignItems: 'center',
+  },
   tBuyOn: { backgroundColor: theme.green, borderColor: theme.green },
   tSellOn: { backgroundColor: theme.red, borderColor: theme.red },
-  tBtnTxt: { color: theme.muted2, fontFamily: theme.mono, fontSize: 12, fontWeight: '700' },
-  tOnTxt: { color: theme.bg },
+  tBtnTxt: { color: theme.muted2, fontFamily: theme.mono, fontSize: theme.fs.sm, fontWeight: '700' },
+  tOnTxt: { color: theme.onAccent },
   // drawer
   backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)' },
-  drawer: { position: 'absolute', bottom: 0, left: 0, right: 0, top: 60, backgroundColor: theme.surface, borderTopLeftRadius: 16, borderTopRightRadius: 16, overflow: 'hidden' },
-  drawerHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderBottomColor: theme.border, borderBottomWidth: 1 },
-  drawerTitle: { color: theme.text, fontSize: 16, fontWeight: '700' },
-  clearAll: { color: theme.muted2, fontSize: 12, fontFamily: theme.mono },
-  group: { paddingHorizontal: 16, paddingTop: 14 },
-  groupTitle: { color: theme.accent, fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 },
-  fRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 7 },
-  fCol: { paddingVertical: 7 },
-  fLabel: { color: theme.text, fontSize: 13, flex: 1 },
-  rangeInputs: { flexDirection: 'row', gap: 6 },
-  rInput: { backgroundColor: theme.surface2, borderColor: theme.border2, borderWidth: 1, borderRadius: 6, color: theme.text, paddingHorizontal: 8, paddingVertical: 6, width: 64, fontFamily: theme.mono, fontSize: 12, textAlign: 'center' },
-  optChip: { borderColor: theme.border2, borderWidth: 1, borderRadius: 6, paddingHorizontal: 10, paddingVertical: 5, marginRight: 6 },
+  drawer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    top: 60,
+    backgroundColor: theme.surface,
+    borderTopLeftRadius: theme.radius.lg + 2,
+    borderTopRightRadius: theme.radius.lg + 2,
+    overflow: 'hidden',
+  },
+  drawerHead: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: theme.sp.lg,
+    borderBottomColor: theme.border,
+    borderBottomWidth: 1,
+  },
+  drawerTitle: { color: theme.text, fontSize: theme.fs.lg, fontWeight: '700' },
+  clearAll: { color: theme.muted2, fontSize: theme.fs.sm, fontWeight: '600' },
+  group: { paddingHorizontal: theme.sp.lg, paddingTop: theme.sp.lg },
+  groupTitle: {
+    color: theme.muted2,
+    fontSize: theme.fs.xs + 1,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 1.2,
+    marginBottom: theme.sp.sm,
+  },
+  fRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: theme.sp.sm + 2,
+  },
+  fCol: { paddingVertical: theme.sp.sm + 2 },
+  fLabel: { color: theme.text, fontSize: theme.fs.md, flex: 1 },
+  rangeInputs: { flexDirection: 'row', gap: theme.sp.sm },
+  rInput: {
+    backgroundColor: theme.surface2,
+    borderColor: theme.border2,
+    borderWidth: 1,
+    borderRadius: theme.radius.sm,
+    color: theme.text,
+    paddingHorizontal: theme.sp.sm,
+    paddingVertical: 7,
+    width: 68,
+    fontFamily: theme.mono,
+    fontSize: theme.fs.sm,
+    textAlign: 'center',
+  },
+  optChip: {
+    backgroundColor: theme.surface2,
+    borderColor: theme.border,
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 13,
+    paddingVertical: 7,
+    marginRight: theme.sp.sm,
+  },
   optChipOn: { backgroundColor: theme.accent, borderColor: theme.accent },
-  optTxt: { color: theme.muted2, fontFamily: theme.mono, fontSize: 11 },
-  optTxtOn: { color: theme.bg, fontWeight: '700' },
-  fundNote: { color: theme.muted, fontSize: 10, fontFamily: theme.mono, padding: 16, lineHeight: 15 },
-  drawerFoot: { flexDirection: 'row', gap: 10, padding: 14, borderTopColor: theme.border, borderTopWidth: 1 },
-  footBtnGhost: { flex: 1, borderColor: theme.border2, borderWidth: 1, borderRadius: 8, paddingVertical: 12, alignItems: 'center' },
-  footGhostTxt: { color: theme.text, fontWeight: '600' },
-  footBtn: { flex: 2, backgroundColor: theme.accent, borderRadius: 8, paddingVertical: 12, alignItems: 'center' },
-  footBtnTxt: { color: theme.bg, fontWeight: '700' },
+  optTxt: { color: theme.muted2, fontSize: theme.fs.sm },
+  optTxtOn: { color: theme.onAccent, fontWeight: '700' },
+  fundNote: { color: theme.muted, fontSize: theme.fs.sm, padding: theme.sp.lg, lineHeight: 17 },
+  drawerFoot: {
+    flexDirection: 'row',
+    gap: theme.sp.md,
+    padding: theme.sp.lg,
+    borderTopColor: theme.border,
+    borderTopWidth: 1,
+  },
 });

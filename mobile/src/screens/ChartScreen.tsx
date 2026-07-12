@@ -1,16 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import {
-  ActivityIndicator,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { api, Candle } from '../api';
 import { chartHtml } from '../chartHtml';
 import HtmlView from '../components/HtmlView';
 import SymbolInput from '../components/SymbolInput';
 import { theme } from '../theme';
+import { ChipBtn, Loading } from '../ui';
 
 const PERIODS: { label: string; period: string; interval: string; barSec: number }[] = [
   { label: '5D', period: '5d', interval: '15m', barSec: 900 },
@@ -65,13 +60,7 @@ export default function ChartScreen() {
       />
       <View style={styles.chips}>
         {PERIODS.map((pp, i) => (
-          <TouchableOpacity
-            key={pp.label}
-            style={[styles.chip, i === pIdx && styles.chipActive]}
-            onPress={() => setPIdx(i)}
-          >
-            <Text style={[styles.chipText, i === pIdx && styles.chipTextActive]}>{pp.label}</Text>
-          </TouchableOpacity>
+          <ChipBtn key={pp.label} label={pp.label} on={i === pIdx} onPress={() => setPIdx(i)} />
         ))}
       </View>
 
@@ -79,10 +68,7 @@ export default function ChartScreen() {
 
       <View style={styles.chartWrap}>
         {loading ? (
-          <View style={styles.center}>
-            <ActivityIndicator color={theme.accent} />
-            <Text style={styles.dim}>Loading {symbol}…</Text>
-          </View>
+          <Loading label={`Loading ${symbol}…`} />
         ) : (
           <HtmlView key={html.length + symbol + p.label} html={html} style={styles.web} />
         )}
@@ -93,38 +79,32 @@ export default function ChartScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.bg },
-  searchWrap: { marginHorizontal: 12, marginTop: 12 },
+  searchWrap: { marginHorizontal: theme.sp.md, marginTop: theme.sp.md },
   search: {
-    backgroundColor: theme.surface2,
+    backgroundColor: theme.surface,
     borderColor: theme.border2,
     borderWidth: 1,
-    borderRadius: 8,
+    borderRadius: theme.radius.sm + 2,
     color: theme.text,
-    paddingHorizontal: 12,
-    paddingVertical: 9,
+    paddingHorizontal: theme.sp.md,
+    paddingVertical: 10,
     fontFamily: theme.mono,
-    fontSize: 13,
+    fontSize: theme.fs.md,
   },
-  chips: { flexDirection: 'row', gap: 8, paddingHorizontal: 12, paddingVertical: 10 },
-  chip: {
-    borderColor: theme.border2,
-    borderWidth: 1,
-    borderRadius: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+  chips: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: theme.sp.sm,
+    paddingHorizontal: theme.sp.md,
+    paddingVertical: theme.sp.md,
   },
-  chipActive: { backgroundColor: theme.accent, borderColor: theme.accent },
-  chipText: { color: theme.muted2, fontFamily: theme.mono, fontSize: 12 },
-  chipTextActive: { color: theme.bg, fontWeight: '700' },
   error: {
     color: theme.red,
-    fontFamily: theme.mono,
-    fontSize: 11,
-    paddingHorizontal: 12,
-    paddingBottom: 6,
+    fontSize: theme.fs.sm,
+    lineHeight: 17,
+    paddingHorizontal: theme.sp.md,
+    paddingBottom: theme.sp.sm,
   },
   chartWrap: { flex: 1 },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 10 },
-  dim: { color: theme.muted, fontFamily: theme.mono, fontSize: 12 },
   web: { flex: 1, backgroundColor: theme.bg },
 });

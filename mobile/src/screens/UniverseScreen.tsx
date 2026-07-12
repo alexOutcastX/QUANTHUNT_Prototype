@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  ActivityIndicator,
   FlatList,
   RefreshControl,
   ScrollView,
@@ -11,6 +10,7 @@ import {
 } from 'react-native';
 import { IndexConstituent, ReturnsRow, api } from '../api';
 import { theme } from '../theme';
+import { EmptyState, Loading } from '../ui';
 
 const INDICES = [
   'NIFTY 50', 'NIFTY 100', 'NIFTY 200', 'NIFTY 500', 'NIFTY BANK', 'NIFTY IT',
@@ -176,8 +176,7 @@ export default function UniverseScreen() {
   if (loading) {
     return (
       <View style={styles.center}>
-        <ActivityIndicator color={theme.accent} />
-        <Text style={styles.dim}>Loading {indexName}…</Text>
+        <Loading label={`Loading ${indexName} constituents…`} />
       </View>
     );
   }
@@ -195,6 +194,7 @@ export default function UniverseScreen() {
                 setSortCol('mcap');
                 setSortDir(-1);
               }}
+              activeOpacity={0.75}
             >
               <Text style={[styles.chipTxt, seg === indexName && styles.chipTxtOn]}>{seg}</Text>
             </TouchableOpacity>
@@ -204,6 +204,7 @@ export default function UniverseScreen() {
               key={idx}
               style={[styles.chip, idx === indexName && styles.chipOn]}
               onPress={() => setIndexName(idx)}
+              activeOpacity={0.75}
             >
               <Text style={[styles.chipTxt, idx === indexName && styles.chipTxtOn]}>{idx.replace('NIFTY ', '')}</Text>
             </TouchableOpacity>
@@ -213,7 +214,11 @@ export default function UniverseScreen() {
 
       <View style={styles.metaRow}>
         <Text style={styles.note}>{note}{error ? ` · ${error}` : ''}</Text>
-        <TouchableOpacity style={[styles.heatBtn, heatmap && styles.heatOn]} onPress={() => setHeatmap((v) => !v)}>
+        <TouchableOpacity
+          style={[styles.heatBtn, heatmap && styles.heatOn]}
+          onPress={() => setHeatmap((v) => !v)}
+          activeOpacity={0.75}
+        >
           <Text style={[styles.heatTxt, heatmap && styles.heatTxtOn]}>⊞ Heatmap</Text>
         </TouchableOpacity>
       </View>
@@ -222,7 +227,12 @@ export default function UniverseScreen() {
         <View style={{ width: TABLE_W }}>
           <View style={styles.headerRow}>
             {COLS.map((c) => (
-              <TouchableOpacity key={String(c.key)} style={{ width: c.w }} onPress={() => onSort(String(c.key))}>
+              <TouchableOpacity
+                key={String(c.key)}
+                style={{ width: c.w }}
+                onPress={() => onSort(String(c.key))}
+                activeOpacity={0.75}
+              >
                 <Text style={[styles.th, c.key !== 'symbol' && styles.right]}>
                   {c.label}
                   {sortCol === c.key ? (sortDir === 1 ? ' ↑' : ' ↓') : ''}
@@ -237,6 +247,13 @@ export default function UniverseScreen() {
             refreshControl={
               <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.accent} />
             }
+            ListEmptyComponent={
+              <EmptyState
+                icon="◇"
+                title="Nothing to show"
+                hint="Pick another index above, or pull down to refresh."
+              />
+            }
             initialNumToRender={25}
             windowSize={11}
           />
@@ -248,25 +265,66 @@ export default function UniverseScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.bg },
-  center: { flex: 1, backgroundColor: theme.bg, alignItems: 'center', justifyContent: 'center', gap: 10 },
-  dim: { color: theme.muted, fontFamily: theme.mono, fontSize: 12 },
+  center: { flex: 1, backgroundColor: theme.bg },
   topBar: { borderBottomColor: theme.border, borderBottomWidth: 1 },
-  chips: { paddingHorizontal: 10, paddingVertical: 8, gap: 6 },
-  chip: { borderColor: theme.border2, borderWidth: 1, borderRadius: 6, paddingHorizontal: 10, paddingVertical: 5 },
+  chips: { paddingHorizontal: theme.sp.md, paddingVertical: theme.sp.md, gap: theme.sp.sm },
+  chip: {
+    backgroundColor: theme.surface2,
+    borderColor: theme.border,
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 13,
+    paddingVertical: 7,
+  },
   chipOn: { backgroundColor: theme.accent, borderColor: theme.accent },
-  segChip: { borderStyle: 'dashed' },
-  chipTxt: { color: theme.muted2, fontFamily: theme.mono, fontSize: 11 },
-  chipTxtOn: { color: theme.bg, fontWeight: '700' },
-  metaRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 12, paddingVertical: 8 },
-  note: { color: theme.muted, fontFamily: theme.mono, fontSize: 10, flex: 1 },
-  heatBtn: { borderColor: theme.border2, borderWidth: 1, borderRadius: 6, paddingHorizontal: 10, paddingVertical: 5 },
+  segChip: { borderStyle: 'dashed', borderColor: theme.border2 },
+  chipTxt: { color: theme.muted2, fontSize: theme.fs.sm },
+  chipTxtOn: { color: theme.onAccent, fontWeight: '700' },
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: theme.sp.md,
+    paddingHorizontal: theme.sp.lg,
+    paddingVertical: theme.sp.md,
+  },
+  note: { color: theme.muted, fontSize: theme.fs.sm, flex: 1 },
+  heatBtn: {
+    backgroundColor: theme.surface2,
+    borderColor: theme.border,
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 13,
+    paddingVertical: 7,
+  },
   heatOn: { backgroundColor: theme.accent, borderColor: theme.accent },
-  heatTxt: { color: theme.muted2, fontFamily: theme.mono, fontSize: 11 },
-  heatTxtOn: { color: theme.bg, fontWeight: '700' },
-  headerRow: { flexDirection: 'row', backgroundColor: theme.surface, borderBottomColor: theme.border2, borderBottomWidth: 1, paddingVertical: 8, paddingHorizontal: 8 },
-  th: { color: theme.muted2, fontSize: 10, fontFamily: theme.mono, textTransform: 'uppercase' },
-  row: { flexDirection: 'row', alignItems: 'center', borderBottomColor: theme.border, borderBottomWidth: 1, paddingVertical: 10, paddingHorizontal: 8 },
-  cell: { color: theme.text, fontFamily: theme.mono, fontSize: 12 },
-  cSym: { fontWeight: '700', fontSize: 13 },
+  heatTxt: { color: theme.muted2, fontSize: theme.fs.sm },
+  heatTxtOn: { color: theme.onAccent, fontWeight: '700' },
+  headerRow: {
+    flexDirection: 'row',
+    backgroundColor: theme.surface2,
+    borderBottomColor: theme.border2,
+    borderBottomWidth: 1,
+    paddingVertical: theme.sp.md,
+    paddingHorizontal: theme.sp.sm,
+  },
+  th: {
+    color: theme.muted2,
+    fontSize: theme.fs.xs + 1,
+    fontWeight: '600',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderBottomColor: theme.border,
+    borderBottomWidth: 1,
+    paddingVertical: theme.sp.md,
+    paddingHorizontal: theme.sp.sm,
+    minHeight: 44,
+  },
+  cell: { color: theme.text, fontFamily: theme.mono, fontSize: theme.fs.sm },
+  cSym: { fontWeight: '700', fontSize: theme.fs.sm + 1 },
   right: { textAlign: 'right' },
 });

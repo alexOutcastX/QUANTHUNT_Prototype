@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Linking } from 'react-native';
 import {
-  ActivityIndicator,
   FlatList,
   RefreshControl,
   StyleSheet,
@@ -13,6 +12,7 @@ import {
 import { BrokerStatus, api, Quote } from '../api';
 import { Holding, addHolding, importHoldings, loadPortfolio, removeHolding } from '../portfolio';
 import { theme } from '../theme';
+import { Btn, Card, EmptyState, Loading, StatTile } from '../ui';
 
 const money = (n: number) =>
   '₹' + n.toLocaleString('en-IN', { maximumFractionDigits: n >= 1000 ? 0 : 2 });
@@ -143,7 +143,12 @@ export default function PortfolioScreen() {
           <Text style={[styles.pnl, { color: col }]}>{priced ? signedMoney(pnl) : '—'}</Text>
           <Text style={[styles.pnlPct, { color: col }]}>{priced ? signedPct(pnlPct) : ''}</Text>
         </View>
-        <TouchableOpacity onPress={() => onRemove(item.symbol)} style={styles.del} hitSlop={10}>
+        <TouchableOpacity
+          onPress={() => onRemove(item.symbol)}
+          style={styles.del}
+          hitSlop={10}
+          activeOpacity={0.75}
+        >
           <Text style={styles.delText}>✕</Text>
         </TouchableOpacity>
       </View>
@@ -153,7 +158,7 @@ export default function PortfolioScreen() {
   if (loading) {
     return (
       <View style={styles.center}>
-        <ActivityIndicator color={theme.accent} />
+        <Loading label="Loading your portfolio…" />
       </View>
     );
   }
@@ -163,30 +168,25 @@ export default function PortfolioScreen() {
   return (
     <View style={styles.container}>
       {list.length ? (
-        <View style={styles.summary}>
-          <View style={styles.sumMain}>
-            <Text style={styles.sumLabel}>Current value</Text>
-            <Text style={styles.sumValue}>{money(totals.value)}</Text>
-          </View>
-          <View style={styles.sumGrid}>
-            <Sum label="Invested" value={money(totals.invested)} />
-            <Sum
-              label="Total P&L"
-              value={signedMoney(totals.pnl)}
-              sub={signedPct(totals.pnlPct)}
-              color={totalCol}
-            />
-            <Sum
-              label="Day P&L"
-              value={totals.priced ? signedMoney(totals.dayChg) : '—'}
-              color={totals.dayChg >= 0 ? theme.green : theme.red}
-            />
-          </View>
+        <View style={styles.summaryRow}>
+          <StatTile label="Current value" value={money(totals.value)} />
+          <StatTile label="Invested" value={money(totals.invested)} />
+          <StatTile
+            label="Total P&L"
+            value={signedMoney(totals.pnl)}
+            sub={signedPct(totals.pnlPct)}
+            color={totalCol}
+          />
+          <StatTile
+            label="Day P&L"
+            value={totals.priced ? signedMoney(totals.dayChg) : '—'}
+            color={totals.dayChg >= 0 ? theme.green : theme.red}
+          />
         </View>
       ) : null}
 
       {broker?.configured ? (
-        <View style={styles.brokerCard}>
+        <Card style={styles.brokerCard}>
           <View style={{ flex: 1 }}>
             <Text style={styles.brokerTitle}>
               ZERODHA {broker.connected ? `· ${broker.user || 'connected'}` : '· not connected'}
@@ -199,15 +199,15 @@ export default function PortfolioScreen() {
             </Text>
           </View>
           {broker.connected ? (
-            <TouchableOpacity style={styles.brokerBtn} onPress={brokerSync} disabled={syncing}>
-              <Text style={styles.brokerBtnTxt}>{syncing ? 'SYNCING…' : '⇊ SYNC HOLDINGS'}</Text>
-            </TouchableOpacity>
+            <Btn
+              label={syncing ? 'SYNCING…' : '⇊ SYNC HOLDINGS'}
+              onPress={brokerSync}
+              disabled={syncing}
+            />
           ) : (
-            <TouchableOpacity style={styles.brokerBtn} onPress={brokerConnect}>
-              <Text style={styles.brokerBtnTxt}>CONNECT</Text>
-            </TouchableOpacity>
+            <Btn label="CONNECT" onPress={brokerConnect} />
           )}
-        </View>
+        </Card>
       ) : null}
 
       <View style={styles.addBox}>
@@ -235,9 +235,7 @@ export default function PortfolioScreen() {
           placeholderTextColor={theme.muted}
           keyboardType="numeric"
         />
-        <TouchableOpacity style={styles.addBtn} onPress={onAdd}>
-          <Text style={styles.addBtnText}>Add</Text>
-        </TouchableOpacity>
+        <Btn label="Add" onPress={onAdd} />
       </View>
 
       {error ? <Text style={styles.error}>{error} — is the backend reachable?</Text> : null}
@@ -250,32 +248,12 @@ export default function PortfolioScreen() {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.accent} />
         }
         ListEmptyComponent={
-          <Text style={styles.empty}>
-            No holdings yet. Add a symbol with quantity and average buy price — it's saved on this
-            device and valued live.
-          </Text>
+          <EmptyState
+            title="No holdings yet"
+            hint="Add a symbol with quantity and average buy price — it's saved on this device and valued live."
+          />
         }
       />
-    </View>
-  );
-}
-
-function Sum({
-  label,
-  value,
-  sub,
-  color,
-}: {
-  label: string;
-  value: string;
-  sub?: string;
-  color?: string;
-}) {
-  return (
-    <View style={styles.sumCell}>
-      <Text style={styles.sumCellLabel}>{label}</Text>
-      <Text style={[styles.sumCellValue, color ? { color } : null]}>{value}</Text>
-      {sub ? <Text style={[styles.sumCellSub, color ? { color } : null]}>{sub}</Text> : null}
     </View>
   );
 }
@@ -284,80 +262,47 @@ const styles = StyleSheet.create({
   brokerCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    marginHorizontal: 12,
-    marginTop: 10,
-    padding: 12,
-    backgroundColor: theme.surface,
-    borderColor: theme.border2,
-    borderWidth: 1,
-    borderRadius: 8,
+    gap: theme.sp.md,
+    marginTop: theme.sp.md,
   },
-  brokerTitle: { color: theme.text, fontFamily: theme.mono, fontSize: 11, fontWeight: '700', letterSpacing: 1 },
-  brokerSub: { color: theme.muted, fontFamily: theme.mono, fontSize: 9, marginTop: 3 },
-  brokerBtn: { backgroundColor: theme.accent, borderRadius: 6, paddingHorizontal: 12, paddingVertical: 8 },
-  brokerBtnTxt: { color: theme.bg, fontFamily: theme.mono, fontSize: 10, fontWeight: '700', letterSpacing: 1 },
-  container: { flex: 1, backgroundColor: theme.bg, paddingHorizontal: 12 },
+  brokerTitle: { color: theme.text, fontSize: theme.fs.sm, fontWeight: '700', letterSpacing: 0.8 },
+  brokerSub: { color: theme.muted, fontSize: theme.fs.sm, marginTop: 3 },
+  container: { flex: 1, backgroundColor: theme.bg, paddingHorizontal: theme.sp.lg },
   center: { flex: 1, backgroundColor: theme.bg, alignItems: 'center', justifyContent: 'center' },
-  summary: {
-    backgroundColor: theme.surface2,
-    borderColor: theme.border,
-    borderWidth: 1,
-    borderRadius: 10,
-    padding: 14,
-    marginTop: 12,
-  },
-  sumMain: { marginBottom: 12 },
-  sumLabel: { color: theme.muted2, fontSize: 11, fontFamily: theme.mono },
-  sumValue: { color: theme.text, fontSize: 24, fontWeight: '700', marginTop: 2 },
-  sumGrid: {
+  summaryRow: {
     flexDirection: 'row',
-    borderTopColor: theme.border,
-    borderTopWidth: 1,
-    paddingTop: 12,
+    flexWrap: 'wrap',
+    gap: theme.sp.sm,
+    marginTop: theme.sp.lg,
   },
-  sumCell: { flex: 1 },
-  sumCellLabel: { color: theme.muted2, fontSize: 10, fontFamily: theme.mono },
-  sumCellValue: { color: theme.text, fontSize: 14, fontWeight: '600', marginTop: 3 },
-  sumCellSub: { fontSize: 11, fontFamily: theme.mono, marginTop: 1 },
-  addBox: { flexDirection: 'row', gap: 6, marginTop: 12, marginBottom: 4 },
+  addBox: { flexDirection: 'row', gap: theme.sp.sm, marginTop: theme.sp.md, marginBottom: theme.sp.xs },
   input: {
     backgroundColor: theme.surface2,
     borderColor: theme.border2,
     borderWidth: 1,
-    borderRadius: 8,
+    borderRadius: theme.radius.sm + 2,
     color: theme.text,
-    paddingHorizontal: 10,
-    paddingVertical: 9,
+    paddingHorizontal: theme.sp.md,
+    paddingVertical: 10,
     fontFamily: theme.mono,
-    fontSize: 13,
+    fontSize: theme.fs.sm + 1,
   },
   iSym: { flex: 1 },
   iNum: { width: 66 },
-  addBtn: { backgroundColor: theme.accent, borderRadius: 8, paddingHorizontal: 14, justifyContent: 'center' },
-  addBtnText: { color: theme.bg, fontWeight: '700', fontSize: 13 },
-  error: { color: theme.red, fontFamily: theme.mono, fontSize: 11, marginTop: 8 },
+  error: { color: theme.red, fontSize: theme.fs.sm, marginTop: theme.sp.sm },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 12,
+    minHeight: 44,
+    paddingVertical: theme.sp.md,
     borderBottomColor: theme.border,
     borderBottomWidth: 1,
   },
-  sym: { color: theme.text, fontWeight: '700', fontSize: 14 },
-  meta: { color: theme.muted, fontFamily: theme.mono, fontSize: 11, marginTop: 3 },
-  pnlWrap: { alignItems: 'flex-end', marginRight: 14 },
-  pnl: { fontFamily: theme.mono, fontSize: 13, fontWeight: '700' },
-  pnlPct: { fontFamily: theme.mono, fontSize: 11, marginTop: 2 },
-  del: { padding: 4 },
-  delText: { color: theme.muted2, fontSize: 15 },
-  empty: {
-    color: theme.muted,
-    fontFamily: theme.mono,
-    fontSize: 12,
-    textAlign: 'center',
-    marginTop: 30,
-    lineHeight: 18,
-    paddingHorizontal: 16,
-  },
+  sym: { color: theme.text, fontWeight: '700', fontSize: theme.fs.md, fontFamily: theme.mono },
+  meta: { color: theme.muted, fontFamily: theme.mono, fontSize: theme.fs.sm, marginTop: 3 },
+  pnlWrap: { alignItems: 'flex-end', marginRight: theme.sp.lg },
+  pnl: { fontFamily: theme.mono, fontSize: theme.fs.sm + 1, fontWeight: '700', textAlign: 'right' },
+  pnlPct: { fontFamily: theme.mono, fontSize: theme.fs.sm, marginTop: 2, textAlign: 'right' },
+  del: { padding: theme.sp.xs },
+  delText: { color: theme.muted, fontSize: theme.fs.md + 1 },
 });
