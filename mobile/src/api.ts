@@ -377,7 +377,47 @@ export type EntityGraph = {
 export type EntityView = { view: 'entity'; entity: string; positions: FlowEdge[]; asof: { first: string; last: string }; source: string };
 export type SymbolView = { view: 'symbol'; symbol: string; flows: FlowEdge[]; asof: { first: string; last: string }; source: string };
 
+// Server-side alerts (owner-only).
+export type Alert = {
+  id: string;
+  symbol: string;
+  type: 'price_above' | 'price_below' | 'pct_above' | 'pct_below' | 'rsi_above' | 'rsi_below';
+  value: number;
+  note: string;
+  active: boolean;
+  created: number;
+  triggered_at: number | null;
+  last_value: number | null;
+};
+
+// Public-API keys (owner-only).
+export type ApiKey = {
+  id: string;
+  label: string;
+  created: number;
+  last_used: number | null;
+  calls: number;
+  active: boolean;
+};
+
+async function delJson<T>(path: string): Promise<T> {
+  const res = await fetch(API_BASE + path, { method: 'DELETE', credentials: 'include' });
+  const data = (await res.json().catch(() => ({}))) as T & { error?: string };
+  if (!res.ok) throw new Error((data as { error?: string }).error || 'HTTP ' + res.status);
+  return data;
+}
+
 export const api = {
+  alertsList: () => getJson<{ alerts: Alert[] }>('/alerts'),
+  alertsCreate: (symbol: string, type: Alert['type'], value: number, note = '') =>
+    postJson<{ alert: Alert }>('/alerts', { symbol, type, value, note }),
+  alertsDelete: (id: string) => delJson<{ deleted: boolean }>('/alerts/' + encodeURIComponent(id)),
+  alertsToggle: (id: string, active: boolean) =>
+    postJson<{ ok: boolean }>('/alerts/' + encodeURIComponent(id) + '/toggle', { active }),
+  alertsCheck: () => postJson<{ checked: number; fired: Alert[] }>('/alerts/check', {}),
+  apiKeysList: () => getJson<{ keys: ApiKey[] }>('/apikeys'),
+  apiKeysIssue: (label: string) => postJson<{ key: string; record: ApiKey }>('/apikeys', { label }),
+  apiKeysRevoke: (id: string) => delJson<{ revoked: boolean }>('/apikeys/' + encodeURIComponent(id)),
   entityGraph: () => getJson<EntityGraph>('/entity-graph', 30000),
   entityPositions: (entity: string) =>
     getJson<EntityView>('/entity-graph?entity=' + encodeURIComponent(entity), 30000),

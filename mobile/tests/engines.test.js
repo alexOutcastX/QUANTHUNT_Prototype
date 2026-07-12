@@ -6,6 +6,7 @@ const path = require('path');
 
 const bt = require(path.join(__dirname, 'build', 'backtest.js'));
 const scr = require(path.join(__dirname, 'build', 'screener.js'));
+const costs = require(path.join(__dirname, 'build', 'costs.js'));
 
 // ── backtest: custom strategy fires and produces trades ──
 (function backtest() {
@@ -33,7 +34,33 @@ const scr = require(path.join(__dirname, 'build', 'screener.js'));
     slType: 'none', slVal: 0, tpType: 'none', tpVal: 0, trail: false, trailPct: 0, capital: 100000,
   });
   assert(Array.isArray(ema.markers), 'ema_cross returns markers');
+
+  // with a cost model, charges drag net return below the frictionless run
+  const gross = bt.runBacktest(candles, 'ema_cross', [5, 15], {
+    slType: 'none', slVal: 0, tpType: 'none', tpVal: 0, trail: false, trailPct: 0, capital: 100000,
+  });
+  const net = bt.runBacktest(candles, 'ema_cross', [5, 15], {
+    slType: 'none', slVal: 0, tpType: 'none', tpVal: 0, trail: false, trailPct: 0, capital: 100000,
+  }, undefined, costs.DEFAULT_COSTS);
+  if (net.trades.length) {
+    assert(typeof net.stats.totalCharges === 'number' && net.stats.totalCharges > 0, 'costs booked');
+    assert(net.stats.finalCapital < gross.stats.finalCapital, 'costs reduce net capital');
+  }
   console.log('OK backtest');
+})();
+
+// ── costs: India charge model + slippage ──
+(function costModel() {
+  const m = costs.DEFAULT_COSTS;
+  const ch = costs.tradeCharges(100000, 105000, m);
+  assert(ch.total > 0 && ch.stt > 0 && ch.gst > 0, 'delivery charges positive');
+  // delivery STT (both sides) exceeds intraday STT (sell side only) here
+  const intra = costs.tradeCharges(100000, 105000, { ...m, segment: 'intraday' });
+  assert(ch.stt > intra.stt, 'delivery STT > intraday STT');
+  // slippage moves fills against the trader
+  assert(costs.slip(100, 'buy', m) > 100, 'buy slips up');
+  assert(costs.slip(100, 'sell', m) < 100, 'sell slips down');
+  console.log('OK costs');
 })();
 
 // ── screener: a signal filter selects only rows with the flag ──

@@ -24,6 +24,8 @@ import corporate as _corp       # corporate actions/announcements/shareholding/d
 import derivatives as _deriv     # F&O option-chain analytics (PCR/max-pain/ATM IV) from NSE
 import risk as _risk            # portfolio risk analytics (VaR/beta/drawdown/correlation)
 import entity_graph as _egraph   # grounded institution⇄company graph from NSE deal records
+import alerts as _alerts        # server-side price/technical alerts (store-backed)
+import apikeys as _apikeys      # public-API key issue/verify (hashed, store-backed)
 
 # Support both normal run and PyInstaller frozen exe
 _BASE_DIR = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
@@ -1417,6 +1419,125 @@ def entity_graph_route():
     graph["nodes"]["entities"] = _egraph.top_entities(graph, 40)
     graph["edges"] = graph["edges"][:120]
     return jsonify(graph)
+
+
+# ── Server-side alerts (owner-only) ──
+def _alert_notify(alert, quote):
+    """Deliver a fired alert. Push/email need external services; we POST to an
+    ALERT_WEBHOOK if configured, and always log. Non-fatal on failure."""
+    app.logger.info("ALERT FIRED %s %s %s (val=%s)", alert.get("symbol"),
+                    alert.get("type"), alert.get("value"), alert.get("last_value"))
+    hook = os.environ.get("ALERT_WEBHOOK", "").strip()
+    if hook:
+        try:
+            requests.post(hook, json={"alert": alert, "quote": quote}, timeout=6)
+        except Exception:
+            pass
+
+
+@app.route("/alerts", methods=["GET"])
+@require_owner
+def alerts_list():
+    return jsonify({"alerts": _alerts.list_alerts()})
+
+
+@app.route("/alerts", methods=["POST"])
+@require_owner
+@rate_limit("alerts", 60, 300)
+def alerts_create():
+    b = request.get_json(silent=True) or {}
+    try:
+        a = _alerts.create(b.get("symbol"), b.get("type"), b.get("value"), b.get("note", ""))
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    return jsonify({"alert": a})
+
+
+@app.route("/alerts/<alert_id>", methods=["DELETE"])
+@require_owner
+def alerts_delete(alert_id):
+    return jsonify({"deleted": _alerts.delete(alert_id)})
+
+
+@app.route("/alerts/<alert_id>/toggle", methods=["POST"])
+@require_owner
+def alerts_toggle(alert_id):
+    b = request.get_json(silent=True) or {}
+    return jsonify({"ok": _alerts.set_active(alert_id, bool(b.get("active", True)))})
+
+
+@app.route("/alerts/check", methods=["POST"])
+@require_owner
+@rate_limit("alerts", 30, 300)
+def alerts_check():
+    """Fetch live quotes for watched symbols, evaluate alerts, fire the newly
+    triggered ones. Returns what fired (and can be polled by the client)."""
+    syms = _alerts.symbols_watched()
+    quotes = {}
+    for s in syms[:100]:
+        _fetch_one(s, quotes)
+    fired = _alerts.check(quotes, notify=_alert_notify)
+    return jsonify({"checked": len(syms), "fired": fired})
+
+
+# ── Public API keys (owner issues; callers use X-API-Key) ──
+@app.route("/apikeys", methods=["GET"])
+@require_owner
+def apikeys_list():
+    return jsonify({"keys": _apikeys.list_keys()})
+
+
+@app.route("/apikeys", methods=["POST"])
+@require_owner
+def apikeys_issue():
+    b = request.get_json(silent=True) or {}
+    raw, rec = _apikeys.issue(b.get("label", ""))
+    # raw key is returned exactly once — the client must copy it now.
+    return jsonify({"key": raw, "record": rec})
+
+
+@app.route("/apikeys/<key_id>", methods=["DELETE"])
+@require_owner
+def apikeys_revoke(key_id):
+    return jsonify({"revoked": _apikeys.revoke(key_id)})
+
+
+def require_api_key(fn):
+    import functools
+
+    @functools.wraps(fn)
+    def wrapper(*a, **kw):
+        rec = _apikeys.verify(request.headers.get("X-API-Key", ""))
+        if not rec:
+            return jsonify({"error": "invalid-api-key",
+                            "detail": "Pass a valid key in the X-API-Key header. "
+                                      "The owner issues keys via /apikeys."}), 401
+        request._apikey = rec
+        return fn(*a, **kw)
+    return wrapper
+
+
+# ── Public data API (v1) — key-gated + rate-limited ──
+@app.route("/api/v1/quote")
+@require_api_key
+@rate_limit("apiv1", 120, 60)
+def api_v1_quote():
+    raw = request.args.get("symbols", "").strip().upper()
+    if not raw:
+        return jsonify({"error": "symbols required"}), 400
+    syms = [s.strip() for s in raw.split(",") if s.strip()][:50]
+    out = {}
+    for s in syms:
+        _fetch_one(s, out)
+    return jsonify({"quotes": out, "count": len(out)})
+
+
+@app.route("/api/v1/indices")
+@require_api_key
+@rate_limit("apiv1", 120, 60)
+def api_v1_indices():
+    # Reuse the live-indices snapshot the app already computes.
+    return indices_live()
 
 
 @app.route("/indices/history")

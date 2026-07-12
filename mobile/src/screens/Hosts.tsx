@@ -16,6 +16,8 @@ import CorporateScreen from './CorporateScreen';
 import DerivativesScreen from './DerivativesScreen';
 import RiskScreen from './RiskScreen';
 import EntityGraphScreen from './EntityGraphScreen';
+import AlertsScreen from './AlertsScreen';
+import DeveloperScreen from './DeveloperScreen';
 
 type SubTab = { key: string; label: string; render: () => React.ReactElement };
 
@@ -66,6 +68,7 @@ export function ListsHome() {
         { key: 'track', label: 'Track List', render: () => <TrackListScreen /> },
         { key: 'portfolio', label: 'Portfolio', render: () => <PortfolioScreen /> },
         { key: 'watchlist', label: 'Watchlist', render: () => <WatchlistScreen /> },
+        { key: 'alerts', label: 'Alerts', render: () => <AlertsScreen /> },
       ]}
     />
   );
@@ -81,6 +84,7 @@ export function ToolsHome() {
         { key: 'calc', label: 'Calculator', render: () => <CalculatorScreen /> },
         { key: 'indices', label: 'Indices', render: () => <IndicesScreen /> },
         { key: 'holidays', label: 'Holidays', render: () => <HolidaysScreen /> },
+        { key: 'developer', label: 'API', render: () => <DeveloperScreen /> },
       ]}
     />
   );
@@ -110,6 +114,8 @@ const MORE_ITEMS: { key: string; label: string; hint: string; render: () => Reac
   { key: 'derivatives', label: 'Derivatives', hint: 'F&O option chain · PCR · max-pain · payoff builder', render: () => <DerivativesScreen /> },
   { key: 'risk', label: 'Portfolio risk', hint: 'VaR · volatility · beta · drawdown · correlation', render: () => <RiskScreen /> },
   { key: 'entities', label: 'Entity graph', hint: 'Institution ⇄ company link analysis, grounded in NSE deals', render: () => <EntityGraphScreen /> },
+  { key: 'alerts', label: 'Alerts', hint: 'Server-side price / % / RSI alerts (owner)', render: () => <AlertsScreen /> },
+  { key: 'developer', label: 'Developer API', hint: 'Issue keys · public /api/v1 quote & indices (owner)', render: () => <DeveloperScreen /> },
   { key: 'indices', label: 'Indices', hint: 'Live index levels · day & 1Y change', render: () => <IndicesScreen /> },
   { key: 'holidays', label: 'Holidays', hint: 'NSE holiday calendar · market open/closed', render: () => <HolidaysScreen /> },
 ];

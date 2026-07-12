@@ -2,6 +2,7 @@
 // Indicators, 7 built-in strategies, and the trade simulator (SL / TP / trailing
 // stop, brokerage) all match the web behaviour so results are identical.
 import { Candle } from './api';
+import { CostModel, slip, tradeCharges } from './costs';
 
 type Arr = (number | null)[];
 
@@ -358,6 +359,7 @@ export type BacktestResult = {
     maxDD: number;
     profitFactor: number | null; // null = infinite
     avgRet: number;
+    totalCharges?: number; // present when a cost model was applied
   };
 };
 
@@ -369,6 +371,7 @@ export function runBacktest(
   params: number[],
   risk: Risk,
   custom?: CustomStrategy,
+  costs?: CostModel,
 ): BacktestResult {
   const raw =
     strat === CUSTOM_KEY && custom ? runCustomStrategy(candles, custom) : runStrategy(candles, strat, params);
@@ -394,6 +397,8 @@ export function runBacktest(
   let inPos = false;
   let buyPrice = 0;
   let buyT = 0;
+  let entryEquity = 0; // position notional at entry (for the charges calc)
+  let totalCharges = 0;
   let trailPeak = 0;
   let activeSL = 0;
   let activeTP = 0;
@@ -408,7 +413,9 @@ export function runBacktest(
     const hi = c.h ?? price;
 
     if (!inPos && entrySigs[i] === 1) {
-      buyPrice = price * (1 + BROK);
+      // Slippage moves the fill against us; charges are booked at exit.
+      buyPrice = costs ? slip(price, 'buy', costs) : price * (1 + BROK);
+      entryEquity = equity;
       buyT = c.t;
       activeSL = getSLpct(i, buyPrice);
       activeTP = getTPpct(activeSL);
@@ -430,9 +437,17 @@ export function runBacktest(
         if (hitTP) exitPrice = buyPrice * (1 + activeTP / 100);
         exitPrice = Math.max(lo, Math.min(hi, exitPrice));
 
-        const sellPrice = exitPrice * (1 - BROK);
+        const sellPrice = costs ? slip(exitPrice, 'sell', costs) : exitPrice * (1 - BROK);
         const ret = ((sellPrice - buyPrice) / buyPrice) * 100;
-        const pnl = equity * (ret / 100);
+        let pnl = equity * (ret / 100);
+        // Book realistic round-trip charges against the position notional.
+        if (costs) {
+          const buyVal = entryEquity;
+          const sellVal = entryEquity * (1 + ret / 100);
+          const ch = tradeCharges(buyVal, sellVal, costs).total;
+          totalCharges += ch;
+          pnl -= ch;
+        }
         equity += pnl;
         const reason = hitSL ? 'SL' : hitTrail ? 'Trail' : hitTP ? 'TP' : exitSigs[i] === 1 ? 'Signal' : 'End';
         trades.push({ buyT, sellT: c.t, buyP: buyPrice, sellP: sellPrice, ret, pnl, exit: reason });
@@ -469,6 +484,7 @@ export function runBacktest(
       maxDD,
       profitFactor: grossL ? grossW / grossL : null,
       avgRet: trades.length ? trades.reduce((s, t) => s + t.ret, 0) / trades.length : 0,
+      ...(costs ? { totalCharges: Math.round(totalCharges * 100) / 100 } : {}),
     },
   };
 }
