@@ -36,12 +36,18 @@ Status legend: ☐ pending · ◐ in progress · ☑ shipped
   NIFTY, max drawdown, Sharpe, weights, per-symbol correlation (`risk.py`).
 - ☐ futures basis/rollover; CVaR + factor/sector attribution (follow-up).
 
-## Phase 5 — Grounded entity graph, the Palantir layer (v3.6.0)
-- ☐ Rebuild relationship edges from filings / shareholding / board interlocks /
-  related-party disclosures — **with per-edge citations and time-versioning**.
-- ☐ Cross-entity link analysis (promoter/auditor/lender pivots, pledge
-  cascades, governance red-flags).
-- ☐ Scenario/impact propagation through the supply/ownership graph.
+## Phase 5 — Grounded entity graph, the Palantir layer (v3.6.0) — ☑ shipped
+- ☑ Grounded institution⇄company graph rebuilt from **NSE bulk/block deal
+  records** — every edge is **cited (raw deal rows) and time-versioned**
+  (first/last date), with entity resolution collapsing account-string
+  variants (`entity_graph.py`, `/entity-graph`).
+- ☑ Cross-entity link analysis: rank institutions by breadth, pivot by stock
+  (who's accumulating/distributing), net-flow aggregation with provenance.
+- ☑ Company nodes enriched with time-stamped shareholding structure.
+- ☐ Board interlocks / promoter-group / auditor-lender pivots / related-party
+  edges — need structured **filings parsing** (follow-up; not faked from
+  model knowledge).
+- ☐ Scenario/impact propagation through the supply/ownership graph (follow-up).
 
 ## Phase 6 — Accuracy, alerts, API (v3.7.0)
 - ☐ Backtest realism: slippage, STT, exchange charges, liquidity/tradability

@@ -15,6 +15,7 @@ import IndicesScreen from './IndicesScreen';
 import CorporateScreen from './CorporateScreen';
 import DerivativesScreen from './DerivativesScreen';
 import RiskScreen from './RiskScreen';
+import EntityGraphScreen from './EntityGraphScreen';
 
 type SubTab = { key: string; label: string; render: () => React.ReactElement };
 
@@ -76,6 +77,7 @@ export function ToolsHome() {
       tabs={[
         { key: 'universe', label: 'Universe', render: () => <UniverseScreen /> },
         { key: 'corporate', label: 'Corporate', render: () => <CorporateScreen /> },
+        { key: 'entities', label: 'Entities', render: () => <EntityGraphScreen /> },
         { key: 'calc', label: 'Calculator', render: () => <CalculatorScreen /> },
         { key: 'indices', label: 'Indices', render: () => <IndicesScreen /> },
         { key: 'holidays', label: 'Holidays', render: () => <HolidaysScreen /> },
@@ -107,6 +109,7 @@ const MORE_ITEMS: { key: string; label: string; hint: string; render: () => Reac
   { key: 'corporate', label: 'Corporate', hint: 'Filings, actions, shareholding, bulk/block deals', render: () => <CorporateScreen /> },
   { key: 'derivatives', label: 'Derivatives', hint: 'F&O option chain · PCR · max-pain · payoff builder', render: () => <DerivativesScreen /> },
   { key: 'risk', label: 'Portfolio risk', hint: 'VaR · volatility · beta · drawdown · correlation', render: () => <RiskScreen /> },
+  { key: 'entities', label: 'Entity graph', hint: 'Institution ⇄ company link analysis, grounded in NSE deals', render: () => <EntityGraphScreen /> },
   { key: 'indices', label: 'Indices', hint: 'Live index levels · day & 1Y change', render: () => <IndicesScreen /> },
   { key: 'holidays', label: 'Holidays', hint: 'NSE holiday calendar · market open/closed', render: () => <HolidaysScreen /> },
 ];

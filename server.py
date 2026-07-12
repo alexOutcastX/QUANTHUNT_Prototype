@@ -23,6 +23,7 @@ import store as _store         # SQLite persistence (kv + snapshots)
 import corporate as _corp       # corporate actions/announcements/shareholding/deals (NSE)
 import derivatives as _deriv     # F&O option-chain analytics (PCR/max-pain/ATM IV) from NSE
 import risk as _risk            # portfolio risk analytics (VaR/beta/drawdown/correlation)
+import entity_graph as _egraph   # grounded institution⇄company graph from NSE deal records
 
 # Support both normal run and PyInstaller frozen exe
 _BASE_DIR = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
@@ -1392,6 +1393,30 @@ def risk_portfolio():
     report["symbols_priced"] = list(hist.keys())
     report["symbols_missing"] = [h["symbol"] for h in holdings if h["symbol"] not in hist]
     return jsonify(report)
+
+
+# ── Grounded entity graph (institutional link analysis) ──
+@app.route("/entity-graph")
+@rate_limit("corp", 60, 300)
+def entity_graph_route():
+    """Grounded institution⇄company graph from NSE bulk/block deal records.
+    Optional views: ?entity=<name> for one institution's positions, ?symbol=
+    for all institutions active in a stock. Every edge carries citations."""
+    graph = _egraph.build_flows(_corp.deals(_corp_fetch))
+    entity = request.args.get("entity", "").strip()
+    symbol = request.args.get("symbol", "").strip().upper()
+    if entity:
+        return jsonify({"view": "entity", "entity": entity,
+                        "positions": _egraph.entity_positions(graph, entity),
+                        "asof": graph["asof"], "source": graph["source"]})
+    if symbol:
+        return jsonify({"view": "symbol", "symbol": symbol,
+                        "flows": _egraph.symbol_flows(graph, symbol),
+                        "asof": graph["asof"], "source": graph["source"]})
+    # Overview: ranked entities + the strongest edges, trimmed for payload size.
+    graph["nodes"]["entities"] = _egraph.top_entities(graph, 40)
+    graph["edges"] = graph["edges"][:120]
+    return jsonify(graph)
 
 
 @app.route("/indices/history")

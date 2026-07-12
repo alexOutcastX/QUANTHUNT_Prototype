@@ -338,7 +338,51 @@ export type RiskReport = {
 };
 export type RiskHolding = { symbol: string; qty: number };
 
+// Grounded entity graph — institution⇄company link analysis from NSE deals.
+export type DealCitation = {
+  date: string;
+  side: string;
+  qty: number | null;
+  price: number | null;
+  kind: string;
+};
+export type FlowEdge = {
+  entity: string;
+  entity_name: string;
+  symbol: string;
+  buy_qty: number;
+  sell_qty: number;
+  net_qty: number;
+  deal_count: number;
+  avg_price: number | null;
+  first_date: string;
+  last_date: string;
+  citations: DealCitation[];
+};
+export type EntityNode = {
+  id: string;
+  name: string;
+  kind: string;
+  deals: number;
+  breadth: number;
+  symbols: string[];
+};
+export type EntityGraph = {
+  nodes: { companies: { id: string; kind: string; deals: number }[]; entities: EntityNode[] };
+  edges: FlowEdge[];
+  asof: { first: string; last: string };
+  source: string;
+  disclaimer: string;
+};
+export type EntityView = { view: 'entity'; entity: string; positions: FlowEdge[]; asof: { first: string; last: string }; source: string };
+export type SymbolView = { view: 'symbol'; symbol: string; flows: FlowEdge[]; asof: { first: string; last: string }; source: string };
+
 export const api = {
+  entityGraph: () => getJson<EntityGraph>('/entity-graph', 30000),
+  entityPositions: (entity: string) =>
+    getJson<EntityView>('/entity-graph?entity=' + encodeURIComponent(entity), 30000),
+  symbolFlows: (symbol: string) =>
+    getJson<SymbolView>('/entity-graph?symbol=' + encodeURIComponent(symbol), 30000),
   optionChain: (symbol: string, expiry?: string) =>
     getJson<OptionChain>(
       '/derivatives/option-chain?symbol=' + encodeURIComponent(symbol) +

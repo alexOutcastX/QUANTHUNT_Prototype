@@ -80,6 +80,12 @@ feature/* ──PR──▶ main (CI, integration; does NOT deploy)
 
 Canonical per-version notes are in **[CHANGELOG.md](CHANGELOG.md)**. Summary:
 
+### v3.6.0 — grounded entity graph (Palantir layer)
+
+| Area | Change |
+|---|---|
+| New | **Entity graph** (Tools → Entities): institution ⇄ company link analysis from NSE bulk/block deals — cited + time-versioned edges, entity resolution, Institutions / By-stock pivots (`/entity-graph`) |
+
 ### v3.5.0 — derivatives + portfolio risk
 
 | Area | Change |
