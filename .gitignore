@@ -28,3 +28,6 @@ broker_token.json
 quanthunt.db
 quanthunt.db-wal
 quanthunt.db-shm
+
+# Local throwaway static server used only for headless UI verification
+fake_server.py
