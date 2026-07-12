@@ -7,8 +7,21 @@ import { theme } from './theme';
 export const UP = '#10b981';
 export const DOWN = '#f43f5e';
 
-export function chartHtml(candles: Candle[], barSec: number): string {
+// Simple-moving-average overlays. Distinct but muted so they read as reference
+// lines behind the candles, never competing with the up/down colour. The Chart
+// screen renders a toggle chip per period; the on/off set is persisted.
+export const MA_CONFIG: { period: number; color: string }[] = [
+  { period: 20, color: '#5b93c7' }, // muted blue
+  { period: 50, color: '#b48ead' }, // muted mauve
+  { period: 200, color: '#c9a45b' }, // muted gold
+];
+export const DEFAULT_MA: number[] = [20, 50, 200];
+
+// `maSet` is the set of SMA periods to draw (default 20/50/200). StockDetail
+// calls chartHtml(candles, barSec) and gets the default overlays.
+export function chartHtml(candles: Candle[], barSec: number, maSet: number[] = DEFAULT_MA): string {
   const data = JSON.stringify(candles);
+  const mas = JSON.stringify(MA_CONFIG.filter((m) => maSet.includes(m.period)));
   return `<!DOCTYPE html><html><head>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
   <style>html,body,#c{height:100%;margin:0;background:${theme.bg}}
@@ -35,12 +48,14 @@ export function chartHtml(candles: Candle[], barSec: number): string {
     });
     var cs=chart.addCandlestickSeries({upColor:'${UP}',downColor:'${DOWN}',borderUpColor:'${UP}',borderDownColor:'${DOWN}',wickUpColor:'${UP}',wickDownColor:'${DOWN}'});
     cs.setData(candles.map(function(c){return{time:c.t,open:c.o,high:c.h,low:c.l,close:c.c};}));
+    // Volume panel — green/red histogram pinned to the bottom 20% of the pane.
     var vs=chart.addHistogramSeries({priceFormat:{type:'volume'},priceScaleId:'vol'});
     chart.priceScale('vol').applyOptions({scaleMargins:{top:0.8,bottom:0}});
-    vs.setData(candles.map(function(c){return{time:c.t,value:c.v,color:c.c>=c.o?'rgba(16,185,129,0.3)':'rgba(244,63,94,0.3)'};}));
+    vs.setData(candles.map(function(c){return{time:c.t,value:c.v,color:c.c>=c.o?'rgba(16,185,129,0.35)':'rgba(244,63,94,0.35)'};}));
     var gap=barSec*2.5;
-    function seg(key,color,w){
-      var pts=candles.filter(function(c){return c[key]!=null;}).map(function(c){return{time:c.t,value:c[key]};});
+    // Draw a line series, splitting into segments across data gaps so the MA
+    // never draws a straight line over a market holiday / missing bar.
+    function drawSegments(pts,color,w){
       var run=[];
       for(var i=0;i<pts.length;i++){
         if(i>0&&pts[i].time-pts[i-1].time>gap){if(run.length>1){var s=chart.addLineSeries({color:color,lineWidth:w,priceLineVisible:false,lastValueVisible:false,crosshairMarkerVisible:false});s.setData(run);}run=[];}
@@ -48,9 +63,19 @@ export function chartHtml(candles: Candle[], barSec: number): string {
       }
       if(run.length>1){var s2=chart.addLineSeries({color:color,lineWidth:w,priceLineVisible:false,lastValueVisible:false,crosshairMarkerVisible:false});s2.setData(run);}
     }
-    seg('ema20','${theme.muted2}',1);
-    seg('ema50','${theme.muted}',2);
-    seg('ema200','${DOWN}',2);
+    // Compute + draw each enabled SMA over the close series.
+    var closes=candles.filter(function(c){return c.c!=null;});
+    var mas=${mas};
+    mas.forEach(function(m){
+      if(closes.length<m.period)return;
+      var vals=[],sum=0;
+      for(var i=0;i<closes.length;i++){
+        sum+=closes[i].c;
+        if(i>=m.period)sum-=closes[i-m.period].c;
+        if(i>=m.period-1)vals.push({time:closes[i].t,value:+(sum/m.period).toFixed(4)});
+      }
+      drawSegments(vals,m.color,2);
+    });
     chart.timeScale().fitContent();
   })();
   </script>
