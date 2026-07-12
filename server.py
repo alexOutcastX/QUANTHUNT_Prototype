@@ -19,6 +19,7 @@ import ai_graph as _ai         # AI-generated relationship graphs (any symbol)
 import broker as _broker       # BYOB Zerodha connect (read-only, single user)
 import holidays as _holidays   # NSE trading holidays + market open/closed status
 import auth as _auth           # owner passcode gate for owner-only endpoints
+import store as _store         # SQLite persistence (kv + snapshots)
 
 # Support both normal run and PyInstaller frozen exe
 _BASE_DIR = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
@@ -332,12 +333,50 @@ def rate_limit(name, limit, window):
     return deco
 
 
+# ── observability: request metrics + structured access log + error capture ──
+_METRICS = {"requests": 0, "errors": 0, "by_status": {}, "slow": 0}
+_METRICS_LOCK = threading.Lock()
+
+
+@app.before_request
+def _req_start():
+    request._t0 = time.time()
+
+
 @app.after_request
 def _security_headers(resp):
     resp.headers.setdefault("X-Content-Type-Options", "nosniff")
     resp.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
     resp.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    try:
+        dt = time.time() - getattr(request, "_t0", time.time())
+        with _METRICS_LOCK:
+            _METRICS["requests"] += 1
+            b = str(resp.status_code)
+            _METRICS["by_status"][b] = _METRICS["by_status"].get(b, 0) + 1
+            if resp.status_code >= 500:
+                _METRICS["errors"] += 1
+            if dt > 5:
+                _METRICS["slow"] += 1
+        # concise structured access line (path only, no query — avoids logging secrets)
+        if resp.status_code >= 400 or dt > 5:
+            logging.info("req %s %s -> %s %.0fms", request.method,
+                         request.path, resp.status_code, dt * 1000)
+    except Exception:
+        pass
     return resp
+
+
+@app.errorhandler(Exception)
+def _on_error(e):
+    from werkzeug.exceptions import HTTPException
+    if isinstance(e, HTTPException):
+        return e
+    logging.exception("unhandled error on %s", request.path)
+    with _METRICS_LOCK:
+        _METRICS["errors"] += 1
+    return jsonify({"error": "server-error",
+                    "detail": "Something went wrong — please retry."}), 500
 
 
 # ── owner authentication (protects broker + future per-user endpoints) ──
@@ -405,6 +444,10 @@ def health():
         "version": _app_version(),
         "uptime_s": int(time.time() - _STARTED),
         "ai_graphs": _ai.available(),
+        "auth": _auth.configured(),
+        "db": safe(lambda: _store.stats(), {"ok": False}),
+        "requests": _METRICS["requests"],
+        "errors": _METRICS["errors"],
         "caches": {
             "fundamentals": safe(lambda: len(getattr(_fund, "_cache", {}) or {}), 0),
             "graphs": safe(lambda: len(_ai._load()), 0),
@@ -412,6 +455,17 @@ def health():
             "news": safe(lambda: len(getattr(_news, "_cache", {}) or {}), 0),
         },
     })
+
+
+@app.route("/metrics")
+@require_owner
+def metrics():
+    """Owner-only operational metrics (request/error counters, DB, caches)."""
+    with _METRICS_LOCK:
+        m = dict(_METRICS, by_status=dict(_METRICS["by_status"]))
+    m["uptime_s"] = int(time.time() - _STARTED)
+    m["db"] = _store.stats()
+    return jsonify(m)
 
 
 @app.route("/version")
@@ -1210,8 +1264,27 @@ def indices_live():
             except Exception as e:
                 log.debug("Index fetch failed for %s: %s", yf_sym, e)
         _indices_cache["ts"], _indices_cache["data"] = now, rows
+        # Persist a daily history point per index (throttled to once/hour) so the
+        # app builds a real long-run series over time.
+        try:
+            last = _store.kv_get("indices_snap_ts", 0)
+            if now - last > 3600:
+                for r in rows:
+                    _store.snap_put("index", r["key"], {"level": r.get("level"), "chg": r.get("chg")})
+                _store.kv_set("indices_snap_ts", int(now))
+        except Exception as e:
+            log.debug("index snapshot failed: %s", e)
     return jsonify({"indices": _indices_cache["data"],
                     "asof": int(time.time()), "cached": cached})
+
+
+@app.route("/indices/history")
+def indices_history():
+    """Persisted level history for one index (from the snapshot store)."""
+    key = request.args.get("key", "").strip()
+    if not key:
+        return jsonify({"error": "key required"}), 400
+    return jsonify({"key": key, "series": _store.snap_series("index", key, 400)})
 
 
 @app.route("/scan")

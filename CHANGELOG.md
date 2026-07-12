@@ -3,6 +3,27 @@
 All notable changes are recorded here. Versioning is [SemVer](https://semver.org):
 `MAJOR.MINOR.PATCH`.
 
+## [3.3.0] — 2026-07-12
+Data platform: persistent SQLite store, observability, and a real
+CI-gated test suite.
+
+### Backend
+- **`store.py`** — thread-safe SQLite persistence (stdlib): key/value +
+  append-only snapshots. Survives restarts; git-ignored and
+  rsync-excluded on deploy. `/indices` now records an hourly level
+  snapshot per index, exposed at **`/indices/history?key=…`** — the app
+  starts building its own long-run series.
+- **Observability**: per-request metrics + structured access log for
+  slow/error requests, a global JSON error handler (no stack traces
+  leaked), enriched **`/health`** (db, auth, request/error counters) and
+  an owner-only **`/metrics`** endpoint.
+
+### CI / tests
+- Test suite expanded and wired as a CI gate: Python (auth, holidays,
+  store — 13 cases) plus **JS engine tests** (backtest custom-strategy +
+  built-ins, screener signal filters) bundled with esbuild and run on
+  Node. Regressions in the math now fail CI.
+
 ## [3.2.0] — 2026-07-12
 Security foundation: owner authentication + broker lockdown + tighter CORS.
 
@@ -480,6 +501,7 @@ Oracle Always-Free VM with push-to-deploy.
 - Embedded TradingView Advanced Chart tab, plus deep-link to the user's
   logged-in TradingView account.
 
+[3.3.0]: https://github.com/alexOutcastX/QUANTHUNT_Prototype/releases/tag/v3.3.0
 [3.2.0]: https://github.com/alexOutcastX/QUANTHUNT_Prototype/releases/tag/v3.2.0
 [3.1.1]: https://github.com/alexOutcastX/QUANTHUNT_Prototype/releases/tag/v3.1.1
 [3.1.0]: https://github.com/alexOutcastX/QUANTHUNT_Prototype/releases/tag/v3.1.0
