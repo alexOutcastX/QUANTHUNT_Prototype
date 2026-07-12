@@ -13,12 +13,14 @@ Fields returned per symbol (all best-effort; missing → null):
   beta,                          (vs NIFTY 50, 1y daily returns)
   sqzOn, sqzFire, sqzMom,        (TTM squeeze)
   s1, s2, s3, r1, r2, r3,        (classic floor-trader pivots)
+  cam_h3, cam_h4, cam_l3, cam_l4,(Camarilla levels from the previous bar)
   golden_cross, death_cross,     (50-DMA crossed the 200-DMA on the latest bar)
   cross_20_50_up, cross_20_50_down,
   macd_bull_cross, macd_bear_cross,
   gap_up, gap_down,              (open vs previous bar's high/low)
   new_high_52w, new_low_52w,     (fresh 52-week extreme on the latest bar)
-  volume_spike                   (volume >= 2.5x the 20-day average)
+  volume_spike,                  (volume >= 2.5x the 20-day average)
+  cam_break_up, cam_break_down   (close beyond the Camarilla H4/L4 level)
 """
 import math
 import threading
@@ -219,6 +221,18 @@ def _compute_row(sym, idx_ret):
     s1, s2, s3 = 2 * P - H, P - (H - L), L - 2 * (H - P)
     r1, r2, r3 = 2 * P - L, P + (H - L), H + 2 * (P - L)
 
+    # Camarilla levels from the PREVIOUS completed bar (standard practice:
+    # today's trading levels derive from yesterday's OHLC — and it means the
+    # break flags below can actually fire when today's close escapes the band).
+    if len(close) >= 2:
+        pH, pL, pC = float(high.iloc[-2]), float(low.iloc[-2]), float(close.iloc[-2])
+    else:
+        pH, pL, pC = H, L, C
+    cam_h4 = pC + (pH - pL) * 1.1 / 2
+    cam_h3 = pC + (pH - pL) * 1.1 / 4
+    cam_l3 = pC - (pH - pL) * 1.1 / 4
+    cam_l4 = pC - (pH - pL) * 1.1 / 2
+
     return {
         "price": round(price, 2),
         "prevClose": round(prev, 2),
@@ -245,6 +259,8 @@ def _compute_row(sym, idx_ret):
         "sqzMom": sqz_mom,
         "s1": round(s1, 2), "s2": round(s2, 2), "s3": round(s3, 2),
         "r1": round(r1, 2), "r2": round(r2, 2), "r3": round(r3, 2),
+        "cam_h3": round(cam_h3, 2), "cam_h4": round(cam_h4, 2),
+        "cam_l3": round(cam_l3, 2), "cam_l4": round(cam_l4, 2),
         "golden_cross": golden_cross,
         "death_cross": death_cross,
         "cross_20_50_up": cross_20_50_up,
@@ -256,6 +272,8 @@ def _compute_row(sym, idx_ret):
         "new_high_52w": new_high_52w,
         "new_low_52w": new_low_52w,
         "volume_spike": volume_spike,
+        "cam_break_up": bool(price > cam_h4),
+        "cam_break_down": bool(price < cam_l4),
     }
 
 

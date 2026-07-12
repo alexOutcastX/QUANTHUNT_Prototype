@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { api } from '../api';
 import { Assessment, assess } from '../analysis';
+import SymbolInput from '../components/SymbolInput';
 import { theme } from '../theme';
 
 function verdictColor(v: string): string {
@@ -34,8 +35,8 @@ export default function AnalysisScreen() {
   const [msg, setMsg] = useState<string | null>(null);
   const [result, setResult] = useState<Assessment | null>(null);
 
-  const run = async () => {
-    const symbol = sym.trim().toUpperCase().replace(/^NSE:/, '');
+  const run = async (symOverride?: string) => {
+    const symbol = (symOverride ?? sym).trim().toUpperCase().replace(/^NSE:/, '');
     const tgt = Math.max(0.1, parseFloat(target) || 10);
     if (!symbol) {
       setMsg('⚠ Enter a symbol to analyse.');
@@ -86,15 +87,13 @@ export default function AnalysisScreen() {
       <View style={styles.inputs}>
         <View style={styles.field}>
           <Text style={styles.label}>Symbol</Text>
-          <TextInput
-            style={styles.input}
+          <SymbolInput
+            inputStyle={styles.input}
             value={sym}
             onChangeText={setSym}
-            autoCapitalize="characters"
+            onSelect={(s) => run(s)}
+            onSubmit={() => run()}
             placeholder="RELIANCE"
-            placeholderTextColor={theme.muted}
-            returnKeyType="go"
-            onSubmitEditing={run}
           />
         </View>
         <View style={styles.fieldSm}>
@@ -110,7 +109,7 @@ export default function AnalysisScreen() {
         </View>
       </View>
 
-      <TouchableOpacity style={styles.btn} onPress={run} disabled={busy}>
+      <TouchableOpacity style={styles.btn} onPress={() => run()} disabled={busy}>
         {busy ? (
           <ActivityIndicator color={theme.bg} />
         ) : (
@@ -212,8 +211,8 @@ const styles = StyleSheet.create({
   content: { padding: 16, paddingBottom: 48, width: '100%', maxWidth: 760, alignSelf: 'center' },
   h1: { color: theme.text, fontSize: 18, fontWeight: '700' },
   sub: { color: theme.muted, fontSize: 12, marginTop: 4, marginBottom: 16, lineHeight: 17 },
-  inputs: { flexDirection: 'row', gap: 10 },
-  field: { flex: 1 },
+  inputs: { flexDirection: 'row', gap: 10, zIndex: 50 },
+  field: { flex: 1, zIndex: 50 },
   fieldSm: { width: 90 },
   label: { color: theme.muted, fontSize: 11, marginBottom: 4, fontFamily: theme.mono },
   input: {

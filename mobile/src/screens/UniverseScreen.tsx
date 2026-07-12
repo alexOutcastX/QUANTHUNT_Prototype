@@ -19,7 +19,12 @@ const INDICES = [
   'NIFTY SMALLCAP 250', 'NIFTY MICROCAP 250',
 ];
 
-type UnivRow = IndexConstituent & ReturnsRow;
+// Market-cap segments, SEBI-style rank classification over the NIFTY 500:
+// top 100 by market cap = large, next 150 = mid, rest = small.
+const SEGMENTS = ['LARGE CAP', 'MID CAP', 'SMALL CAP'] as const;
+const isSegment = (n: string) => (SEGMENTS as readonly string[]).includes(n);
+
+type UnivRow = IndexConstituent & ReturnsRow & { mcap?: number | null };
 
 const pct = (v: number | null | undefined, d = 2) =>
   v == null || !isFinite(v) ? '—' : (v >= 0 ? '+' : '') + v.toFixed(d) + '%';
@@ -33,7 +38,7 @@ const heatBg = (v: number | null | undefined) => {
 };
 
 type Col = { key: keyof UnivRow | 'symbol'; label: string; w: number };
-const COLS: Col[] = [
+const BASE_COLS: Col[] = [
   { key: 'symbol', label: 'Symbol', w: 110 },
   { key: 'price', label: 'CMP', w: 78 },
   { key: 'chg', label: 'Chg%', w: 66 },
@@ -41,7 +46,7 @@ const COLS: Col[] = [
   { key: 'ret3y', label: '3Y', w: 66 },
   { key: 'ret5y', label: '5Y', w: 66 },
 ];
-const TABLE_W = COLS.reduce((a, c) => a + c.w, 0);
+const MCAP_COL: Col = { key: 'mcap', label: 'MCap cr', w: 92 };
 
 export default function UniverseScreen() {
   const [indexName, setIndexName] = useState('NIFTY 50');
@@ -57,20 +62,51 @@ export default function UniverseScreen() {
   const load = useCallback(async (name: string) => {
     setError(null);
     try {
-      const idx = await api.indexConstituents(name);
-      const base = idx.data || [];
+      const segment = isSegment(name);
+      const idx = await api.indexConstituents(segment ? 'NIFTY 500' : name);
+      let base: UnivRow[] = (idx.data || []).map((c) => ({ ...c }));
       if (!base.length) {
         setRows([]);
         setNote(idx.error || 'No constituents.');
         return;
       }
-      setRows(base.map((c) => ({ ...c })));
-      setNote(`${base.length} constituents · loading returns…`);
+      if (segment) {
+        // Rank the NIFTY 500 by market cap, then keep this segment's band.
+        setRows([]);
+        setNote('Classifying NIFTY 500 by market cap…');
+        const syms = base.map((c) => c.symbol);
+        let mcaps: Record<string, Record<string, unknown>> = {};
+        let bulk = await api.fundamentalsBulk(syms);
+        mcaps = { ...bulk.data };
+        for (let round = 0; round < 10 && bulk.pending.length; round++) {
+          await new Promise((r) => setTimeout(r, 3000));
+          bulk = await api.fundamentalsBulk(bulk.pending);
+          mcaps = { ...mcaps, ...bulk.data };
+        }
+        const withCap = base
+          .map((c) => ({ ...c, mcap: (mcaps[c.symbol]?.market_cap_cr as number | undefined) ?? null }))
+          .filter((c) => c.mcap != null)
+          .sort((a, b) => (b.mcap as number) - (a.mcap as number));
+        const bands: Record<string, [number, number]> = {
+          'LARGE CAP': [0, 100],
+          'MID CAP': [100, 250],
+          'SMALL CAP': [250, withCap.length],
+        };
+        const [from, to] = bands[name];
+        base = withCap.slice(from, to);
+        if (!base.length) {
+          setRows([]);
+          setNote('Market caps unavailable right now — try again shortly.');
+          return;
+        }
+      }
+      setRows(base);
+      setNote(`${base.length} ${segment ? name.toLowerCase() + ' stocks (by mcap rank in NIFTY 500)' : 'constituents'} · loading returns…`);
       // Returns are heavier; layer them in once loaded.
       try {
         const rets = await api.returns(base.map((c) => c.symbol));
         setRows(base.map((c) => ({ ...c, ...(rets[c.symbol] || {}) })));
-        setNote(`${base.length} constituents`);
+        setNote(`${base.length} ${segment ? name.toLowerCase() + ' stocks (by mcap rank in NIFTY 500)' : 'constituents'}`);
       } catch {
         setNote(`${base.length} constituents · returns unavailable`);
       }
@@ -101,6 +137,13 @@ export default function UniverseScreen() {
     }
   };
 
+  const segment = isSegment(indexName);
+  const COLS = useMemo<Col[]>(
+    () => (segment ? [BASE_COLS[0], MCAP_COL, ...BASE_COLS.slice(1)] : BASE_COLS),
+    [segment],
+  );
+  const TABLE_W = COLS.reduce((a, c) => a + c.w, 0);
+
   const sorted = useMemo(() => {
     return [...rows].sort((a, b) => {
       if (sortCol === 'symbol') return a.symbol.localeCompare(b.symbol) * sortDir;
@@ -114,14 +157,19 @@ export default function UniverseScreen() {
 
   const renderRow = ({ item }: { item: UnivRow }) => (
     <View style={[styles.row, heatmap ? { backgroundColor: heatBg(item.chg) } : null]}>
-      <Text style={[styles.cell, styles.cSym, { width: COLS[0].w }]}>{item.symbol}</Text>
-      <Text style={[styles.cell, styles.right, { width: COLS[1].w }]}>
+      <Text style={[styles.cell, styles.cSym, { width: BASE_COLS[0].w }]}>{item.symbol}</Text>
+      {segment ? (
+        <Text style={[styles.cell, styles.right, { width: MCAP_COL.w }]}>
+          {item.mcap != null ? Math.round(item.mcap).toLocaleString('en-IN') : '—'}
+        </Text>
+      ) : null}
+      <Text style={[styles.cell, styles.right, { width: BASE_COLS[1].w }]}>
         {item.price != null ? item.price.toFixed(1) : '—'}
       </Text>
-      <Text style={[styles.cell, styles.right, { width: COLS[2].w, color: colorOf(item.chg) }]}>{pct(item.chg)}</Text>
-      <Text style={[styles.cell, styles.right, { width: COLS[3].w, color: colorOf(item.ret1y) }]}>{pct(item.ret1y, 0)}</Text>
-      <Text style={[styles.cell, styles.right, { width: COLS[4].w, color: colorOf(item.ret3y) }]}>{pct(item.ret3y, 0)}</Text>
-      <Text style={[styles.cell, styles.right, { width: COLS[5].w, color: colorOf(item.ret5y) }]}>{pct(item.ret5y, 0)}</Text>
+      <Text style={[styles.cell, styles.right, { width: BASE_COLS[2].w, color: colorOf(item.chg) }]}>{pct(item.chg)}</Text>
+      <Text style={[styles.cell, styles.right, { width: BASE_COLS[3].w, color: colorOf(item.ret1y) }]}>{pct(item.ret1y, 0)}</Text>
+      <Text style={[styles.cell, styles.right, { width: BASE_COLS[4].w, color: colorOf(item.ret3y) }]}>{pct(item.ret3y, 0)}</Text>
+      <Text style={[styles.cell, styles.right, { width: BASE_COLS[5].w, color: colorOf(item.ret5y) }]}>{pct(item.ret5y, 0)}</Text>
     </View>
   );
 
@@ -138,6 +186,19 @@ export default function UniverseScreen() {
     <View style={styles.container}>
       <View style={styles.topBar}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
+          {SEGMENTS.map((seg) => (
+            <TouchableOpacity
+              key={seg}
+              style={[styles.chip, styles.segChip, seg === indexName && styles.chipOn]}
+              onPress={() => {
+                setIndexName(seg);
+                setSortCol('mcap');
+                setSortDir(-1);
+              }}
+            >
+              <Text style={[styles.chipTxt, seg === indexName && styles.chipTxtOn]}>{seg}</Text>
+            </TouchableOpacity>
+          ))}
           {INDICES.map((idx) => (
             <TouchableOpacity
               key={idx}
@@ -193,6 +254,7 @@ const styles = StyleSheet.create({
   chips: { paddingHorizontal: 10, paddingVertical: 8, gap: 6 },
   chip: { borderColor: theme.border2, borderWidth: 1, borderRadius: 6, paddingHorizontal: 10, paddingVertical: 5 },
   chipOn: { backgroundColor: theme.accent, borderColor: theme.accent },
+  segChip: { borderStyle: 'dashed' },
   chipTxt: { color: theme.muted2, fontFamily: theme.mono, fontSize: 11 },
   chipTxtOn: { color: theme.bg, fontWeight: '700' },
   metaRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 12, paddingVertical: 8 },

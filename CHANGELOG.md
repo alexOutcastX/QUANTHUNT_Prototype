@@ -3,6 +3,29 @@
 All notable changes are recorded here. Versioning is [SemVer](https://semver.org):
 `MAJOR.MINOR.PATCH`.
 
+## [2.11.0] — 2026-07-12
+Feature-gap close-out: autocomplete, custom strategies, Camarilla,
+market-cap segments, Indices & Holidays pages, ticker strip.
+
+### New
+- **Symbol autocomplete** everywhere a symbol is typed (Chart, Institutional,
+  TradingView, Terminal command line): type-ahead over the full NSE/BSE
+  universe with symbol + company-name matching.
+- **Custom strategy builder** in Backtest: build your own BUY/SELL rules
+  (close/RSI/EMA/SMA/MACD-hist/volume × >/<
+  /cross-above/cross-below × value or another MA), AND semantics,
+  persisted across launches, backtested with the same SL/TP/trailing engine.
+- **Camarilla levels** (H3/H4/L3/L4 from the previous session) in /scan,
+  stock detail and CSV, plus two true event flags — H4 breakout / L4
+  breakdown — as one-tap Signals filters.
+- **Market-cap segments** in Universe: LARGE/MID/SMALL CAP chips classify the
+  NIFTY 500 by market-cap rank (SEBI-style 100/150/rest) with an MCap column.
+- **Indices page**: 12 major indices with live level, day % and 1Y % (new
+  `/indices` endpoint, 5-min cache).
+- **Market Holidays page**: NSE 2026 calendar with live market OPEN/CLOSED
+  status and next holiday (new `/holidays` endpoint; indicative list).
+- **Scrolling ticker strip** on the desktop shell: live index levels marquee.
+
 ## [2.10.0] — 2026-07-12
 Production hardening: PWA install, rate limiting, health checks, legal page,
 HTTPS/backup tooling.
@@ -327,6 +350,7 @@ Oracle Always-Free VM with push-to-deploy.
 - Embedded TradingView Advanced Chart tab, plus deep-link to the user's
   logged-in TradingView account.
 
+[2.11.0]: https://github.com/alexOutcastX/QUANTHUNT_Prototype/releases/tag/v2.11.0
 [2.10.0]: https://github.com/alexOutcastX/QUANTHUNT_Prototype/releases/tag/v2.10.0
 [2.9.0]: https://github.com/alexOutcastX/QUANTHUNT_Prototype/releases/tag/v2.9.0
 [2.8.0]: https://github.com/alexOutcastX/QUANTHUNT_Prototype/releases/tag/v2.8.0

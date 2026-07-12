@@ -76,6 +76,16 @@ feature/* ──PR──▶ main (CI, integration; does NOT deploy)
 
 Canonical per-version notes are in **[CHANGELOG.md](CHANGELOG.md)**. Summary:
 
+### v2.11.0 — Feature-gap close-out
+
+| Area | Change |
+|---|---|
+| UX | **Symbol autocomplete** (full-universe type-ahead) in Chart / Institutional / TradingView / Terminal; desktop **ticker strip** |
+| Backtest | **Custom strategy builder** — user-defined BUY/SELL rules, persisted, full risk engine |
+| Screener | **Camarilla H3/H4/L3/L4** + H4-breakout / L4-breakdown signal filters, detail + CSV |
+| Universe | **LARGE / MID / SMALL CAP** segments (NIFTY 500 mcap rank) with MCap column |
+| New pages | **Indices** (live levels via `/indices`) and **Market Holidays** (`/holidays`, open/closed status) |
+
 ### v2.10.0 — Production hardening
 
 | Area | Change |
