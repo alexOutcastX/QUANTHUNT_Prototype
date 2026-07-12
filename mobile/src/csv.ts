@@ -79,23 +79,98 @@ export function buildCsv(rows: Row[]): string {
   return head + '\n' + body + '\n';
 }
 
+const slug = (name: string) => name.toLowerCase().replace(/\s+/g, '-');
+
+// Trigger a real file download on web via a Blob + anchor (no DOM lib in this
+// tsconfig, so everything is reached through globalThis).
+function webDownload(data: string, filename: string, mime: string): boolean {
+  const doc = (globalThis as { document?: any }).document;
+  const url = (globalThis as { URL?: any }).URL;
+  if (!doc || !url) return false;
+  const blob = new (globalThis as { Blob?: any }).Blob([data], { type: mime });
+  const a = doc.createElement('a');
+  a.href = url.createObjectURL(blob);
+  a.download = filename;
+  doc.body.appendChild(a);
+  a.click();
+  doc.body.removeChild(a);
+  url.revokeObjectURL(a.href);
+  return true;
+}
+
 export async function exportCsv(rows: Row[], name: string): Promise<void> {
   const csv = buildCsv(rows);
-  const filename = `taureye-${name.toLowerCase().replace(/\s+/g, '-')}.csv`;
+  const filename = `taureye-${slug(name)}.csv`;
   if (Platform.OS === 'web') {
-    // No DOM lib in this tsconfig — reach document via globalThis.
-    const doc = (globalThis as { document?: any }).document;
-    const url = (globalThis as { URL?: any }).URL;
-    if (!doc || !url) return;
-    const blob = new (globalThis as { Blob?: any }).Blob([csv], { type: 'text/csv' });
-    const a = doc.createElement('a');
-    a.href = url.createObjectURL(blob);
-    a.download = filename;
-    doc.body.appendChild(a);
-    a.click();
-    doc.body.removeChild(a);
-    url.revokeObjectURL(a.href);
+    webDownload(csv, filename, 'text/csv');
   } else {
     await Share.share({ title: filename, message: csv });
   }
+}
+
+const htmlEsc = (v: unknown): string => {
+  if (v == null) return '';
+  return String(v)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+};
+
+function buildHtmlTable(rows: Row[], styled: boolean): string {
+  const th = FIELDS.map((f) => `<th>${htmlEsc(f.header)}</th>`).join('');
+  const body = rows
+    .map((r) => '<tr>' + FIELDS.map((f) => `<td>${htmlEsc(f.get(r))}</td>`).join('') + '</tr>')
+    .join('');
+  const css = styled
+    ? '<style>body{font-family:Arial,Helvetica,sans-serif;color:#111}' +
+      'table{border-collapse:collapse;width:100%;font-size:11px}' +
+      'th,td{border:1px solid #ccc;padding:4px 6px;text-align:right;white-space:nowrap}' +
+      'th{background:#f0f2f5;text-align:center}' +
+      'td:first-child,th:first-child{text-align:left}</style>'
+    : '';
+  return `${css}<table><thead><tr>${th}</tr></thead><tbody>${body}</tbody></table>`;
+}
+
+// Excel: no xlsx dep — emit an HTML table Excel can open, downloaded as .xls
+// (web). On native, fall back to sharing the CSV text.
+export async function exportExcel(rows: Row[], name: string): Promise<void> {
+  const filename = `taureye-${slug(name)}.xls`;
+  if (Platform.OS === 'web') {
+    const html =
+      '<html><head><meta charset="utf-8"></head><body>' +
+      buildHtmlTable(rows, false) +
+      '</body></html>';
+    webDownload(html, filename, 'application/vnd.ms-excel');
+  } else {
+    await Share.share({ title: `taureye-${slug(name)}.csv`, message: buildCsv(rows) });
+  }
+}
+
+// PDF: no jspdf dep — open a print window with a styled table and invoke the
+// browser's print/"Save as PDF" (web only). No-op / CSV share off web.
+export async function exportPdf(rows: Row[], name: string): Promise<void> {
+  if (Platform.OS !== 'web') {
+    await Share.share({ title: `taureye-${slug(name)}.csv`, message: buildCsv(rows) });
+    return;
+  }
+  const win = (globalThis as { window?: any }).window;
+  const w = win?.open?.('', '_blank');
+  if (!w) return; // popup blocked
+  const title = `TaurEye — ${name}`;
+  w.document.write(
+    `<html><head><title>${htmlEsc(title)}</title></head><body>` +
+      `<h3 style="font-family:Arial,sans-serif">${htmlEsc(title)}</h3>` +
+      buildHtmlTable(rows, true) +
+      '</body></html>',
+  );
+  w.document.close();
+  w.focus();
+  // Let layout settle before printing.
+  setTimeout(() => {
+    try {
+      w.print();
+    } catch {
+      /* user can print manually */
+    }
+  }, 250);
 }
