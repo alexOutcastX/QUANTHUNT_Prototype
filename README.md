@@ -25,8 +25,12 @@ and at `GET /version`. The pre-v2 single-file HTML UI is kept at **`/legacy`**.
   (`EODHD_API_KEY` / `FUND_SOURCE`).
 - **Analysis** — institutional upside-probability model (Monte Carlo +
   historical frequency across 1M/3M/6M/1Y), score/verdict, suggested holding
-  term; plus strategy **backtesting** (7 strategies, SL/TP/trailing) with a
-  price chart + buy/sell signal markers, equity curve, and trade log.
+  term; strategy **backtesting** (7 strategies, SL/TP/trailing) with a
+  price chart + buy/sell signal markers, equity curve, and trade log;
+  **Derivatives** (F&O option chain with PCR / max-pain / ATM IV + a multi-leg
+  payoff builder, `/derivatives/option-chain`); and **Portfolio risk** (1-day
+  VaR, volatility, beta vs NIFTY, drawdown, Sharpe, weights, correlation,
+  `/risk/portfolio`).
 - **Charts** — native lightweight-charts (candles, volume, EMAs) and an
   embedded TradingView Advanced Chart.
 - **Lists & tools** — Track List (entry-vs-current with exit hints), Portfolio
@@ -75,6 +79,13 @@ feature/* ──PR──▶ main (CI, integration; does NOT deploy)
 ## Version history
 
 Canonical per-version notes are in **[CHANGELOG.md](CHANGELOG.md)**. Summary:
+
+### v3.5.0 — derivatives + portfolio risk
+
+| Area | Change |
+|---|---|
+| New | **Derivatives** screen: F&O option chain (PCR / max-pain / ATM IV, per-strike OI·IV·LTP ladder, expiry switcher) + multi-leg **payoff builder** (`/derivatives/option-chain`) |
+| New | **Portfolio risk** screen: 1-day VaR (historical + parametric), volatility, beta vs NIFTY, max drawdown, Sharpe, weights, correlation (`/risk/portfolio`) |
 
 ### v3.4.0 — institutional data (Corporate)
 

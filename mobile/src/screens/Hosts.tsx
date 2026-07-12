@@ -13,6 +13,8 @@ import UniverseScreen from './UniverseScreen';
 import HolidaysScreen from './HolidaysScreen';
 import IndicesScreen from './IndicesScreen';
 import CorporateScreen from './CorporateScreen';
+import DerivativesScreen from './DerivativesScreen';
+import RiskScreen from './RiskScreen';
 
 type SubTab = { key: string; label: string; render: () => React.ReactElement };
 
@@ -48,6 +50,8 @@ export function AnalysisHome() {
     <SubTabs
       tabs={[
         { key: 'inst', label: 'Institutional', render: () => <AnalysisScreen /> },
+        { key: 'deriv', label: 'Derivatives', render: () => <DerivativesScreen /> },
+        { key: 'risk', label: 'Risk', render: () => <RiskScreen /> },
         { key: 'bt', label: 'Backtest', render: () => <BacktestScreen /> },
       ]}
     />
@@ -101,6 +105,8 @@ const MORE_ITEMS: { key: string; label: string; hint: string; render: () => Reac
   { key: 'watchlist', label: 'Watchlist', hint: 'Saved symbols with live quotes', render: () => <WatchlistScreen /> },
   { key: 'calc', label: 'Calculator', hint: 'Position size · SIP · CAGR', render: () => <CalculatorScreen /> },
   { key: 'corporate', label: 'Corporate', hint: 'Filings, actions, shareholding, bulk/block deals', render: () => <CorporateScreen /> },
+  { key: 'derivatives', label: 'Derivatives', hint: 'F&O option chain · PCR · max-pain · payoff builder', render: () => <DerivativesScreen /> },
+  { key: 'risk', label: 'Portfolio risk', hint: 'VaR · volatility · beta · drawdown · correlation', render: () => <RiskScreen /> },
   { key: 'indices', label: 'Indices', hint: 'Live index levels · day & 1Y change', render: () => <IndicesScreen /> },
   { key: 'holidays', label: 'Holidays', hint: 'NSE holiday calendar · market open/closed', render: () => <HolidaysScreen /> },
 ];
