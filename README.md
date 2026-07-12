@@ -76,6 +76,12 @@ feature/* ──PR──▶ main (CI, integration; does NOT deploy)
 
 Canonical per-version notes are in **[CHANGELOG.md](CHANGELOG.md)**. Summary:
 
+### v3.4.0 — institutional data (Corporate)
+
+| Area | Change |
+|---|---|
+| New | **Corporate** screen: per-company shareholding (promoter/FII/DII/pledge), corporate actions, announcements + market bulk/block deals, from free NSE feeds (`/corporate/*`) |
+
 ### v3.1.0 — Terminal market browser
 
 | Area | Change |

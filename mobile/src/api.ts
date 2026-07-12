@@ -271,7 +271,32 @@ export type BrokerHolding = {
 
 export type AuthStatus = { configured: boolean; owner: boolean };
 
+// Corporate / institutional data (NSE public feeds).
+export type Announcement = { date: string; subject: string; detail: string; attachment: string };
+export type CorpAction = { type: string; ex_date: string; record_date: string; detail: string };
+export type Shareholding = {
+  date: string;
+  promoter: number | null;
+  fii: number | null;
+  dii: number | null;
+  public: number | null;
+  pledge: number | null;
+};
+export type Deal = {
+  kind: string;
+  date: string;
+  symbol: string;
+  client: string;
+  side: string;
+  qty: number | null;
+  price: number | null;
+};
+
 export const api = {
+  corpAnnouncements: (s: string) => getJson<{ items: Announcement[]; source: string }>('/corporate/announcements?symbol=' + encodeURIComponent(s)),
+  corpActions: (s: string) => getJson<{ items: CorpAction[]; source: string }>('/corporate/actions?symbol=' + encodeURIComponent(s)),
+  corpShareholding: (s: string) => getJson<{ latest: Shareholding | null; source: string }>('/corporate/shareholding?symbol=' + encodeURIComponent(s)),
+  corpDeals: () => getJson<{ bulk: Deal[]; block: Deal[]; source: string }>('/corporate/deals'),
   authStatus: () => getJson<AuthStatus>('/auth/status'),
   authLogin: (password: string) => postJson<{ owner: boolean }>('/auth/login', { password }),
   authLogout: () => postJson<{ owner: boolean }>('/auth/logout', {}),
