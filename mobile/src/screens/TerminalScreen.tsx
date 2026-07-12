@@ -668,32 +668,61 @@ export default function TerminalScreen() {
   const [input, setInput] = useState('TMCV');
   const [err, setErr] = useState<string | null>(null);
   const [notFound, setNotFound] = useState<string | null>(null);
+  const [chips, setChips] = useState<string[]>([]);
+  const [aiOn, setAiOn] = useState(false);
+  const [generating, setGenerating] = useState<string | null>(null);
+  const [genErr, setGenErr] = useState<string | null>(null);
+
+  const loadQuotes = (g: GraphResp) => {
+    const listed = Object.entries(g.companies)
+      .filter(([, c]) => c.listed)
+      .map(([t]) => t);
+    api.ltp(listed).then((q) => setQuotes((prev) => ({ ...prev, ...q }))).catch(() => {});
+  };
 
   useEffect(() => {
     (async () => {
       try {
         const g = await api.graph();
         setData(g);
-        const listed = Object.entries(g.companies)
-          .filter(([, c]) => c.listed)
-          .map(([t]) => t);
-        api.ltp(listed).then(setQuotes).catch(() => {});
+        setChips(g.available);
+        setAiOn(!!g.ai);
+        loadQuotes(g);
       } catch (e) {
         setErr(e instanceof Error ? e.message : 'Failed to load graph');
       }
     })();
   }, []);
 
-  const go = () => {
-    const sym = input.trim().toUpperCase().replace(/^NSE:/, '');
-    if (!data) return;
+  // Centre a symbol: in the loaded graph → recentre; known to the backend
+  // (curated or AI with a server key) → fetch its graph; else explain.
+  const select = (raw: string) => {
+    const sym = raw.trim().toUpperCase().replace(/^NSE:/, '');
+    if (!sym || !data || generating) return;
+    setNotFound(null);
+    setGenErr(null);
+    setInput(sym);
     if (data.companies[sym]) {
-      setNotFound(null);
       setCentre(sym);
-    } else {
-      setNotFound(sym);
+      return;
     }
+    if (!aiOn && !chips.includes(sym)) {
+      setNotFound(sym);
+      return;
+    }
+    setGenerating(sym);
+    api
+      .graph(sym)
+      .then((g) => {
+        setData(g);
+        setCentre(sym);
+        loadQuotes(g);
+      })
+      .catch((e) => setGenErr(e instanceof Error ? e.message : 'Graph unavailable'))
+      .finally(() => setGenerating(null));
   };
+
+  const go = () => select(input);
 
   const html = useMemo(
     () => (data ? graphHtml(data, quotes, centre) : ''),
@@ -704,7 +733,11 @@ export default function TerminalScreen() {
     <View style={styles.container}>
       <View style={styles.head}>
         <Text style={styles.title}>
-          TAUREYE TERMINAL <Text style={styles.titleDim}>· RELATIONSHIP GRAPH · DEMO DATA</Text>
+          TAUREYE TERMINAL{' '}
+          <Text style={styles.titleDim}>
+            · RELATIONSHIP GRAPH ·{' '}
+            {data?.source === 'ai' ? 'AI GRAPH' : aiOn ? 'CURATED + AI' : 'DEMO DATA'}
+          </Text>
         </Text>
       </View>
       <View style={styles.cmdRow}>
@@ -726,15 +759,11 @@ export default function TerminalScreen() {
       </View>
       {data ? (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipScroll} contentContainerStyle={styles.chips}>
-          {data.available.map((t) => (
+          {chips.map((t) => (
             <TouchableOpacity
               key={t}
               style={[styles.chip, t === centre && styles.chipOn]}
-              onPress={() => {
-                setInput(t);
-                setNotFound(null);
-                setCentre(t);
-              }}
+              onPress={() => select(t)}
             >
               <Text style={[styles.chipTxt, t === centre && styles.chipTxtOn]}>{t}</Text>
             </TouchableOpacity>
@@ -743,22 +772,35 @@ export default function TerminalScreen() {
       ) : null}
       {notFound ? (
         <Text style={styles.warn}>
-          {notFound} isn't in the curated demo set — AI mode will cover any company once an API key
-          is configured.
+          {notFound} isn't in the curated demo set — set ANTHROPIC_API_KEY on the server to unlock
+          AI graphs for any company.
         </Text>
       ) : null}
+      {genErr ? <Text style={styles.warn}>⚠ {genErr}</Text> : null}
 
       <View style={styles.graphWrap}>
         {err ? (
           <View style={styles.center}>
             <Text style={styles.dim}>{err} — is the backend reachable?</Text>
           </View>
+        ) : generating ? (
+          <View style={styles.center}>
+            <ActivityIndicator color={theme.accent} />
+            <Text style={styles.genTxt}>
+              Generating relationship graph for {generating} — first time takes ~15s, then it's
+              cached.
+            </Text>
+          </View>
         ) : !data ? (
           <View style={styles.center}>
             <ActivityIndicator color={theme.accent} />
           </View>
         ) : (
-          <HtmlView key={centre + Object.keys(quotes).length} html={html} style={styles.web} />
+          <HtmlView
+            key={centre + data.source + Object.keys(quotes).length}
+            html={html}
+            style={styles.web}
+          />
         )}
       </View>
       {data ? <Text style={styles.disclaimer}>{data.disclaimer}</Text> : null}
@@ -798,6 +840,14 @@ const styles = StyleSheet.create({
   graphWrap: { flex: 1, borderTopColor: theme.border, borderTopWidth: 1, marginTop: 4 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   dim: { color: theme.muted, fontFamily: theme.mono, fontSize: 12 },
+  genTxt: {
+    color: theme.muted2,
+    fontFamily: theme.mono,
+    fontSize: 11,
+    marginTop: 12,
+    paddingHorizontal: 30,
+    textAlign: 'center',
+  },
   web: { flex: 1, backgroundColor: theme.bg },
   disclaimer: {
     color: theme.muted,
