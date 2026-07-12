@@ -76,6 +76,14 @@ feature/* ──PR──▶ main (CI, integration; does NOT deploy)
 
 Canonical per-version notes are in **[CHANGELOG.md](CHANGELOG.md)**. Summary:
 
+### v2.10.0 — Production hardening
+
+| Area | Change |
+|---|---|
+| Web | Installable **PWA** (manifest, icons, service worker, offline shell) + SEO/OG meta |
+| Backend | Per-IP **rate limits** on /scan /news /graph, AI generations 10/hr/IP, `/health`, security headers |
+| Ops | `deploy/enable-https.sh` (domain + Let's Encrypt), `deploy/backup.sh` (nightly), `/legal.html` disclaimer/privacy page |
+
 ### v2.9.0 — Terminal wired to real data (AI graphs)
 
 | Area | Change |

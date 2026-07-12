@@ -127,6 +127,44 @@ over the domain:
 3. Point the same GitHub secrets at this repo, or copy them over.
 QuantHunt now answers on the same IP/domain; re-run certbot if the domain changed.
 
+## HTTPS (domain + free certificate)
+
+1. Buy/own a domain and add an **A record** → the VM's public IP.
+2. Open port 443 in the Oracle security list (and `sudo ufw allow 443` if ufw is on).
+3. On the VM:
+
+```bash
+cd /opt/quanthunt
+sudo bash deploy/enable-https.sh yourdomain.com you@email.com
+```
+
+That rewrites the nginx `server_name`, installs certbot, issues the Let's
+Encrypt certificate, and turns on the http→https redirect. Renewal is
+automatic. Afterwards, native app builds should set
+`EXPO_PUBLIC_API_BASE=https://yourdomain.com`.
+
+## AI graphs (Terminal)
+
+Add your Anthropic API key on the VM (never commit it):
+
+```bash
+echo 'ANTHROPIC_API_KEY=sk-ant-...' | sudo tee -a /opt/quanthunt/.env
+sudo systemctl restart quanthunt
+```
+
+Optional: `GRAPH_AI_MODEL=claude-sonnet-5` (default). Generations are cached
+in `graph_cache.json` for 30 days and rate-limited to 10/hour per IP.
+
+## Backups & monitoring
+
+- **Backups**: `deploy/backup.sh` archives `.env` + runtime caches nightly.
+  Install with `sudo crontab -e` → `15 2 * * * /opt/quanthunt/deploy/backup.sh`.
+- **Uptime**: point a free pinger (e.g. UptimeRobot) at `GET /ping`.
+- **Health**: `GET /health` reports uptime, cache sizes, and whether AI graphs
+  are enabled.
+- **Rate limits**: nginx applies 20 req/s/IP burst protection; the app also
+  limits `/scan`, `/news`, `/graph` per IP, and AI generations to 10/hour/IP.
+
 ## Notes on security
 QuantHunt has **no login or API key** — anything reachable on the public
 IP/domain is open. It only serves public market data, which is usually fine for

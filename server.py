@@ -285,10 +285,81 @@ def _app_version():
         return "0.0.0"
 
 
+# ── per-IP rate limiting (sliding window; nginx sets X-Real-IP) ──
+_RL: dict = {}
+_RL_LOCK = threading.Lock()
+_STARTED = time.time()
+
+
+def _client_ip():
+    return request.headers.get("X-Real-IP") or request.remote_addr or "?"
+
+
+def _rl_hit(name, limit, window):
+    """Record a hit; returns None if allowed, else seconds until retry."""
+    key = (name, _client_ip())
+    now = time.time()
+    with _RL_LOCK:
+        hits = [t for t in _RL.get(key, []) if now - t < window]
+        if len(hits) >= limit:
+            _RL[key] = hits
+            return max(1, int(window - (now - hits[0])) + 1)
+        hits.append(now)
+        _RL[key] = hits
+        if len(_RL) > 5000:  # bound memory under address churn
+            _RL.clear()
+    return None
+
+
+def rate_limit(name, limit, window):
+    def deco(fn):
+        import functools
+
+        @functools.wraps(fn)
+        def wrapper(*a, **kw):
+            retry = _rl_hit(name, limit, window)
+            if retry is not None:
+                return jsonify({"error": "rate-limited",
+                                "detail": "Too many requests — retry in %ds." % retry}), 429
+            return fn(*a, **kw)
+        return wrapper
+    return deco
+
+
+@app.after_request
+def _security_headers(resp):
+    resp.headers.setdefault("X-Content-Type-Options", "nosniff")
+    resp.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
+    resp.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    return resp
+
+
 @app.route("/ping")
 def ping():
     return jsonify({"server": "ok", "status": "ok", "source": "NSE Direct + YF fallback",
                     "version": _app_version()})
+
+
+@app.route("/health")
+def health():
+    """Operational status: uptime, data-layer cache states, AI availability."""
+    def safe(fn, default=None):
+        try:
+            return fn()
+        except Exception:
+            return default
+    return jsonify({
+        "status": "ok",
+        "version": _app_version(),
+        "uptime_s": int(time.time() - _STARTED),
+        "ai_graphs": _ai.available(),
+        "caches": {
+            "fundamentals": safe(lambda: len(getattr(_fund, "_cache", {}) or {}), 0),
+            "graphs": safe(lambda: len(_ai._load()), 0),
+            "scan": safe(lambda: len(getattr(_scanner, "_cache", {}) or {}), 0),
+            "news": safe(lambda: len(getattr(_news, "_cache", {}) or {}), 0),
+        },
+    })
 
 
 @app.route("/version")
@@ -906,6 +977,7 @@ AI_DISCLAIMER = ("AI-generated relationship map from model knowledge — indicat
 
 
 @app.route("/graph")
+@rate_limit("graph", 60, 300)
 def relationship_graph():
     """Company-relationship graph for the Terminal tab.
 
@@ -923,6 +995,14 @@ def relationship_graph():
         return jsonify({"error": "ai-unavailable", "ai": False,
                         "detail": "Set ANTHROPIC_API_KEY on the server to unlock "
                                   "AI graphs for any company."}), 404
+    # Uncached generations burn API tokens — cap them per IP.
+    cached = _ai._load().get(sym)
+    if not (cached and time.time() - cached.get("ts", 0) < _ai.TTL):
+        retry = _rl_hit("graph-ai", 10, 3600)
+        if retry is not None:
+            return jsonify({"error": "rate-limited", "ai": True,
+                            "detail": "Graph-generation limit reached — retry in %d min."
+                                      % max(1, retry // 60)}), 429
     try:
         g = _ai.get_graph(sym)
     except Exception as e:
@@ -936,6 +1016,7 @@ def relationship_graph():
 
 
 @app.route("/news")
+@rate_limit("news", 30, 300)
 def latest_news():
     """Latest news for the Terminal news panel.
 
@@ -950,6 +1031,7 @@ def latest_news():
 
 
 @app.route("/scan")
+@rate_limit("scan", 200, 300)
 def scan():
     """Live technical indicators per symbol for the screener filter engine.
 
