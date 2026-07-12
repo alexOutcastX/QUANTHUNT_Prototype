@@ -76,6 +76,13 @@ feature/* ──PR──▶ main (CI, integration; does NOT deploy)
 
 Canonical per-version notes are in **[CHANGELOG.md](CHANGELOG.md)**. Summary:
 
+### v2.7.0 — Terminal docking & pop-outs
+
+| Area | Change |
+|---|---|
+| Terminal | Research window dockable: float ❐ / dock-bottom ⬓ / dock-right ◨, drag divider to resize the split; graph reflows; mode persists |
+| Terminal | ↗ on the window header and on every tab opens that view as a standalone browser tab (`/research.html`) — company research page or comparison report |
+
 ### v2.6.0 — Terminal workspace
 
 | Area | Change |

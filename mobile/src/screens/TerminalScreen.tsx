@@ -22,7 +22,8 @@ function graphHtml(data: GraphResp, quotes: LtpResp, centre: string): string {
 <style>
   html,body{height:100%;margin:0;background:${theme.bg};font-family:ui-monospace,Menlo,Consolas,monospace;overflow:hidden}
   #wrap{display:flex;height:100%}
-  #gfx{flex:1;position:relative;overflow:hidden}
+  #gfx{flex:1;position:relative;overflow:hidden;display:flex}
+  #gwrap{flex:1;position:relative;overflow:hidden;min-width:120px;min-height:120px}
   svg{width:100%;height:100%;display:block}
   #panel{width:310px;border-left:1px solid ${theme.border};overflow-y:auto;padding:14px;box-sizing:border-box}
   .ph{color:${theme.text};font-size:15px;font-weight:700;margin:0 0 2px}
@@ -49,8 +50,20 @@ function graphHtml(data: GraphResp, quotes: LtpResp, centre: string): string {
   #menu .mh{color:${theme.muted};font-size:10px;cursor:default;letter-spacing:1px}
   #menu .mh:hover{background:none}
   /* ── floating window ── */
-  #win{position:absolute;z-index:20;background:${theme.surface};border:1px solid ${theme.border2};border-radius:10px;display:none;flex-direction:column;overflow:hidden;box-shadow:0 12px 40px #000c;min-width:340px;min-height:220px}
+  #win{z-index:20;background:${theme.surface};border:1px solid ${theme.border2};display:none;flex-direction:column;overflow:hidden;min-width:250px;min-height:170px}
+  #win.float{position:absolute;border-radius:10px;box-shadow:0 12px 40px #000c;min-width:340px;min-height:220px}
+  #win.dockb{position:relative;border-left:none;border-right:none;border-bottom:none}
+  #win.dockr{position:relative;border-top:none;border-bottom:none;border-right:none}
+  #windiv{display:none;background:${theme.border};flex:none}
+  #win.dockb #windiv{display:block;height:5px;cursor:ns-resize;width:100%}
+  #win.dockr #windiv{display:block;position:absolute;left:0;top:0;bottom:0;width:5px;cursor:ew-resize;z-index:23}
+  #win.dockr #winhead,#win.dockr #winbody{margin-left:5px}
+  #winbtns{display:flex;align-items:center;flex:none}
+  .wbtn{color:${theme.muted2};padding:6px 6px;cursor:pointer;font-size:12px;line-height:1}
+  .wbtn:hover{color:${theme.text}}
+  .wbtn.on{color:${theme.accent}}
   #winhead{display:flex;align-items:center;background:${theme.surface2};border-bottom:1px solid ${theme.border};cursor:move;user-select:none;padding:0 6px 0 0}
+  #win.dockb #winhead,#win.dockr #winhead{cursor:default}
   #wintabs{display:flex;flex:1;overflow-x:auto;scrollbar-width:none}
   .wtab{padding:8px 10px;color:${theme.muted2};font-size:11px;cursor:pointer;border-right:1px solid ${theme.border};white-space:nowrap;display:flex;gap:7px;align-items:center}
   .wtab.on{color:${theme.text};background:${theme.surface};font-weight:700}
@@ -77,22 +90,34 @@ function graphHtml(data: GraphResp, quotes: LtpResp, centre: string): string {
 </style></head><body>
 <div id="wrap">
   <div id="gfx">
-    <div id="crumb"></div>
-    <div id="hl">
-      <button class="hlb" id="hl-in" onclick="setHl('in')">INPUTS</button>
-      <button class="hlb" id="hl-out" onclick="setHl('out')">OUTPUTS</button>
-      <button class="hlb on" id="hl-all" onclick="setHl('all')">ALL</button>
+    <div id="gwrap">
+      <div id="crumb"></div>
+      <div id="hl">
+        <button class="hlb" id="hl-in" onclick="setHl('in')">INPUTS</button>
+        <button class="hlb" id="hl-out" onclick="setHl('out')">OUTPUTS</button>
+        <button class="hlb on" id="hl-all" onclick="setHl('all')">ALL</button>
+      </div>
+      <svg id="svg"></svg>
+      <div id="legend">
+        <span class="lg-line" style="border-top-style:solid"></span>supplies →<br>
+        <span class="lg-line" style="border-top-style:dashed"></span>group<br>
+        <span class="lg-line" style="border-top-style:dotted"></span>competitor<br>
+        <span class="lg-line" style="border-top:2px double ${theme.muted2};height:4px"></span>finances
+      </div>
+      <div id="menu"></div>
     </div>
-    <svg id="svg"></svg>
-    <div id="legend">
-      <span class="lg-line" style="border-top-style:solid"></span>supplies →<br>
-      <span class="lg-line" style="border-top-style:dashed"></span>group<br>
-      <span class="lg-line" style="border-top-style:dotted"></span>competitor<br>
-      <span class="lg-line" style="border-top:2px double ${theme.muted2};height:4px"></span>finances
-    </div>
-    <div id="menu"></div>
     <div id="win">
-      <div id="winhead"><div id="wintabs"></div><div id="winclose" onclick="closeWin()">✕</div></div>
+      <div id="windiv"></div>
+      <div id="winhead">
+        <div id="wintabs"></div>
+        <div id="winbtns">
+          <div class="wbtn" id="dk-float" title="Float" onclick="setDock('float')">❐</div>
+          <div class="wbtn" id="dk-bottom" title="Dock to bottom" onclick="setDock('bottom')">⬓</div>
+          <div class="wbtn" id="dk-right" title="Dock to right" onclick="setDock('right')">◨</div>
+          <div class="wbtn" title="Open in browser tab" onclick="openExt(null)">↗</div>
+          <div class="wbtn" id="winclose" onclick="closeWin()">✕</div>
+        </div>
+      </div>
       <div id="winbody"></div>
       <div id="winresize"></div>
     </div>
@@ -114,7 +139,7 @@ function graphHtml(data: GraphResp, quotes: LtpResp, centre: string): string {
   var histCache = {}, fundCache = {};
 
   // ── persisted workspace state (survives frame rebuilds) ──
-  var W = { open: false, tabs: [], active: null, compare: [], rect: null };
+  var W = { open: false, tabs: [], active: null, compare: [], rect: null, dock: 'float', dockH: 300, dockW: 400 };
   try { var s = localStorage.getItem('te_term_win_v1'); if (s) W = Object.assign(W, JSON.parse(s)); } catch (e) {}
   function saveW(){ try { localStorage.setItem('te_term_win_v1', JSON.stringify(W)); } catch (e) {} }
 
@@ -197,7 +222,7 @@ function graphHtml(data: GraphResp, quotes: LtpResp, centre: string): string {
     h += '<div onclick="window.hideMenu()" style="color:${theme.muted}">✕ Cancel</div>';
     m.innerHTML = h;
     m.style.display = 'block';
-    var g = document.getElementById('gfx');
+    var g = document.getElementById('gwrap');
     m.style.left = Math.min(x, g.clientWidth - 190) + 'px';
     m.style.top = Math.min(y, g.clientHeight - 170) + 'px';
   }
@@ -210,7 +235,7 @@ function graphHtml(data: GraphResp, quotes: LtpResp, centre: string): string {
     panelHtml(centre);
     if (sim) sim.stop();
     svg.selectAll('*').remove();
-    var Wd = document.getElementById('gfx').clientWidth, H = document.getElementById('gfx').clientHeight;
+    var Wd = document.getElementById('gwrap').clientWidth, H = document.getElementById('gwrap').clientHeight;
     var root = svg.append('g');
     svg.call(d3.zoom().scaleExtent([0.4, 2.5]).on('zoom', function(ev){ root.attr('transform', ev.transform); }));
     svg.append('defs').append('marker').attr('id','arr').attr('viewBox','0 -4 8 8')
@@ -266,21 +291,56 @@ function graphHtml(data: GraphResp, quotes: LtpResp, centre: string): string {
     return { x: 16, y: Math.max(60, g.clientHeight - 400), w: Math.min(560, g.clientWidth - 40), h: 360 };
   }
   function layoutWin() {
-    var r = W.rect || defaultRect();
-    var g = document.getElementById('gfx');
-    r.x = Math.max(0, Math.min(r.x, g.clientWidth - 120));
-    r.y = Math.max(0, Math.min(r.y, g.clientHeight - 60));
-    var el = winEl();
-    el.style.left = r.x + 'px'; el.style.top = r.y + 'px';
-    el.style.width = r.w + 'px'; el.style.height = r.h + 'px';
-    el.style.display = W.open ? 'flex' : 'none';
+    var el = winEl(), gfx = document.getElementById('gfx');
+    var dock = W.dock || 'float';
+    ['float','bottom','right'].forEach(function(m){
+      var b = document.getElementById('dk-' + m);
+      if (b) b.className = 'wbtn' + (m === dock ? ' on' : '');
+    });
+    if (!W.open) { el.style.display = 'none'; gfx.style.flexDirection = 'row'; return; }
+    el.style.display = 'flex';
+    el.className = dock === 'bottom' ? 'dockb' : dock === 'right' ? 'dockr' : 'float';
+    document.getElementById('winresize').style.display = dock === 'float' ? 'block' : 'none';
+    if (dock === 'float') {
+      gfx.style.flexDirection = 'row';
+      var r = W.rect || defaultRect();
+      r.x = Math.max(0, Math.min(r.x, gfx.clientWidth - 120));
+      r.y = Math.max(0, Math.min(r.y, gfx.clientHeight - 60));
+      el.style.left = r.x + 'px'; el.style.top = r.y + 'px';
+      el.style.width = r.w + 'px'; el.style.height = r.h + 'px';
+    } else if (dock === 'bottom') {
+      gfx.style.flexDirection = 'column';
+      el.style.left = ''; el.style.top = '';
+      el.style.width = 'auto';
+      el.style.height = Math.min(W.dockH || 300, gfx.clientHeight - 130) + 'px';
+    } else {
+      gfx.style.flexDirection = 'row';
+      el.style.left = ''; el.style.top = '';
+      el.style.height = 'auto';
+      el.style.width = Math.min(W.dockW || 400, gfx.clientWidth - 140) + 'px';
+    }
   }
-  window.closeWin = function(){ W.open = false; saveW(); layoutWin(); };
+  window.setDock = function(mode) {
+    W.dock = mode; saveW(); layoutWin(); render(); renderBody();
+  };
+  // Pop the active tab (or a given id) out to a standalone browser tab.
+  window.openExt = function(id) {
+    id = id || W.active;
+    if (!id) return;
+    var u = id === '__cmp__'
+      ? 'research.html?symbols=' + encodeURIComponent(W.compare.join(','))
+      : 'research.html?symbol=' + encodeURIComponent(id);
+    var url = (API || '') + '/' + u;
+    try { window.open(url, '_blank'); } catch (e) {}
+  };
+  window.closeWin = function(){ W.open = false; saveW(); layoutWin(); if ((W.dock||'float') !== 'float') render(); };
   window.openTab = function(sym) {
     hideMenu();
     if (W.tabs.indexOf(sym) < 0) W.tabs.push(sym);
+    var wasOpen = W.open;
     W.active = sym; W.open = true; if (!W.rect) W.rect = defaultRect();
     saveW(); layoutWin(); renderTabs(); renderBody();
+    if (!wasOpen && (W.dock||'float') !== 'float') render();
   };
   window.closeTab = function(ev, id) {
     ev.stopPropagation();
@@ -310,17 +370,20 @@ function graphHtml(data: GraphResp, quotes: LtpResp, centre: string): string {
     W.tabs.forEach(function(t){
       var label = t === '__cmp__' ? 'COMPARE (' + W.compare.length + ')' : t;
       h += '<div class="wtab' + (t === W.active ? ' on' : '') + '" onclick="selTab(\\'' + t + '\\')">' + label +
+           '<span class="x" title="Open in browser tab" onclick="event.stopPropagation();openExt(\\'' + t + '\\')">↗</span>' +
            '<span class="x" onclick="closeTab(event, \\'' + t + '\\')">✕</span></div>';
     });
     document.getElementById('wintabs').innerHTML = h;
   }
 
-  // drag + resize
+  // drag + resize (float) and divider resize (docked)
   (function(){
-    var head = document.getElementById('winhead'), grip = document.getElementById('winresize');
+    var head = document.getElementById('winhead'), grip = document.getElementById('winresize'),
+        divd = document.getElementById('windiv');
     var drag = null;
     head.addEventListener('pointerdown', function(ev){
-      if (ev.target.id === 'winclose' || ev.target.classList.contains('wtab') || ev.target.classList.contains('x')) return;
+      if ((W.dock || 'float') !== 'float') return;
+      if (ev.target.classList.contains('wbtn') || ev.target.classList.contains('wtab') || ev.target.classList.contains('x')) return;
       var r = W.rect || defaultRect();
       drag = { mode: 'move', sx: ev.clientX, sy: ev.clientY, r: { x: r.x, y: r.y, w: r.w, h: r.h } };
       head.setPointerCapture(ev.pointerId);
@@ -331,16 +394,30 @@ function graphHtml(data: GraphResp, quotes: LtpResp, centre: string): string {
       grip.setPointerCapture(ev.pointerId);
       ev.preventDefault();
     });
+    divd.addEventListener('pointerdown', function(ev){
+      drag = { mode: 'dock', sx: ev.clientX, sy: ev.clientY, h: W.dockH || 300, w: W.dockW || 400 };
+      divd.setPointerCapture(ev.pointerId);
+      ev.preventDefault();
+    });
     function move(ev){
       if (!drag) return;
       var dx = ev.clientX - drag.sx, dy = ev.clientY - drag.sy;
-      if (drag.mode === 'move') W.rect = { x: drag.r.x + dx, y: drag.r.y + dy, w: drag.r.w, h: drag.r.h };
-      else W.rect = { x: drag.r.x, y: drag.r.y, w: Math.max(340, drag.r.w + dx), h: Math.max(220, drag.r.h + dy) };
-      layoutWin();
+      if (drag.mode === 'move') { W.rect = { x: drag.r.x + dx, y: drag.r.y + dy, w: drag.r.w, h: drag.r.h }; layoutWin(); }
+      else if (drag.mode === 'size') { W.rect = { x: drag.r.x, y: drag.r.y, w: Math.max(340, drag.r.w + dx), h: Math.max(220, drag.r.h + dy) }; layoutWin(); }
+      else {
+        if (W.dock === 'bottom') W.dockH = Math.max(170, drag.h - dy);
+        else W.dockW = Math.max(280, drag.w - dx);
+        layoutWin();
+      }
     }
-    function up(){ if (drag) { drag = null; saveW(); } }
-    head.addEventListener('pointermove', move); grip.addEventListener('pointermove', move);
-    head.addEventListener('pointerup', up); grip.addEventListener('pointerup', up);
+    function up(){
+      if (!drag) return;
+      var wasDock = drag.mode === 'dock';
+      drag = null; saveW();
+      if (wasDock) render(); // re-centre forces for the resized graph area
+    }
+    head.addEventListener('pointermove', move); grip.addEventListener('pointermove', move); divd.addEventListener('pointermove', move);
+    head.addEventListener('pointerup', up); grip.addEventListener('pointerup', up); divd.addEventListener('pointerup', up);
   })();
 
   // ── company tab: chart + screener.in fundamentals ──
