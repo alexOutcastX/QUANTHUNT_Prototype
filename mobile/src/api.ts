@@ -241,7 +241,17 @@ async function fetchGraph(symbol?: string): Promise<GraphResp> {
 }
 
 // Live index levels + market holidays (Indices / Holidays pages, ticker strip).
-export type IndexQuote = { key: string; name: string; level: number; chg: number; y1: number };
+// `category` (domestic | international | depository) tags the source list; older
+// backends omit it, so it's optional. `country` is reserved for future use.
+export type IndexQuote = {
+  key: string;
+  name: string;
+  level: number;
+  chg: number;
+  y1: number;
+  category?: string;
+  country?: string;
+};
 export type IndicesResp = { indices: IndexQuote[]; asof: number; cached?: boolean };
 export type Holiday = { date: string; name: string; day: string };
 export type HolidaysResp = {
@@ -440,7 +450,8 @@ export const api = {
   authLogout: () => postJson<{ owner: boolean }>('/auth/logout', {}),
   brokerStatus: () => getJson<BrokerStatus>('/broker/status'),
   brokerHoldings: () => getJson<{ holdings: BrokerHolding[] }>('/broker/holdings'),
-  indices: () => getJson<IndicesResp>('/indices'),
+  indices: (category?: string) =>
+    getJson<IndicesResp>('/indices' + (category ? '?category=' + encodeURIComponent(category) : '')),
   holidays: () => getJson<HolidaysResp>('/holidays'),
   ping: () => getJson<Ping>('/ping'),
   version: () => getJson<Version>('/version'),
