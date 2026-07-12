@@ -11,6 +11,7 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Candle, api } from '../api';
 import { BacktestResult, CUSTOM_KEY, CustomRule, Risk, STRATEGIES, runBacktest } from '../backtest';
+import { DEFAULT_COSTS } from '../costs';
 import HtmlView from '../components/HtmlView';
 import { theme } from '../theme';
 import { Card, ChipBtn, EmptyState, Loading, ScreenTitle, SectionTitle, StatTile } from '../ui';
@@ -187,6 +188,7 @@ export default function BacktestScreen() {
   const [tpVal, setTpVal] = useState('10');
   const [trailOn, setTrailOn] = useState(false);
   const [trailPct, setTrailPct] = useState('1.5');
+  const [realistic, setRealistic] = useState(true); // apply India charges + slippage
 
   const [buyRules, setBuyRules] = useState<CustomRule[]>([defaultBuyRule()]);
   const [sellRules, setSellRules] = useState<CustomRule[]>([defaultSellRule()]);
@@ -274,6 +276,7 @@ export default function BacktestScreen() {
         params,
         risk,
         isCustom ? { buy: buyRules, sell: sellRules } : undefined,
+        realistic ? DEFAULT_COSTS : undefined,
       );
       setResult(res);
       setHtml(resultHtml(candles, res));
@@ -425,6 +428,17 @@ export default function BacktestScreen() {
               <TextInput style={styles.smInput} value={trailPct} onChangeText={setTrailPct} keyboardType="numeric" />
             ) : null}
           </View>
+
+          <Text style={styles.lbl}>Realistic costs</Text>
+          <View style={styles.riskRow}>
+            <ChipBtn
+              label={realistic ? 'On' : 'Off'}
+              on={realistic}
+              onPress={() => setRealistic((v) => !v)}
+              style={styles.trailChip}
+            />
+            <Text style={styles.costHint}>Brokerage · STT · exchange/SEBI/GST · stamp · slippage</Text>
+          </View>
         </Card>
 
         <TouchableOpacity style={styles.runBtn} onPress={run} disabled={busy} activeOpacity={0.75}>
@@ -465,6 +479,9 @@ export default function BacktestScreen() {
                 value={signed(result.stats.avgRet) + '%'}
                 color={result.stats.avgRet >= 0 ? theme.green : theme.red}
               />
+              {result.stats.totalCharges != null ? (
+                <StatTile label="Costs (charges)" value={money(result.stats.totalCharges)} color={theme.red} />
+              ) : null}
             </View>
 
             {html ? (
@@ -582,6 +599,7 @@ const styles = StyleSheet.create({
   seg: { flexDirection: 'row', gap: theme.sp.sm, flexWrap: 'wrap' },
   riskRow: { flexDirection: 'row', alignItems: 'center', gap: theme.sp.sm },
   trailChip: { minWidth: 70, alignItems: 'center' },
+  costHint: { color: theme.muted, fontSize: theme.fs.xs + 1, flex: 1, flexWrap: 'wrap' },
   smInput: {
     height: 38,
     backgroundColor: theme.surface,

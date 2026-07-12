@@ -80,6 +80,14 @@ feature/* ──PR──▶ main (CI, integration; does NOT deploy)
 
 Canonical per-version notes are in **[CHANGELOG.md](CHANGELOG.md)**. Summary:
 
+### v3.7.0 — accuracy, alerts, public API
+
+| Area | Change |
+|---|---|
+| Accuracy | Backtest **India cost model** (brokerage · STT · exchange/SEBI/GST · stamp · slippage) with a Realistic-costs toggle + charges stat (`costs.ts`) |
+| New | **Alerts** (Lists → Alerts): server-side price / day-% / RSI alerts, owner-only, "Check now" + webhook delivery (`/alerts/*`, `alerts.py`) |
+| New | **Developer API** (Tools → API): public `/api/v1/quote` & `/api/v1/indices` gated by hashed `X-API-Key`; owner issues/revokes keys (`apikeys.py`) |
+
 ### v3.6.0 — grounded entity graph (Palantir layer)
 
 | Area | Change |

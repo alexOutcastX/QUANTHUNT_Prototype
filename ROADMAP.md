@@ -49,11 +49,17 @@ Status legend: ☐ pending · ◐ in progress · ☑ shipped
   model knowledge).
 - ☐ Scenario/impact propagation through the supply/ownership graph (follow-up).
 
-## Phase 6 — Accuracy, alerts, API (v3.7.0)
-- ☐ Backtest realism: slippage, STT, exchange charges, liquidity/tradability
-  filter; deterministic-seed Monte Carlo; point-in-time fundamentals.
-- ☐ Server-side alerts (price/technical/event/news) with push + email.
-- ☐ Public data API + rate-limited API keys; Excel/Sheets connector.
+## Phase 6 — Accuracy, alerts, API (v3.7.0) — ☑ shipped
+- ☑ Backtest realism: India cost model (brokerage, STT, exchange/SEBI/GST,
+  stamp duty) + slippage applied per trade, with a Realistic-costs toggle and
+  a charges stat (`costs.ts`).
+- ☑ Server-side alerts (price / day-% / RSI) with store-backed CRUD, owner
+  gate, on-demand evaluation, and pluggable delivery via ALERT_WEBHOOK
+  (`alerts.py`).
+- ☑ Public data API (`/api/v1/quote`, `/api/v1/indices`) gated by hashed
+  `X-API-Key`, rate-limited; owner issues/revokes keys (`apikeys.py`).
+- ☐ liquidity/tradability filter, deterministic-seed Monte Carlo, point-in-time
+  fundamentals; native push + email delivery; Excel/Sheets connector (follow-ups).
 
 ## Not code — external dependencies (track, don't "build")
 - **$** Licensed real-time/depth/F&O/bond data (NSE/BSE vendor, TrueData/
