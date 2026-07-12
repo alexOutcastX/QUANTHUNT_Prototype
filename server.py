@@ -20,6 +20,7 @@ import broker as _broker       # BYOB Zerodha connect (read-only, single user)
 import holidays as _holidays   # NSE trading holidays + market open/closed status
 import auth as _auth           # owner passcode gate for owner-only endpoints
 import store as _store         # SQLite persistence (kv + snapshots)
+import corporate as _corp       # corporate actions/announcements/shareholding/deals (NSE)
 
 # Support both normal run and PyInstaller frozen exe
 _BASE_DIR = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
@@ -1276,6 +1277,55 @@ def indices_live():
             log.debug("index snapshot failed: %s", e)
     return jsonify({"indices": _indices_cache["data"],
                     "asof": int(time.time()), "cached": cached})
+
+
+# ── corporate / institutional data (NSE public feeds, injected fetch) ──
+def _corp_fetch(url):
+    """GET a full NSE URL via the warmed session; returns decoded JSON."""
+    s = nse_session()
+    for _ in range(2):
+        try:
+            r = s.get(url, timeout=12)
+            if r.status_code == 200:
+                return r.json()
+        except Exception:
+            pass
+        _reset_session()
+        s = nse_session()
+    raise RuntimeError("NSE corporate fetch failed")
+
+
+@app.route("/corporate/announcements")
+@rate_limit("corp", 60, 300)
+def corp_announcements():
+    sym = request.args.get("symbol", "").strip().upper()
+    if not sym:
+        return jsonify({"error": "symbol required"}), 400
+    return jsonify(_corp.announcements(sym, _corp_fetch))
+
+
+@app.route("/corporate/actions")
+@rate_limit("corp", 60, 300)
+def corp_actions():
+    sym = request.args.get("symbol", "").strip().upper()
+    if not sym:
+        return jsonify({"error": "symbol required"}), 400
+    return jsonify(_corp.actions(sym, _corp_fetch))
+
+
+@app.route("/corporate/shareholding")
+@rate_limit("corp", 60, 300)
+def corp_shareholding():
+    sym = request.args.get("symbol", "").strip().upper()
+    if not sym:
+        return jsonify({"error": "symbol required"}), 400
+    return jsonify(_corp.shareholding(sym, _corp_fetch))
+
+
+@app.route("/corporate/deals")
+@rate_limit("corp", 60, 300)
+def corp_deals():
+    return jsonify(_corp.deals(_corp_fetch))
 
 
 @app.route("/indices/history")

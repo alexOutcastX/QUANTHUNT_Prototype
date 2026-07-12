@@ -12,6 +12,7 @@ import WatchlistScreen from './WatchlistScreen';
 import UniverseScreen from './UniverseScreen';
 import HolidaysScreen from './HolidaysScreen';
 import IndicesScreen from './IndicesScreen';
+import CorporateScreen from './CorporateScreen';
 
 type SubTab = { key: string; label: string; render: () => React.ReactElement };
 
@@ -70,6 +71,7 @@ export function ToolsHome() {
     <SubTabs
       tabs={[
         { key: 'universe', label: 'Universe', render: () => <UniverseScreen /> },
+        { key: 'corporate', label: 'Corporate', render: () => <CorporateScreen /> },
         { key: 'calc', label: 'Calculator', render: () => <CalculatorScreen /> },
         { key: 'indices', label: 'Indices', render: () => <IndicesScreen /> },
         { key: 'holidays', label: 'Holidays', render: () => <HolidaysScreen /> },
@@ -98,6 +100,7 @@ const MORE_ITEMS: { key: string; label: string; hint: string; render: () => Reac
   { key: 'portfolio', label: 'Portfolio', hint: 'Holdings with live P&L · broker sync', render: () => <PortfolioScreen /> },
   { key: 'watchlist', label: 'Watchlist', hint: 'Saved symbols with live quotes', render: () => <WatchlistScreen /> },
   { key: 'calc', label: 'Calculator', hint: 'Position size · SIP · CAGR', render: () => <CalculatorScreen /> },
+  { key: 'corporate', label: 'Corporate', hint: 'Filings, actions, shareholding, bulk/block deals', render: () => <CorporateScreen /> },
   { key: 'indices', label: 'Indices', hint: 'Live index levels · day & 1Y change', render: () => <IndicesScreen /> },
   { key: 'holidays', label: 'Holidays', hint: 'NSE holiday calendar · market open/closed', render: () => <HolidaysScreen /> },
 ];
