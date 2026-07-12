@@ -14,7 +14,6 @@ import ScreenerScreen from './screens/ScreenerScreen';
 import TerminalScreen from './screens/TerminalScreen';
 import TradingViewScreen from './screens/TradingViewScreen';
 import TrackListScreen from './screens/TrackListScreen';
-import UniverseScreen from './screens/UniverseScreen';
 import WatchlistScreen from './screens/WatchlistScreen';
 import HolidaysScreen from './screens/HolidaysScreen';
 import IndicesScreen from './screens/IndicesScreen';
@@ -28,7 +27,6 @@ type Screen = () => React.ReactElement;
 const SCREEN_BY_KEY: Record<string, (nav: (k: string) => void) => React.ReactElement> = {
   dashboard: (nav) => <DashboardScreen onNavigate={nav} />,
   screener: () => <ScreenerScreen />,
-  universe: () => <UniverseScreen />,
   terminal: () => <TerminalScreen />,
   analysis: () => <AnalysisHome />,
   charts: () => <ChartsHome />,
@@ -40,7 +38,6 @@ const SCREEN_BY_KEY: Record<string, (nav: (k: string) => void) => React.ReactEle
 const PAGES: { k: string; label: string }[] = [
   { k: 'dashboard', label: 'Dashboard' },
   { k: 'screener', label: 'Screener' },
-  { k: 'universe', label: 'Universe' },
   { k: 'terminal', label: 'Terminal' },
   { k: 'analysis', label: 'Analysis' },
   { k: 'charts', label: 'Charts' },
