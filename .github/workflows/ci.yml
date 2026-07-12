@@ -18,7 +18,10 @@ jobs:
           python-version: "3.11"
 
       - name: Python syntax (compile, no imports/network)
-        run: python -m py_compile server.py fundamentals.py wsgi.py
+        run: python -m py_compile server.py fundamentals.py wsgi.py auth.py broker.py news.py ai_graph.py holidays.py scanner.py relations.py
+
+      - name: Stdlib-only unit tests (auth, holidays)
+        run: python -m unittest discover -s tests -p 'test_*.py' -v
 
       - name: HTML / inline-JS sanity
         run: |
@@ -40,3 +43,19 @@ jobs:
 
       - name: Shell scripts parse
         run: bash -n deploy/setup-vm.sh && bash -n deploy/rollback.sh
+
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      # Non-blocking dependency vulnerability report (informational).
+      - name: pip-audit (Python deps)
+        run: |
+          pip install -q pip-audit
+          pip-audit -r requirements.txt || echo "pip-audit found advisories (non-blocking)"
+      - name: npm audit (JS deps)
+        working-directory: mobile
+        run: npm audit --audit-level=high || echo "npm audit found advisories (non-blocking)"

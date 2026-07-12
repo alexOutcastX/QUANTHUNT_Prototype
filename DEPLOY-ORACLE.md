@@ -155,6 +155,22 @@ sudo systemctl restart quanthunt
 Optional: `GRAPH_AI_MODEL=claude-sonnet-5` (default). Generations are cached
 in `graph_cache.json` for 30 days and rate-limited to 10/hour per IP.
 
+## Owner passcode (required for broker features)
+
+Broker holdings/quotes are private to you. Set an owner passcode so only you
+can access them (and so a broker can be connected at all):
+
+```bash
+printf 'APP_PASSWORD=choose-a-strong-passcode\n' | sudo tee -a /opt/quanthunt/.env
+sudo systemctl restart quanthunt
+```
+
+In the app: Lists → Portfolio → the Zerodha card shows **LOCKED**; enter the
+passcode to **UNLOCK**, then Connect/Sync. Without `APP_PASSWORD` set, broker
+features are disabled entirely (never left publicly reachable). Optional:
+`APP_SECRET` (else derived from the passcode), `CORS_ORIGINS` (comma-separated
+allowed cross-origin callers; default same-origin only).
+
 ## Broker connect (BYOB, read-only)
 
 Optional: sync your Zerodha demat holdings into the Portfolio tab.

@@ -31,6 +31,9 @@ export default function PortfolioScreen() {
   const [broker, setBroker] = useState<BrokerStatus | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [syncMsg, setSyncMsg] = useState<string | null>(null);
+  const [ownerAuth, setOwnerAuth] = useState<{ configured: boolean; owner: boolean } | null>(null);
+  const [pw, setPw] = useState('');
+  const [authMsg, setAuthMsg] = useState<string | null>(null);
 
   const fetchQuotes = useCallback(async (holdings: Holding[]) => {
     if (!holdings.length) {
@@ -45,9 +48,25 @@ export default function PortfolioScreen() {
     }
   }, []);
 
+  const refreshAuth = useCallback(() => {
+    api.authStatus().then(setOwnerAuth).catch(() => setOwnerAuth({ configured: false, owner: false }));
+  }, []);
+
   useEffect(() => {
     api.brokerStatus().then(setBroker).catch(() => {});
-  }, []);
+    refreshAuth();
+  }, [refreshAuth]);
+
+  const ownerLogin = useCallback(async () => {
+    setAuthMsg(null);
+    try {
+      await api.authLogin(pw);
+      setPw('');
+      refreshAuth();
+    } catch {
+      setAuthMsg('Incorrect passcode.');
+    }
+  }, [pw, refreshAuth]);
 
   const brokerConnect = useCallback(() => {
     if (broker?.login_url) Linking.openURL(broker.login_url).catch(() => {});
@@ -185,7 +204,29 @@ export default function PortfolioScreen() {
         </View>
       ) : null}
 
-      {broker?.configured ? (
+      {broker?.configured && ownerAuth && !ownerAuth.owner ? (
+        // Owner unlock: broker holdings are private to the instance owner.
+        ownerAuth.configured ? (
+          <Card style={styles.brokerCard}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.brokerTitle}>ZERODHA · LOCKED</Text>
+              <Text style={styles.brokerSub}>
+                {authMsg || 'Enter the owner passcode to access broker sync (holdings are private).'}
+              </Text>
+            </View>
+            <TextInput
+              style={[styles.input, { minWidth: 120 }]}
+              value={pw}
+              onChangeText={setPw}
+              placeholder="Passcode"
+              placeholderTextColor={theme.muted}
+              secureTextEntry
+              onSubmitEditing={ownerLogin}
+            />
+            <Btn label="UNLOCK" onPress={ownerLogin} />
+          </Card>
+        ) : null
+      ) : broker?.configured ? (
         <Card style={styles.brokerCard}>
           <View style={{ flex: 1 }}>
             <Text style={styles.brokerTitle}>
