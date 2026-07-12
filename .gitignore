@@ -23,3 +23,8 @@ index_cache.json
 graph_cache.json
 graph_cache.json.tmp
 broker_token.json
+
+# runtime database
+quanthunt.db
+quanthunt.db-wal
+quanthunt.db-shm

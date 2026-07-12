@@ -18,10 +18,22 @@ jobs:
           python-version: "3.11"
 
       - name: Python syntax (compile, no imports/network)
-        run: python -m py_compile server.py fundamentals.py wsgi.py auth.py broker.py news.py ai_graph.py holidays.py scanner.py relations.py
+        run: python -m py_compile server.py fundamentals.py wsgi.py auth.py broker.py news.py ai_graph.py holidays.py scanner.py relations.py store.py
 
-      - name: Stdlib-only unit tests (auth, holidays)
+      - name: Stdlib-only unit tests (auth, holidays, store)
         run: python -m unittest discover -s tests -p 'test_*.py' -v
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: JS engine unit tests (backtest, screener)
+        working-directory: mobile
+        run: |
+          mkdir -p tests/build
+          npx --yes esbuild src/backtest.ts --bundle --format=cjs --platform=node --outfile=tests/build/backtest.js --log-level=error
+          npx --yes esbuild src/screener.ts --bundle --format=cjs --platform=node --outfile=tests/build/screener.js --log-level=error
+          node tests/engines.test.js
 
       - name: HTML / inline-JS sanity
         run: |

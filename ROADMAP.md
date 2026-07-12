@@ -15,7 +15,7 @@ Status legend: ☐ pending · ◐ in progress · ☑ shipped
 - ☐ CI security scanning: `pip-audit` + `npm audit` (non-blocking report).
 - ☐ `security.txt`, security headers already present.
 
-## Phase 2 — Data platform (v3.3.0)
+## Phase 2 — Data platform (v3.3.0) — ☑ shipped
 - ☐ Persistent store (SQLite → Postgres path) for users, alerts, snapshots,
   historical series — replaces ephemeral in-memory/localStorage-only state.
 - ☐ Observability: error capture, request metrics, `/health` already present.
