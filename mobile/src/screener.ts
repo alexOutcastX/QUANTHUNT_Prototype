@@ -128,6 +128,8 @@ export const FILTER_DEFS: FilterDef[] = [
   { key: 'new_high_52w', label: 'New 52-week high', group: 'Signals', type: 'toggle', get: (s) => s.new_high_52w === true },
   { key: 'new_low_52w', label: 'New 52-week low', group: 'Signals', type: 'toggle', get: (s) => s.new_low_52w === true },
   { key: 'volume_spike', label: 'Volume spike (≥2.5×)', group: 'Signals', type: 'toggle', get: (s) => s.volume_spike === true },
+  { key: 'cam_break_up', label: 'Camarilla H4 breakout', group: 'Signals', type: 'toggle', get: (s) => s.cam_break_up === true },
+  { key: 'cam_break_down', label: 'Camarilla L4 breakdown', group: 'Signals', type: 'toggle', get: (s) => s.cam_break_down === true },
   // Volume
   { key: 'volume', label: 'Volume', group: 'Volume', type: 'range', get: (s) => n(s.volume) },
   { key: 'avgvol', label: 'Avg Volume', group: 'Volume', type: 'range', get: (s) => n(s.avgvol) },

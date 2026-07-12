@@ -4,12 +4,12 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
 import { API_BASE, GraphResp, LtpResp, api } from '../api';
 import HtmlView from '../components/HtmlView';
+import SymbolInput from '../components/SymbolInput';
 import { theme } from '../theme';
 
 // Self-contained Terminal workspace: d3-force relationship graph + a floating,
@@ -742,16 +742,14 @@ export default function TerminalScreen() {
       </View>
       <View style={styles.cmdRow}>
         <Text style={styles.prompt}>{'>'}</Text>
-        <TextInput
-          style={styles.cmd}
+        <SymbolInput
+          containerStyle={{ flex: 1 }}
+          inputStyle={styles.cmd}
           value={input}
           onChangeText={setInput}
-          onSubmitEditing={go}
-          autoCapitalize="characters"
-          autoCorrect={false}
+          onSelect={(s) => select(s)}
+          onSubmit={go}
           placeholder="TMCV"
-          placeholderTextColor={theme.muted}
-          returnKeyType="go"
         />
         <TouchableOpacity style={styles.goBtn} onPress={go}>
           <Text style={styles.goTxt}>GO</Text>
@@ -813,7 +811,7 @@ const styles = StyleSheet.create({
   head: { paddingHorizontal: 14, paddingTop: 12 },
   title: { color: theme.text, fontFamily: theme.mono, fontSize: 12, fontWeight: '700', letterSpacing: 1 },
   titleDim: { color: theme.muted, fontWeight: '400' },
-  cmdRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14, paddingTop: 10 },
+  cmdRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14, paddingTop: 10, zIndex: 50 },
   prompt: { color: theme.accent, fontFamily: theme.mono, fontSize: 16, fontWeight: '700' },
   cmd: {
     flex: 1,

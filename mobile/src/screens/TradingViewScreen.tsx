@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
-import { StyleSheet, TextInput, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import HtmlView from '../components/HtmlView';
+import SymbolInput from '../components/SymbolInput';
 import { theme } from '../theme';
 
 function normSymbol(s: string): string {
@@ -36,15 +37,14 @@ export default function TradingViewScreen() {
 
   return (
     <View style={styles.container}>
-      <TextInput
-        style={styles.search}
+      <SymbolInput
+        containerStyle={styles.searchWrap}
+        inputStyle={styles.search}
         value={input}
         onChangeText={setInput}
-        onSubmitEditing={() => setSymbol(normSymbol(input))}
+        onSelect={(s) => setSymbol(normSymbol(s))}
+        onSubmit={() => setSymbol(normSymbol(input))}
         placeholder="Symbol — e.g. NSE:RELIANCE"
-        placeholderTextColor={theme.muted}
-        autoCapitalize="characters"
-        returnKeyType="go"
       />
       <HtmlView html={html} style={styles.web} />
     </View>
@@ -53,6 +53,7 @@ export default function TradingViewScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.bg },
+  searchWrap: { margin: 12 },
   search: {
     backgroundColor: theme.surface2,
     borderColor: theme.border2,
@@ -61,7 +62,6 @@ const styles = StyleSheet.create({
     color: theme.text,
     paddingHorizontal: 12,
     paddingVertical: 9,
-    margin: 12,
     fontFamily: theme.mono,
     fontSize: 13,
   },

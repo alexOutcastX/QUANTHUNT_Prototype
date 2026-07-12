@@ -19,6 +19,28 @@ export function ema(arr: Arr, period: number): Arr {
   return out;
 }
 
+export function sma(arr: Arr, period: number): Arr {
+  const out: Arr = new Array(arr.length).fill(null);
+  let sum = 0;
+  let count = 0;
+  for (let i = 0; i < arr.length; i++) {
+    const x = arr[i];
+    if (x == null) {
+      sum = 0;
+      count = 0;
+      continue;
+    }
+    sum += x;
+    count++;
+    if (count > period) {
+      sum -= arr[i - period] as number;
+      count = period;
+    }
+    if (count === period) out[i] = sum / period;
+  }
+  return out;
+}
+
 export function rsi(closes: number[], period: number): Arr {
   const out: Arr = new Array(closes.length).fill(null);
   if (closes.length <= period) return out;
@@ -231,6 +253,76 @@ export function runStrategy(candles: Candle[], strat: string, params: number[]):
   return signals;
 }
 
+// ── Custom (user-defined) strategy ───────────────────────────────────────────
+export const CUSTOM_KEY = 'custom';
+
+export type CustomRule = {
+  ind: 'close' | 'rsi' | 'ema' | 'sma' | 'macd_hist' | 'volume';
+  period?: number; // rsi/ema/sma period (default 14/20/20)
+  op: 'gt' | 'lt' | 'cross_above' | 'cross_below';
+  target: 'value' | 'ema' | 'sma' | 'close';
+  value?: number; // constant when target='value', else MA period
+};
+// AND semantics within each list: all buy rules must hold to emit 1, all sell
+// rules to emit -1 (buy wins if both fire on the same bar).
+export type CustomStrategy = { buy: CustomRule[]; sell: CustomRule[] };
+
+export function runCustomStrategy(candles: Candle[], cs: CustomStrategy): number[] {
+  const n = candles.length;
+  const closes = candles.map((x) => x.c ?? 0);
+  const closeArr: Arr = closes;
+
+  const seriesFor = (ind: CustomRule['ind'], period?: number): Arr => {
+    if (ind === 'close') return closeArr;
+    if (ind === 'rsi') return rsi(closes, period || 14);
+    if (ind === 'ema') return ema(closeArr, period || 20);
+    if (ind === 'sma') return sma(closeArr, period || 20);
+    if (ind === 'macd_hist') {
+      const fast = ema(closeArr, 12);
+      const slow = ema(closeArr, 26);
+      const ml: Arr = closes.map((_, i) =>
+        fast[i] != null && slow[i] != null ? (fast[i] as number) - (slow[i] as number) : null,
+      );
+      const sig = ema(ml, 9);
+      return ml.map((v, i) => (v != null && sig[i] != null ? v - (sig[i] as number) : null));
+    }
+    return candles.map((x) => x.v ?? 0); // volume
+  };
+
+  const targetFor = (rule: CustomRule): Arr => {
+    if (rule.target === 'value') return new Array(n).fill(rule.value ?? 0);
+    if (rule.target === 'ema') return ema(closeArr, rule.value || 20);
+    if (rule.target === 'sma') return sma(closeArr, rule.value || 20);
+    return closeArr; // close
+  };
+
+  const compile = (rules: CustomRule[]) =>
+    rules.map((r) => ({ op: r.op, left: seriesFor(r.ind, r.period), right: targetFor(r) }));
+
+  const ruleTrue = (rule: { op: CustomRule['op']; left: Arr; right: Arr }, i: number): boolean => {
+    const l = rule.left[i];
+    const r = rule.right[i];
+    if (l == null || r == null) return false;
+    if (rule.op === 'gt') return l > r;
+    if (rule.op === 'lt') return l < r;
+    if (i === 0) return false;
+    const lp = rule.left[i - 1];
+    const rp = rule.right[i - 1];
+    if (lp == null || rp == null) return false;
+    if (rule.op === 'cross_above') return lp <= rp && l > r;
+    return lp >= rp && l < r; // cross_below
+  };
+
+  const buy = compile(cs.buy);
+  const sell = compile(cs.sell);
+  const signals = new Array(n).fill(0);
+  for (let i = 0; i < n; i++) {
+    if (buy.length && buy.every((r) => ruleTrue(r, i))) signals[i] = 1;
+    else if (sell.length && sell.every((r) => ruleTrue(r, i))) signals[i] = -1;
+  }
+  return signals;
+}
+
 // ── Trade simulator ──────────────────────────────────────────────────────────
 export type Risk = {
   capital: number;
@@ -271,8 +363,15 @@ export type BacktestResult = {
 
 const BROK = 0.001;
 
-export function runBacktest(candles: Candle[], strat: string, params: number[], risk: Risk): BacktestResult {
-  const raw = runStrategy(candles, strat, params);
+export function runBacktest(
+  candles: Candle[],
+  strat: string,
+  params: number[],
+  risk: Risk,
+  custom?: CustomStrategy,
+): BacktestResult {
+  const raw =
+    strat === CUSTOM_KEY && custom ? runCustomStrategy(candles, custom) : runStrategy(candles, strat, params);
   const entrySigs = raw.map((s) => (s === 1 ? 1 : 0));
   const exitSigs = raw.map((s) => (s === -1 ? 1 : 0));
   const atrArr = calcATR(candles, 14);

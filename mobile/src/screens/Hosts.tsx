@@ -10,6 +10,8 @@ import TradingViewScreen from './TradingViewScreen';
 import TerminalScreen from './TerminalScreen';
 import TrackListScreen from './TrackListScreen';
 import WatchlistScreen from './WatchlistScreen';
+import HolidaysScreen from './HolidaysScreen';
+import IndicesScreen from './IndicesScreen';
 
 type SubTab = { key: string; label: string; render: () => React.ReactElement };
 
@@ -67,6 +69,8 @@ const MORE_ITEMS: { key: string; label: string; hint: string; render: () => Reac
   { key: 'portfolio', label: 'Portfolio', hint: 'Holdings with live P&L', render: () => <PortfolioScreen /> },
   { key: 'watchlist', label: 'Watchlist', hint: 'Saved symbols with live quotes', render: () => <WatchlistScreen /> },
   { key: 'calc', label: 'Calculator', hint: 'Position size · SIP · CAGR', render: () => <CalculatorScreen /> },
+  { key: 'indices', label: 'Indices', hint: 'Live index levels · day & 1Y change', render: () => <IndicesScreen /> },
+  { key: 'holidays', label: 'Holidays', hint: 'NSE holiday calendar · market open/closed', render: () => <HolidaysScreen /> },
 ];
 
 export function MoreScreen() {

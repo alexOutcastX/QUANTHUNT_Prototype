@@ -16,6 +16,7 @@ import scanner as _scanner     # live per-symbol technical scan for the screener
 import relations as _relations # curated company-relationship graph (Terminal tab)
 import news as _news           # RSS news aggregation (Terminal news panel)
 import ai_graph as _ai         # AI-generated relationship graphs (any symbol)
+import holidays as _holidays   # NSE trading holidays + market open/closed status
 
 # Support both normal run and PyInstaller frozen exe
 _BASE_DIR = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
@@ -1028,6 +1029,62 @@ def latest_news():
     q = request.args.get("q", "").strip()
     force = request.args.get("force") == "1"
     return jsonify(_news.get_news(sym, q, force))
+
+
+@app.route("/holidays")
+def market_holidays():
+    """NSE trading-holiday calendar + live market open/closed status (IST)."""
+    s = _holidays.market_status()
+    return jsonify({**s, "holidays": _holidays.holidays(),
+                    "note": "Indicative list — verify with NSE circulars."})
+
+
+# ── Major indices (live level + day change + 1Y return via yfinance) ─────────
+_MAJOR_INDICES = [
+    ("NIFTY50",     "NIFTY 50",         "^NSEI"),
+    ("SENSEX",      "BSE SENSEX",       "^BSESN"),
+    ("BANKNIFTY",   "NIFTY Bank",       "^NSEBANK"),
+    ("NIFTYIT",     "NIFTY IT",         "^CNXIT"),
+    ("NIFTYAUTO",   "NIFTY Auto",       "^CNXAUTO"),
+    ("NIFTYPHARMA", "NIFTY Pharma",     "^CNXPHARMA"),
+    ("NIFTYFMCG",   "NIFTY FMCG",       "^CNXFMCG"),
+    ("NIFTYMETAL",  "NIFTY Metal",      "^CNXMETAL"),
+    ("NIFTYENERGY", "NIFTY Energy",     "^CNXENERGY"),
+    ("NIFTYREALTY", "NIFTY Realty",     "^CNXREALTY"),
+    ("NIFTYMIDCAP", "NIFTY Midcap 100", "^CRSMID"),
+    ("NIFTYNEXT50", "NIFTY Next 50",    "^NSMIDCP"),
+]
+_indices_cache = {"ts": 0.0, "data": None}
+_INDICES_TTL = 300   # 5 minutes
+
+
+def _fetch_index_row(key, name, yf_sym):
+    """One index snapshot: last close, % day change, % 1-year return."""
+    import yfinance as yf
+    df = yf.Ticker(yf_sym).history(period="1y", interval="1d")
+    closes = df["Close"].dropna()
+    last, prev, first = float(closes.iloc[-1]), float(closes.iloc[-2]), float(closes.iloc[0])
+    return {"key": key, "name": name, "symbol": yf_sym,
+            "level": round(last, 2),
+            "chg": round((last / prev - 1) * 100, 2) if prev else None,
+            "y1": round((last / first - 1) * 100, 1) if first else None}
+
+
+@app.route("/indices")
+def indices_live():
+    """Major NSE/BSE index levels for the dashboard, cached 5 minutes."""
+    now = time.time()
+    cached = _indices_cache["data"] is not None and (now - _indices_cache["ts"]) < _INDICES_TTL
+    if not cached:
+        rows = []
+        for key, name, yf_sym in _MAJOR_INDICES:
+            try:
+                rows.append(_fetch_index_row(key, name, yf_sym))
+            except Exception as e:
+                log.debug("Index fetch failed for %s: %s", yf_sym, e)
+        _indices_cache["ts"], _indices_cache["data"] = now, rows
+    return jsonify({"indices": _indices_cache["data"],
+                    "asof": int(time.time()), "cached": cached})
 
 
 @app.route("/scan")

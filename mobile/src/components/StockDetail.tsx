@@ -118,6 +118,8 @@ export default function StockDetail({ row, onClose }: { row: Row; onClose: () =>
             if (row.new_high_52w) events.push('New 52-week high');
             if (row.new_low_52w) events.push('New 52-week low');
             if (row.volume_spike) events.push('Volume spike');
+            if (row.cam_break_up) events.push('Camarilla H4 breakout');
+            if (row.cam_break_down) events.push('Camarilla L4 breakdown');
             return events.length ? (
               <>
                 <Text style={styles.section}>Signals today</Text>
@@ -130,6 +132,8 @@ export default function StockDetail({ row, onClose }: { row: Row; onClose: () =>
           <View style={styles.grid}>
             <Cell k="S1 / S2 / S3" v={`${num(row.s1)} / ${num(row.s2)} / ${num(row.s3)}`} wide />
             <Cell k="R1 / R2 / R3" v={`${num(row.r1)} / ${num(row.r2)} / ${num(row.r3)}`} wide />
+            <Cell k="Camarilla H3 / H4" v={`${num(row.cam_h3)} / ${num(row.cam_h4)}`} wide />
+            <Cell k="Camarilla L3 / L4" v={`${num(row.cam_l3)} / ${num(row.cam_l4)}`} wide />
           </View>
 
           <Text style={styles.section}>Fundamentals</Text>

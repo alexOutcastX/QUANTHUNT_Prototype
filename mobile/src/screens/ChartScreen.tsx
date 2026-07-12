@@ -3,13 +3,13 @@ import {
   ActivityIndicator,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
 import { api, Candle } from '../api';
 import { chartHtml } from '../chartHtml';
 import HtmlView from '../components/HtmlView';
+import SymbolInput from '../components/SymbolInput';
 import { theme } from '../theme';
 
 const PERIODS: { label: string; period: string; interval: string; barSec: number }[] = [
@@ -54,15 +54,14 @@ export default function ChartScreen() {
 
   return (
     <View style={styles.container}>
-      <TextInput
-        style={styles.search}
+      <SymbolInput
+        containerStyle={styles.searchWrap}
+        inputStyle={styles.search}
         value={input}
         onChangeText={setInput}
-        onSubmitEditing={() => setSymbol(input.trim().toUpperCase().replace(/^NSE:/, ''))}
+        onSelect={(s) => setSymbol(s.trim().toUpperCase().replace(/^NSE:/, ''))}
+        onSubmit={() => setSymbol(input.trim().toUpperCase().replace(/^NSE:/, ''))}
         placeholder="Symbol — e.g. RELIANCE"
-        placeholderTextColor={theme.muted}
-        autoCapitalize="characters"
-        returnKeyType="go"
       />
       <View style={styles.chips}>
         {PERIODS.map((pp, i) => (
@@ -94,6 +93,7 @@ export default function ChartScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.bg },
+  searchWrap: { marginHorizontal: 12, marginTop: 12 },
   search: {
     backgroundColor: theme.surface2,
     borderColor: theme.border2,
@@ -102,8 +102,6 @@ const styles = StyleSheet.create({
     color: theme.text,
     paddingHorizontal: 12,
     paddingVertical: 9,
-    marginHorizontal: 12,
-    marginTop: 12,
     fontFamily: theme.mono,
     fontSize: 13,
   },
