@@ -292,7 +292,61 @@ export type Deal = {
   price: number | null;
 };
 
+// Derivatives — F&O option chain (NSE public feed).
+export type OptionLeg = {
+  oi: number | null;
+  chg_oi: number | null;
+  iv: number | null;
+  ltp: number | null;
+  volume: number | null;
+};
+export type OptionStrike = { strike: number; ce: OptionLeg | null; pe: OptionLeg | null };
+export type OptionChain = {
+  symbol: string | null;
+  underlying: number | null;
+  expiry: string | null;
+  expiries: string[];
+  strikes: OptionStrike[];
+  pcr: number | null;
+  total_ce_oi: number | null;
+  total_pe_oi: number | null;
+  max_pain: number | null;
+  atm: number | null;
+  atm_iv: number | null;
+  source: string;
+  error?: string;
+};
+
+// Portfolio risk report (from /risk/portfolio).
+export type RiskReport = {
+  ok: boolean;
+  reason?: string;
+  value?: number;
+  weights?: Record<string, number>;
+  volatility_annual?: number | null;
+  var_pct?: number | null;
+  var_amount?: number | null;
+  var_param_pct?: number | null;
+  drawdown?: { mdd: number | null; peak: number | null; trough: number | null };
+  sharpe?: number | null;
+  beta?: number | null;
+  correlations?: Record<string, number>;
+  conf?: number;
+  days?: number;
+  symbols_priced?: string[];
+  symbols_missing?: string[];
+};
+export type RiskHolding = { symbol: string; qty: number };
+
 export const api = {
+  optionChain: (symbol: string, expiry?: string) =>
+    getJson<OptionChain>(
+      '/derivatives/option-chain?symbol=' + encodeURIComponent(symbol) +
+        (expiry ? '&expiry=' + encodeURIComponent(expiry) : ''),
+      30000,
+    ),
+  riskPortfolio: (holdings: RiskHolding[], conf = 0.95) =>
+    postJson<RiskReport>('/risk/portfolio', { holdings, conf }),
   corpAnnouncements: (s: string) => getJson<{ items: Announcement[]; source: string }>('/corporate/announcements?symbol=' + encodeURIComponent(s)),
   corpActions: (s: string) => getJson<{ items: CorpAction[]; source: string }>('/corporate/actions?symbol=' + encodeURIComponent(s)),
   corpShareholding: (s: string) => getJson<{ latest: Shareholding | null; source: string }>('/corporate/shareholding?symbol=' + encodeURIComponent(s)),

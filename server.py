@@ -21,6 +21,8 @@ import holidays as _holidays   # NSE trading holidays + market open/closed statu
 import auth as _auth           # owner passcode gate for owner-only endpoints
 import store as _store         # SQLite persistence (kv + snapshots)
 import corporate as _corp       # corporate actions/announcements/shareholding/deals (NSE)
+import derivatives as _deriv     # F&O option-chain analytics (PCR/max-pain/ATM IV) from NSE
+import risk as _risk            # portfolio risk analytics (VaR/beta/drawdown/correlation)
 
 # Support both normal run and PyInstaller frozen exe
 _BASE_DIR = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
@@ -1326,6 +1328,70 @@ def corp_shareholding():
 @rate_limit("corp", 60, 300)
 def corp_deals():
     return jsonify(_corp.deals(_corp_fetch))
+
+
+# ── Derivatives (F&O option chain) ──
+@app.route("/derivatives/option-chain")
+@rate_limit("deriv", 60, 300)
+def deriv_option_chain():
+    """Option-chain ladder + PCR / max-pain / ATM IV for an index or equity.
+    Sourced live from NSE's public option-chain feed (best from an Indian IP)."""
+    sym = request.args.get("symbol", "NIFTY").strip().upper()
+    expiry = request.args.get("expiry", "").strip() or None
+    if not sym:
+        return jsonify({"error": "symbol required"}), 400
+    return jsonify(_deriv.option_chain(sym, _corp_fetch, expiry=expiry))
+
+
+# ── Portfolio risk ──
+def _closes(sym, period="1y"):
+    """Daily closing prices for a symbol as a plain list (newest last)."""
+    try:
+        df = yf.Ticker(f"{sym}.NS").history(period=period, interval="1d", auto_adjust=True)
+        if df is None or df.empty:
+            return []
+        return [float(x) for x in df["Close"].tolist() if x == x]
+    except Exception:
+        return []
+
+
+@app.route("/risk/portfolio", methods=["POST"])
+@rate_limit("risk", 30, 300)
+def risk_portfolio():
+    """Risk report for a set of holdings. Body: {holdings:[{symbol,qty}],
+    benchmark?:"NIFTY 50", conf?:0.95}. Fetches 1Y daily closes per symbol and
+    a benchmark index, then runs the pure analytics in risk.py."""
+    body = request.get_json(silent=True) or {}
+    holdings = body.get("holdings") or []
+    holdings = [{"symbol": str(h.get("symbol", "")).upper().strip(), "qty": h.get("qty", 0)}
+                for h in holdings if str(h.get("symbol", "")).strip()]
+    if not holdings:
+        return jsonify({"ok": False, "reason": "no holdings"}), 400
+    try:
+        conf = float(body.get("conf", 0.95))
+    except Exception:
+        conf = 0.95
+    conf = min(max(conf, 0.90), 0.99)
+
+    hist = {}
+    for h in holdings:
+        c = _closes(h["symbol"])
+        if c:
+            hist[h["symbol"]] = c
+
+    # Benchmark: NIFTY index via ^NSEI so beta is against the market.
+    idx = None
+    try:
+        df = yf.Ticker("^NSEI").history(period="1y", interval="1d", auto_adjust=True)
+        if df is not None and not df.empty:
+            idx = [float(x) for x in df["Close"].tolist() if x == x]
+    except Exception:
+        idx = None
+
+    report = _risk.analyze(holdings, hist, index_prices=idx, conf=conf)
+    report["symbols_priced"] = list(hist.keys())
+    report["symbols_missing"] = [h["symbol"] for h in holdings if h["symbol"] not in hist]
+    return jsonify(report)
 
 
 @app.route("/indices/history")

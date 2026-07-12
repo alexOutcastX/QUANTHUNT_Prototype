@@ -29,11 +29,12 @@ Status legend: ☐ pending · ◐ in progress · ☑ shipped
 - ☐ Shareholding pattern trends + promoter pledging.
 - ☐ Bulk/block deals.
 
-## Phase 4 — Derivatives + portfolio risk (v3.5.0)
-- ☐ F&O option chain: IV, OI, PCR, max-pain; futures basis/rollover.
-- ☐ Option strategy payoff builder.
-- ☐ Portfolio risk: VaR/CVaR, beta, factor/sector exposure, drawdown,
-  correlation matrix, attribution.
+## Phase 4 — Derivatives + portfolio risk (v3.5.0) — ☑ shipped
+- ☑ F&O option chain: IV, OI, PCR, max-pain (`derivatives.py`, NSE feed).
+- ☑ Option strategy payoff builder (multi-leg, net premium / breakeven / max P&L).
+- ☑ Portfolio risk: historical + parametric VaR, annualised volatility, beta vs
+  NIFTY, max drawdown, Sharpe, weights, per-symbol correlation (`risk.py`).
+- ☐ futures basis/rollover; CVaR + factor/sector attribution (follow-up).
 
 ## Phase 5 — Grounded entity graph, the Palantir layer (v3.6.0)
 - ☐ Rebuild relationship edges from filings / shareholding / board interlocks /
