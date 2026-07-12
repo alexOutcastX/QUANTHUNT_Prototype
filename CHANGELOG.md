@@ -3,6 +3,20 @@
 All notable changes are recorded here. Versioning is [SemVer](https://semver.org):
 `MAJOR.MINOR.PATCH`.
 
+## [2.12.0] — 2026-07-12
+Native mobile build setup (EAS).
+
+### Mobile
+- **eas.json** build profiles: `preview` (sideloadable Android APK, points
+  at the VM) and `production` (Play Store .aab, auto-incrementing
+  versionCode, requires the HTTPS domain).
+- **app.json** completed for store builds: bundle ids
+  (`com.taureye.app`), splash screen, dark UI style, adaptive-icon
+  background matched to the theme, tablet + orientation support.
+- **BUILD-MOBILE.md** — the full path from `eas login` to an APK on your
+  phone (~15 min), plus Play Store / iOS steps and the Expo Go + PWA
+  no-cost alternatives.
+
 ## [2.11.0] — 2026-07-12
 Feature-gap close-out: autocomplete, custom strategies, Camarilla,
 market-cap segments, Indices & Holidays pages, ticker strip.
@@ -350,6 +364,7 @@ Oracle Always-Free VM with push-to-deploy.
 - Embedded TradingView Advanced Chart tab, plus deep-link to the user's
   logged-in TradingView account.
 
+[2.12.0]: https://github.com/alexOutcastX/QUANTHUNT_Prototype/releases/tag/v2.12.0
 [2.11.0]: https://github.com/alexOutcastX/QUANTHUNT_Prototype/releases/tag/v2.11.0
 [2.10.0]: https://github.com/alexOutcastX/QUANTHUNT_Prototype/releases/tag/v2.10.0
 [2.9.0]: https://github.com/alexOutcastX/QUANTHUNT_Prototype/releases/tag/v2.9.0
