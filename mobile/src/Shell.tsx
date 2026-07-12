@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Linking, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { api } from './api';
+import { API_BASE, api } from './api';
 import { useResponsive } from './responsive';
 import AnalysisScreen from './screens/AnalysisScreen';
 import BacktestScreen from './screens/BacktestScreen';
@@ -85,6 +85,12 @@ function DesktopShell({ version }: { version: string }) {
       <View style={styles.brandBar}>
         <Brand version={version} big />
         <Text style={styles.tagline}>NSE · BSE Live Screener</Text>
+        <TouchableOpacity
+          style={styles.legalBtn}
+          onPress={() => Linking.openURL((API_BASE || '') + '/legal.html').catch(() => {})}
+        >
+          <Text style={styles.legalTxt}>DISCLAIMER</Text>
+        </TouchableOpacity>
       </View>
       <View style={styles.pagesBar}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pagesRow}>
@@ -155,6 +161,8 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
   },
   tagline: { color: theme.muted, fontSize: 10, fontFamily: theme.mono },
+  legalBtn: { marginLeft: 'auto' },
+  legalTxt: { color: theme.muted, fontSize: 9, fontFamily: theme.mono, letterSpacing: 1 },
   pagesBar: { backgroundColor: theme.surface, borderBottomColor: theme.border, borderBottomWidth: 1 },
   pagesRow: { paddingHorizontal: 10, gap: 2 },
   pageItem: {

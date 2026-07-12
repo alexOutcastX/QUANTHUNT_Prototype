@@ -3,6 +3,32 @@
 All notable changes are recorded here. Versioning is [SemVer](https://semver.org):
 `MAJOR.MINOR.PATCH`.
 
+## [2.10.0] — 2026-07-12
+Production hardening: PWA install, rate limiting, health checks, legal page,
+HTTPS/backup tooling.
+
+### Web / PWA
+- The site is now an **installable PWA**: web manifest, 192/512 icons,
+  apple-touch-icon, theme colour, and a service worker (cache-first for the
+  immutable JS bundle, network-first for data, offline shell fallback).
+- Proper SEO/OG meta (title, description, share card).
+
+### Backend
+- **Per-IP rate limiting**: /scan (200/5min), /news (30/5min), /graph
+  (60/5min), and **AI graph generations capped at 10/hour/IP** so the
+  Anthropic key can't be drained; nginx template adds 20 r/s edge burst
+  protection. 429s carry a retry hint.
+- New **/health** endpoint: uptime, cache sizes, AI availability.
+- Security headers (nosniff, frame, referrer policy) on every response.
+
+### Ops & legal
+- **deploy/enable-https.sh** — one-command domain + Let's Encrypt setup;
+  DEPLOY-ORACLE.md gains HTTPS / AI-key / backups / monitoring sections.
+- **deploy/backup.sh** — nightly cron archive of .env + runtime caches (7 kept).
+- New **/legal.html** — disclaimer ("not investment advice"), data-accuracy
+  notes (incl. AI graphs), and privacy statement; linked from the desktop
+  brand bar.
+
 ## [2.9.0] — 2026-07-12
 Terminal wired to real data: AI-generated relationship graphs for **any**
 company (bring your Anthropic API key), with the curated cluster as the
@@ -301,6 +327,7 @@ Oracle Always-Free VM with push-to-deploy.
 - Embedded TradingView Advanced Chart tab, plus deep-link to the user's
   logged-in TradingView account.
 
+[2.10.0]: https://github.com/alexOutcastX/QUANTHUNT_Prototype/releases/tag/v2.10.0
 [2.9.0]: https://github.com/alexOutcastX/QUANTHUNT_Prototype/releases/tag/v2.9.0
 [2.8.0]: https://github.com/alexOutcastX/QUANTHUNT_Prototype/releases/tag/v2.8.0
 [2.7.0]: https://github.com/alexOutcastX/QUANTHUNT_Prototype/releases/tag/v2.7.0
