@@ -76,6 +76,13 @@ feature/* ──PR──▶ main (CI, integration; does NOT deploy)
 
 Canonical per-version notes are in **[CHANGELOG.md](CHANGELOG.md)**. Summary:
 
+### v2.13.0 — broker connect (read-only)
+
+| Area | Change |
+|---|---|
+| Portfolio | **Zerodha Kite connect** (your own API app): daily login + one-tap demat **holdings sync** into live P&L |
+| Backend | `broker.py` + `/broker/*` — strictly read-only (no order code), secret in `.env`, 0600 daily token, rate-limited |
+
 ### v2.12.0 — native mobile build setup
 
 | Area | Change |

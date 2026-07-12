@@ -7,7 +7,7 @@ QuantHunt NSE Direct backend.
 - /patterns     : Candlestick + TA pattern analysis
 - /fundamentals : PE, EPS, revenue, ratios (YF)
 """
-from flask import Flask, jsonify, request, render_template, send_from_directory
+from flask import Flask, jsonify, redirect, request, render_template, send_from_directory
 from flask_cors import CORS
 import requests, logging, time, threading, os, io, csv, datetime, json, math, sys
 import pandas as pd
@@ -16,6 +16,7 @@ import scanner as _scanner     # live per-symbol technical scan for the screener
 import relations as _relations # curated company-relationship graph (Terminal tab)
 import news as _news           # RSS news aggregation (Terminal news panel)
 import ai_graph as _ai         # AI-generated relationship graphs (any symbol)
+import broker as _broker       # BYOB Zerodha connect (read-only, single user)
 import holidays as _holidays   # NSE trading holidays + market open/closed status
 
 # Support both normal run and PyInstaller frozen exe
@@ -1014,6 +1015,59 @@ def relationship_graph():
     return jsonify({"companies": g["companies"], "edges": g["edges"],
                     "available": listed, "source": "ai", "ai": True,
                     "disclaimer": AI_DISCLAIMER})
+
+
+# ── BYOB broker connect (Zerodha Kite, READ-ONLY — no order endpoints) ──
+@app.route("/broker/status")
+@rate_limit("broker", 60, 300)
+def broker_status():
+    return jsonify(_broker.status())
+
+
+@app.route("/broker/callback")
+@rate_limit("broker-login", 10, 600)
+def broker_callback():
+    """Kite redirects here after the user logs in on zerodha.com."""
+    tok = request.args.get("request_token", "").strip()
+    if not tok:
+        return jsonify({"error": "missing request_token"}), 400
+    try:
+        _broker.complete_login(tok)
+    except Exception as e:
+        logging.warning("broker login failed: %s", type(e).__name__)
+        return jsonify({"error": "login-failed",
+                        "detail": "Token exchange failed — start the login again."}), 502
+    return redirect("/?broker=connected")
+
+
+@app.route("/broker/holdings")
+@rate_limit("broker", 60, 300)
+def broker_holdings():
+    if not _broker.connected():
+        return jsonify({"error": "not-connected"}), 401
+    try:
+        return jsonify({"holdings": _broker.holdings(), "read_only": True})
+    except Exception as e:
+        return jsonify({"error": "broker-error", "detail": str(e)}), 502
+
+
+@app.route("/broker/ltp")
+@rate_limit("broker", 120, 300)
+def broker_ltp():
+    if not _broker.connected():
+        return jsonify({"error": "not-connected"}), 401
+    syms = [x for x in request.args.get("symbols", "").upper().split(",") if x]
+    try:
+        return jsonify({"data": _broker.ltp(syms)})
+    except Exception as e:
+        return jsonify({"error": "broker-error", "detail": str(e)}), 502
+
+
+@app.route("/broker/logout", methods=["POST"])
+@rate_limit("broker-login", 10, 600)
+def broker_logout():
+    _broker.logout()
+    return jsonify({"connected": False})
 
 
 @app.route("/news")

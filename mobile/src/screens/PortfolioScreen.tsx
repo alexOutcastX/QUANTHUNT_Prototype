@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { Linking } from 'react-native';
 import {
   ActivityIndicator,
   FlatList,
@@ -9,8 +10,8 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { api, Quote } from '../api';
-import { Holding, addHolding, loadPortfolio, removeHolding } from '../portfolio';
+import { BrokerStatus, api, Quote } from '../api';
+import { Holding, addHolding, importHoldings, loadPortfolio, removeHolding } from '../portfolio';
 import { theme } from '../theme';
 
 const money = (n: number) =>
@@ -27,6 +28,9 @@ export default function PortfolioScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [broker, setBroker] = useState<BrokerStatus | null>(null);
+  const [syncing, setSyncing] = useState(false);
+  const [syncMsg, setSyncMsg] = useState<string | null>(null);
 
   const fetchQuotes = useCallback(async (holdings: Holding[]) => {
     if (!holdings.length) {
@@ -40,6 +44,31 @@ export default function PortfolioScreen() {
       setError(e instanceof Error ? e.message : 'Failed to fetch quotes');
     }
   }, []);
+
+  useEffect(() => {
+    api.brokerStatus().then(setBroker).catch(() => {});
+  }, []);
+
+  const brokerConnect = useCallback(() => {
+    if (broker?.login_url) Linking.openURL(broker.login_url).catch(() => {});
+  }, [broker]);
+
+  const brokerSync = useCallback(async () => {
+    setSyncing(true);
+    setSyncMsg(null);
+    try {
+      const { holdings } = await api.brokerHoldings();
+      const next = await importHoldings(list, holdings);
+      setList(next);
+      await fetchQuotes(next);
+      setSyncMsg(`Synced ${holdings.length} holdings from Zerodha (read-only).`);
+    } catch {
+      setSyncMsg('Sync failed — broker session may have expired. Reconnect and retry.');
+      api.brokerStatus().then(setBroker).catch(() => {});
+    } finally {
+      setSyncing(false);
+    }
+  }, [list, fetchQuotes]);
 
   useEffect(() => {
     (async () => {
@@ -156,6 +185,31 @@ export default function PortfolioScreen() {
         </View>
       ) : null}
 
+      {broker?.configured ? (
+        <View style={styles.brokerCard}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.brokerTitle}>
+              ZERODHA {broker.connected ? `· ${broker.user || 'connected'}` : '· not connected'}
+            </Text>
+            <Text style={styles.brokerSub}>
+              {syncMsg ||
+                (broker.connected
+                  ? 'Read-only — TaurEye never places orders.'
+                  : 'Daily Kite login required to sync holdings.')}
+            </Text>
+          </View>
+          {broker.connected ? (
+            <TouchableOpacity style={styles.brokerBtn} onPress={brokerSync} disabled={syncing}>
+              <Text style={styles.brokerBtnTxt}>{syncing ? 'SYNCING…' : '⇊ SYNC HOLDINGS'}</Text>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity style={styles.brokerBtn} onPress={brokerConnect}>
+              <Text style={styles.brokerBtnTxt}>CONNECT</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      ) : null}
+
       <View style={styles.addBox}>
         <TextInput
           style={[styles.input, styles.iSym]}
@@ -227,6 +281,22 @@ function Sum({
 }
 
 const styles = StyleSheet.create({
+  brokerCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginHorizontal: 12,
+    marginTop: 10,
+    padding: 12,
+    backgroundColor: theme.surface,
+    borderColor: theme.border2,
+    borderWidth: 1,
+    borderRadius: 8,
+  },
+  brokerTitle: { color: theme.text, fontFamily: theme.mono, fontSize: 11, fontWeight: '700', letterSpacing: 1 },
+  brokerSub: { color: theme.muted, fontFamily: theme.mono, fontSize: 9, marginTop: 3 },
+  brokerBtn: { backgroundColor: theme.accent, borderRadius: 6, paddingHorizontal: 12, paddingVertical: 8 },
+  brokerBtnTxt: { color: theme.bg, fontFamily: theme.mono, fontSize: 10, fontWeight: '700', letterSpacing: 1 },
   container: { flex: 1, backgroundColor: theme.bg, paddingHorizontal: 12 },
   center: { flex: 1, backgroundColor: theme.bg, alignItems: 'center', justifyContent: 'center' },
   summary: {

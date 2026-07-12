@@ -62,3 +62,21 @@ export async function removeHolding(list: Holding[], symbol: string): Promise<Ho
   await save(next);
   return next;
 }
+
+// Merge broker-synced holdings into the local list: broker rows win by
+// symbol (their qty/avg are the demat truth); manual rows not held at the
+// broker are kept.
+export async function importHoldings(
+  list: Holding[],
+  imported: { symbol: string; qty: number; avg_price?: number | null }[],
+): Promise<Holding[]> {
+  const bySym = new Map(list.map((h) => [h.symbol, h] as const));
+  for (const b of imported) {
+    const symbol = normSymbol(b.symbol);
+    if (!symbol || !b.qty) continue;
+    bySym.set(symbol, { symbol, qty: b.qty, avg: b.avg_price ?? bySym.get(symbol)?.avg ?? 0 });
+  }
+  const next = [...bySym.values()];
+  await save(next);
+  return next;
+}

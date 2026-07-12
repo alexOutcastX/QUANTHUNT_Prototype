@@ -238,7 +238,26 @@ export type HolidaysResp = {
   note: string;
 };
 
+// BYOB broker connect (read-only; server holds the user's own Kite session).
+export type BrokerStatus = {
+  configured: boolean;
+  connected: boolean;
+  user?: string | null;
+  login_url?: string | null;
+  read_only: boolean;
+};
+export type BrokerHolding = {
+  symbol: string;
+  exchange?: string;
+  qty: number;
+  avg_price?: number | null;
+  ltp?: number | null;
+  pnl?: number | null;
+};
+
 export const api = {
+  brokerStatus: () => getJson<BrokerStatus>('/broker/status'),
+  brokerHoldings: () => getJson<{ holdings: BrokerHolding[] }>('/broker/holdings'),
   indices: () => getJson<IndicesResp>('/indices'),
   holidays: () => getJson<HolidaysResp>('/holidays'),
   ping: () => getJson<Ping>('/ping'),
