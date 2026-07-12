@@ -146,6 +146,47 @@ export async function exportExcel(rows: Row[], name: string): Promise<void> {
   }
 }
 
+// ── Generic, column-config-driven export ──────────────────────────────────────
+// The Watchlist has its own row shape (symbol + live quote), not screener Rows,
+// so it drives these header/row exporters instead of the Row-typed ones above.
+// Reuses the same cell-escaping, web download and native share plumbing.
+export function buildCsvRows(headers: string[], rows: string[][]): string {
+  const head = headers.map(cell).join(',');
+  const body = rows.map((r) => r.map(cell).join(',')).join('\n');
+  return head + '\n' + body + '\n';
+}
+
+function buildHtmlTableRows(headers: string[], rows: string[][]): string {
+  const th = headers.map((h) => `<th>${htmlEsc(h)}</th>`).join('');
+  const body = rows
+    .map((r) => '<tr>' + r.map((c) => `<td>${htmlEsc(c)}</td>`).join('') + '</tr>')
+    .join('');
+  return `<table><thead><tr>${th}</tr></thead><tbody>${body}</tbody></table>`;
+}
+
+export async function exportCsvRows(headers: string[], rows: string[][], name: string): Promise<void> {
+  const csv = buildCsvRows(headers, rows);
+  const filename = `taureye-${slug(name)}.csv`;
+  if (Platform.OS === 'web') {
+    webDownload(csv, filename, 'text/csv');
+  } else {
+    await Share.share({ title: filename, message: csv });
+  }
+}
+
+export async function exportExcelRows(headers: string[], rows: string[][], name: string): Promise<void> {
+  const filename = `taureye-${slug(name)}.xls`;
+  if (Platform.OS === 'web') {
+    const html =
+      '<html><head><meta charset="utf-8"></head><body>' +
+      buildHtmlTableRows(headers, rows) +
+      '</body></html>';
+    webDownload(html, filename, 'application/vnd.ms-excel');
+  } else {
+    await Share.share({ title: `taureye-${slug(name)}.csv`, message: buildCsvRows(headers, rows) });
+  }
+}
+
 // PDF: no jspdf dep — open a print window with a styled table and invoke the
 // browser's print/"Save as PDF" (web only). No-op / CSV share off web.
 export async function exportPdf(rows: Row[], name: string): Promise<void> {
