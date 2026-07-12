@@ -76,6 +76,12 @@ feature/* ──PR──▶ main (CI, integration; does NOT deploy)
 
 Canonical per-version notes are in **[CHANGELOG.md](CHANGELOG.md)**. Summary:
 
+### v2.12.0 — native mobile build setup
+
+| Area | Change |
+|---|---|
+| Mobile | EAS build profiles (`preview` APK / `production` AAB), store-ready app.json, **BUILD-MOBILE.md** guide |
+
 ### v2.11.0 — Feature-gap close-out
 
 | Area | Change |
