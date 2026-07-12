@@ -42,6 +42,10 @@
   .nt{color:var(--t);font-size:13px;line-height:1.5}
   .nm{color:var(--m);font-size:10px;margin-top:5px}
   .ntag{color:var(--g);font-weight:700}
+  table.idx th{cursor:pointer;white-space:nowrap}
+  table.idx td{white-space:nowrap}
+  .isym{color:var(--t);font-weight:700;text-decoration:none}
+  .isym:hover{text-decoration:underline}
   #newsbar{display:flex;align-items:center;gap:12px;margin:6px 0 4px}
   #newsmeta{color:var(--m);font-size:10px}
 </style></head><body>
@@ -219,10 +223,91 @@
     setInterval(function(){ load(false); }, 3600 * 1000);
   }
 
+  // ── index / segment browser (?view=index&name=NIFTY%2050) ──
+  var SEGBANDS = { 'LARGE CAP': [0, 100], 'MID CAP': [100, 250], 'SMALL CAP': [250, 1e9] };
+  function indexView(name) {
+    document.title = name + ' · TaurEye';
+    document.getElementById('crumbs').textContent = 'index browser · ' + name;
+    main.innerHTML = '<h1>' + esc(name) + '</h1><div class="sub" id="sb">loading…</div><div id="tbl" class="msg">Loading constituents…</div>';
+    var state = { rows: [], sortK: 'chg', sortDir: -1, seg: !!SEGBANDS[name], note: '' };
+    function pcts(v){ return v == null ? '—' : (v >= 0 ? '+' : '') + (+v).toFixed(1) + '%'; }
+    function draw() {
+      var rows = state.rows.slice();
+      var k = state.sortK, dir = state.sortDir;
+      rows.sort(function(a, b) {
+        if (k === 'symbol') return a.symbol.localeCompare(b.symbol) * dir;
+        var va = a[k] == null ? -Infinity : a[k], vb = b[k] == null ? -Infinity : b[k];
+        return (va - vb) * dir;
+      });
+      var cols = [['symbol','Symbol'],['price','CMP'],['chg','Chg%'],['ret1y','1Y'],['ret3y','3Y'],['ret5y','5Y']];
+      if (state.seg) cols.splice(1, 0, ['mcap','MCap cr']);
+      var h = '<table class="idx"><tr>';
+      cols.forEach(function(c){ h += '<th data-k="' + c[0] + '">' + c[1] + (state.sortK === c[0] ? (state.sortDir === 1 ? ' ↑' : ' ↓') : '') + '</th>'; });
+      h += '</tr>';
+      rows.forEach(function(r) {
+        h += '<tr><td><a class="isym" href="/research.html?symbol=' + encodeURIComponent(r.symbol) + '">' + r.symbol + '</a></td>' +
+          (state.seg ? '<td>' + (r.mcap != null ? Math.round(r.mcap).toLocaleString('en-IN') : '—') + '</td>' : '') +
+          '<td>' + (r.price != null ? (+r.price).toFixed(1) : '—') + '</td>' +
+          '<td class="' + (r.chg == null ? '' : r.chg >= 0 ? 'up' : 'dn') + '">' + pcts(r.chg) + '</td>' +
+          '<td>' + pcts(r.ret1y) + '</td><td>' + pcts(r.ret3y) + '</td><td>' + pcts(r.ret5y) + '</td></tr>';
+      });
+      h += '</table>';
+      if (state.note) h += '<div class="note">' + state.note + '</div>';
+      var t = document.getElementById('tbl'); t.className = ''; t.innerHTML = h;
+      t.querySelectorAll('th').forEach(function(th) {
+        th.onclick = function() {
+          var kk = th.getAttribute('data-k');
+          if (state.sortK === kk) state.sortDir = -state.sortDir; else { state.sortK = kk; state.sortDir = kk === 'symbol' ? 1 : -1; }
+          draw();
+        };
+      });
+      document.getElementById('sb').textContent = state.rows.length + (state.seg ? ' ' + name.toLowerCase() + ' stocks (by mcap rank in NIFTY 500)' : ' constituents') + ' · click a symbol for research';
+    }
+    function loadReturns() {
+      var syms = state.rows.map(function(r){ return r.symbol; }).slice(0, 100);
+      [syms.slice(0, 50), syms.slice(50, 100)].filter(function(b){ return b.length; }).forEach(function(b) {
+        fetch('/returns?symbols=' + encodeURIComponent(b.join(',')))
+          .then(function(r){ return r.json(); })
+          .then(function(d) {
+            state.rows.forEach(function(row) {
+              if (d[row.symbol]) { row.ret1y = d[row.symbol].ret1y; row.ret3y = d[row.symbol].ret3y; row.ret5y = d[row.symbol].ret5y; }
+            });
+            if (state.rows.length > 100) state.note = 'Returns loaded for the first 100 rows.';
+            draw();
+          }).catch(function(){});
+      });
+    }
+    fetch('/index?name=' + encodeURIComponent(state.seg ? 'NIFTY 500' : name))
+      .then(function(r){ return r.json(); })
+      .then(function(d) {
+        var rows = (d.data || []).map(function(c){ return { symbol: c.symbol, price: c.price, chg: c.chg }; });
+        if (!rows.length) { document.getElementById('tbl').textContent = 'No constituents right now.'; return; }
+        if (!state.seg) { state.rows = rows; draw(); loadReturns(); return; }
+        var mcaps = {};
+        (function poll(list, round) {
+          fetch('/fundamentals/bulk?symbols=' + encodeURIComponent(list.join(',')))
+            .then(function(r){ return r.json(); })
+            .then(function(d2) {
+              Object.assign(mcaps, d2.data || {});
+              if (d2.pending && d2.pending.length && round < 8) return setTimeout(function(){ poll(d2.pending, round + 1); }, 3000);
+              var withCap = rows.map(function(r){ var f = mcaps[r.symbol]; return Object.assign({}, r, { mcap: f && f.market_cap_cr != null ? f.market_cap_cr : null }); })
+                .filter(function(r){ return r.mcap != null; })
+                .sort(function(a, b){ return b.mcap - a.mcap; });
+              var band = SEGBANDS[name];
+              state.rows = withCap.slice(band[0], Math.min(band[1], withCap.length));
+              state.sortK = 'mcap';
+              draw(); loadReturns();
+            }).catch(function(){ document.getElementById('tbl').textContent = 'Market caps unavailable right now.'; });
+        })(rows.map(function(r){ return r.symbol; }), 0);
+      })
+      .catch(function(){ document.getElementById('tbl').textContent = 'Could not load ' + name + '.'; });
+  }
+
   var syms = (P.get('symbols') || '').split(',').map(function(s){ return s.trim().toUpperCase(); }).filter(Boolean);
   var sym = (P.get('symbol') || '').trim().toUpperCase();
   var view = (P.get('view') || '').toLowerCase();
-  if (view === 'chart' && (sym || syms.length)) fullChart(sym || syms[0]);
+  if (view === 'index' && P.get('name')) indexView((P.get('name') || '').toUpperCase());
+  else if (view === 'chart' && (sym || syms.length)) fullChart(sym || syms[0]);
   else if (view === 'news') newsView(sym, P.get('q') || '');
   else if (syms.length >= 2) compare(syms);
   else if (sym || syms.length === 1) company(sym || syms[0]);

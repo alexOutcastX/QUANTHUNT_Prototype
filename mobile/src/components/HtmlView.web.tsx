@@ -7,10 +7,22 @@ import React from 'react';
 import { View } from 'react-native';
 import { HtmlViewProps } from './HtmlView';
 
-export default function HtmlView({ html, style }: HtmlViewProps) {
+export default function HtmlView({ html, style, onMessage }: HtmlViewProps) {
+  React.useEffect(() => {
+    if (!onMessage) return undefined;
+    const g = globalThis as unknown as {
+      addEventListener: (t: string, h: (e: { data?: unknown }) => void) => void;
+      removeEventListener: (t: string, h: (e: { data?: unknown }) => void) => void;
+    };
+    const handler = (e: { data?: unknown }) => {
+      if (typeof e.data === 'string' && e.data.startsWith('te:')) onMessage(e.data);
+    };
+    g.addEventListener('message', handler);
+    return () => g.removeEventListener('message', handler);
+  }, [onMessage]);
   const iframe = React.createElement('iframe', {
     srcDoc: html,
-    style: { border: 'none', width: '100%', height: '100%', background: '#0a0c0f' },
+    style: { border: 'none', width: '100%', height: '100%', background: '#08090c' },
     sandbox: 'allow-scripts allow-same-origin allow-popups',
     title: 'chart',
   });

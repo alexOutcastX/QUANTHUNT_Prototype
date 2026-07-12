@@ -8,6 +8,7 @@ import {
   View,
 } from 'react-native';
 import { API_BASE, GraphResp, LtpResp, api } from '../api';
+import { resolveIndex } from '../indices';
 import HtmlView from '../components/HtmlView';
 import SymbolInput from '../components/SymbolInput';
 import { theme } from '../theme';
@@ -16,7 +17,7 @@ import { theme } from '../theme';
 // draggable, resizable, closeable multi-tab window (company chart +
 // screener.in fundamentals, and a comparison report). All interaction lives
 // inside the frame; state persists to localStorage across frame rebuilds.
-function graphHtml(data: GraphResp, quotes: LtpResp, centre: string): string {
+function graphHtml(data: GraphResp, quotes: LtpResp, centre: string, openIdx: string | null): string {
   return `<!DOCTYPE html><html><head>
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
 <style>
@@ -100,6 +101,15 @@ function graphHtml(data: GraphResp, quotes: LtpResp, centre: string): string {
   tr.score td{font-weight:700;border-top:2px solid ${theme.border2};font-size:13px}
   .best{color:${theme.green} !important}
   .cmpnote{color:${theme.muted};font-size:10px;padding:8px 10px;line-height:1.5}
+  table.idx{border-collapse:collapse;width:100%;font-size:12px}
+  table.idx th{position:sticky;top:0;background:${theme.surface2};color:${theme.muted2};font-size:11px;letter-spacing:0.5px;text-transform:uppercase;padding:8px 10px;text-align:right;cursor:pointer;white-space:nowrap}
+  table.idx th:first-child{text-align:left}
+  table.idx td{border-bottom:1px solid ${theme.border};padding:8px 10px;text-align:right;color:${theme.text};white-space:nowrap}
+  table.idx td:first-child{text-align:left}
+  .isym{font-weight:700;cursor:pointer}
+  .isym:hover{text-decoration:underline}
+  .iact span{cursor:pointer;color:${theme.muted2};padding:0 4px}
+  .iact span:hover{color:${theme.text}}
 </style></head><body>
 <div id="wrap">
   <div id="news">
@@ -155,6 +165,7 @@ function graphHtml(data: GraphResp, quotes: LtpResp, centre: string): string {
 (function(){
   if (typeof d3 === 'undefined') { document.getElementById('panel').innerHTML = '<div class="wmsg">⚠ Graph library unavailable (no network).</div>'; return; }
   var DATA = ${JSON.stringify({ companies: data.companies, edges: data.edges })};
+  var OPENIDX = ${JSON.stringify(openIdx)};
   var QUOTES = ${JSON.stringify(quotes)};
   var API = ${JSON.stringify(API_BASE)};
   var centre = ${JSON.stringify(centre)};
@@ -372,7 +383,9 @@ function graphHtml(data: GraphResp, quotes: LtpResp, centre: string): string {
     if (!id) return;
     var u = id === '__cmp__'
       ? 'research.html?symbols=' + encodeURIComponent(W.compare.join(','))
-      : 'research.html?symbol=' + encodeURIComponent(id);
+      : (isIdxTab(id)
+        ? 'research.html?view=index&name=' + encodeURIComponent(id.slice(4))
+        : 'research.html?symbol=' + encodeURIComponent(id));
     var url = (API || '') + '/' + u;
     try { window.open(url, '_blank'); } catch (e) {}
   };
@@ -382,6 +395,143 @@ function graphHtml(data: GraphResp, quotes: LtpResp, centre: string): string {
     var url = (API || '') + '/research.html?view=chart&symbol=' + encodeURIComponent(sym);
     try { window.open(url, '_blank'); } catch (e) {}
   };
+
+  // ── message channel to the host app (web iframe + native webview) ──
+  function toApp(msg) {
+    try {
+      if (window.ReactNativeWebView) { window.ReactNativeWebView.postMessage(msg); return; }
+      if (window.parent && window.parent !== window) window.parent.postMessage(msg, '*');
+    } catch (e) {}
+  }
+
+  // ════ index browser tabs (the Terminal's market browser) ════
+  var idxCache = {};   // name -> { rows: [...], sortK, sortDir }
+  function isIdxTab(t){ return t && t.indexOf('idx:') === 0; }
+  window.openIdxTab = function(name) {
+    var id = 'idx:' + name;
+    if (W.tabs.indexOf(id) < 0) W.tabs.push(id);
+    var wasOpen = W.open;
+    W.active = id; W.open = true; if (!W.rect) W.rect = defaultRect();
+    saveW(); layoutWin(); renderTabs(); renderBody();
+    if (!wasOpen && (W.dock||'float') !== 'float') render();
+  };
+  window.idxGraph = function(sym){ toApp('te:graph:' + sym); };
+  window.idxSort = function(name, k) {
+    var st = idxCache[name];
+    if (!st) return;
+    if (st.sortK === k) st.sortDir = -st.sortDir; else { st.sortK = k; st.sortDir = k === 'symbol' ? 1 : -1; }
+    drawIndex(name);
+  };
+  function heat(chg) {
+    if (chg == null) return '';
+    var a = Math.min(0.22, Math.abs(chg) / 6 * 0.22).toFixed(3);
+    return 'background:rgba(' + (chg >= 0 ? '34,201,147' : '244,88,122') + ',' + a + ')';
+  }
+  function drawIndex(name) {
+    var st = idxCache[name];
+    var body = document.getElementById('winbody');
+    if (!st || W.active !== 'idx:' + name) return;
+    var rows = st.rows.slice();
+    var k = st.sortK, dir = st.sortDir;
+    rows.sort(function(a, b) {
+      if (k === 'symbol') return a.symbol.localeCompare(b.symbol) * dir;
+      var va = a[k] == null ? -Infinity : a[k], vb = b[k] == null ? -Infinity : b[k];
+      return (va - vb) * dir;
+    });
+    var seg = st.seg;
+    var cols = [['symbol','SYMBOL'],['price','CMP'],['chg','CHG%'],['ret1y','1Y'],['ret3y','3Y'],['ret5y','5Y']];
+    if (seg) cols.splice(1, 0, ['mcap','MCAP CR']);
+    var h = '<table class="idx"><tr>';
+    cols.forEach(function(c){
+      h += '<th onclick="idxSort(\\'' + name + '\\',\\'' + c[0] + '\\')">' + c[1] +
+           (st.sortK === c[0] ? (st.sortDir === 1 ? ' ↑' : ' ↓') : '') + '</th>';
+    });
+    h += '<th></th></tr>';
+    var num = function(v, d){ return v == null ? '—' : (+v).toFixed(d == null ? 1 : d); };
+    var pcts = function(v){ return v == null ? '—' : (v >= 0 ? '+' : '') + (+v).toFixed(1) + '%'; };
+    rows.forEach(function(r) {
+      h += '<tr style="' + heat(r.chg) + '">' +
+        '<td class="isym" onclick="idxGraph(\\'' + r.symbol + '\\')" title="Open relationship graph">' + r.symbol + '</td>' +
+        (seg ? '<td>' + (r.mcap != null ? Math.round(r.mcap).toLocaleString('en-IN') : '—') + '</td>' : '') +
+        '<td>' + num(r.price) + '</td>' +
+        '<td style="color:' + (r.chg == null ? '${theme.muted}' : r.chg >= 0 ? '${theme.green}' : '${theme.red}') + '">' + pcts(r.chg) + '</td>' +
+        '<td>' + pcts(r.ret1y) + '</td><td>' + pcts(r.ret3y) + '</td><td>' + pcts(r.ret5y) + '</td>' +
+        '<td class="iact">' +
+          '<span title="Open in window" onclick="openTab(\\'' + r.symbol + '\\')">▤</span>' +
+          '<span title="Add to compare" onclick="toggleCompare(\\'' + r.symbol + '\\')">⇄</span>' +
+        '</td></tr>';
+    });
+    h += '</table>';
+    if (st.note) h += '<div class="cmpnote">' + st.note + '</div>';
+    body.innerHTML = h;
+  }
+  function loadReturns(name, syms) {
+    // /returns caps at 50 per call; fetch the first 100 rows in two batches.
+    var batches = [syms.slice(0, 50), syms.slice(50, 100)].filter(function(b){ return b.length; });
+    var done = 0;
+    batches.forEach(function(b) {
+      fetch(API + '/returns?symbols=' + encodeURIComponent(b.join(',')))
+        .then(function(r){ return r.json(); })
+        .then(function(d) {
+          var st = idxCache[name];
+          if (!st) return;
+          st.rows.forEach(function(row) {
+            if (d[row.symbol]) { row.ret1y = d[row.symbol].ret1y; row.ret3y = d[row.symbol].ret3y; row.ret5y = d[row.symbol].ret5y; }
+          });
+          done++;
+          if (done === batches.length && syms.length > 100) st.note = 'Returns loaded for the first 100 rows.';
+          drawIndex(name);
+        })
+        .catch(function(){});
+    });
+  }
+  var SEGBANDS = { 'LARGE CAP': [0, 100], 'MID CAP': [100, 250], 'SMALL CAP': [250, 1e9] };
+  function renderIndex(name) {
+    var body = document.getElementById('winbody');
+    if (idxCache[name]) { drawIndex(name); return; }
+    var seg = !!SEGBANDS[name];
+    body.innerHTML = '<div class="wmsg">Loading ' + name + (seg ? ' — classifying the NIFTY 500 by market cap…' : ' constituents…') + '</div>';
+    fetch(API + '/index?name=' + encodeURIComponent(seg ? 'NIFTY 500' : name))
+      .then(function(r){ return r.json(); })
+      .then(function(d) {
+        var rows = (d.data || []).map(function(c){ return { symbol: c.symbol, price: c.price, chg: c.chg }; });
+        if (!rows.length) { body.innerHTML = '<div class="wmsg">No constituents right now — sources may be briefly unavailable.</div>'; return; }
+        if (!seg) {
+          idxCache[name] = { rows: rows, sortK: 'chg', sortDir: -1, seg: false };
+          drawIndex(name);
+          loadReturns(name, rows.map(function(r){ return r.symbol; }));
+          return;
+        }
+        // segment: need market caps to rank
+        var syms = rows.map(function(r){ return r.symbol; });
+        function classify(mcaps) {
+          var withCap = rows.map(function(r){
+            var f = mcaps[r.symbol];
+            return Object.assign({}, r, { mcap: f && f.market_cap_cr != null ? f.market_cap_cr : null });
+          }).filter(function(r){ return r.mcap != null; })
+            .sort(function(a, b){ return b.mcap - a.mcap; });
+          var band = SEGBANDS[name];
+          var out = withCap.slice(band[0], Math.min(band[1], withCap.length));
+          if (!out.length) { body.innerHTML = '<div class="wmsg">Market caps unavailable right now — try again shortly.</div>'; return; }
+          idxCache[name] = { rows: out, sortK: 'mcap', sortDir: -1, seg: true };
+          drawIndex(name);
+          loadReturns(name, out.map(function(r){ return r.symbol; }));
+        }
+        var mcaps = {};
+        function poll(list, round) {
+          fetch(API + '/fundamentals/bulk?symbols=' + encodeURIComponent(list.join(',')))
+            .then(function(r){ return r.json(); })
+            .then(function(d) {
+              Object.assign(mcaps, d.data || {});
+              if (d.pending && d.pending.length && round < 8) setTimeout(function(){ poll(d.pending, round + 1); }, 3000);
+              else classify(mcaps);
+            })
+            .catch(function(){ classify(mcaps); });
+        }
+        poll(syms, 0);
+      })
+      .catch(function(){ body.innerHTML = '<div class="wmsg">Couldn\\'t load ' + name + ' — is the backend reachable?</div>'; });
+  }
 
   // ════ news panel ════
   function esc(s){ return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;'); }
@@ -478,7 +628,7 @@ function graphHtml(data: GraphResp, quotes: LtpResp, centre: string): string {
   function renderTabs() {
     var h = '';
     W.tabs.forEach(function(t){
-      var label = t === '__cmp__' ? 'COMPARE (' + W.compare.length + ')' : t;
+      var label = t === '__cmp__' ? 'COMPARE (' + W.compare.length + ')' : (isIdxTab(t) ? '∿ ' + t.slice(4) : t);
       h += '<div class="wtab' + (t === W.active ? ' on' : '') + '" onclick="selTab(\\'' + t + '\\')">' + label +
            '<span class="x" title="Open in browser tab" onclick="event.stopPropagation();openExt(\\'' + t + '\\')">↗</span>' +
            '<span class="x" onclick="closeTab(event, \\'' + t + '\\')">✕</span></div>';
@@ -649,11 +799,14 @@ function graphHtml(data: GraphResp, quotes: LtpResp, centre: string): string {
 
   function renderBody() {
     if (!W.open || !W.active) return;
-    if (W.active === '__cmp__') renderCompare(); else renderCompany(W.active);
+    if (W.active === '__cmp__') renderCompare();
+    else if (isIdxTab(W.active)) renderIndex(W.active.slice(4));
+    else renderCompany(W.active);
   }
 
   layoutNews();
   render();
+  if (OPENIDX) openIdxTab(OPENIDX);
   layoutWin(); renderTabs(); renderBody();
   loadNews(false);
   setInterval(function(){ loadNews(false); }, 3600 * 1000); // hourly auto-update
@@ -672,6 +825,7 @@ export default function TerminalScreen() {
   const [aiOn, setAiOn] = useState(false);
   const [generating, setGenerating] = useState<string | null>(null);
   const [genErr, setGenErr] = useState<string | null>(null);
+  const [idxCmd, setIdxCmd] = useState<{ name: string; n: number } | null>(null);
 
   const loadQuotes = (g: GraphResp) => {
     const listed = Object.entries(g.companies)
@@ -702,6 +856,12 @@ export default function TerminalScreen() {
     setNotFound(null);
     setGenErr(null);
     setInput(sym);
+    // Index / market-cap segment → open the market browser tab in the window.
+    const idx = resolveIndex(sym);
+    if (idx) {
+      setIdxCmd((prev) => ({ name: idx, n: (prev?.n || 0) + 1 }));
+      return;
+    }
     if (data.companies[sym]) {
       setCentre(sym);
       return;
@@ -725,9 +885,14 @@ export default function TerminalScreen() {
   const go = () => select(input);
 
   const html = useMemo(
-    () => (data ? graphHtml(data, quotes, centre) : ''),
-    [data, quotes, centre],
+    () => (data ? graphHtml(data, quotes, centre, idxCmd?.name || null) : ''),
+    [data, quotes, centre, idxCmd],
   );
+
+  // Messages posted by the embedded workspace (index rows → open a graph).
+  const onFrameMessage = (msg: string) => {
+    if (msg.startsWith('te:graph:')) select(msg.slice(9));
+  };
 
   return (
     <View style={styles.container}>
@@ -749,7 +914,7 @@ export default function TerminalScreen() {
           onChangeText={setInput}
           onSelect={(s) => select(s)}
           onSubmit={go}
-          placeholder="TMCV"
+          placeholder="TMCV · NIFTY 50 · LARGE CAP"
         />
         <TouchableOpacity style={styles.goBtn} onPress={go}>
           <Text style={styles.goTxt}>GO</Text>
@@ -757,6 +922,11 @@ export default function TerminalScreen() {
       </View>
       {data ? (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipScroll} contentContainerStyle={styles.chips}>
+          {['NIFTY 50', 'NIFTY BANK', 'NIFTY IT', 'MIDCAP 100', 'LARGE CAP', 'MID CAP', 'SMALL CAP'].map((n) => (
+            <TouchableOpacity key={n} style={[styles.chip, styles.idxChip]} onPress={() => select(n)} activeOpacity={0.75}>
+              <Text style={styles.chipTxt}>∿ {n}</Text>
+            </TouchableOpacity>
+          ))}
           {chips.map((t) => (
             <TouchableOpacity
               key={t}
@@ -795,9 +965,10 @@ export default function TerminalScreen() {
           </View>
         ) : (
           <HtmlView
-            key={centre + data.source + Object.keys(quotes).length}
+            key={centre + data.source + Object.keys(quotes).length + ':' + (idxCmd?.n || 0)}
             html={html}
             style={styles.web}
+            onMessage={onFrameMessage}
           />
         )}
       </View>
@@ -832,6 +1003,7 @@ const styles = StyleSheet.create({
   chips: { paddingHorizontal: 14, paddingVertical: 8, gap: 6 },
   chip: { borderColor: theme.border, borderWidth: 1, borderRadius: 4, paddingHorizontal: 8, paddingVertical: 3 },
   chipOn: { backgroundColor: theme.accent, borderColor: theme.accent },
+  idxChip: { borderStyle: 'dashed' },
   chipTxt: { color: theme.muted2, fontFamily: theme.mono, fontSize: 11 },
   chipTxtOn: { color: theme.bg, fontWeight: '700' },
   warn: { color: theme.muted2, fontSize: 13, paddingHorizontal: 14, paddingBottom: 4 },

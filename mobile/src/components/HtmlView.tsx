@@ -13,11 +13,14 @@ import { WebView } from 'react-native-webview';
 export type HtmlViewProps = {
   html: string;
   style?: StyleProp<ViewStyle>;
+  // Receives string messages posted by the embedded page (see toApp() there).
+  onMessage?: (data: string) => void;
 };
 
-export default function HtmlView({ html, style }: HtmlViewProps) {
+export default function HtmlView({ html, style, onMessage }: HtmlViewProps) {
   return (
     <WebView
+      onMessage={(e) => onMessage?.(e.nativeEvent.data)}
       originWhitelist={['*']}
       source={{ html }}
       style={style}
