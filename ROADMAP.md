@@ -22,7 +22,7 @@ Status legend: ☐ pending · ◐ in progress · ☑ shipped
 - ☐ Real unit-test suite (analysis, backtest, screener, camarilla, holidays,
   broker, auth) wired into CI as a gate.
 
-## Phase 3 — Institutional data, free public feeds (v3.4.0)
+## Phase 3 — Institutional data, free public feeds (v3.4.0) — ☑ shipped
 - ☐ Corporate actions (dividends/splits/bonuses/buybacks).
 - ☐ Results + board-meeting calendar.
 - ☐ BSE/NSE corporate announcements, entity-tagged.

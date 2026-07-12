@@ -3,6 +3,24 @@
 All notable changes are recorded here. Versioning is [SemVer](https://semver.org):
 `MAJOR.MINOR.PATCH`.
 
+## [3.4.0] — 2026-07-12
+Institutional data from free public NSE feeds — a new **Corporate** surface.
+
+### New
+- **Corporate screen** (Tools → Corporate): per-company **shareholding
+  pattern** (promoter / FII / DII / public + promoter pledge),
+  **corporate actions** (dividends / splits / bonuses with ex/record
+  dates), and **announcements**; plus a market-wide **bulk / block
+  deals** feed. Type any NSE symbol.
+- New endpoints `/corporate/announcements|actions|shareholding|deals`
+  (`corporate.py`): defensive parsers + 6h cache, last-good on failure,
+  fetched live from NSE public feeds (best from an Indian IP — the VM).
+
+### Tests
+- Corporate parsers unit-tested (announcements, actions, shareholding
+  normalisation, bulk/block deals, cache + last-good-on-failure) — CI
+  now runs 18 Python cases + the JS engine tests.
+
 ## [3.3.0] — 2026-07-12
 Data platform: persistent SQLite store, observability, and a real
 CI-gated test suite.
@@ -501,6 +519,7 @@ Oracle Always-Free VM with push-to-deploy.
 - Embedded TradingView Advanced Chart tab, plus deep-link to the user's
   logged-in TradingView account.
 
+[3.4.0]: https://github.com/alexOutcastX/QUANTHUNT_Prototype/releases/tag/v3.4.0
 [3.3.0]: https://github.com/alexOutcastX/QUANTHUNT_Prototype/releases/tag/v3.3.0
 [3.2.0]: https://github.com/alexOutcastX/QUANTHUNT_Prototype/releases/tag/v3.2.0
 [3.1.1]: https://github.com/alexOutcastX/QUANTHUNT_Prototype/releases/tag/v3.1.1
