@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { EntityGraph, EntityNode, FlowEdge, api } from '../api';
+import { Linking, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { API_BASE, EntityGraph, EntityNode, FlowEdge, api } from '../api';
 import SymbolInput from '../components/SymbolInput';
 import { Card, EmptyState, Loading, ScreenTitle, SectionTitle } from '../ui';
 import { theme } from '../theme';
@@ -192,16 +192,28 @@ function EdgeCard({ e, show }: { e: FlowEdge; show: 'symbol' | 'entity' }) {
   const [open, setOpen] = useState(false);
   const acc = e.net_qty >= 0;
   const title = show === 'symbol' ? e.symbol : e.entity_name;
+  // On a stock row, offer a shortcut to that company's profile page.
+  const openProfile = () =>
+    Linking.openURL(`${API_BASE || ''}/research.html?symbol=${encodeURIComponent(e.symbol)}`).catch(() => {});
   return (
     <Card style={styles.edge}>
+      <View style={styles.edgeHead}>
+        <Text style={styles.edgeTitle}>{title}</Text>
+        {show === 'symbol' ? (
+          <TouchableOpacity
+            onPress={openProfile}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            style={styles.openBtn}
+          >
+            <Text style={styles.openTxt}>↗ PROFILE</Text>
+          </TouchableOpacity>
+        ) : null}
+        <Text style={[styles.edgeNet, { color: acc ? theme.green : theme.red }]}>
+          {acc ? '▲ ' : '▼ '}
+          {compact(e.net_qty)}
+        </Text>
+      </View>
       <TouchableOpacity onPress={() => setOpen((o) => !o)} activeOpacity={0.7}>
-        <View style={styles.edgeHead}>
-          <Text style={styles.edgeTitle}>{title}</Text>
-          <Text style={[styles.edgeNet, { color: acc ? theme.green : theme.red }]}>
-            {acc ? '▲ ' : '▼ '}
-            {compact(e.net_qty)}
-          </Text>
-        </View>
         <View style={styles.edgeMetaRow}>
           <Text style={styles.edgeMeta}>
             {e.deal_count} deal{e.deal_count === 1 ? '' : 's'} · buy {compact(e.buy_qty)} · sell{' '}
@@ -297,6 +309,15 @@ const styles = StyleSheet.create({
   edge: { marginTop: theme.sp.sm, marginBottom: theme.sp.xs },
   edgeHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   edgeTitle: { color: theme.text, fontFamily: theme.mono, fontSize: theme.fs.md, fontWeight: '700', flex: 1 },
+  openBtn: {
+    borderColor: theme.border2,
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: theme.sp.sm,
+    paddingVertical: 3,
+    marginRight: theme.sp.sm,
+  },
+  openTxt: { color: theme.muted2, fontFamily: theme.mono, fontSize: theme.fs.xs, letterSpacing: 0.5 },
   edgeNet: { fontFamily: theme.mono, fontSize: theme.fs.md, fontWeight: '700' },
   edgeMetaRow: { marginTop: 4 },
   edgeMeta: { color: theme.muted2, fontSize: theme.fs.sm },
