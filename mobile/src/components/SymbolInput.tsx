@@ -32,6 +32,37 @@ function loadUniverse(): Promise<UniverseSymbol[]> {
 
 const MAX_SUGGESTIONS = 12;
 
+// Common colloquial nicknames / abbreviations that don't appear in the ticker
+// or the registered company name, so substring matching alone can't find them.
+// Key = what people type, value = the actual NSE symbol.
+const ALIASES: Record<string, string> = {
+  RIL: 'RELIANCE',
+  HUL: 'HINDUNILVR',
+  HLL: 'HINDUNILVR',
+  LIC: 'LICI',
+  SBI: 'SBIN',
+  PNB: 'PNB',
+  BOB: 'BANKBARODA',
+  HDFC: 'HDFCBANK',
+  ICICI: 'ICICIBANK',
+  KOTAK: 'KOTAKBANK',
+  AXIS: 'AXISBANK',
+  LNT: 'LT',
+  'L&T': 'LT',
+  MNM: 'M&M',
+  MAHINDRA: 'M&M',
+  BAJAJ: 'BAJAJ-AUTO',
+  ADANI: 'ADANIENT',
+  ULTRATECH: 'ULTRACEMCO',
+  ASIANPAINTS: 'ASIANPAINT',
+  ZOMATO: 'ETERNAL',
+  BLINKIT: 'ETERNAL',
+  INFOSYS: 'INFY',
+  AIRTEL: 'BHARTIARTL',
+  TATAMOTOR: 'TATAMOTORS',
+  RELIANCEIND: 'RELIANCE',
+};
+
 type Props = {
   value: string;
   onChangeText: (t: string) => void;
@@ -107,21 +138,32 @@ export default function SymbolInput({
       .filter((n) => n !== q && (n.includes(q) || n.replace(/ /g, '').includes(q.replace(/ /g, ''))))
       .slice(0, 3)
       .map((n) => ({ symbol: n, name: '∿ Index / segment — opens the market browser', exchange: 'IDX' }));
+    // Colloquial nickname → real symbol (e.g. RIL → RELIANCE). Match on alias
+    // keys that start with the typed text so "RI" already surfaces RELIANCE.
+    const aliased: UniverseSymbol[] = [];
+    const aliasSeen = new Set<string>();
+    for (const key in ALIASES) {
+      if (!key.startsWith(q)) continue;
+      const target = ALIASES[key];
+      if (aliasSeen.has(target)) continue;
+      aliasSeen.add(target);
+      const hit = symbols.find((s) => (s.symbol || '').toUpperCase() === target);
+      aliased.push(hit || { symbol: target, name: target, exchange: 'NSE' });
+    }
     const prefix: UniverseSymbol[] = [];
     const substr: UniverseSymbol[] = [];
     const byName: UniverseSymbol[] = [];
     for (const s of symbols) {
       const sym = (s.symbol || '').toUpperCase();
-      if (!sym || sym === q) continue; // exclude exact current value
+      if (!sym || sym === q || aliasSeen.has(sym)) continue; // skip current + alias dupes
       if (sym.startsWith(q)) {
         prefix.push(s);
-        if (prefix.length >= MAX_SUGGESTIONS) break;
       } else if (substr.length + byName.length < MAX_SUGGESTIONS) {
         if (sym.includes(q)) substr.push(s);
         else if ((s.name || '').toUpperCase().includes(q)) byName.push(s);
       }
     }
-    return [...idx, ...prefix, ...substr, ...byName].slice(0, MAX_SUGGESTIONS);
+    return [...idx, ...aliased, ...prefix, ...substr, ...byName].slice(0, MAX_SUGGESTIONS);
   }, [open, symbols, value]);
 
   return (

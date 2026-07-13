@@ -174,18 +174,50 @@ def _load_bhavcopy():
 
 
 def _load_microcap():
-    """Pull NIFTY MICROCAP 250 constituents."""
+    """Pull NIFTY MICROCAP 250 constituents (with company names when present)."""
     try:
         data = nse_get("/api/equity-stockIndices", params={"index": "NIFTY MICROCAP 250"})
         items = []
         for item in data.get("data", []):
             sym = item.get("symbol", "")
             if sym and sym != "NIFTY MICROCAP 250":
-                items.append({"symbol": sym, "exchange": "NSE", "price": 0})
+                name = (item.get("meta") or {}).get("companyName") or ""
+                items.append({"symbol": sym, "exchange": "NSE", "price": 0, "name": name})
         return items
     except Exception as e:
         log.warning("Microcap index fetch failed: %s", e)
         return []
+
+
+def _load_equity_names():
+    """Map SYMBOL -> company name from NSE's official equity master list.
+
+    EQUITY_L.csv covers the whole listed EQ universe with real company names,
+    which the bhavcopy lacks. Failures degrade gracefully to an empty map so
+    the universe still works (name falls back to the symbol).
+    """
+    try:
+        s = nse_session()
+        r = s.get(NSE_ARCHIVE + "/content/equities/EQUITY_L.csv", timeout=20)
+        if r.status_code != 200:
+            log.warning("EQUITY_L.csv HTTP %s", r.status_code)
+            return {}
+        reader = csv.DictReader(io.StringIO(r.text))
+        name_col = next((k for k in (reader.fieldnames or []) if "NAME OF COMPANY" in k.upper()), None)
+        sym_col  = next((k for k in (reader.fieldnames or []) if k.strip().upper() == "SYMBOL"), None)
+        if not name_col or not sym_col:
+            return {}
+        names = {}
+        for row in reader:
+            sym = (row.get(sym_col) or "").strip()
+            nm  = (row.get(name_col) or "").strip()
+            if sym and nm:
+                names[sym] = nm
+        log.info("Equity names loaded: %d", len(names))
+        return names
+    except Exception as e:
+        log.warning("Equity-name list fetch failed: %s", e)
+        return {}
 
 
 def get_universe():
@@ -201,6 +233,12 @@ def get_universe():
             if item["symbol"] not in seen:
                 bhav.append(item)
                 seen.add(item["symbol"])
+        # Attach real company names (bhavcopy has none). Prefer the official
+        # equity master list; fall back to any name the microcap feed carried.
+        names = _load_equity_names()
+        for item in bhav:
+            nm = names.get(item["symbol"]) or item.get("name") or ""
+            item["name"] = nm
         _universe_cache = bhav
         _universe_ts    = time.time()
         log.info("Universe ready: %d symbols (bhavcopy date: %s)", len(bhav), bhav_date)
@@ -659,7 +697,8 @@ def universe():
         "total":   len(items),
         "nse":     len(items),
         "bse":     0,
-        "symbols": [{"symbol": x["symbol"], "name": x["symbol"], "exchange": x["exchange"]}
+        "symbols": [{"symbol": x["symbol"], "name": x.get("name") or x["symbol"],
+                     "exchange": x["exchange"]}
                     for x in items],
     })
 
