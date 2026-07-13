@@ -30,7 +30,7 @@ function loadUniverse(): Promise<UniverseSymbol[]> {
   return universePromise;
 }
 
-const MAX_SUGGESTIONS = 8;
+const MAX_SUGGESTIONS = 12;
 
 type Props = {
   value: string;
@@ -148,7 +148,10 @@ export default function SymbolInput({
                 style={styles.row}
                 onPress={() => pick(s.symbol)}
               >
-                <Text style={styles.rowSym}>{s.symbol}</Text>
+                <View style={styles.rowTop}>
+                  <Text style={styles.rowSym}>{s.symbol}</Text>
+                  {s.exchange ? <Text style={styles.rowExch}>{s.exchange}</Text> : null}
+                </View>
                 <Text style={styles.rowName} numberOfLines={1}>
                   {s.name}
                 </Text>
@@ -184,6 +187,8 @@ const styles = StyleSheet.create({
     borderBottomColor: theme.border,
     borderBottomWidth: 1,
   },
+  rowTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   rowSym: { color: theme.text, fontFamily: theme.mono, fontWeight: '700', fontSize: 12 },
+  rowExch: { color: theme.muted2, fontFamily: theme.mono, fontSize: 9, letterSpacing: 0.5 },
   rowName: { color: theme.muted, fontSize: 10, marginTop: 2 },
 });
