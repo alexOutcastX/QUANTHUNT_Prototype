@@ -109,11 +109,14 @@ def _validate(symbol: str, data: dict) -> dict:
     return {"companies": companies, "edges": edges}
 
 
-def _generate(symbol: str) -> dict:
+def _generate(symbol: str, api_key: str = "") -> dict:
+    key = (api_key or API_KEY).strip()
+    if not key:
+        raise RuntimeError("no API key")
     r = requests.post(
         "https://api.anthropic.com/v1/messages",
         headers={
-            "x-api-key": API_KEY,
+            "x-api-key": key,
             "anthropic-version": "2023-06-01",
             "content-type": "application/json",
         },
@@ -131,8 +134,14 @@ def _generate(symbol: str) -> dict:
     return _validate(symbol, _extract_json(text))
 
 
-def get_graph(symbol: str) -> dict:
-    """Cached AI graph for a symbol. Raises on generation/validation failure."""
+def get_graph(symbol: str, api_key: str = "") -> dict:
+    """Cached AI graph for a symbol. Raises on generation/validation failure.
+
+    `api_key` lets a caller bring its own Anthropic key (BYOK) — used when no
+    server key is configured, or to spend the user's own tokens. The cached
+    result is keyed only by symbol (the graph content isn't key-specific), so a
+    graph one user generates benefits everyone.
+    """
     symbol = symbol.upper().strip()
     with _lock:
         cache = _load()
@@ -154,7 +163,7 @@ def get_graph(symbol: str) -> dict:
             return {"companies": c["companies"], "edges": c["edges"]}
         raise RuntimeError("graph generation failed")
     try:
-        g = _generate(symbol)
+        g = _generate(symbol, api_key)
         with _lock:
             _cache[symbol] = {"ts": int(time.time()), **g}
             _save()
