@@ -27,7 +27,7 @@ CACHE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "graph_cac
 SEED_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "graph_cache.seed.json")
 TTL = 30 * 86400          # regenerate monthly — relationships move slowly
 TIMEOUT = 75              # generation can take a while on big graphs
-EDGE_TYPES = {"supplies", "group", "competitor", "finances"}
+EDGE_TYPES = {"supplies", "group", "competitor", "finances", "invests"}
 
 # Bring-your-own-key providers. Each user picks one and pastes their own key;
 # the default model is used unless they override it. anthropic also backs the
@@ -134,7 +134,11 @@ Rules:
   short uppercase identifiers for unlisted entities (listed: false).
 - type semantics: "supplies" means src supplies goods/services to dst;
   "finances" means src finances dst or dst's customers; "group" = same
-  promoter group / parent-subsidiary; "competitor" = direct competitor.
+  promoter group / parent-subsidiary; "competitor" = direct competitor;
+  "invests" means src holds an equity stake in dst (investor → investee) —
+  include the centre's major shareholders (promoter/holding company, notable
+  institutions like LIC/GIC, foreign parents, government for PSUs) and any
+  listed companies the centre itself holds a strategic stake in.
 - Every edge endpoint must exist in companies. No self-edges.
 - notes: <= 90 characters, concrete and factual (what is supplied / the nature
   of the tie). confidence reflects how well-established the relationship is.
