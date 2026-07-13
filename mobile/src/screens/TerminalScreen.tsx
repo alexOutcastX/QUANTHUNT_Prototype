@@ -45,7 +45,7 @@ function graphHtml(data: GraphResp, quotes: LtpResp, centre: string, openIdx: st
   .lg-line{display:inline-block;width:26px;height:0;border-top:2px solid ${theme.muted2};vertical-align:middle;margin-right:6px}
   #crumb{position:absolute;top:12px;left:14px;color:${theme.muted};font-size:12px;z-index:5}
   #crumb b{color:${theme.text}}
-  #hl{position:absolute;top:8px;right:10px;z-index:5;display:flex;gap:6px}
+  #hl{position:absolute;top:8px;right:10px;left:10px;z-index:5;display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end}
   .hlb{background:${theme.surface2};border:1px solid ${theme.border2};color:${theme.muted2};font-family:inherit;font-size:11px;letter-spacing:1px;padding:7px 12px;border-radius:999px;cursor:pointer}
   .hlb.on{background:${theme.accent};border-color:${theme.accent};color:${theme.bg};font-weight:700}
   .dim{opacity:0.12}
@@ -151,6 +151,10 @@ function graphHtml(data: GraphResp, quotes: LtpResp, centre: string, openIdx: st
         <span style="width:8px"></span>
         <button class="hlb" id="hl-in" onclick="setHl('in')">◄ INPUTS</button>
         <button class="hlb" id="hl-out" onclick="setHl('out')">OUTPUTS ►</button>
+        <button class="hlb" id="hl-group" onclick="setHl('group')">GROUP</button>
+        <button class="hlb" id="hl-comp" onclick="setHl('comp')">RIVALS</button>
+        <button class="hlb" id="hl-investors" onclick="setHl('investors')">INVESTORS</button>
+        <button class="hlb" id="hl-invested" onclick="setHl('invested')">INVESTED</button>
         <button class="hlb on" id="hl-all" onclick="setHl('all')">ALL</button>
         <span style="width:8px"></span>
         <button class="hlb" id="hl-reset" onclick="resetPos()" title="Reset bubble positions">⟲ RESET</button>
@@ -161,6 +165,7 @@ function graphHtml(data: GraphResp, quotes: LtpResp, centre: string, openIdx: st
         <span class="lg-line" style="border-top:2px solid #3fb950"></span>input — supplies in →<br>
         <span class="lg-line" style="border-top:2px solid #f85149"></span>output — supplies out →<br>
         <span class="lg-line" style="border-top:2px dashed #f5c518"></span>group<br>
+        <span class="lg-line" style="border-top:2px dashed #4f9dff"></span>invests → (investor→investee)<br>
         <span class="lg-line" style="border-top:2px dotted ${theme.muted}"></span>competitor
         <div style="margin-top:5px;color:${theme.muted2};font-size:10px">◄ inputs · outputs ► · drag to place · ⟲ reset</div>
       </div>
@@ -196,12 +201,12 @@ function graphHtml(data: GraphResp, quotes: LtpResp, centre: string, openIdx: st
   var QUOTES = ${JSON.stringify(quotes)};
   var API = ${JSON.stringify(API_BASE)};
   var centre = ${JSON.stringify(centre)};
-  var DASH = { supplies: null, group: '7,5', competitor: '2,5', finances: '11,4' };
+  var DASH = { supplies: null, group: '7,5', competitor: '2,5', finances: '11,4', invests: '2,3' };
   // Colour encodes flow DIRECTION relative to the centre only: inputs (things
   // that supply/finance the centre) are green, outputs (things the centre
   // supplies/finances) are red. Everything else (group, competitor, or links
   // between two neighbours) stays neutral grey — not colour-coded.
-  var CIN = '#3fb950', COUT = '#f85149', CNEUTRAL = '${theme.muted}', CGROUP = '#f5c518';
+  var CIN = '#3fb950', COUT = '#f85149', CNEUTRAL = '${theme.muted}', CGROUP = '#f5c518', CINVEST = '#4f9dff';
   var svg = d3.select('#svg'), sim = null, hlMode = 'all';
   var linkSel = null, nodeSel = null;
   var histCache = {}, fundCache = {};
@@ -231,18 +236,35 @@ function graphHtml(data: GraphResp, quotes: LtpResp, centre: string, openIdx: st
     return { nodes: nodes, links: edges.map(function(e){ return { source: e.src, target: e.dst, e: e }; }) };
   }
 
+  var HL_MODES = ['all','in','out','group','comp','investors','invested'];
   window.setHl = function(mode) {
     hlMode = mode;
-    ['in','out','all'].forEach(function(m){ document.getElementById('hl-' + m).className = 'hlb' + (m === mode ? ' on' : ''); });
+    HL_MODES.forEach(function(m){
+      var b = document.getElementById('hl-' + m);
+      if (b) b.className = 'hlb' + (m === mode ? ' on' : '');
+    });
     applyHl();
   };
   function edgeIsIn(e){ return e.dst === centre && (e.type === 'supplies' || e.type === 'finances'); }
   function edgeIsOut(e){ return e.src === centre && (e.type === 'supplies' || e.type === 'finances'); }
+  // Does an edge belong to the active filter? Type filters only count edges
+  // that actually touch the centre.
+  function edgeMatch(e){
+    switch (hlMode) {
+      case 'in': return edgeIsIn(e);
+      case 'out': return edgeIsOut(e);
+      case 'group': return e.type === 'group' && (e.src === centre || e.dst === centre);
+      case 'comp': return e.type === 'competitor' && (e.src === centre || e.dst === centre);
+      case 'investors': return e.type === 'invests' && e.dst === centre;   // who holds a stake in the centre
+      case 'invested': return e.type === 'invests' && e.src === centre;    // what the centre holds a stake in
+      default: return true; // 'all'
+    }
+  }
   function applyHl() {
     if (!linkSel) return;
     var keepNode = {}; keepNode[centre] = 1;
     linkSel.attr('class', function(d){
-      var keep = hlMode === 'all' || (hlMode === 'in' ? edgeIsIn(d.e) : edgeIsOut(d.e));
+      var keep = hlMode === 'all' || edgeMatch(d.e);
       if (keep) { keepNode[d.e.src] = 1; keepNode[d.e.dst] = 1; }
       return keep ? '' : 'dim';
     });
@@ -279,6 +301,8 @@ function graphHtml(data: GraphResp, quotes: LtpResp, centre: string, openIdx: st
     h += block('Customers / demand', E.filter(function(e){ return e.src === c && e.type === 'supplies'; }), function(e){ return e.dst; });
     h += block('Financiers', E.filter(function(e){ return e.dst === c && e.type === 'finances'; }), function(e){ return e.src; });
     h += block('Finances purchases of', E.filter(function(e){ return e.src === c && e.type === 'finances'; }), function(e){ return e.dst; });
+    h += block('Investors', E.filter(function(e){ return e.dst === c && e.type === 'invests'; }), function(e){ return e.src; });
+    h += block('Holdings / investments', E.filter(function(e){ return e.src === c && e.type === 'invests'; }), function(e){ return e.dst; });
     h += block('Competitors', E.filter(function(e){ return e.type === 'competitor' && (e.src === c || e.dst === c); }), function(e){ return e.src === c ? e.dst : e.src; });
     h += block('Group', E.filter(function(e){ return e.type === 'group' && (e.src === c || e.dst === c); }), function(e){ return e.src === c ? e.dst : e.src; });
     document.getElementById('panel').innerHTML = h;
@@ -340,14 +364,17 @@ function graphHtml(data: GraphResp, quotes: LtpResp, centre: string, openIdx: st
     // Fixed px size (userSpaceOnUse) with the tip at the line end — the line is
     // shortened to the target's edge in the tick handler so arrows never clip
     // behind the bubble regardless of node size or stroke width.
-    [['in', CIN], ['out', COUT], ['n', CNEUTRAL]].forEach(function(m){
+    [['in', CIN], ['out', COUT], ['n', CNEUTRAL], ['inv', CINVEST]].forEach(function(m){
       defs.append('marker').attr('id','arr-'+m[0])
         .attr('viewBox','0 0 10 10').attr('refX', 9).attr('refY', 5)
         .attr('markerWidth', 7).attr('markerHeight', 7)
         .attr('markerUnits','userSpaceOnUse').attr('orient','auto')
         .append('path').attr('d','M0,1L9,5L0,9L2.6,5Z').attr('fill', m[1]);
     });
-    function edgeColor(e){ return edgeIsIn(e) ? CIN : edgeIsOut(e) ? COUT : (e.type === 'group' ? CGROUP : CNEUTRAL); }
+    function edgeColor(e){
+      if (e.type === 'invests') return CINVEST;
+      return edgeIsIn(e) ? CIN : edgeIsOut(e) ? COUT : (e.type === 'group' ? CGROUP : CNEUTRAL);
+    }
     function nodeR(d){ return d.id === centre ? 29 : 20; }
     // Nodes in the same corporate group as the centre (linked by a group edge).
     var groupSet = {};
@@ -360,9 +387,10 @@ function graphHtml(data: GraphResp, quotes: LtpResp, centre: string, openIdx: st
     linkSel = root.selectAll('line').data(g.links).enter().append('line')
       .attr('stroke', function(d){ return edgeColor(d.e); })
       .attr('stroke-width', function(d){ return d.e.confidence === 'high' ? 2.2 : 1.4; })
-      .attr('stroke-opacity', function(d){ return (edgeIsIn(d.e) || edgeIsOut(d.e)) ? 0.9 : (d.e.type === 'group' ? 0.85 : 0.5); })
+      .attr('stroke-opacity', function(d){ return (edgeIsIn(d.e) || edgeIsOut(d.e)) ? 0.9 : (d.e.type === 'group' || d.e.type === 'invests') ? 0.85 : 0.5; })
       .attr('stroke-dasharray', function(d){ return DASH[d.e.type]; })
       .attr('marker-end', function(d){
+        if (d.e.type === 'invests') return 'url(#arr-inv)';
         if (edgeIsIn(d.e)) return 'url(#arr-in)';
         if (edgeIsOut(d.e)) return 'url(#arr-out)';
         return (d.e.type === 'supplies' || d.e.type === 'finances') ? 'url(#arr-n)' : null; });
@@ -412,9 +440,10 @@ function graphHtml(data: GraphResp, quotes: LtpResp, centre: string, openIdx: st
       if (id === centre) return 0;
       var isIn = false, isOut = false;
       DATA.edges.forEach(function(e){
-        if (e.type !== 'supplies' && e.type !== 'finances') return;
-        if (e.src === id && e.dst === centre) isIn = true;   // id supplies centre
-        if (e.src === centre && e.dst === id) isOut = true;  // centre supplies id
+        // supplies/finances flow, plus investment (investor→investee capital flow)
+        if (e.type !== 'supplies' && e.type !== 'finances' && e.type !== 'invests') return;
+        if (e.src === id && e.dst === centre) isIn = true;   // id supplies/invests-in centre → left
+        if (e.src === centre && e.dst === id) isOut = true;  // centre supplies/invests-in id → right
       });
       return (isIn && !isOut) ? -1 : (isOut && !isIn) ? 1 : 0;
     }
