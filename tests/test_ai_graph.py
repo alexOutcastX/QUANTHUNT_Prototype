@@ -1,5 +1,6 @@
-"""Unit tests for BYOK key handling in ai_graph (no network — requests.post stubbed)."""
+"""Unit tests for BYOK key handling in ai_graph (no network, no deps — requests faked)."""
 import importlib
+import types
 import unittest
 
 
@@ -33,7 +34,9 @@ class AiGraphByokTest(unittest.TestCase):
             self.captured["key"] = (headers or {}).get("x-api-key")
             return FakeResp()
 
-        self.ai.requests.post = fake_post
+        # Inject a fake `requests` so the test runs with no third-party deps
+        # (CI installs none — ai_graph imports requests lazily/guarded).
+        self.ai.requests = types.SimpleNamespace(post=fake_post)
 
     def test_byok_key_is_used(self):
         g = self.ai.get_graph("AAA", api_key="sk-ant-user-key")

@@ -12,7 +12,10 @@ import re
 import threading
 import time
 
-import requests
+try:
+    import requests
+except ImportError:            # only needed at generation time, not on import
+    requests = None            # keeps the module importable in stdlib-only CI
 
 API_KEY = os.environ.get("ANTHROPIC_API_KEY", "").strip()
 MODEL = os.environ.get("GRAPH_AI_MODEL", "claude-sonnet-5").strip()
@@ -113,6 +116,8 @@ def _generate(symbol: str, api_key: str = "") -> dict:
     key = (api_key or API_KEY).strip()
     if not key:
         raise RuntimeError("no API key")
+    if requests is None:
+        raise RuntimeError("requests library unavailable")
     r = requests.post(
         "https://api.anthropic.com/v1/messages",
         headers={
