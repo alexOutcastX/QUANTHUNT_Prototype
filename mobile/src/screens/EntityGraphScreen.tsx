@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { EntityGraph, EntityNode, FlowEdge, api } from '../api';
 import SymbolInput from '../components/SymbolInput';
 import { Card, EmptyState, Loading, ScreenTitle, SectionTitle } from '../ui';
@@ -27,6 +27,17 @@ export default function EntityGraphScreen() {
   const [symInput, setSymInput] = useState('TATASTEEL');
   const [sym, setSym] = useState('');
   const [flows, setFlows] = useState<FlowEdge[] | null | undefined>(undefined);
+
+  // Free-text filter for the institutions list (by name or id).
+  const [entQuery, setEntQuery] = useState('');
+  const entities = graph && graph.nodes ? graph.nodes.entities : [];
+  const filteredEntities = useMemo(() => {
+    const q = entQuery.trim().toUpperCase();
+    if (!q) return entities;
+    return entities.filter(
+      (e) => (e.name || '').toUpperCase().includes(q) || (e.id || '').toUpperCase().includes(q),
+    );
+  }, [entities, entQuery]);
 
   useEffect(() => {
     if (graph === undefined) api.entityGraph().then(setGraph).catch(() => setGraph(null));
@@ -78,6 +89,26 @@ export default function EntityGraphScreen() {
             placeholder="Symbol — who's trading it"
           />
         </View>
+      ) : graph && graph.nodes && graph.nodes.entities.length ? (
+        <View style={styles.searchWrap}>
+          <View style={styles.searchBox}>
+            <Text style={styles.searchIcon}>⌕</Text>
+            <TextInput
+              value={entQuery}
+              onChangeText={setEntQuery}
+              style={styles.searchInput}
+              placeholder="Search institution…"
+              placeholderTextColor={theme.muted}
+              autoCapitalize="characters"
+              autoCorrect={false}
+            />
+            {entQuery ? (
+              <TouchableOpacity onPress={() => setEntQuery('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <Text style={styles.searchClear}>✕</Text>
+              </TouchableOpacity>
+            ) : null}
+          </View>
+        </View>
       ) : null}
 
       <ScrollView contentContainerStyle={styles.body}>
@@ -92,10 +123,15 @@ export default function EntityGraphScreen() {
           ) : (
             <>
               <Text style={styles.asof}>
-                {graph.nodes.entities.length} institutions · {graph.edges.length} links ·{' '}
-                {graph.asof.first || '—'} → {graph.asof.last || '—'}
+                {entQuery
+                  ? `${filteredEntities.length} of ${graph.nodes.entities.length} institutions`
+                  : `${graph.nodes.entities.length} institutions`}{' '}
+                · {graph.edges.length} links · {graph.asof.first || '—'} → {graph.asof.last || '—'}
               </Text>
-              {graph.nodes.entities.map((ent) => (
+              {entQuery && !filteredEntities.length ? (
+                <Text style={styles.none}>No institution matches “{entQuery}”.</Text>
+              ) : null}
+              {filteredEntities.map((ent) => (
                 <View key={ent.id}>
                   <TouchableOpacity style={styles.entRow} onPress={() => toggleEntity(ent)} activeOpacity={0.7}>
                     <View style={{ flex: 1 }}>
@@ -214,6 +250,25 @@ const styles = StyleSheet.create({
   tabTxt: { color: theme.muted2, fontSize: theme.fs.sm, fontWeight: '700' },
   tabTxtOn: { color: theme.onAccent },
   searchWrap: { paddingHorizontal: theme.sp.lg, paddingBottom: theme.sp.sm, zIndex: 50 },
+  searchBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: theme.surface2,
+    borderColor: theme.border2,
+    borderWidth: 1,
+    borderRadius: theme.radius.sm + 2,
+    paddingHorizontal: theme.sp.md,
+  },
+  searchIcon: { color: theme.muted, fontSize: theme.fs.md, marginRight: theme.sp.sm },
+  searchInput: {
+    flex: 1,
+    color: theme.text,
+    fontFamily: theme.mono,
+    fontSize: theme.fs.md,
+    paddingVertical: theme.sp.sm + 2,
+    letterSpacing: 1,
+  },
+  searchClear: { color: theme.muted2, fontSize: theme.fs.md, paddingHorizontal: 4 },
   input: {
     backgroundColor: theme.surface2,
     borderColor: theme.border2,
