@@ -318,12 +318,18 @@ function graphHtml(data: GraphResp, quotes: LtpResp, centre: string, openIdx: st
     setTimeout(fitAll, 900);
     var defs = svg.append('defs');
     // Arrowheads match the flow direction: green in, red out, grey otherwise.
+    // Fixed px size (userSpaceOnUse) with the tip at the line end — the line is
+    // shortened to the target's edge in the tick handler so arrows never clip
+    // behind the bubble regardless of node size or stroke width.
     [['in', CIN], ['out', COUT], ['n', CNEUTRAL]].forEach(function(m){
-      defs.append('marker').attr('id','arr-'+m[0]).attr('viewBox','0 -4 8 8')
-        .attr('refX', 24).attr('markerWidth', 7).attr('markerHeight', 7).attr('orient','auto')
-        .append('path').attr('d','M0,-4L8,0L0,4').attr('fill', m[1]);
+      defs.append('marker').attr('id','arr-'+m[0])
+        .attr('viewBox','0 0 10 10').attr('refX', 9).attr('refY', 5)
+        .attr('markerWidth', 7).attr('markerHeight', 7)
+        .attr('markerUnits','userSpaceOnUse').attr('orient','auto')
+        .append('path').attr('d','M0,1L9,5L0,9L2.6,5Z').attr('fill', m[1]);
     });
     function edgeColor(e){ return edgeIsIn(e) ? CIN : edgeIsOut(e) ? COUT : CNEUTRAL; }
+    function nodeR(d){ return d.id === centre ? 29 : 20; }
 
     linkSel = root.selectAll('line').data(g.links).enter().append('line')
       .attr('stroke', function(d){ return edgeColor(d.e); })
@@ -398,10 +404,22 @@ function graphHtml(data: GraphResp, quotes: LtpResp, centre: string, openIdx: st
       .force('y', d3.forceY(H/2).strength(0.04))
       .force('collide', d3.forceCollide(46))
       .on('tick', function(){
-        linkSel.attr('x1', function(d){ return d.source.x; }).attr('y1', function(d){ return d.source.y; })
-               .attr('x2', function(d){ return d.target.x; }).attr('y2', function(d){ return d.target.y; });
+        // End the line just outside the target circle so the arrowhead is fully
+        // visible; also pull the start off the source circle a touch.
+        linkSel.attr('x1', function(d){ return trim(d, true).x; })
+               .attr('y1', function(d){ return trim(d, true).y; })
+               .attr('x2', function(d){ return trim(d, false).x; })
+               .attr('y2', function(d){ return trim(d, false).y; });
         nodeSel.attr('transform', function(d){ return 'translate(' + d.x + ',' + d.y + ')'; });
       });
+    function trim(d, atSource){
+      var s = d.source, t = d.target;
+      var dx = t.x - s.x, dy = t.y - s.y, len = Math.sqrt(dx*dx + dy*dy) || 1;
+      var ux = dx/len, uy = dy/len;
+      if (atSource){ var r = nodeR(s) + 2; return { x: s.x + ux*r, y: s.y + uy*r }; }
+      var gap = nodeR(t) + 6;   // leave room for the arrowhead outside the node
+      return { x: t.x - ux*gap, y: t.y - uy*gap };
+    }
     applyHl();
   }
 
