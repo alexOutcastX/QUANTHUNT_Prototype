@@ -45,7 +45,7 @@ function graphHtml(data: GraphResp, quotes: LtpResp, centre: string, openIdx: st
   .lg-line{display:inline-block;width:26px;height:0;border-top:2px solid ${theme.muted2};vertical-align:middle;margin-right:6px}
   #crumb{position:absolute;top:12px;left:14px;color:${theme.muted};font-size:12px;z-index:5}
   #crumb b{color:${theme.text}}
-  #hl{position:absolute;top:8px;right:10px;z-index:5;display:flex;gap:6px}
+  #hl{position:absolute;top:8px;right:10px;left:10px;z-index:5;display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end}
   .hlb{background:${theme.surface2};border:1px solid ${theme.border2};color:${theme.muted2};font-family:inherit;font-size:11px;letter-spacing:1px;padding:7px 12px;border-radius:999px;cursor:pointer}
   .hlb.on{background:${theme.accent};border-color:${theme.accent};color:${theme.bg};font-weight:700}
   .dim{opacity:0.12}
@@ -151,6 +151,10 @@ function graphHtml(data: GraphResp, quotes: LtpResp, centre: string, openIdx: st
         <span style="width:8px"></span>
         <button class="hlb" id="hl-in" onclick="setHl('in')">◄ INPUTS</button>
         <button class="hlb" id="hl-out" onclick="setHl('out')">OUTPUTS ►</button>
+        <button class="hlb" id="hl-group" onclick="setHl('group')">GROUP</button>
+        <button class="hlb" id="hl-comp" onclick="setHl('comp')">RIVALS</button>
+        <button class="hlb" id="hl-investors" onclick="setHl('investors')">INVESTORS</button>
+        <button class="hlb" id="hl-invested" onclick="setHl('invested')">INVESTED</button>
         <button class="hlb on" id="hl-all" onclick="setHl('all')">ALL</button>
         <span style="width:8px"></span>
         <button class="hlb" id="hl-reset" onclick="resetPos()" title="Reset bubble positions">⟲ RESET</button>
@@ -232,18 +236,35 @@ function graphHtml(data: GraphResp, quotes: LtpResp, centre: string, openIdx: st
     return { nodes: nodes, links: edges.map(function(e){ return { source: e.src, target: e.dst, e: e }; }) };
   }
 
+  var HL_MODES = ['all','in','out','group','comp','investors','invested'];
   window.setHl = function(mode) {
     hlMode = mode;
-    ['in','out','all'].forEach(function(m){ document.getElementById('hl-' + m).className = 'hlb' + (m === mode ? ' on' : ''); });
+    HL_MODES.forEach(function(m){
+      var b = document.getElementById('hl-' + m);
+      if (b) b.className = 'hlb' + (m === mode ? ' on' : '');
+    });
     applyHl();
   };
   function edgeIsIn(e){ return e.dst === centre && (e.type === 'supplies' || e.type === 'finances'); }
   function edgeIsOut(e){ return e.src === centre && (e.type === 'supplies' || e.type === 'finances'); }
+  // Does an edge belong to the active filter? Type filters only count edges
+  // that actually touch the centre.
+  function edgeMatch(e){
+    switch (hlMode) {
+      case 'in': return edgeIsIn(e);
+      case 'out': return edgeIsOut(e);
+      case 'group': return e.type === 'group' && (e.src === centre || e.dst === centre);
+      case 'comp': return e.type === 'competitor' && (e.src === centre || e.dst === centre);
+      case 'investors': return e.type === 'invests' && e.dst === centre;   // who holds a stake in the centre
+      case 'invested': return e.type === 'invests' && e.src === centre;    // what the centre holds a stake in
+      default: return true; // 'all'
+    }
+  }
   function applyHl() {
     if (!linkSel) return;
     var keepNode = {}; keepNode[centre] = 1;
     linkSel.attr('class', function(d){
-      var keep = hlMode === 'all' || (hlMode === 'in' ? edgeIsIn(d.e) : edgeIsOut(d.e));
+      var keep = hlMode === 'all' || edgeMatch(d.e);
       if (keep) { keepNode[d.e.src] = 1; keepNode[d.e.dst] = 1; }
       return keep ? '' : 'dim';
     });
