@@ -150,20 +150,26 @@ export default function SymbolInput({
       const hit = symbols.find((s) => (s.symbol || '').toUpperCase() === target);
       aliased.push(hit || { symbol: target, name: target, exchange: 'NSE' });
     }
+    // An exact ticker match ranks first — e.g. typing "LT" must surface
+    // Larsen & Toubro (symbol LT) above LTF/LTFOODS/LTIM, not hide it.
+    let exact: UniverseSymbol | null = null;
     const prefix: UniverseSymbol[] = [];
     const substr: UniverseSymbol[] = [];
     const byName: UniverseSymbol[] = [];
     for (const s of symbols) {
       const sym = (s.symbol || '').toUpperCase();
-      if (!sym || sym === q || aliasSeen.has(sym)) continue; // skip current + alias dupes
-      if (sym.startsWith(q)) {
+      if (!sym || aliasSeen.has(sym)) continue; // skip alias dupes
+      if (sym === q) {
+        exact = s;
+      } else if (sym.startsWith(q)) {
         prefix.push(s);
       } else if (substr.length + byName.length < MAX_SUGGESTIONS) {
         if (sym.includes(q)) substr.push(s);
         else if ((s.name || '').toUpperCase().includes(q)) byName.push(s);
       }
     }
-    return [...idx, ...aliased, ...prefix, ...substr, ...byName].slice(0, MAX_SUGGESTIONS);
+    const head = exact ? [exact] : [];
+    return [...idx, ...head, ...aliased, ...prefix, ...substr, ...byName].slice(0, MAX_SUGGESTIONS);
   }, [open, symbols, value]);
 
   return (
