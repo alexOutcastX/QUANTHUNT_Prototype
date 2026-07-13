@@ -88,12 +88,17 @@ def _merge_seed():
             continue
         existing = _cache.get(sym)
         if existing is not None:
-            # Preserve fresh AI/BYOK graphs; keep current-version seed copies as-is.
-            if existing.get("src") == "ai":
+            ex_edges = len(existing.get("edges") or [])
+            # Preserve a BYOK/AI graph only while it is at least as rich as the
+            # seed — a stale sparse entry (e.g. an old AI graph cached before the
+            # symbol was seeded) must not shadow the fuller curated seed.
+            if existing.get("src") == "ai" and ex_edges >= len(edges):
                 continue
-            if existing.get("src") == "seed" and existing.get("ver") == ver:
+            # An up-to-date seed copy that isn't sparser is already correct.
+            if (existing.get("src") == "seed" and existing.get("ver") == ver
+                    and ex_edges >= len(edges)):
                 continue
-            # else: legacy/no-src or stale-seed entry — refresh from the seed.
+            # else: legacy/no-src, stale-version, or sparser entry — refresh it.
         _cache[sym] = {"ts": now, "companies": comps, "edges": edges,
                        "src": "seed", "ver": ver}
 
