@@ -145,13 +145,24 @@ class SeedGraphTest(unittest.TestCase):
     def test_unknown_symbol_not_in_seed(self):
         self.assertIsNone(self.ai.cached_graph("NOPE"))
 
-    def test_runtime_cache_beats_seed(self):
-        # A runtime-generated graph already present must not be overwritten by the seed.
-        self.ai._cache = {"ZZZ": {"ts": 9_999_999_999,
+    def test_ai_graph_beats_seed(self):
+        # A BYOK/AI-generated graph (src="ai") must not be overwritten by the seed.
+        self.ai._cache = {"ZZZ": {"ts": 9_999_999_999, "src": "ai",
                                   "companies": {"ZZZ": {"name": "Real", "listed": True}},
                                   "edges": []}}
         self.ai._merge_seed()
         self.assertEqual(self.ai._cache["ZZZ"]["companies"]["ZZZ"]["name"], "Real")
+        self.assertEqual(self.ai._cache["ZZZ"].get("src"), "ai")
+
+    def test_legacy_entry_refreshed_from_seed(self):
+        # A stale legacy entry (no src marker) is replaced by the curated seed so
+        # improved seed graphs reach production despite an old on-disk cache.
+        self.ai._cache = {"ZZZ": {"ts": 9_999_999_999,
+                                  "companies": {"ZZZ": {"name": "Stale", "listed": True}},
+                                  "edges": []}}
+        self.ai._merge_seed()
+        self.assertEqual(len(self.ai._cache["ZZZ"]["edges"]), 3)
+        self.assertEqual(self.ai._cache["ZZZ"].get("src"), "seed")
 
 
 if __name__ == "__main__":
