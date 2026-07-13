@@ -49,6 +49,21 @@ function graphHtml(data: GraphResp, quotes: LtpResp, centre: string, openIdx: st
   .hlb{background:${theme.surface2};border:1px solid ${theme.border2};color:${theme.muted2};font-family:inherit;font-size:11px;letter-spacing:1px;padding:7px 12px;border-radius:999px;cursor:pointer}
   .hlb.on{background:${theme.accent};border-color:${theme.accent};color:${theme.bg};font-weight:700}
   .dim{opacity:0.12}
+  #printhead{display:none}
+  /* ── PDF / print export: keep the dark terminal look, drop the chrome ── */
+  @media print {
+    @page { size: A4 landscape; margin: 8mm; }
+    * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+    html, body, #wrap, #gfx, #gwrap, #panel { background: ${theme.bg} !important; }
+    #news, #win, #hl, #menu, .wbtn, #crumb { display: none !important; }
+    #wrap { display: block !important; height: auto !important; }
+    #gfx { display: block !important; }
+    #gwrap { height: 60vh !important; width: 100% !important; overflow: visible !important; }
+    #panel { width: 100% !important; border-left: none !important; border-top: 1px solid ${theme.border} !important; overflow: visible !important; }
+    #legend { position: static !important; display: inline-block; margin: 6px 0 }
+    #printhead { display: block !important; color: ${theme.text}; font-size: 15px; font-weight: 700; letter-spacing: 1px; padding: 0 0 6px }
+    #printhead span { color: ${theme.muted} }
+  }
   #menu{position:absolute;z-index:30;background:${theme.surface};border:1px solid ${theme.border2};border-radius:8px;min-width:170px;display:none;box-shadow:0 8px 30px #000a}
   #menu div{padding:11px 15px;color:${theme.text};font-size:13px;cursor:pointer;border-bottom:1px solid ${theme.border}}
   #menu div:last-child{border-bottom:none}
@@ -129,6 +144,7 @@ function graphHtml(data: GraphResp, quotes: LtpResp, centre: string, openIdx: st
   <div id="gfx">
     <div id="gwrap">
       <div id="crumb"></div>
+      <div id="printhead">TaurEye · Relationship Map — <span id="ph-centre"></span></div>
       <div id="hl">
         <button class="hlb" id="tg-news" onclick="toggleNews()">◧ NEWS</button>
         <button class="hlb" id="tg-win" onclick="toggleWin()">▤ CHART</button>
@@ -138,6 +154,7 @@ function graphHtml(data: GraphResp, quotes: LtpResp, centre: string, openIdx: st
         <button class="hlb on" id="hl-all" onclick="setHl('all')">ALL</button>
         <span style="width:8px"></span>
         <button class="hlb" id="hl-reset" onclick="resetPos()" title="Reset bubble positions">⟲ RESET</button>
+        <button class="hlb" id="hl-pdf" onclick="exportPDF()" title="Export this graph to PDF">⤓ PDF</button>
       </div>
       <svg id="svg"></svg>
       <div id="legend">
@@ -429,6 +446,17 @@ function graphHtml(data: GraphResp, quotes: LtpResp, centre: string, openIdx: st
     }
     applyHl();
   }
+
+  // Export the current relationship map to PDF via the browser's print dialog
+  // ("Save as PDF"). Print CSS keeps the dark look and drops the toolbar/chart.
+  window.exportPDF = function(){
+    try {
+      var ph = document.getElementById('ph-centre');
+      if (ph) ph.textContent = (DATA.companies[centre] || {}).name || centre;
+    } catch (e) {}
+    window.focus();
+    window.print();
+  };
 
   // Clear all manual placements (and re-pin the centre), then re-run the layout.
   window.resetPos = function(){
