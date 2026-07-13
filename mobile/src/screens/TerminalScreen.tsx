@@ -161,6 +161,7 @@ function graphHtml(data: GraphResp, quotes: LtpResp, centre: string, openIdx: st
         <span class="lg-line" style="border-top:2px solid #3fb950"></span>input — supplies in →<br>
         <span class="lg-line" style="border-top:2px solid #f85149"></span>output — supplies out →<br>
         <span class="lg-line" style="border-top:2px dashed #f5c518"></span>group<br>
+        <span class="lg-line" style="border-top:2px dashed #4f9dff"></span>invests → (investor→investee)<br>
         <span class="lg-line" style="border-top:2px dotted ${theme.muted}"></span>competitor
         <div style="margin-top:5px;color:${theme.muted2};font-size:10px">◄ inputs · outputs ► · drag to place · ⟲ reset</div>
       </div>
@@ -196,12 +197,12 @@ function graphHtml(data: GraphResp, quotes: LtpResp, centre: string, openIdx: st
   var QUOTES = ${JSON.stringify(quotes)};
   var API = ${JSON.stringify(API_BASE)};
   var centre = ${JSON.stringify(centre)};
-  var DASH = { supplies: null, group: '7,5', competitor: '2,5', finances: '11,4' };
+  var DASH = { supplies: null, group: '7,5', competitor: '2,5', finances: '11,4', invests: '2,3' };
   // Colour encodes flow DIRECTION relative to the centre only: inputs (things
   // that supply/finance the centre) are green, outputs (things the centre
   // supplies/finances) are red. Everything else (group, competitor, or links
   // between two neighbours) stays neutral grey — not colour-coded.
-  var CIN = '#3fb950', COUT = '#f85149', CNEUTRAL = '${theme.muted}', CGROUP = '#f5c518';
+  var CIN = '#3fb950', COUT = '#f85149', CNEUTRAL = '${theme.muted}', CGROUP = '#f5c518', CINVEST = '#4f9dff';
   var svg = d3.select('#svg'), sim = null, hlMode = 'all';
   var linkSel = null, nodeSel = null;
   var histCache = {}, fundCache = {};
@@ -279,6 +280,8 @@ function graphHtml(data: GraphResp, quotes: LtpResp, centre: string, openIdx: st
     h += block('Customers / demand', E.filter(function(e){ return e.src === c && e.type === 'supplies'; }), function(e){ return e.dst; });
     h += block('Financiers', E.filter(function(e){ return e.dst === c && e.type === 'finances'; }), function(e){ return e.src; });
     h += block('Finances purchases of', E.filter(function(e){ return e.src === c && e.type === 'finances'; }), function(e){ return e.dst; });
+    h += block('Investors', E.filter(function(e){ return e.dst === c && e.type === 'invests'; }), function(e){ return e.src; });
+    h += block('Holdings / investments', E.filter(function(e){ return e.src === c && e.type === 'invests'; }), function(e){ return e.dst; });
     h += block('Competitors', E.filter(function(e){ return e.type === 'competitor' && (e.src === c || e.dst === c); }), function(e){ return e.src === c ? e.dst : e.src; });
     h += block('Group', E.filter(function(e){ return e.type === 'group' && (e.src === c || e.dst === c); }), function(e){ return e.src === c ? e.dst : e.src; });
     document.getElementById('panel').innerHTML = h;
@@ -340,14 +343,17 @@ function graphHtml(data: GraphResp, quotes: LtpResp, centre: string, openIdx: st
     // Fixed px size (userSpaceOnUse) with the tip at the line end — the line is
     // shortened to the target's edge in the tick handler so arrows never clip
     // behind the bubble regardless of node size or stroke width.
-    [['in', CIN], ['out', COUT], ['n', CNEUTRAL]].forEach(function(m){
+    [['in', CIN], ['out', COUT], ['n', CNEUTRAL], ['inv', CINVEST]].forEach(function(m){
       defs.append('marker').attr('id','arr-'+m[0])
         .attr('viewBox','0 0 10 10').attr('refX', 9).attr('refY', 5)
         .attr('markerWidth', 7).attr('markerHeight', 7)
         .attr('markerUnits','userSpaceOnUse').attr('orient','auto')
         .append('path').attr('d','M0,1L9,5L0,9L2.6,5Z').attr('fill', m[1]);
     });
-    function edgeColor(e){ return edgeIsIn(e) ? CIN : edgeIsOut(e) ? COUT : (e.type === 'group' ? CGROUP : CNEUTRAL); }
+    function edgeColor(e){
+      if (e.type === 'invests') return CINVEST;
+      return edgeIsIn(e) ? CIN : edgeIsOut(e) ? COUT : (e.type === 'group' ? CGROUP : CNEUTRAL);
+    }
     function nodeR(d){ return d.id === centre ? 29 : 20; }
     // Nodes in the same corporate group as the centre (linked by a group edge).
     var groupSet = {};
@@ -360,9 +366,10 @@ function graphHtml(data: GraphResp, quotes: LtpResp, centre: string, openIdx: st
     linkSel = root.selectAll('line').data(g.links).enter().append('line')
       .attr('stroke', function(d){ return edgeColor(d.e); })
       .attr('stroke-width', function(d){ return d.e.confidence === 'high' ? 2.2 : 1.4; })
-      .attr('stroke-opacity', function(d){ return (edgeIsIn(d.e) || edgeIsOut(d.e)) ? 0.9 : (d.e.type === 'group' ? 0.85 : 0.5); })
+      .attr('stroke-opacity', function(d){ return (edgeIsIn(d.e) || edgeIsOut(d.e)) ? 0.9 : (d.e.type === 'group' || d.e.type === 'invests') ? 0.85 : 0.5; })
       .attr('stroke-dasharray', function(d){ return DASH[d.e.type]; })
       .attr('marker-end', function(d){
+        if (d.e.type === 'invests') return 'url(#arr-inv)';
         if (edgeIsIn(d.e)) return 'url(#arr-in)';
         if (edgeIsOut(d.e)) return 'url(#arr-out)';
         return (d.e.type === 'supplies' || d.e.type === 'finances') ? 'url(#arr-n)' : null; });
@@ -412,9 +419,10 @@ function graphHtml(data: GraphResp, quotes: LtpResp, centre: string, openIdx: st
       if (id === centre) return 0;
       var isIn = false, isOut = false;
       DATA.edges.forEach(function(e){
-        if (e.type !== 'supplies' && e.type !== 'finances') return;
-        if (e.src === id && e.dst === centre) isIn = true;   // id supplies centre
-        if (e.src === centre && e.dst === id) isOut = true;  // centre supplies id
+        // supplies/finances flow, plus investment (investor→investee capital flow)
+        if (e.type !== 'supplies' && e.type !== 'finances' && e.type !== 'invests') return;
+        if (e.src === id && e.dst === centre) isIn = true;   // id supplies/invests-in centre → left
+        if (e.src === centre && e.dst === id) isOut = true;  // centre supplies/invests-in id → right
       });
       return (isIn && !isOut) ? -1 : (isOut && !isIn) ? 1 : 0;
     }

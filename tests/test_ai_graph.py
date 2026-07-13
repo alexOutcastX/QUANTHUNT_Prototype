@@ -109,6 +109,21 @@ class AiGraphByokTest(unittest.TestCase):
         self.assertEqual(self.cap.get("url"), None)
         self.assertIn("AAA", g["companies"])
 
+    def test_invests_is_a_valid_edge_type(self):
+        # Equity-investment (investor → investee) edges must survive validation.
+        g = self.ai._validate("XX", {
+            "companies": {"XX": {"name": "X", "listed": True},
+                          "PROMO": {"name": "Promoter", "listed": False},
+                          "SUBS": {"name": "Subsidiary", "listed": True}},
+            "edges": [
+                {"src": "PROMO", "dst": "XX", "type": "invests", "note": "holds 60%", "confidence": "high"},
+                {"src": "XX", "dst": "SUBS", "type": "invests", "note": "holds 75%", "confidence": "high"},
+                {"src": "PROMO", "dst": "SUBS", "type": "group", "note": "same group", "confidence": "low"},
+            ],
+        })
+        inv = [e for e in g["edges"] if e["type"] == "invests"]
+        self.assertEqual(len(inv), 2)
+
 
 class SeedGraphTest(unittest.TestCase):
     """Committed seed graphs load and serve keylessly."""
