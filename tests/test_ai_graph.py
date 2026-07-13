@@ -1,5 +1,8 @@
-"""Unit tests for BYOK multi-provider handling in ai_graph (no network/deps — requests faked)."""
+"""Unit tests for BYOK multi-provider handling + seed graphs in ai_graph (no network/deps)."""
 import importlib
+import json
+import os
+import tempfile
 import types
 import unittest
 
@@ -105,6 +108,50 @@ class AiGraphByokTest(unittest.TestCase):
         g = self.ai.get_graph("AAA")          # no key/provider, but cached → no new request
         self.assertEqual(self.cap.get("url"), None)
         self.assertIn("AAA", g["companies"])
+
+
+class SeedGraphTest(unittest.TestCase):
+    """Committed seed graphs load and serve keylessly."""
+
+    def setUp(self):
+        import ai_graph
+        self.ai = importlib.reload(ai_graph)
+        self.tmp = tempfile.NamedTemporaryFile("w", suffix=".json", delete=False)
+        json.dump({
+            "ZZZ": {
+                "companies": {"ZZZ": {"name": "Zzz", "listed": True},
+                              "QQQ": {"name": "Qqq", "listed": True},
+                              "WWW": {"name": "Www", "listed": False}},
+                "edges": [
+                    {"src": "QQQ", "dst": "ZZZ", "type": "supplies", "note": "n", "confidence": "high"},
+                    {"src": "ZZZ", "dst": "QQQ", "type": "competitor", "note": "n", "confidence": "low"},
+                    {"src": "WWW", "dst": "ZZZ", "type": "finances", "note": "n", "confidence": "medium"},
+                ],
+            }
+        }, self.tmp)
+        self.tmp.close()
+        self.ai.SEED_FILE = self.tmp.name
+        self.ai._cache = None          # force a reload that merges the seed
+
+    def tearDown(self):
+        os.unlink(self.tmp.name)
+
+    def test_seed_is_served_without_a_key(self):
+        g = self.ai.cached_graph("ZZZ")
+        self.assertIsNotNone(g)
+        self.assertIn("ZZZ", g["companies"])
+        self.assertEqual(len(g["edges"]), 3)
+
+    def test_unknown_symbol_not_in_seed(self):
+        self.assertIsNone(self.ai.cached_graph("NOPE"))
+
+    def test_runtime_cache_beats_seed(self):
+        # A runtime-generated graph already present must not be overwritten by the seed.
+        self.ai._cache = {"ZZZ": {"ts": 9_999_999_999,
+                                  "companies": {"ZZZ": {"name": "Real", "listed": True}},
+                                  "edges": []}}
+        self.ai._merge_seed()
+        self.assertEqual(self.ai._cache["ZZZ"]["companies"]["ZZZ"]["name"], "Real")
 
 
 if __name__ == "__main__":

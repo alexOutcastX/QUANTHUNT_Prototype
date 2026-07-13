@@ -1111,6 +1111,15 @@ def relationship_graph():
     if not sym or sym in base["companies"]:
         return jsonify(base)
 
+    # A cached or committed-seed graph is served to everyone, no key required —
+    # this is what makes the pre-warmed set instant and keyless.
+    seeded = _ai.cached_graph(sym)
+    if seeded:
+        listed = sorted(k for k, v in seeded["companies"].items() if v.get("listed"))
+        return jsonify({"companies": seeded["companies"], "edges": seeded["edges"],
+                        "available": listed, "source": "ai", "ai": ai_ok,
+                        "disclaimer": AI_DISCLAIMER})
+
     # A minimal graph so the Terminal can centre on ANY listed company and use
     # its workspace (chart, fundamentals, news, compare) even when relationship
     # edges aren't available — those need either the curated set or an AI key.
@@ -1135,10 +1144,9 @@ def relationship_graph():
     if not ai_ok:
         return _minimal("no-key")
 
-    # Uncached generations burn API tokens — cap them per IP, but only when the
-    # server's own key pays for it. BYOK requests spend the user's own tokens.
-    cached = _ai._load().get(sym)
-    if not user_key and not (cached and time.time() - cached.get("ts", 0) < _ai.TTL):
+    # We only reach here on a genuine (uncached) generation. Cap per IP, but only
+    # when the server's own key pays for it — BYOK spends the user's own tokens.
+    if not user_key:
         retry = _rl_hit("graph-ai", 10, 3600)
         if retry is not None:
             return jsonify({"error": "rate-limited", "ai": True,
