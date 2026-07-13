@@ -344,21 +344,34 @@ function graphHtml(data: GraphResp, quotes: LtpResp, centre: string, openIdx: st
         .on('end', function(ev,d){ if(!ev.active) sim.alphaTarget(0); }))
       .on('click', function(ev,d){ ev.stopPropagation(); showMenu(d, ev.offsetX != null ? ev.offsetX : 40, ev.offsetY != null ? ev.offsetY : 40); });
 
+    // Fit the ticker inside the bubble: shrink the font for longer symbols and
+    // truncate anything that still won't fit (full name is in the side panel).
+    function symFont(id, isC){
+      var n = (id || '').length;
+      if (isC) return n >= 10 ? 9 : n >= 8 ? 10.5 : n >= 6 ? 12.5 : 14.5;
+      return n >= 8 ? 6.8 : n >= 7 ? 7.5 : n >= 6 ? 8.4 : n >= 5 ? 9.6 : 11;
+    }
+    function symText(id, isC){
+      var max = isC ? 12 : 9;
+      id = id || '';
+      return id.length > max ? id.slice(0, max - 1) + '…' : id;
+    }
     nodeSel.append('circle')
-      .attr('r', function(d){ return d.id === centre ? 26 : 17; })
+      .attr('r', function(d){ return d.id === centre ? 29 : 20; })
       .attr('fill', '${theme.surface2}')
       .attr('stroke', function(d){ return d.id === centre ? '${theme.accent}' : (d.listed ? '${theme.border2}' : '${theme.border}'); })
       .attr('stroke-width', function(d){ return d.id === centre ? 2.5 : 1.5; });
-    nodeSel.append('text').text(function(d){ return d.id; })
-      .attr('text-anchor','middle').attr('dy', function(d){ return d.id === centre ? 40 : 30; })
+    // Company symbol inside the bubble.
+    nodeSel.append('text').text(function(d){ return symText(d.id, d.id === centre); })
+      .attr('text-anchor','middle').attr('dy', 4)
       .attr('fill', function(d){ return d.listed ? '${theme.text}' : '${theme.muted}'; })
-      .attr('font-size', function(d){ return d.id === centre ? 13 : 11; }).attr('font-weight', 700);
+      .attr('font-size', function(d){ return symFont(d.id, d.id === centre); })
+      .attr('font-weight', 700).style('pointer-events','none');
+    // Live price under the bubble.
     nodeSel.append('text').text(function(d){ var q = fmtPrice(d.id); return q ? q.txt : ''; })
-      .attr('text-anchor','middle').attr('dy', function(d){ return d.id === centre ? 54 : 43; })
+      .attr('text-anchor','middle').attr('dy', function(d){ return d.id === centre ? 45 : 35; })
       .attr('class', function(d){ var q = fmtPrice(d.id); return q && q.up ? 'price-up' : 'price-dn'; })
-      .attr('font-size', 10);
-    nodeSel.append('text').text(function(d){ return d.id === centre ? '' : d.deg; })
-      .attr('text-anchor','middle').attr('dy', 4).attr('fill','${theme.muted2}').attr('font-size', 10);
+      .attr('font-size', 10).style('pointer-events','none');
 
     // Directional layout: suppliers (INPUTS) settle on the left, customers
     // (OUTPUTS) on the right, with the pinned centre in the middle. Nodes that
