@@ -6,6 +6,7 @@
 # disk for 30 days. Without a key the Terminal falls back to the curated
 # demo dataset in relations.py. Plain HTTPS via requests — no SDK needed.
 
+import hashlib
 import json
 import os
 import re
@@ -61,25 +62,40 @@ def _load() -> dict:
 
 
 def _merge_seed():
-    """Fill the runtime cache with committed seed graphs for any symbol it lacks.
+    """Merge committed seed graphs into the runtime cache.
 
-    Seed entries are stamped with a fresh ts so they serve for the full TTL from
-    load (renewed on each restart). Runtime-generated graphs always win. Kept
-    in memory only — never written back to CACHE_FILE.
+    The seed is the curated baseline for its (NIFTY-100) symbols and wins over
+    stale runtime entries — including legacy ones cached on disk before the seed
+    existed, which is why we can't simply skip symbols already present. A genuine
+    BYOK/AI generation (marked src="ai") always wins and is preserved. Seed
+    entries are versioned (a hash of the seed file) so a refreshed seed replaces
+    the previous seed's copies. Kept in memory only — never written to CACHE_FILE.
     """
     try:
-        with open(SEED_FILE) as f:
-            seed = json.load(f)
+        with open(SEED_FILE, "rb") as f:
+            raw = f.read()
+        seed = json.loads(raw)
     except Exception:
         return
+    ver = hashlib.md5(raw).hexdigest()[:12]
     now = int(time.time())
     for sym, g in (seed or {}).items():
         sym = str(sym).upper().strip()
-        if sym in _cache or not isinstance(g, dict):
+        if not isinstance(g, dict):
             continue
         comps, edges = g.get("companies"), g.get("edges")
-        if comps and edges:
-            _cache[sym] = {"ts": now, "companies": comps, "edges": edges}
+        if not (comps and edges):
+            continue
+        existing = _cache.get(sym)
+        if existing is not None:
+            # Preserve fresh AI/BYOK graphs; keep current-version seed copies as-is.
+            if existing.get("src") == "ai":
+                continue
+            if existing.get("src") == "seed" and existing.get("ver") == ver:
+                continue
+            # else: legacy/no-src or stale-seed entry — refresh from the seed.
+        _cache[sym] = {"ts": now, "companies": comps, "edges": edges,
+                       "src": "seed", "ver": ver}
 
 
 def cached_graph(symbol: str):
@@ -255,7 +271,7 @@ def get_graph(symbol: str, api_key: str = "", provider: str = "", model: str = "
     try:
         g = _generate(symbol, api_key, provider, model)
         with _lock:
-            _cache[symbol] = {"ts": int(time.time()), **g}
+            _cache[symbol] = {"ts": int(time.time()), "src": "ai", **g}
             _save()
         return g
     finally:
