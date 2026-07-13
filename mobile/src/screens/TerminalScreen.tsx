@@ -285,8 +285,10 @@ function graphHtml(data: GraphResp, quotes: LtpResp, centre: string, openIdx: st
   }
 
   window.recentre = function(id) {
-    if (!DATA.companies[id]) return;
-    centre = id; hideMenu(); render();
+    // Route through the host so it fetches the target's OWN full graph, rather
+    // than re-rendering a sparse subgraph from the current (stale) dataset.
+    hideMenu();
+    toApp('te:graph:' + id);
   };
 
   // ── node context menu ──
@@ -1073,10 +1075,10 @@ export default function TerminalScreen() {
       setIdxCmd((prev) => ({ name: idx, n: (prev?.n || 0) + 1 }));
       return;
     }
-    if (data.companies[sym]) {
-      setCentre(sym);
-      return;
-    }
+    if (sym === centre) return; // already centred here
+    // Always fetch the target's OWN full graph. Re-using the current dataset
+    // (because sym happens to be a neighbour node in it) rendered a sparse
+    // 1–2 edge graph instead of that company's real relationship map.
     setGenerating(sym);
     api
       .graph(sym, aiKey ? { key: aiKey, provider: aiProvider, model: aiModel } : undefined)
