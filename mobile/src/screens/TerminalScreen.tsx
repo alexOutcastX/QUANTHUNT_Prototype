@@ -143,7 +143,7 @@ function graphHtml(data: GraphResp, quotes: LtpResp, centre: string, openIdx: st
       <div id="legend">
         <span class="lg-line" style="border-top:2px solid #3fb950"></span>input — supplies in →<br>
         <span class="lg-line" style="border-top:2px solid #f85149"></span>output — supplies out →<br>
-        <span class="lg-line" style="border-top:2px dashed ${theme.muted}"></span>group<br>
+        <span class="lg-line" style="border-top:2px dashed #f5c518"></span>group<br>
         <span class="lg-line" style="border-top:2px dotted ${theme.muted}"></span>competitor
         <div style="margin-top:5px;color:${theme.muted2};font-size:10px">◄ inputs · outputs ► · drag to place · ⟲ reset</div>
       </div>
@@ -184,7 +184,7 @@ function graphHtml(data: GraphResp, quotes: LtpResp, centre: string, openIdx: st
   // that supply/finance the centre) are green, outputs (things the centre
   // supplies/finances) are red. Everything else (group, competitor, or links
   // between two neighbours) stays neutral grey — not colour-coded.
-  var CIN = '#3fb950', COUT = '#f85149', CNEUTRAL = '${theme.muted}';
+  var CIN = '#3fb950', COUT = '#f85149', CNEUTRAL = '${theme.muted}', CGROUP = '#f5c518';
   var svg = d3.select('#svg'), sim = null, hlMode = 'all';
   var linkSel = null, nodeSel = null;
   var histCache = {}, fundCache = {};
@@ -328,13 +328,20 @@ function graphHtml(data: GraphResp, quotes: LtpResp, centre: string, openIdx: st
         .attr('markerUnits','userSpaceOnUse').attr('orient','auto')
         .append('path').attr('d','M0,1L9,5L0,9L2.6,5Z').attr('fill', m[1]);
     });
-    function edgeColor(e){ return edgeIsIn(e) ? CIN : edgeIsOut(e) ? COUT : CNEUTRAL; }
+    function edgeColor(e){ return edgeIsIn(e) ? CIN : edgeIsOut(e) ? COUT : (e.type === 'group' ? CGROUP : CNEUTRAL); }
     function nodeR(d){ return d.id === centre ? 29 : 20; }
+    // Nodes in the same corporate group as the centre (linked by a group edge).
+    var groupSet = {};
+    DATA.edges.forEach(function(e){
+      if (e.type !== 'group') return;
+      if (e.src === centre) groupSet[e.dst] = 1;
+      else if (e.dst === centre) groupSet[e.src] = 1;
+    });
 
     linkSel = root.selectAll('line').data(g.links).enter().append('line')
       .attr('stroke', function(d){ return edgeColor(d.e); })
       .attr('stroke-width', function(d){ return d.e.confidence === 'high' ? 2.2 : 1.4; })
-      .attr('stroke-opacity', function(d){ return (edgeIsIn(d.e) || edgeIsOut(d.e)) ? 0.9 : 0.5; })
+      .attr('stroke-opacity', function(d){ return (edgeIsIn(d.e) || edgeIsOut(d.e)) ? 0.9 : (d.e.type === 'group' ? 0.85 : 0.5); })
       .attr('stroke-dasharray', function(d){ return DASH[d.e.type]; })
       .attr('marker-end', function(d){
         if (edgeIsIn(d.e)) return 'url(#arr-in)';
@@ -365,8 +372,8 @@ function graphHtml(data: GraphResp, quotes: LtpResp, centre: string, openIdx: st
     nodeSel.append('circle')
       .attr('r', function(d){ return d.id === centre ? 29 : 20; })
       .attr('fill', '${theme.surface2}')
-      .attr('stroke', function(d){ return d.id === centre ? '${theme.accent}' : (d.listed ? '${theme.border2}' : '${theme.border}'); })
-      .attr('stroke-width', function(d){ return d.id === centre ? 2.5 : 1.5; });
+      .attr('stroke', function(d){ return d.id === centre ? '${theme.accent}' : (groupSet[d.id] ? CGROUP : (d.listed ? '${theme.border2}' : '${theme.border}')); })
+      .attr('stroke-width', function(d){ return d.id === centre ? 2.5 : (groupSet[d.id] ? 2.4 : 1.5); });
     // Company symbol inside the bubble.
     nodeSel.append('text').text(function(d){ return symText(d.id, d.id === centre); })
       .attr('text-anchor','middle').attr('dy', 4)
