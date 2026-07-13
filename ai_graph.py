@@ -24,6 +24,17 @@ TTL = 30 * 86400          # regenerate monthly — relationships move slowly
 TIMEOUT = 75              # generation can take a while on big graphs
 EDGE_TYPES = {"supplies", "group", "competitor", "finances"}
 
+# Bring-your-own-key providers. Each user picks one and pastes their own key;
+# the default model is used unless they override it. anthropic also backs the
+# optional server key (ANTHROPIC_API_KEY).
+PROVIDERS = ("anthropic", "gemini", "grok", "openai")
+DEFAULT_MODELS = {
+    "anthropic": MODEL,
+    "gemini": "gemini-2.0-flash",
+    "grok": "grok-2-latest",
+    "openai": "gpt-4o-mini",
+}
+
 _lock = threading.Lock()
 _cache = None             # symbol -> {"ts": epoch, "companies": {...}, "edges": [...]}
 _inflight: dict = {}      # symbol -> threading.Event, so concurrent requests wait
@@ -112,40 +123,77 @@ def _validate(symbol: str, data: dict) -> dict:
     return {"companies": companies, "edges": edges}
 
 
-def _generate(symbol: str, api_key: str = "") -> dict:
-    key = (api_key or API_KEY).strip()
+def _call_anthropic(key: str, model: str, prompt: str) -> str:
+    r = requests.post(
+        "https://api.anthropic.com/v1/messages",
+        headers={"x-api-key": key, "anthropic-version": "2023-06-01",
+                 "content-type": "application/json"},
+        json={"model": model, "max_tokens": 3000,
+              "messages": [{"role": "user", "content": prompt}]},
+        timeout=TIMEOUT,
+    )
+    r.raise_for_status()
+    return "".join(b.get("text", "") for b in r.json().get("content", [])
+                   if b.get("type") == "text")
+
+
+def _call_openai_compat(base_url: str, key: str, model: str, prompt: str) -> str:
+    # OpenAI Chat Completions shape — also used by xAI Grok (api.x.ai).
+    r = requests.post(
+        base_url,
+        headers={"authorization": "Bearer " + key, "content-type": "application/json"},
+        json={"model": model, "max_tokens": 3000,
+              "messages": [{"role": "user", "content": prompt}]},
+        timeout=TIMEOUT,
+    )
+    r.raise_for_status()
+    return r.json()["choices"][0]["message"]["content"]
+
+
+def _call_gemini(key: str, model: str, prompt: str) -> str:
+    r = requests.post(
+        "https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent" % model,
+        headers={"content-type": "application/json", "x-goog-api-key": key},
+        json={"contents": [{"parts": [{"text": prompt}]}]},
+        timeout=TIMEOUT,
+    )
+    r.raise_for_status()
+    cands = r.json().get("candidates") or []
+    parts = (cands[0].get("content", {}).get("parts", []) if cands else [])
+    return "".join(p.get("text", "") for p in parts)
+
+
+def _generate(symbol: str, api_key: str = "", provider: str = "", model: str = "") -> dict:
+    provider = (provider or "anthropic").strip().lower()
+    if provider not in PROVIDERS:
+        provider = "anthropic"
+    # anthropic can fall back to the server key; other providers are BYOK only.
+    key = (api_key or (API_KEY if provider == "anthropic" else "")).strip()
     if not key:
         raise RuntimeError("no API key")
     if requests is None:
         raise RuntimeError("requests library unavailable")
-    r = requests.post(
-        "https://api.anthropic.com/v1/messages",
-        headers={
-            "x-api-key": key,
-            "anthropic-version": "2023-06-01",
-            "content-type": "application/json",
-        },
-        json={
-            "model": MODEL,
-            "max_tokens": 3000,
-            "messages": [{"role": "user", "content": PROMPT % (symbol, symbol)}],
-        },
-        timeout=TIMEOUT,
-    )
-    r.raise_for_status()
-    text = "".join(
-        b.get("text", "") for b in r.json().get("content", []) if b.get("type") == "text"
-    )
+    model = (model or DEFAULT_MODELS[provider]).strip()
+    prompt = PROMPT % (symbol, symbol)
+    if provider == "gemini":
+        text = _call_gemini(key, model, prompt)
+    elif provider == "grok":
+        text = _call_openai_compat("https://api.x.ai/v1/chat/completions", key, model, prompt)
+    elif provider == "openai":
+        text = _call_openai_compat("https://api.openai.com/v1/chat/completions", key, model, prompt)
+    else:
+        text = _call_anthropic(key, model, prompt)
     return _validate(symbol, _extract_json(text))
 
 
-def get_graph(symbol: str, api_key: str = "") -> dict:
+def get_graph(symbol: str, api_key: str = "", provider: str = "", model: str = "") -> dict:
     """Cached AI graph for a symbol. Raises on generation/validation failure.
 
-    `api_key` lets a caller bring its own Anthropic key (BYOK) — used when no
-    server key is configured, or to spend the user's own tokens. The cached
-    result is keyed only by symbol (the graph content isn't key-specific), so a
-    graph one user generates benefits everyone.
+    `api_key`/`provider`/`model` let a caller bring its own key (BYOK) for any
+    supported provider (anthropic, gemini, grok, openai) — used when no server
+    key is configured, or to spend the user's own tokens. The cached result is
+    keyed only by symbol (the graph content isn't provider-specific), so a graph
+    one user generates benefits everyone.
     """
     symbol = symbol.upper().strip()
     with _lock:
@@ -168,7 +216,7 @@ def get_graph(symbol: str, api_key: str = "") -> dict:
             return {"companies": c["companies"], "edges": c["edges"]}
         raise RuntimeError("graph generation failed")
     try:
-        g = _generate(symbol, api_key)
+        g = _generate(symbol, api_key, provider, model)
         with _lock:
             _cache[symbol] = {"ts": int(time.time()), **g}
             _save()

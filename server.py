@@ -1099,9 +1099,12 @@ def relationship_graph():
     covers so the hand-checked cluster stays authoritative.
     """
     sym = request.args.get("symbol", "").strip().upper()
-    # BYOK: the visitor may bring their own Anthropic key (sent as a header,
-    # never logged or stored) so AI graphs work even with no server key.
+    # BYOK: the visitor may bring their own key for any supported provider
+    # (Claude/Gemini/Grok/OpenAI), sent as headers, never logged or stored, so
+    # AI graphs work even with no server key.
     user_key = request.headers.get("X-AI-Key", "").strip()
+    user_provider = request.headers.get("X-AI-Provider", "").strip()
+    user_model = request.headers.get("X-AI-Model", "").strip()
     ai_ok = _ai.available() or bool(user_key)
     base = _relations.graph()
     base["ai"] = ai_ok
@@ -1118,8 +1121,9 @@ def relationship_graph():
             name = f.get("name") or sym
         except Exception:
             pass
-        note = ("Relationship edges for this company need the AI graph — add your "
-                "Anthropic API key from the ⚙ AI KEY field to unlock them." if reason == "no-key"
+        note = ("Relationship edges for this company need the AI graph — add an AI "
+                "key (Claude/Gemini/Grok/OpenAI) from the ⚙ AI KEY field to unlock them."
+                if reason == "no-key"
                 else "Couldn't build a relationship graph right now — showing the "
                      "company's live data instead.")
         return jsonify({
@@ -1141,7 +1145,7 @@ def relationship_graph():
                             "detail": "Graph-generation limit reached — retry in %d min."
                                       % max(1, retry // 60)}), 429
     try:
-        g = _ai.get_graph(sym, user_key)
+        g = _ai.get_graph(sym, user_key, user_provider, user_model)
     except Exception as e:
         logging.warning("AI graph generation failed for %s: %s", sym, e)
         if user_key:

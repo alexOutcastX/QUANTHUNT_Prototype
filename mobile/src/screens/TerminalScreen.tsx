@@ -829,7 +829,18 @@ function graphHtml(data: GraphResp, quotes: LtpResp, centre: string, openIdx: st
 </script></body></html>`;
 }
 
-const AI_KEY_STORE = 'taureye.aikey.v1';
+const AI_KEY_STORE = 'taureye.aikey.v2';
+const AI_KEY_STORE_V1 = 'taureye.aikey.v1'; // legacy: a bare Anthropic key string
+
+// Bring-your-own-key providers the user can pick from.
+type Provider = { id: string; label: string; ph: string; get: string };
+const PROVIDERS: Provider[] = [
+  { id: 'anthropic', label: 'Claude', ph: 'sk-ant-…', get: 'console.anthropic.com' },
+  { id: 'gemini', label: 'Gemini', ph: 'AIza…', get: 'aistudio.google.com/apikey' },
+  { id: 'grok', label: 'Grok', ph: 'xai-…', get: 'console.x.ai' },
+  { id: 'openai', label: 'OpenAI', ph: 'sk-…', get: 'platform.openai.com/api-keys' },
+];
+const providerOf = (id: string) => PROVIDERS.find((p) => p.id === id) || PROVIDERS[0];
 
 export default function TerminalScreen() {
   const [data, setData] = useState<GraphResp | null>(null);
@@ -844,11 +855,17 @@ export default function TerminalScreen() {
   const [generating, setGenerating] = useState<string | null>(null);
   const [genErr, setGenErr] = useState<string | null>(null);
   const [idxCmd, setIdxCmd] = useState<{ name: string; n: number } | null>(null);
-  // BYOK: the visitor's own Anthropic key, kept only in local storage.
+  // BYOK: the visitor's own key + chosen provider, kept only in local storage.
   const [aiKey, setAiKey] = useState('');
+  const [aiProvider, setAiProvider] = useState('anthropic');
+  const [aiModel, setAiModel] = useState('');
   const [keyOpen, setKeyOpen] = useState(false);
   const [keyDraft, setKeyDraft] = useState('');
+  const [providerDraft, setProviderDraft] = useState('anthropic');
+  const [modelDraft, setModelDraft] = useState('');
   const aiEnabled = aiOn || !!aiKey;
+  const activeProvider = providerOf(aiProvider);
+  const draftProvider = providerOf(providerDraft);
 
   const loadQuotes = (g: GraphResp) => {
     const listed = Object.entries(g.companies)
@@ -860,10 +877,27 @@ export default function TerminalScreen() {
   useEffect(() => {
     (async () => {
       try {
-        const saved = await AsyncStorage.getItem(AI_KEY_STORE);
-        if (saved) {
-          setAiKey(saved);
-          setKeyDraft(saved);
+        const raw = await AsyncStorage.getItem(AI_KEY_STORE);
+        if (raw) {
+          const v = JSON.parse(raw) as { key?: string; provider?: string; model?: string };
+          if (v.key) {
+            setAiKey(v.key);
+            setKeyDraft(v.key);
+            const p = v.provider && providerOf(v.provider).id === v.provider ? v.provider : 'anthropic';
+            setAiProvider(p);
+            setProviderDraft(p);
+            setAiModel(v.model || '');
+            setModelDraft(v.model || '');
+          }
+        } else {
+          // Migrate the legacy v1 bare Anthropic key, if any.
+          const legacy = await AsyncStorage.getItem(AI_KEY_STORE_V1);
+          if (legacy) {
+            setAiKey(legacy);
+            setKeyDraft(legacy);
+            AsyncStorage.setItem(AI_KEY_STORE, JSON.stringify({ key: legacy, provider: 'anthropic', model: '' })).catch(() => {});
+            AsyncStorage.removeItem(AI_KEY_STORE_V1).catch(() => {});
+          }
         }
       } catch {
         /* storage unavailable — key just won't persist */
@@ -884,8 +918,12 @@ export default function TerminalScreen() {
 
   const saveKey = () => {
     const k = keyDraft.trim();
+    const p = providerDraft;
+    const m = modelDraft.trim();
     setAiKey(k);
-    AsyncStorage.setItem(AI_KEY_STORE, k).catch(() => {});
+    setAiProvider(p);
+    setAiModel(m);
+    AsyncStorage.setItem(AI_KEY_STORE, JSON.stringify({ key: k, provider: p, model: m })).catch(() => {});
     setKeyOpen(false);
     setGenErr(null);
     setNotFound(null);
@@ -893,6 +931,8 @@ export default function TerminalScreen() {
   const clearKey = () => {
     setAiKey('');
     setKeyDraft('');
+    setAiModel('');
+    setModelDraft('');
     AsyncStorage.removeItem(AI_KEY_STORE).catch(() => {});
   };
 
@@ -916,7 +956,7 @@ export default function TerminalScreen() {
     }
     setGenerating(sym);
     api
-      .graph(sym, aiKey || undefined)
+      .graph(sym, aiKey ? { key: aiKey, provider: aiProvider, model: aiModel } : undefined)
       .then((g) => {
         setData(g);
         setCentre(sym);
@@ -962,26 +1002,50 @@ export default function TerminalScreen() {
           activeOpacity={0.75}
         >
           <Text style={[styles.keyBtnTxt, !!aiKey && styles.keyBtnTxtOn]}>
-            ⚙ AI KEY {aiKey ? '✓' : ''}
+            {aiKey ? `⚙ ${activeProvider.label.toUpperCase()} ✓` : '⚙ AI KEY'}
           </Text>
         </TouchableOpacity>
       </View>
       {keyOpen ? (
         <View style={styles.keyPanel}>
           <Text style={styles.keyLabel}>
-            Bring your own Anthropic API key to generate relationship graphs for any listed
-            company. Stored only on this device; sent per request, never saved on the server.
+            Bring your own AI key to generate relationship graphs for any listed company. Pick a
+            provider and paste your key — stored only on this device, sent per request, never saved
+            on the server.
           </Text>
+          <View style={styles.provRow}>
+            {PROVIDERS.map((p) => (
+              <TouchableOpacity
+                key={p.id}
+                style={[styles.provChip, providerDraft === p.id && styles.provChipOn]}
+                onPress={() => setProviderDraft(p.id)}
+                activeOpacity={0.75}
+              >
+                <Text style={[styles.provChipTxt, providerDraft === p.id && styles.provChipTxtOn]}>
+                  {p.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
           <View style={styles.keyRow}>
             <TextInput
               style={styles.keyInput}
               value={keyDraft}
               onChangeText={setKeyDraft}
-              placeholder="sk-ant-…"
+              placeholder={draftProvider.ph}
               placeholderTextColor={theme.muted}
               autoCapitalize="none"
               autoCorrect={false}
               secureTextEntry
+            />
+            <TextInput
+              style={styles.modelInput}
+              value={modelDraft}
+              onChangeText={setModelDraft}
+              placeholder="model (optional)"
+              placeholderTextColor={theme.muted}
+              autoCapitalize="none"
+              autoCorrect={false}
             />
             <TouchableOpacity style={styles.keySave} onPress={saveKey}>
               <Text style={styles.keySaveTxt}>SAVE</Text>
@@ -993,7 +1057,7 @@ export default function TerminalScreen() {
             ) : null}
           </View>
           <Text style={styles.keyHint}>
-            Get a key at console.anthropic.com · keys stay in your browser
+            Get a {draftProvider.label} key at {draftProvider.get} · keys stay in your browser
           </Text>
         </View>
       ) : null}
@@ -1111,7 +1175,31 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   keyLabel: { color: theme.muted2, fontSize: 12, lineHeight: 17 },
-  keyRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  provRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  provChip: {
+    borderColor: theme.border2,
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    backgroundColor: theme.surface2,
+  },
+  provChipOn: { borderColor: theme.accent, backgroundColor: theme.accent },
+  provChipTxt: { color: theme.muted2, fontFamily: theme.mono, fontSize: 12, letterSpacing: 0.5 },
+  provChipTxtOn: { color: theme.bg, fontWeight: '700' },
+  keyRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
+  modelInput: {
+    width: 150,
+    backgroundColor: theme.surface2,
+    borderColor: theme.border2,
+    borderWidth: 1,
+    borderRadius: 6,
+    color: theme.text,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    fontFamily: theme.mono,
+    fontSize: 12,
+  },
   keyInput: {
     flex: 1,
     backgroundColor: theme.surface2,
