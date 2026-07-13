@@ -133,16 +133,19 @@ function graphHtml(data: GraphResp, quotes: LtpResp, centre: string, openIdx: st
         <button class="hlb" id="tg-news" onclick="toggleNews()">◧ NEWS</button>
         <button class="hlb" id="tg-win" onclick="toggleWin()">▤ CHART</button>
         <span style="width:8px"></span>
-        <button class="hlb" id="hl-in" onclick="setHl('in')">INPUTS</button>
-        <button class="hlb" id="hl-out" onclick="setHl('out')">OUTPUTS</button>
+        <button class="hlb" id="hl-in" onclick="setHl('in')">◄ INPUTS</button>
+        <button class="hlb" id="hl-out" onclick="setHl('out')">OUTPUTS ►</button>
         <button class="hlb on" id="hl-all" onclick="setHl('all')">ALL</button>
+        <span style="width:8px"></span>
+        <button class="hlb" id="hl-reset" onclick="resetPos()" title="Reset bubble positions">⟲ RESET</button>
       </div>
       <svg id="svg"></svg>
       <div id="legend">
-        <span class="lg-line" style="border-top-style:solid"></span>supplies →<br>
-        <span class="lg-line" style="border-top-style:dashed"></span>group<br>
-        <span class="lg-line" style="border-top-style:dotted"></span>competitor<br>
-        <span class="lg-line" style="border-top:2px double ${theme.muted2};height:4px"></span>finances
+        <span class="lg-line" style="border-top:2px solid #3fb950"></span>supplies →<br>
+        <span class="lg-line" style="border-top:2px dashed #f5c518"></span>finances →<br>
+        <span class="lg-line" style="border-top:2px dashed #a371f7"></span>group<br>
+        <span class="lg-line" style="border-top:2px dotted #f85149"></span>competitor
+        <div style="margin-top:5px;color:${theme.muted2};font-size:10px">◄ inputs · outputs ► · drag to place · ⟲ reset</div>
       </div>
       <div id="menu"></div>
     </div>
@@ -176,7 +179,10 @@ function graphHtml(data: GraphResp, quotes: LtpResp, centre: string, openIdx: st
   var QUOTES = ${JSON.stringify(quotes)};
   var API = ${JSON.stringify(API_BASE)};
   var centre = ${JSON.stringify(centre)};
-  var DASH = { supplies: null, group: '7,5', competitor: '2,5', finances: '12,3,2,3' };
+  var DASH = { supplies: null, group: '7,5', competitor: '2,5', finances: '11,4' };
+  // Colour is the primary way to tell relationship types apart (dash alone read
+  // as too similar). supplies=green, finances=gold, group=violet, competitor=red.
+  var ECOLOR = { supplies: '#3fb950', finances: '#f5c518', group: '#a371f7', competitor: '#f85149' };
   var svg = d3.select('#svg'), sim = null, hlMode = 'all';
   var linkSel = null, nodeSel = null;
   var histCache = {}, fundCache = {};
@@ -308,21 +314,30 @@ function graphHtml(data: GraphResp, quotes: LtpResp, centre: string, openIdx: st
       svg.transition().duration(250).call(zoomB.transform, t);
     }
     setTimeout(fitAll, 900);
-    svg.append('defs').append('marker').attr('id','arr').attr('viewBox','0 -4 8 8')
-      .attr('refX', 26).attr('markerWidth', 7).attr('markerHeight', 7).attr('orient','auto')
-      .append('path').attr('d','M0,-4L8,0L0,4').attr('fill','${theme.muted}');
+    var defs = svg.append('defs');
+    // One arrow marker per directional type so the arrowhead matches the line.
+    [['sup', ECOLOR.supplies], ['fin', ECOLOR.finances]].forEach(function(m){
+      defs.append('marker').attr('id','arr-'+m[0]).attr('viewBox','0 -4 8 8')
+        .attr('refX', 24).attr('markerWidth', 7).attr('markerHeight', 7).attr('orient','auto')
+        .append('path').attr('d','M0,-4L8,0L0,4').attr('fill', m[1]);
+    });
 
     linkSel = root.selectAll('line').data(g.links).enter().append('line')
-      .attr('stroke', '${theme.muted}').attr('stroke-width', function(d){ return d.e.confidence === 'high' ? 2 : 1.2; })
+      .attr('stroke', function(d){ return ECOLOR[d.e.type] || '${theme.muted}'; })
+      .attr('stroke-width', function(d){ return d.e.confidence === 'high' ? 2.2 : 1.4; })
+      .attr('stroke-opacity', 0.85)
       .attr('stroke-dasharray', function(d){ return DASH[d.e.type]; })
-      .attr('marker-end', function(d){ return (d.e.type === 'supplies' || d.e.type === 'finances') ? 'url(#arr)' : null; });
+      .attr('marker-end', function(d){
+        return d.e.type === 'supplies' ? 'url(#arr-sup)'
+             : d.e.type === 'finances' ? 'url(#arr-fin)' : null; });
 
     nodeSel = root.selectAll('g.n').data(g.nodes).enter().append('g').attr('class','n')
       .style('cursor','pointer')
       .call(d3.drag()
-        .on('start', function(ev,d){ if(!ev.active) sim.alphaTarget(0.25).restart(); d.fx=d.x; d.fy=d.y; })
-        .on('drag', function(ev,d){ d.fx=ev.x; d.fy=ev.y; })
-        .on('end', function(ev,d){ if(!ev.active) sim.alphaTarget(0); d.fx=null; d.fy=null; }))
+        .on('start', function(ev,d){ if(!ev.active) sim.alphaTarget(0.15).restart(); d.fx=d.x; d.fy=d.y; })
+        .on('drag', function(ev,d){ d.fx=ev.x; d.fy=ev.y; d.pinned=true; })
+        // Keep fx/fy after release so a bubble stays exactly where it was dropped.
+        .on('end', function(ev,d){ if(!ev.active) sim.alphaTarget(0); }))
       .on('click', function(ev,d){ ev.stopPropagation(); showMenu(d, ev.offsetX != null ? ev.offsetX : 40, ev.offsetY != null ? ev.offsetY : 40); });
 
     nodeSel.append('circle')
@@ -341,10 +356,29 @@ function graphHtml(data: GraphResp, quotes: LtpResp, centre: string, openIdx: st
     nodeSel.append('text').text(function(d){ return d.id === centre ? '' : d.deg; })
       .attr('text-anchor','middle').attr('dy', 4).attr('fill','${theme.muted2}').attr('font-size', 10);
 
+    // Directional layout: suppliers (INPUTS) settle on the left, customers
+    // (OUTPUTS) on the right, with the pinned centre in the middle. Nodes that
+    // are neither flow direction (group/competitor only, or both) stay central.
+    function sideOf(id){
+      if (id === centre) return 0;
+      var isIn = false, isOut = false;
+      DATA.edges.forEach(function(e){
+        if (e.type !== 'supplies' && e.type !== 'finances') return;
+        if (e.src === id && e.dst === centre) isIn = true;   // id supplies centre
+        if (e.src === centre && e.dst === id) isOut = true;  // centre supplies id
+      });
+      return (isIn && !isOut) ? -1 : (isOut && !isIn) ? 1 : 0;
+    }
+    g.nodes.forEach(function(n){ n.side = sideOf(n.id); });
+    var cnode = g.nodes.find(function(n){ return n.id === centre; });
+    if (cnode) { cnode.fx = Wd/2; cnode.fy = H/2; }   // pin the centre
+
     sim = d3.forceSimulation(g.nodes)
       .force('link', d3.forceLink(g.links).id(function(d){ return d.id; }).distance(150))
-      .force('charge', d3.forceManyBody().strength(-600))
-      .force('center', d3.forceCenter(Wd/2, H/2))
+      .force('charge', d3.forceManyBody().strength(-620))
+      .force('x', d3.forceX(function(d){ return Wd/2 + d.side * Wd * 0.30; })
+                    .strength(function(d){ return d.side === 0 ? 0.02 : 0.28; }))
+      .force('y', d3.forceY(H/2).strength(0.04))
       .force('collide', d3.forceCollide(46))
       .on('tick', function(){
         linkSel.attr('x1', function(d){ return d.source.x; }).attr('y1', function(d){ return d.source.y; })
@@ -353,6 +387,18 @@ function graphHtml(data: GraphResp, quotes: LtpResp, centre: string, openIdx: st
       });
     applyHl();
   }
+
+  // Clear all manual placements (and re-pin the centre), then re-run the layout.
+  window.resetPos = function(){
+    if (!sim || !nodeSel) return;
+    var Wd = document.getElementById('gwrap').clientWidth || 800;
+    var H  = document.getElementById('gwrap').clientHeight || 600;
+    nodeSel.each(function(d){
+      if (d.id === centre) { d.fx = Wd/2; d.fy = H/2; }
+      else { d.fx = null; d.fy = null; d.pinned = false; }
+    });
+    sim.alpha(0.9).restart();
+  };
 
   // ════ floating window ════
   function winEl(){ return document.getElementById('win'); }
