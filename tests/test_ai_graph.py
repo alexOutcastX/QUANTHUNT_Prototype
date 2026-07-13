@@ -160,14 +160,23 @@ class SeedGraphTest(unittest.TestCase):
     def test_unknown_symbol_not_in_seed(self):
         self.assertIsNone(self.ai.cached_graph("NOPE"))
 
-    def test_ai_graph_beats_seed(self):
-        # A BYOK/AI-generated graph (src="ai") must not be overwritten by the seed.
+    def test_rich_ai_graph_beats_seed(self):
+        # A BYOK/AI-generated graph at least as rich as the seed is preserved.
         self.ai._cache = {"ZZZ": {"ts": 9_999_999_999, "src": "ai",
                                   "companies": {"ZZZ": {"name": "Real", "listed": True}},
-                                  "edges": []}}
+                                  "edges": [{"src": "ZZZ", "dst": "A", "type": "supplies"}] * 5}}
         self.ai._merge_seed()
         self.assertEqual(self.ai._cache["ZZZ"]["companies"]["ZZZ"]["name"], "Real")
         self.assertEqual(self.ai._cache["ZZZ"].get("src"), "ai")
+
+    def test_sparse_ai_entry_refreshed_from_seed(self):
+        # A stale, sparse AI entry must not shadow the fuller curated seed.
+        self.ai._cache = {"ZZZ": {"ts": 9_999_999_999, "src": "ai",
+                                  "companies": {"ZZZ": {"name": "Stale", "listed": True}},
+                                  "edges": [{"src": "ZZZ", "dst": "A", "type": "supplies"}]}}
+        self.ai._merge_seed()
+        self.assertEqual(len(self.ai._cache["ZZZ"]["edges"]), 3)
+        self.assertEqual(self.ai._cache["ZZZ"].get("src"), "seed")
 
     def test_legacy_entry_refreshed_from_seed(self):
         # A stale legacy entry (no src marker) is replaced by the curated seed so
