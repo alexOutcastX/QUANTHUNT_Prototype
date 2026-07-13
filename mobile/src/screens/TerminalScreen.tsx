@@ -141,10 +141,10 @@ function graphHtml(data: GraphResp, quotes: LtpResp, centre: string, openIdx: st
       </div>
       <svg id="svg"></svg>
       <div id="legend">
-        <span class="lg-line" style="border-top:2px solid #3fb950"></span>supplies →<br>
-        <span class="lg-line" style="border-top:2px dashed #f5c518"></span>finances →<br>
-        <span class="lg-line" style="border-top:2px dashed #a371f7"></span>group<br>
-        <span class="lg-line" style="border-top:2px dotted #f85149"></span>competitor
+        <span class="lg-line" style="border-top:2px solid #3fb950"></span>input — supplies in →<br>
+        <span class="lg-line" style="border-top:2px solid #f85149"></span>output — supplies out →<br>
+        <span class="lg-line" style="border-top:2px dashed ${theme.muted}"></span>group<br>
+        <span class="lg-line" style="border-top:2px dotted ${theme.muted}"></span>competitor
         <div style="margin-top:5px;color:${theme.muted2};font-size:10px">◄ inputs · outputs ► · drag to place · ⟲ reset</div>
       </div>
       <div id="menu"></div>
@@ -180,9 +180,11 @@ function graphHtml(data: GraphResp, quotes: LtpResp, centre: string, openIdx: st
   var API = ${JSON.stringify(API_BASE)};
   var centre = ${JSON.stringify(centre)};
   var DASH = { supplies: null, group: '7,5', competitor: '2,5', finances: '11,4' };
-  // Colour is the primary way to tell relationship types apart (dash alone read
-  // as too similar). supplies=green, finances=gold, group=violet, competitor=red.
-  var ECOLOR = { supplies: '#3fb950', finances: '#f5c518', group: '#a371f7', competitor: '#f85149' };
+  // Colour encodes flow DIRECTION relative to the centre only: inputs (things
+  // that supply/finance the centre) are green, outputs (things the centre
+  // supplies/finances) are red. Everything else (group, competitor, or links
+  // between two neighbours) stays neutral grey — not colour-coded.
+  var CIN = '#3fb950', COUT = '#f85149', CNEUTRAL = '${theme.muted}';
   var svg = d3.select('#svg'), sim = null, hlMode = 'all';
   var linkSel = null, nodeSel = null;
   var histCache = {}, fundCache = {};
@@ -315,21 +317,23 @@ function graphHtml(data: GraphResp, quotes: LtpResp, centre: string, openIdx: st
     }
     setTimeout(fitAll, 900);
     var defs = svg.append('defs');
-    // One arrow marker per directional type so the arrowhead matches the line.
-    [['sup', ECOLOR.supplies], ['fin', ECOLOR.finances]].forEach(function(m){
+    // Arrowheads match the flow direction: green in, red out, grey otherwise.
+    [['in', CIN], ['out', COUT], ['n', CNEUTRAL]].forEach(function(m){
       defs.append('marker').attr('id','arr-'+m[0]).attr('viewBox','0 -4 8 8')
         .attr('refX', 24).attr('markerWidth', 7).attr('markerHeight', 7).attr('orient','auto')
         .append('path').attr('d','M0,-4L8,0L0,4').attr('fill', m[1]);
     });
+    function edgeColor(e){ return edgeIsIn(e) ? CIN : edgeIsOut(e) ? COUT : CNEUTRAL; }
 
     linkSel = root.selectAll('line').data(g.links).enter().append('line')
-      .attr('stroke', function(d){ return ECOLOR[d.e.type] || '${theme.muted}'; })
+      .attr('stroke', function(d){ return edgeColor(d.e); })
       .attr('stroke-width', function(d){ return d.e.confidence === 'high' ? 2.2 : 1.4; })
-      .attr('stroke-opacity', 0.85)
+      .attr('stroke-opacity', function(d){ return (edgeIsIn(d.e) || edgeIsOut(d.e)) ? 0.9 : 0.5; })
       .attr('stroke-dasharray', function(d){ return DASH[d.e.type]; })
       .attr('marker-end', function(d){
-        return d.e.type === 'supplies' ? 'url(#arr-sup)'
-             : d.e.type === 'finances' ? 'url(#arr-fin)' : null; });
+        if (edgeIsIn(d.e)) return 'url(#arr-in)';
+        if (edgeIsOut(d.e)) return 'url(#arr-out)';
+        return (d.e.type === 'supplies' || d.e.type === 'finances') ? 'url(#arr-n)' : null; });
 
     nodeSel = root.selectAll('g.n').data(g.nodes).enter().append('g').attr('class','n')
       .style('cursor','pointer')
