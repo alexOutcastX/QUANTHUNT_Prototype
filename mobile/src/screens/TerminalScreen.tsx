@@ -4,9 +4,11 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_BASE, GraphResp, LtpResp, api } from '../api';
 import { resolveIndex } from '../indices';
 import HtmlView from '../components/HtmlView';
@@ -827,11 +829,14 @@ function graphHtml(data: GraphResp, quotes: LtpResp, centre: string, openIdx: st
 </script></body></html>`;
 }
 
+const AI_KEY_STORE = 'taureye.aikey.v1';
+
 export default function TerminalScreen() {
   const [data, setData] = useState<GraphResp | null>(null);
   const [quotes, setQuotes] = useState<LtpResp>({});
-  const [centre, setCentre] = useState('TMCV');
-  const [input, setInput] = useState('TMCV');
+  // Blank until the user picks a stock — no company is centred on load.
+  const [centre, setCentre] = useState('');
+  const [input, setInput] = useState('');
   const [err, setErr] = useState<string | null>(null);
   const [notFound, setNotFound] = useState<string | null>(null);
   const [chips, setChips] = useState<string[]>([]);
@@ -839,6 +844,11 @@ export default function TerminalScreen() {
   const [generating, setGenerating] = useState<string | null>(null);
   const [genErr, setGenErr] = useState<string | null>(null);
   const [idxCmd, setIdxCmd] = useState<{ name: string; n: number } | null>(null);
+  // BYOK: the visitor's own Anthropic key, kept only in local storage.
+  const [aiKey, setAiKey] = useState('');
+  const [keyOpen, setKeyOpen] = useState(false);
+  const [keyDraft, setKeyDraft] = useState('');
+  const aiEnabled = aiOn || !!aiKey;
 
   const loadQuotes = (g: GraphResp) => {
     const listed = Object.entries(g.companies)
@@ -850,6 +860,17 @@ export default function TerminalScreen() {
   useEffect(() => {
     (async () => {
       try {
+        const saved = await AsyncStorage.getItem(AI_KEY_STORE);
+        if (saved) {
+          setAiKey(saved);
+          setKeyDraft(saved);
+        }
+      } catch {
+        /* storage unavailable — key just won't persist */
+      }
+      try {
+        // Load the curated set for the quick-pick chips and the server AI flag,
+        // but stay blank until the user selects a stock.
         const g = await api.graph();
         setData(g);
         setChips(g.available);
@@ -860,6 +881,20 @@ export default function TerminalScreen() {
       }
     })();
   }, []);
+
+  const saveKey = () => {
+    const k = keyDraft.trim();
+    setAiKey(k);
+    AsyncStorage.setItem(AI_KEY_STORE, k).catch(() => {});
+    setKeyOpen(false);
+    setGenErr(null);
+    setNotFound(null);
+  };
+  const clearKey = () => {
+    setAiKey('');
+    setKeyDraft('');
+    AsyncStorage.removeItem(AI_KEY_STORE).catch(() => {});
+  };
 
   // Centre a symbol: in the loaded graph → recentre; known to the backend
   // (curated or AI with a server key) → fetch its graph; else explain.
@@ -881,7 +916,7 @@ export default function TerminalScreen() {
     }
     setGenerating(sym);
     api
-      .graph(sym)
+      .graph(sym, aiKey || undefined)
       .then((g) => {
         setData(g);
         setCentre(sym);
@@ -894,7 +929,7 @@ export default function TerminalScreen() {
   const go = () => select(input);
 
   const html = useMemo(
-    () => (data ? graphHtml(data, quotes, centre, idxCmd?.name || null, data.source === 'minimal') : ''),
+    () => (data && centre ? graphHtml(data, quotes, centre, idxCmd?.name || null, data.source === 'minimal') : ''),
     [data, quotes, centre, idxCmd],
   );
 
@@ -910,10 +945,58 @@ export default function TerminalScreen() {
           TAUREYE TERMINAL{' '}
           <Text style={styles.titleDim}>
             · RELATIONSHIP GRAPH ·{' '}
-            {data?.source === 'ai' ? 'AI GRAPH' : data?.source === 'minimal' ? 'LIVE DATA' : aiOn ? 'CURATED + AI' : 'DEMO DATA'}
+            {!centre
+              ? 'SELECT A STOCK'
+              : data?.source === 'ai'
+                ? 'AI GRAPH'
+                : data?.source === 'minimal'
+                  ? 'LIVE DATA'
+                  : aiEnabled
+                    ? 'CURATED + AI'
+                    : 'DEMO DATA'}
           </Text>
         </Text>
+        <TouchableOpacity
+          style={[styles.keyBtn, !!aiKey && styles.keyBtnOn]}
+          onPress={() => setKeyOpen((v) => !v)}
+          activeOpacity={0.75}
+        >
+          <Text style={[styles.keyBtnTxt, !!aiKey && styles.keyBtnTxtOn]}>
+            ⚙ AI KEY {aiKey ? '✓' : ''}
+          </Text>
+        </TouchableOpacity>
       </View>
+      {keyOpen ? (
+        <View style={styles.keyPanel}>
+          <Text style={styles.keyLabel}>
+            Bring your own Anthropic API key to generate relationship graphs for any listed
+            company. Stored only on this device; sent per request, never saved on the server.
+          </Text>
+          <View style={styles.keyRow}>
+            <TextInput
+              style={styles.keyInput}
+              value={keyDraft}
+              onChangeText={setKeyDraft}
+              placeholder="sk-ant-…"
+              placeholderTextColor={theme.muted}
+              autoCapitalize="none"
+              autoCorrect={false}
+              secureTextEntry
+            />
+            <TouchableOpacity style={styles.keySave} onPress={saveKey}>
+              <Text style={styles.keySaveTxt}>SAVE</Text>
+            </TouchableOpacity>
+            {aiKey ? (
+              <TouchableOpacity style={styles.keyClear} onPress={clearKey}>
+                <Text style={styles.keyClearTxt}>CLEAR</Text>
+              </TouchableOpacity>
+            ) : null}
+          </View>
+          <Text style={styles.keyHint}>
+            Get a key at console.anthropic.com · keys stay in your browser
+          </Text>
+        </View>
+      ) : null}
       <View style={styles.cmdRow}>
         <Text style={styles.prompt}>{'>'}</Text>
         <SymbolInput
@@ -949,7 +1032,7 @@ export default function TerminalScreen() {
       ) : null}
       {notFound ? (
         <Text style={styles.warn}>
-          {notFound} isn't in the curated demo set — set ANTHROPIC_API_KEY on the server to unlock
+          {notFound} isn't in the curated set — add your Anthropic API key (⚙ AI KEY) to unlock
           AI graphs for any company.
         </Text>
       ) : null}
@@ -971,6 +1054,15 @@ export default function TerminalScreen() {
           <View style={styles.center}>
             <ActivityIndicator color={theme.accent} />
           </View>
+        ) : !centre ? (
+          <View style={styles.center}>
+            <Text style={styles.emptyIcon}>⌾</Text>
+            <Text style={styles.emptyTitle}>Please select a stock</Text>
+            <Text style={styles.emptyHint}>
+              Type a symbol above or tap a chip to open its relationship graph, live chart,
+              fundamentals and news.
+            </Text>
+          </View>
         ) : (
           <HtmlView
             key={centre + data.source + Object.keys(quotes).length + ':' + (idxCmd?.n || 0)}
@@ -987,9 +1079,65 @@ export default function TerminalScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.bg },
-  head: { paddingHorizontal: 14, paddingTop: 12 },
-  title: { color: theme.text, fontFamily: theme.mono, fontSize: 13, fontWeight: '700', letterSpacing: 1 },
+  head: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 14,
+    paddingTop: 12,
+    gap: 8,
+  },
+  title: { color: theme.text, fontFamily: theme.mono, fontSize: 13, fontWeight: '700', letterSpacing: 1, flex: 1 },
   titleDim: { color: theme.muted, fontWeight: '400' },
+  keyBtn: {
+    borderColor: theme.border2,
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    backgroundColor: theme.surface2,
+  },
+  keyBtnOn: { borderColor: theme.accent, backgroundColor: theme.accent },
+  keyBtnTxt: { color: theme.muted2, fontFamily: theme.mono, fontSize: 11, letterSpacing: 1 },
+  keyBtnTxtOn: { color: theme.bg, fontWeight: '700' },
+  keyPanel: {
+    marginHorizontal: 14,
+    marginTop: 8,
+    padding: 12,
+    backgroundColor: theme.surface,
+    borderColor: theme.border2,
+    borderWidth: 1,
+    borderRadius: 8,
+    gap: 8,
+  },
+  keyLabel: { color: theme.muted2, fontSize: 12, lineHeight: 17 },
+  keyRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  keyInput: {
+    flex: 1,
+    backgroundColor: theme.surface2,
+    borderColor: theme.border2,
+    borderWidth: 1,
+    borderRadius: 6,
+    color: theme.text,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    fontFamily: theme.mono,
+    fontSize: 13,
+  },
+  keySave: { backgroundColor: theme.accent, borderRadius: 6, paddingHorizontal: 14, paddingVertical: 9 },
+  keySaveTxt: { color: theme.bg, fontFamily: theme.mono, fontWeight: '700', fontSize: 12 },
+  keyClear: {
+    borderColor: theme.border2,
+    borderWidth: 1,
+    borderRadius: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  keyClearTxt: { color: theme.muted2, fontFamily: theme.mono, fontSize: 12 },
+  keyHint: { color: theme.muted, fontSize: 11, fontFamily: theme.mono },
+  emptyIcon: { color: theme.border2, fontSize: 46, marginBottom: 10 },
+  emptyTitle: { color: theme.text, fontSize: 16, fontWeight: '700', marginBottom: 8 },
+  emptyHint: { color: theme.muted, fontSize: 12, textAlign: 'center', paddingHorizontal: 40, lineHeight: 18 },
   cmdRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14, paddingTop: 10, zIndex: 50 },
   prompt: { color: theme.accent, fontFamily: theme.mono, fontSize: 16, fontWeight: '700' },
   cmd: {
