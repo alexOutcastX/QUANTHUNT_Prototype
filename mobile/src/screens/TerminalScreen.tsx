@@ -19,7 +19,7 @@ import { theme } from '../theme';
 // draggable, resizable, closeable multi-tab window (company chart +
 // screener.in fundamentals, and a comparison report). All interaction lives
 // inside the frame; state persists to localStorage across frame rebuilds.
-function graphHtml(data: GraphResp, quotes: LtpResp, centre: string, openIdx: string | null, autoWin: boolean): string {
+function graphHtml(data: GraphResp, quotes: LtpResp, centre: string, openIdx: string | null, autoWin: boolean, aiOn: boolean): string {
   return `<!DOCTYPE html><html><head>
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
 <style>
@@ -29,6 +29,9 @@ function graphHtml(data: GraphResp, quotes: LtpResp, centre: string, openIdx: st
   #gwrap{flex:1;position:relative;overflow:hidden;min-width:120px;min-height:120px}
   svg{width:100%;height:100%;display:block}
   #panel{width:330px;border-left:1px solid ${theme.border};overflow-y:auto;padding:16px;box-sizing:border-box}
+  .aistat{font-size:11px;font-weight:700;letter-spacing:0.5px;padding:7px 10px;border-radius:6px;margin:0 0 12px;border:1px solid}
+  .aistat.ok{color:${theme.green};border-color:${theme.green}55;background:${theme.green}14}
+  .aistat.warn{color:#f5c518;border-color:#f5c51855;background:#f5c51814}
   .ph{color:${theme.text};font-size:16px;font-weight:700;margin:0 0 2px}
   .ps{color:${theme.muted};font-size:11px;margin:0 0 12px}
   .sec{color:${theme.muted2};font-size:11px;letter-spacing:1px;text-transform:uppercase;margin:14px 0 6px;border-bottom:1px solid ${theme.border};padding-bottom:4px}
@@ -169,6 +172,7 @@ function graphHtml(data: GraphResp, quotes: LtpResp, centre: string, openIdx: st
   var DATA = ${JSON.stringify({ companies: data.companies, edges: data.edges })};
   var OPENIDX = ${JSON.stringify(openIdx)};
   var AUTOWIN = ${JSON.stringify(!!autoWin)};
+  var AION = ${JSON.stringify(!!aiOn)};
   var QUOTES = ${JSON.stringify(quotes)};
   var API = ${JSON.stringify(API_BASE)};
   var centre = ${JSON.stringify(centre)};
@@ -223,7 +227,12 @@ function graphHtml(data: GraphResp, quotes: LtpResp, centre: string, openIdx: st
   function panelHtml(c) {
     var comp = DATA.companies[c] || { name: c };
     var q = fmtPrice(c);
-    var h = '<p class="ph">' + comp.name + '</p><p class="ps">' + c +
+    // AI-key status: green when a key (server or the user's BYOK) is connected,
+    // yellow warning when none — AI graphs for off-list companies need one.
+    var h = AION
+      ? '<div class="aistat ok">● API connected</div>'
+      : '<div class="aistat warn">⚠ No API key connected</div>';
+    h += '<p class="ph">' + comp.name + '</p><p class="ps">' + c +
       (q ? ' · <span style="color:' + (q.up ? '${theme.green}' : '${theme.red}') + '">' + q.txt + '</span>' : '') +
       (comp.listed === false ? ' · unlisted' : '') + '</p>';
     function block(title, list, who) {
@@ -850,7 +859,6 @@ export default function TerminalScreen() {
   const [input, setInput] = useState('');
   const [err, setErr] = useState<string | null>(null);
   const [notFound, setNotFound] = useState<string | null>(null);
-  const [chips, setChips] = useState<string[]>([]);
   const [aiOn, setAiOn] = useState(false);
   const [generating, setGenerating] = useState<string | null>(null);
   const [genErr, setGenErr] = useState<string | null>(null);
@@ -903,11 +911,10 @@ export default function TerminalScreen() {
         /* storage unavailable — key just won't persist */
       }
       try {
-        // Load the curated set for the quick-pick chips and the server AI flag,
+        // Load the curated set (for the fallback universe + server AI flag),
         // but stay blank until the user selects a stock.
         const g = await api.graph();
         setData(g);
-        setChips(g.available);
         setAiOn(!!g.ai);
         loadQuotes(g);
       } catch (e) {
@@ -969,8 +976,8 @@ export default function TerminalScreen() {
   const go = () => select(input);
 
   const html = useMemo(
-    () => (data && centre ? graphHtml(data, quotes, centre, idxCmd?.name || null, data.source === 'minimal') : ''),
-    [data, quotes, centre, idxCmd],
+    () => (data && centre ? graphHtml(data, quotes, centre, idxCmd?.name || null, data.source === 'minimal', aiEnabled) : ''),
+    [data, quotes, centre, idxCmd, aiEnabled],
   );
 
   // Messages posted by the embedded workspace (index rows → open a graph).
@@ -1076,24 +1083,6 @@ export default function TerminalScreen() {
           <Text style={styles.goTxt}>GO</Text>
         </TouchableOpacity>
       </View>
-      {data ? (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipScroll} contentContainerStyle={styles.chips}>
-          {['NIFTY 50', 'NIFTY BANK', 'NIFTY IT', 'MIDCAP 100', 'LARGE CAP', 'MID CAP', 'SMALL CAP'].map((n) => (
-            <TouchableOpacity key={n} style={[styles.chip, styles.idxChip]} onPress={() => select(n)} activeOpacity={0.75}>
-              <Text style={styles.chipTxt}>∿ {n}</Text>
-            </TouchableOpacity>
-          ))}
-          {chips.map((t) => (
-            <TouchableOpacity
-              key={t}
-              style={[styles.chip, t === centre && styles.chipOn]}
-              onPress={() => select(t)}
-            >
-              <Text style={[styles.chipTxt, t === centre && styles.chipTxtOn]}>{t}</Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-      ) : null}
       {notFound ? (
         <Text style={styles.warn}>
           {notFound} isn't in the curated set — add your Anthropic API key (⚙ AI KEY) to unlock
@@ -1129,7 +1118,7 @@ export default function TerminalScreen() {
           </View>
         ) : (
           <HtmlView
-            key={centre + data.source + Object.keys(quotes).length + ':' + (idxCmd?.n || 0)}
+            key={centre + data.source + Object.keys(quotes).length + ':' + (idxCmd?.n || 0) + ':' + (aiEnabled ? 1 : 0)}
             html={html}
             style={styles.web}
             onMessage={onFrameMessage}
