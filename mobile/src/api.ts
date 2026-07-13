@@ -223,12 +223,15 @@ export type GraphResp = {
 
 // Graph fetch is special-cased: AI generation can take ~15s+ on a cache miss,
 // and error responses carry a user-facing `detail` worth surfacing.
-async function fetchGraph(symbol?: string): Promise<GraphResp> {
+async function fetchGraph(symbol?: string, aiKey?: string): Promise<GraphResp> {
   const path = '/graph' + (symbol ? '?symbol=' + encodeURIComponent(symbol) : '');
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 120000);
   try {
-    const res = await fetch(API_BASE + path, { signal: ctrl.signal });
+    // BYOK: forward the user's own Anthropic key so AI graphs work on any
+    // deployment. Sent per-request only; the server never stores or logs it.
+    const headers = aiKey ? { 'X-AI-Key': aiKey } : undefined;
+    const res = await fetch(API_BASE + path, { signal: ctrl.signal, headers });
     const body = (await res.json().catch(() => null)) as
       | (GraphResp & { detail?: string })
       | null;
@@ -469,7 +472,7 @@ export const api = {
     ),
   fundamentals: (symbol: string) =>
     getJson<Fundamentals>('/fundamentals?symbol=' + encodeURIComponent(symbol)),
-  graph: (symbol?: string) => fetchGraph(symbol),
+  graph: (symbol?: string, aiKey?: string) => fetchGraph(symbol, aiKey),
   indexConstituents: (name: string) =>
     getJson<IndexResp>('/index?name=' + encodeURIComponent(name)),
   // /returns caps at 50 symbols/call; batch and merge.

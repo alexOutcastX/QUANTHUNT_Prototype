@@ -1099,7 +1099,10 @@ def relationship_graph():
     covers so the hand-checked cluster stays authoritative.
     """
     sym = request.args.get("symbol", "").strip().upper()
-    ai_ok = _ai.available()
+    # BYOK: the visitor may bring their own Anthropic key (sent as a header,
+    # never logged or stored) so AI graphs work even with no server key.
+    user_key = request.headers.get("X-AI-Key", "").strip()
+    ai_ok = _ai.available() or bool(user_key)
     base = _relations.graph()
     base["ai"] = ai_ok
     if not sym or sym in base["companies"]:
@@ -1115,8 +1118,8 @@ def relationship_graph():
             name = f.get("name") or sym
         except Exception:
             pass
-        note = ("Relationship edges for this company need the AI graph — set "
-                "ANTHROPIC_API_KEY on the server to unlock them." if reason == "no-key"
+        note = ("Relationship edges for this company need the AI graph — add your "
+                "Anthropic API key from the ⚙ AI KEY field to unlock them." if reason == "no-key"
                 else "Couldn't build a relationship graph right now — showing the "
                      "company's live data instead.")
         return jsonify({
@@ -1128,18 +1131,23 @@ def relationship_graph():
     if not ai_ok:
         return _minimal("no-key")
 
-    # Uncached generations burn API tokens — cap them per IP.
+    # Uncached generations burn API tokens — cap them per IP, but only when the
+    # server's own key pays for it. BYOK requests spend the user's own tokens.
     cached = _ai._load().get(sym)
-    if not (cached and time.time() - cached.get("ts", 0) < _ai.TTL):
+    if not user_key and not (cached and time.time() - cached.get("ts", 0) < _ai.TTL):
         retry = _rl_hit("graph-ai", 10, 3600)
         if retry is not None:
             return jsonify({"error": "rate-limited", "ai": True,
                             "detail": "Graph-generation limit reached — retry in %d min."
                                       % max(1, retry // 60)}), 429
     try:
-        g = _ai.get_graph(sym)
+        g = _ai.get_graph(sym, user_key)
     except Exception as e:
         logging.warning("AI graph generation failed for %s: %s", sym, e)
+        if user_key:
+            return jsonify({"error": "ai-key-failed", "ai": True,
+                            "detail": "Couldn't generate with your API key — check it's "
+                                      "valid, has credit, and try again."}), 400
         return _minimal("gen-failed")  # still centre on the company with its data
     listed = sorted(k for k, v in g["companies"].items() if v.get("listed"))
     return jsonify({"companies": g["companies"], "edges": g["edges"],
