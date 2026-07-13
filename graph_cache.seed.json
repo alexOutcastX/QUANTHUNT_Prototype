@@ -1,0 +1,7013 @@
+{
+ "ADANIENT": {
+  "companies": {
+   "ACC": {
+    "listed": true,
+    "name": "ACC Ltd"
+   },
+   "ADANIENSOL": {
+    "listed": true,
+    "name": "Adani Energy Solutions Ltd"
+   },
+   "ADANIENT": {
+    "listed": true,
+    "name": "Adani Enterprises Ltd"
+   },
+   "ADANIGREEN": {
+    "listed": true,
+    "name": "Adani Green Energy Ltd"
+   },
+   "ADANIPORTS": {
+    "listed": true,
+    "name": "Adani Ports & SEZ Ltd"
+   },
+   "ADANIPOWER": {
+    "listed": true,
+    "name": "Adani Power Ltd"
+   },
+   "AMBUJACEM": {
+    "listed": true,
+    "name": "Ambuja Cements Ltd"
+   },
+   "ATGL": {
+    "listed": true,
+    "name": "Adani Total Gas Ltd"
+   },
+   "AWL": {
+    "listed": true,
+    "name": "AWL Agri Business Ltd"
+   },
+   "COALINDIA": {
+    "listed": true,
+    "name": "Coal India Ltd"
+   },
+   "NDTV": {
+    "listed": true,
+    "name": "New Delhi Television Ltd"
+   },
+   "NTPC": {
+    "listed": true,
+    "name": "NTPC Ltd"
+   },
+   "SBIN": {
+    "listed": true,
+    "name": "State Bank of India"
+   }
+  },
+  "edges": [
+   {
+    "confidence": "high",
+    "dst": "ADANIPORTS",
+    "note": "Adani Group flagship and ports arm",
+    "src": "ADANIENT",
+    "type": "group"
+   },
+   {
+    "confidence": "high",
+    "dst": "ADANIPOWER",
+    "note": "Same Adani promoter group",
+    "src": "ADANIENT",
+    "type": "group"
+   },
+   {
+    "confidence": "high",
+    "dst": "ADANIGREEN",
+    "note": "Incubated by and part of Adani Group",
+    "src": "ADANIENT",
+    "type": "group"
+   },
+   {
+    "confidence": "high",
+    "dst": "ADANIENSOL",
+    "note": "Adani Group transmission and distribution arm",
+    "src": "ADANIENT",
+    "type": "group"
+   },
+   {
+    "confidence": "high",
+    "dst": "ATGL",
+    "note": "Adani Group city gas distribution arm",
+    "src": "ADANIENT",
+    "type": "group"
+   },
+   {
+    "confidence": "high",
+    "dst": "AMBUJACEM",
+    "note": "Adani-controlled cement company",
+    "src": "ADANIENT",
+    "type": "group"
+   },
+   {
+    "confidence": "high",
+    "dst": "ACC",
+    "note": "Adani-controlled cement subsidiary via Ambuja",
+    "src": "ADANIENT",
+    "type": "group"
+   },
+   {
+    "confidence": "high",
+    "dst": "AWL",
+    "note": "Adani-Wilmar edible oil venture",
+    "src": "ADANIENT",
+    "type": "group"
+   },
+   {
+    "confidence": "high",
+    "dst": "NDTV",
+    "note": "Adani Group controls NDTV",
+    "src": "ADANIENT",
+    "type": "group"
+   },
+   {
+    "confidence": "medium",
+    "dst": "COALINDIA",
+    "note": "Competes in coal mining and trading",
+    "src": "ADANIENT",
+    "type": "competitor"
+   },
+   {
+    "confidence": "low",
+    "dst": "NTPC",
+    "note": "Competes in power generation development",
+    "src": "ADANIENT",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "ADANIENT",
+    "note": "Key lender to Adani Group companies",
+    "src": "SBIN",
+    "type": "finances"
+   }
+  ]
+ },
+ "ADANIPORTS": {
+  "companies": {
+   "ADANIENSOL": {
+    "listed": true,
+    "name": "Adani Energy Solutions Ltd"
+   },
+   "ADANIENT": {
+    "listed": true,
+    "name": "Adani Enterprises Ltd"
+   },
+   "ADANIPORTS": {
+    "listed": true,
+    "name": "Adani Ports & SEZ Ltd"
+   },
+   "ADANIPOWER": {
+    "listed": true,
+    "name": "Adani Power Ltd"
+   },
+   "AMBUJACEM": {
+    "listed": true,
+    "name": "Ambuja Cements Ltd"
+   },
+   "COALINDIA": {
+    "listed": true,
+    "name": "Coal India Ltd"
+   },
+   "CONCOR": {
+    "listed": true,
+    "name": "Container Corporation of India Ltd"
+   },
+   "GPPL": {
+    "listed": true,
+    "name": "Gujarat Pipavav Port Ltd"
+   },
+   "JSWINFRA": {
+    "listed": true,
+    "name": "JSW Infrastructure Ltd"
+   },
+   "JSWSTEEL": {
+    "listed": true,
+    "name": "JSW Steel Ltd"
+   },
+   "SBIN": {
+    "listed": true,
+    "name": "State Bank of India"
+   }
+  },
+  "edges": [
+   {
+    "confidence": "high",
+    "dst": "ADANIPORTS",
+    "note": "Adani Group flagship holding structure",
+    "src": "ADANIENT",
+    "type": "group"
+   },
+   {
+    "confidence": "high",
+    "dst": "ADANIPOWER",
+    "note": "Same Adani promoter group",
+    "src": "ADANIPORTS",
+    "type": "group"
+   },
+   {
+    "confidence": "medium",
+    "dst": "ADANIPOWER",
+    "note": "Handles coal imports for power plants",
+    "src": "ADANIPORTS",
+    "type": "supplies"
+   },
+   {
+    "confidence": "medium",
+    "dst": "AMBUJACEM",
+    "note": "Port and logistics services for cement group",
+    "src": "ADANIPORTS",
+    "type": "supplies"
+   },
+   {
+    "confidence": "high",
+    "dst": "ADANIENSOL",
+    "note": "Same Adani promoter group",
+    "src": "ADANIPORTS",
+    "type": "group"
+   },
+   {
+    "confidence": "high",
+    "dst": "ADANIPORTS",
+    "note": "Rival private port operator",
+    "src": "JSWINFRA",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "ADANIPORTS",
+    "note": "Competing Gujarat port operator",
+    "src": "GPPL",
+    "type": "competitor"
+   },
+   {
+    "confidence": "medium",
+    "dst": "ADANIPORTS",
+    "note": "Competes in container logistics",
+    "src": "CONCOR",
+    "type": "competitor"
+   },
+   {
+    "confidence": "low",
+    "dst": "COALINDIA",
+    "note": "Provides coal cargo handling capacity",
+    "src": "ADANIPORTS",
+    "type": "supplies"
+   },
+   {
+    "confidence": "low",
+    "dst": "JSWSTEEL",
+    "note": "Port handling for steel raw materials",
+    "src": "ADANIPORTS",
+    "type": "supplies"
+   },
+   {
+    "confidence": "high",
+    "dst": "ADANIPORTS",
+    "note": "Lender to Adani Ports",
+    "src": "SBIN",
+    "type": "finances"
+   }
+  ]
+ },
+ "APOLLOHOSP": {
+  "companies": {
+   "APOLLOHOSP": {
+    "listed": true,
+    "name": "Apollo Hospitals Enterprise Ltd"
+   },
+   "CIPLA": {
+    "listed": true,
+    "name": "Cipla Ltd"
+   },
+   "DRREDDY": {
+    "listed": true,
+    "name": "Dr. Reddy's Laboratories Ltd"
+   },
+   "FORTIS": {
+    "listed": true,
+    "name": "Fortis Healthcare Ltd"
+   },
+   "GLOBALHEALTH": {
+    "listed": true,
+    "name": "Global Health Ltd (Medanta)"
+   },
+   "KIMS": {
+    "listed": true,
+    "name": "Krishna Institute of Medical Sciences Ltd"
+   },
+   "LALPATHLAB": {
+    "listed": true,
+    "name": "Dr. Lal PathLabs Ltd"
+   },
+   "MAXHEALTH": {
+    "listed": true,
+    "name": "Max Healthcare Institute Ltd"
+   },
+   "METROPOLIS": {
+    "listed": true,
+    "name": "Metropolis Healthcare Ltd"
+   },
+   "NH": {
+    "listed": true,
+    "name": "Narayana Hrudayalaya Ltd"
+   },
+   "RAINBOW": {
+    "listed": true,
+    "name": "Rainbow Children's Medicare Ltd"
+   },
+   "SUNPHARMA": {
+    "listed": true,
+    "name": "Sun Pharmaceutical Industries Ltd"
+   }
+  },
+  "edges": [
+   {
+    "confidence": "medium",
+    "dst": "APOLLOHOSP",
+    "note": "Supplies medicines to hospital and pharmacy channel",
+    "src": "SUNPHARMA",
+    "type": "supplies"
+   },
+   {
+    "confidence": "medium",
+    "dst": "APOLLOHOSP",
+    "note": "Drug supplier to hospitals/Apollo Pharmacy",
+    "src": "CIPLA",
+    "type": "supplies"
+   },
+   {
+    "confidence": "medium",
+    "dst": "APOLLOHOSP",
+    "note": "Pharma supplier to hospital/retail channel",
+    "src": "DRREDDY",
+    "type": "supplies"
+   },
+   {
+    "confidence": "high",
+    "dst": "APOLLOHOSP",
+    "note": "Leading hospital-chain competitor",
+    "src": "FORTIS",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "APOLLOHOSP",
+    "note": "Major private hospital rival",
+    "src": "MAXHEALTH",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "APOLLOHOSP",
+    "note": "Hospital-chain competitor",
+    "src": "NH",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "APOLLOHOSP",
+    "note": "Medanta hospital chain competitor",
+    "src": "GLOBALHEALTH",
+    "type": "competitor"
+   },
+   {
+    "confidence": "medium",
+    "dst": "APOLLOHOSP",
+    "note": "South-India hospital competitor",
+    "src": "KIMS",
+    "type": "competitor"
+   },
+   {
+    "confidence": "low",
+    "dst": "APOLLOHOSP",
+    "note": "Specialty hospital competitor",
+    "src": "RAINBOW",
+    "type": "competitor"
+   },
+   {
+    "confidence": "medium",
+    "dst": "APOLLOHOSP",
+    "note": "Diagnostics rival vs Apollo diagnostics",
+    "src": "METROPOLIS",
+    "type": "competitor"
+   },
+   {
+    "confidence": "medium",
+    "dst": "APOLLOHOSP",
+    "note": "Diagnostics-chain competitor",
+    "src": "LALPATHLAB",
+    "type": "competitor"
+   }
+  ]
+ },
+ "ASIANPAINT": {
+  "companies": {
+   "AKZOINDIA": {
+    "listed": true,
+    "name": "Akzo Nobel India Ltd"
+   },
+   "ASIANPAINT": {
+    "listed": true,
+    "name": "Asian Paints Ltd"
+   },
+   "BERGEPAINT": {
+    "listed": true,
+    "name": "Berger Paints India Ltd"
+   },
+   "DLF": {
+    "listed": true,
+    "name": "DLF Ltd"
+   },
+   "GODREJPROP": {
+    "listed": true,
+    "name": "Godrej Properties Ltd"
+   },
+   "GRASIM": {
+    "listed": true,
+    "name": "Grasim Industries Ltd"
+   },
+   "INDIGOPNTS": {
+    "listed": true,
+    "name": "Indigo Paints Ltd"
+   },
+   "KANSAINER": {
+    "listed": true,
+    "name": "Kansai Nerolac Paints Ltd"
+   },
+   "PIDILITIND": {
+    "listed": true,
+    "name": "Pidilite Industries Ltd"
+   },
+   "PPGAP": {
+    "listed": false,
+    "name": "PPG Asian Paints Pvt Ltd"
+   },
+   "RELIANCE": {
+    "listed": true,
+    "name": "Reliance Industries Ltd"
+   },
+   "TIO2": {
+    "listed": false,
+    "name": "Titanium dioxide pigment suppliers"
+   }
+  },
+  "edges": [
+   {
+    "confidence": "high",
+    "dst": "BERGEPAINT",
+    "note": "#2 decorative paints player in India",
+    "src": "ASIANPAINT",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "KANSAINER",
+    "note": "Leader in automotive and industrial coatings",
+    "src": "ASIANPAINT",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "AKZOINDIA",
+    "note": "Dulux maker, decorative paints rival",
+    "src": "ASIANPAINT",
+    "type": "competitor"
+   },
+   {
+    "confidence": "medium",
+    "dst": "INDIGOPNTS",
+    "note": "Fast-growing decorative paints challenger",
+    "src": "ASIANPAINT",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "GRASIM",
+    "note": "Birla Opus new paints entrant",
+    "src": "ASIANPAINT",
+    "type": "competitor"
+   },
+   {
+    "confidence": "medium",
+    "dst": "PIDILITIND",
+    "note": "Overlap in wall putty and waterproofing",
+    "src": "ASIANPAINT",
+    "type": "competitor"
+   },
+   {
+    "confidence": "medium",
+    "dst": "ASIANPAINT",
+    "note": "Supplies petrochemical monomers and solvents",
+    "src": "RELIANCE",
+    "type": "supplies"
+   },
+   {
+    "confidence": "medium",
+    "dst": "ASIANPAINT",
+    "note": "Titanium dioxide, key white pigment feedstock",
+    "src": "TIO2",
+    "type": "supplies"
+   },
+   {
+    "confidence": "high",
+    "dst": "PPGAP",
+    "note": "JV with PPG for auto and industrial coatings",
+    "src": "ASIANPAINT",
+    "type": "group"
+   },
+   {
+    "confidence": "low",
+    "dst": "DLF",
+    "note": "Paints demand driven by real estate projects",
+    "src": "ASIANPAINT",
+    "type": "supplies"
+   },
+   {
+    "confidence": "low",
+    "dst": "GODREJPROP",
+    "note": "Paints demand from housing construction",
+    "src": "ASIANPAINT",
+    "type": "supplies"
+   }
+  ]
+ },
+ "AXISBANK": {
+  "companies": {
+   "AXISBANK": {
+    "listed": true,
+    "name": "Axis Bank Ltd"
+   },
+   "BAJFINANCE": {
+    "listed": true,
+    "name": "Bajaj Finance Ltd"
+   },
+   "HDFCBANK": {
+    "listed": true,
+    "name": "HDFC Bank Ltd"
+   },
+   "ICICIBANK": {
+    "listed": true,
+    "name": "ICICI Bank Ltd"
+   },
+   "IDFCFIRSTB": {
+    "listed": true,
+    "name": "IDFC First Bank Ltd"
+   },
+   "INDUSINDBK": {
+    "listed": true,
+    "name": "IndusInd Bank Ltd"
+   },
+   "INFY": {
+    "listed": true,
+    "name": "Infosys Ltd"
+   },
+   "KOTAKBANK": {
+    "listed": true,
+    "name": "Kotak Mahindra Bank Ltd"
+   },
+   "MFSL": {
+    "listed": true,
+    "name": "Max Financial Services Ltd"
+   },
+   "SBIN": {
+    "listed": true,
+    "name": "State Bank of India"
+   },
+   "TCS": {
+    "listed": true,
+    "name": "Tata Consultancy Services Ltd"
+   }
+  },
+  "edges": [
+   {
+    "confidence": "medium",
+    "dst": "MFSL",
+    "note": "Axis holds stake in Axis Max Life (Max Financial)",
+    "src": "AXISBANK",
+    "type": "group"
+   },
+   {
+    "confidence": "high",
+    "dst": "HDFCBANK",
+    "note": "Private bank competitor",
+    "src": "AXISBANK",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "ICICIBANK",
+    "note": "Private bank competitor",
+    "src": "AXISBANK",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "KOTAKBANK",
+    "note": "Private bank competitor",
+    "src": "AXISBANK",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "SBIN",
+    "note": "Competes in retail banking",
+    "src": "AXISBANK",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "INDUSINDBK",
+    "note": "Private bank competitor",
+    "src": "AXISBANK",
+    "type": "competitor"
+   },
+   {
+    "confidence": "medium",
+    "dst": "IDFCFIRSTB",
+    "note": "Private bank competitor",
+    "src": "AXISBANK",
+    "type": "competitor"
+   },
+   {
+    "confidence": "medium",
+    "dst": "BAJFINANCE",
+    "note": "Competes in retail lending",
+    "src": "AXISBANK",
+    "type": "competitor"
+   },
+   {
+    "confidence": "medium",
+    "dst": "AXISBANK",
+    "note": "IT services provider to the bank",
+    "src": "TCS",
+    "type": "supplies"
+   },
+   {
+    "confidence": "medium",
+    "dst": "AXISBANK",
+    "note": "Finacle core banking / IT services",
+    "src": "INFY",
+    "type": "supplies"
+   }
+  ]
+ },
+ "BAJAJ-AUTO": {
+  "companies": {
+   "APOLLOTYRE": {
+    "listed": true,
+    "name": "Apollo Tyres Ltd"
+   },
+   "BAJAJ-AUTO": {
+    "listed": true,
+    "name": "Bajaj Auto Ltd"
+   },
+   "BAJAJFINSV": {
+    "listed": true,
+    "name": "Bajaj Finserv Ltd"
+   },
+   "BAJAJHLDNG": {
+    "listed": true,
+    "name": "Bajaj Holdings & Investment Ltd"
+   },
+   "BAJFINANCE": {
+    "listed": true,
+    "name": "Bajaj Finance Ltd"
+   },
+   "BOSCHLTD": {
+    "listed": true,
+    "name": "Bosch Ltd"
+   },
+   "EICHERMOT": {
+    "listed": true,
+    "name": "Eicher Motors Ltd"
+   },
+   "ENDURANCE": {
+    "listed": true,
+    "name": "Endurance Technologies Ltd"
+   },
+   "EXIDEIND": {
+    "listed": true,
+    "name": "Exide Industries Ltd"
+   },
+   "HEROMOTOCO": {
+    "listed": true,
+    "name": "Hero MotoCorp Ltd"
+   },
+   "JSWSTEEL": {
+    "listed": true,
+    "name": "JSW Steel Ltd"
+   },
+   "MOTHERSON": {
+    "listed": true,
+    "name": "Samvardhana Motherson International Ltd"
+   },
+   "TVSMOTOR": {
+    "listed": true,
+    "name": "TVS Motor Company Ltd"
+   }
+  },
+  "edges": [
+   {
+    "confidence": "high",
+    "dst": "BAJAJ-AUTO",
+    "note": "Bajaj group holding company",
+    "src": "BAJAJHLDNG",
+    "type": "group"
+   },
+   {
+    "confidence": "high",
+    "dst": "BAJAJ-AUTO",
+    "note": "Same Bajaj promoter group",
+    "src": "BAJAJFINSV",
+    "type": "group"
+   },
+   {
+    "confidence": "high",
+    "dst": "BAJAJ-AUTO",
+    "note": "Finances two-wheeler buyers at dealerships",
+    "src": "BAJFINANCE",
+    "type": "finances"
+   },
+   {
+    "confidence": "high",
+    "dst": "BAJAJ-AUTO",
+    "note": "Rival two-wheeler manufacturer",
+    "src": "HEROMOTOCO",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "BAJAJ-AUTO",
+    "note": "Rival two- and three-wheeler maker",
+    "src": "TVSMOTOR",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "BAJAJ-AUTO",
+    "note": "Royal Enfield competes in motorcycles",
+    "src": "EICHERMOT",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "BAJAJ-AUTO",
+    "note": "Supplies fuel injection and electricals",
+    "src": "BOSCHLTD",
+    "type": "supplies"
+   },
+   {
+    "confidence": "high",
+    "dst": "BAJAJ-AUTO",
+    "note": "Supplies wiring, mirrors and components",
+    "src": "MOTHERSON",
+    "type": "supplies"
+   },
+   {
+    "confidence": "high",
+    "dst": "BAJAJ-AUTO",
+    "note": "Supplies castings, brakes and suspension",
+    "src": "ENDURANCE",
+    "type": "supplies"
+   },
+   {
+    "confidence": "medium",
+    "dst": "BAJAJ-AUTO",
+    "note": "Supplies automotive batteries",
+    "src": "EXIDEIND",
+    "type": "supplies"
+   },
+   {
+    "confidence": "medium",
+    "dst": "BAJAJ-AUTO",
+    "note": "Supplies tyres for two-wheelers",
+    "src": "APOLLOTYRE",
+    "type": "supplies"
+   },
+   {
+    "confidence": "low",
+    "dst": "BAJAJ-AUTO",
+    "note": "Supplies steel for vehicle bodies",
+    "src": "JSWSTEEL",
+    "type": "supplies"
+   }
+  ]
+ },
+ "BAJAJFINSV": {
+  "companies": {
+   "ALLIANZ": {
+    "listed": false,
+    "name": "Allianz SE"
+   },
+   "BAJAJ-AUTO": {
+    "listed": true,
+    "name": "Bajaj Auto Ltd"
+   },
+   "BAJAJFINSV": {
+    "listed": true,
+    "name": "Bajaj Finserv Ltd"
+   },
+   "BAJAJHLDNG": {
+    "listed": true,
+    "name": "Bajaj Holdings & Investment Ltd"
+   },
+   "BAJFINANCE": {
+    "listed": true,
+    "name": "Bajaj Finance Ltd"
+   },
+   "CHOLAFIN": {
+    "listed": true,
+    "name": "Cholamandalam Investment & Finance Co Ltd"
+   },
+   "HDFCLIFE": {
+    "listed": true,
+    "name": "HDFC Life Insurance Co Ltd"
+   },
+   "ICICIPRULI": {
+    "listed": true,
+    "name": "ICICI Prudential Life Insurance Co Ltd"
+   },
+   "SBILIFE": {
+    "listed": true,
+    "name": "SBI Life Insurance Co Ltd"
+   },
+   "SHRIRAMFIN": {
+    "listed": true,
+    "name": "Shriram Finance Ltd"
+   }
+  },
+  "edges": [
+   {
+    "confidence": "high",
+    "dst": "BAJFINANCE",
+    "note": "Holds majority stake in Bajaj Finance",
+    "src": "BAJAJFINSV",
+    "type": "group"
+   },
+   {
+    "confidence": "high",
+    "dst": "BAJAJFINSV",
+    "note": "Bajaj group holding company",
+    "src": "BAJAJHLDNG",
+    "type": "group"
+   },
+   {
+    "confidence": "high",
+    "dst": "BAJAJ-AUTO",
+    "note": "Bajaj group holding company",
+    "src": "BAJAJHLDNG",
+    "type": "group"
+   },
+   {
+    "confidence": "high",
+    "dst": "BAJAJ-AUTO",
+    "note": "Same Bajaj promoter group",
+    "src": "BAJAJFINSV",
+    "type": "group"
+   },
+   {
+    "confidence": "medium",
+    "dst": "BAJAJFINSV",
+    "note": "Former JV partner in Bajaj Allianz insurers",
+    "src": "ALLIANZ",
+    "type": "group"
+   },
+   {
+    "confidence": "high",
+    "dst": "BAJAJFINSV",
+    "note": "Competes in life insurance via Bajaj Allianz",
+    "src": "HDFCLIFE",
+    "type": "competitor"
+   },
+   {
+    "confidence": "medium",
+    "dst": "BAJAJFINSV",
+    "note": "Competes in life insurance",
+    "src": "SBILIFE",
+    "type": "competitor"
+   },
+   {
+    "confidence": "medium",
+    "dst": "BAJAJFINSV",
+    "note": "Competes in life insurance",
+    "src": "ICICIPRULI",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "BAJFINANCE",
+    "note": "Competing NBFC lender",
+    "src": "SHRIRAMFIN",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "BAJFINANCE",
+    "note": "Competing retail NBFC",
+    "src": "CHOLAFIN",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "BAJAJ-AUTO",
+    "note": "Finances two-wheeler and vehicle buyers",
+    "src": "BAJFINANCE",
+    "type": "finances"
+   }
+  ]
+ },
+ "BAJFINANCE": {
+  "companies": {
+   "BAJAJ-AUTO": {
+    "listed": true,
+    "name": "Bajaj Auto Ltd"
+   },
+   "BAJAJFINSV": {
+    "listed": true,
+    "name": "Bajaj Finserv Ltd"
+   },
+   "BAJAJHFL": {
+    "listed": true,
+    "name": "Bajaj Housing Finance Ltd"
+   },
+   "BAJFINANCE": {
+    "listed": true,
+    "name": "Bajaj Finance Ltd"
+   },
+   "CHOLAFIN": {
+    "listed": true,
+    "name": "Cholamandalam Investment & Finance Co Ltd"
+   },
+   "HDFCBANK": {
+    "listed": true,
+    "name": "HDFC Bank Ltd"
+   },
+   "ICICIBANK": {
+    "listed": true,
+    "name": "ICICI Bank Ltd"
+   },
+   "LTF": {
+    "listed": true,
+    "name": "L&T Finance Ltd"
+   },
+   "MUTHOOTFIN": {
+    "listed": true,
+    "name": "Muthoot Finance Ltd"
+   },
+   "SBICARD": {
+    "listed": true,
+    "name": "SBI Cards and Payment Services Ltd"
+   },
+   "SHRIRAMFIN": {
+    "listed": true,
+    "name": "Shriram Finance Ltd"
+   }
+  },
+  "edges": [
+   {
+    "confidence": "high",
+    "dst": "BAJFINANCE",
+    "note": "Bajaj Finserv is parent of Bajaj Finance",
+    "src": "BAJAJFINSV",
+    "type": "group"
+   },
+   {
+    "confidence": "high",
+    "dst": "BAJAJHFL",
+    "note": "Bajaj Housing Finance is a Bajaj Finance subsidiary",
+    "src": "BAJFINANCE",
+    "type": "group"
+   },
+   {
+    "confidence": "medium",
+    "dst": "BAJAJ-AUTO",
+    "note": "Same Bajaj promoter group",
+    "src": "BAJFINANCE",
+    "type": "group"
+   },
+   {
+    "confidence": "medium",
+    "dst": "BAJAJ-AUTO",
+    "note": "Finances Bajaj two-wheeler purchases",
+    "src": "BAJFINANCE",
+    "type": "finances"
+   },
+   {
+    "confidence": "medium",
+    "dst": "HDFCBANK",
+    "note": "Competes in retail/consumer lending",
+    "src": "BAJFINANCE",
+    "type": "competitor"
+   },
+   {
+    "confidence": "medium",
+    "dst": "ICICIBANK",
+    "note": "Competes in retail lending",
+    "src": "BAJFINANCE",
+    "type": "competitor"
+   },
+   {
+    "confidence": "medium",
+    "dst": "SBICARD",
+    "note": "Competes in consumer credit and cards",
+    "src": "BAJFINANCE",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "SHRIRAMFIN",
+    "note": "NBFC lending competitor",
+    "src": "BAJFINANCE",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "CHOLAFIN",
+    "note": "NBFC lending competitor",
+    "src": "BAJFINANCE",
+    "type": "competitor"
+   },
+   {
+    "confidence": "medium",
+    "dst": "MUTHOOTFIN",
+    "note": "Competes in retail/gold loans",
+    "src": "BAJFINANCE",
+    "type": "competitor"
+   },
+   {
+    "confidence": "medium",
+    "dst": "LTF",
+    "note": "NBFC lending competitor",
+    "src": "BAJFINANCE",
+    "type": "competitor"
+   }
+  ]
+ },
+ "BHARTIARTL": {
+  "companies": {
+   "BHARTIARTL": {
+    "listed": true,
+    "name": "Bharti Airtel Ltd"
+   },
+   "BHARTIHEXA": {
+    "listed": true,
+    "name": "Bharti Hexacom Ltd"
+   },
+   "BSNL": {
+    "listed": false,
+    "name": "Bharat Sanchar Nigam Ltd"
+   },
+   "IDEA": {
+    "listed": true,
+    "name": "Vodafone Idea Ltd"
+   },
+   "INDUSTOWER": {
+    "listed": true,
+    "name": "Indus Towers Ltd"
+   },
+   "INFY": {
+    "listed": true,
+    "name": "Infosys Ltd"
+   },
+   "RELIANCE": {
+    "listed": true,
+    "name": "Reliance Industries Ltd"
+   },
+   "RJIO": {
+    "listed": false,
+    "name": "Reliance Jio Infocomm Ltd"
+   },
+   "TCS": {
+    "listed": true,
+    "name": "Tata Consultancy Services Ltd"
+   }
+  },
+  "edges": [
+   {
+    "confidence": "high",
+    "dst": "INDUSTOWER",
+    "note": "Airtel is major shareholder of Indus Towers",
+    "src": "BHARTIARTL",
+    "type": "group"
+   },
+   {
+    "confidence": "high",
+    "dst": "BHARTIARTL",
+    "note": "Provides telecom tower infrastructure to Airtel",
+    "src": "INDUSTOWER",
+    "type": "supplies"
+   },
+   {
+    "confidence": "high",
+    "dst": "BHARTIHEXA",
+    "note": "Bharti Hexacom is an Airtel subsidiary",
+    "src": "BHARTIARTL",
+    "type": "group"
+   },
+   {
+    "confidence": "high",
+    "dst": "IDEA",
+    "note": "Mobile telecom competitor",
+    "src": "BHARTIARTL",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "RJIO",
+    "note": "Airtel vs Reliance Jio in telecom",
+    "src": "BHARTIARTL",
+    "type": "competitor"
+   },
+   {
+    "confidence": "medium",
+    "dst": "RELIANCE",
+    "note": "Compete across telecom and digital services",
+    "src": "BHARTIARTL",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "RJIO",
+    "note": "Jio is a Reliance subsidiary",
+    "src": "RELIANCE",
+    "type": "group"
+   },
+   {
+    "confidence": "medium",
+    "dst": "BSNL",
+    "note": "State telecom competitor",
+    "src": "BHARTIARTL",
+    "type": "competitor"
+   },
+   {
+    "confidence": "low",
+    "dst": "BHARTIARTL",
+    "note": "IT services to Airtel",
+    "src": "TCS",
+    "type": "supplies"
+   },
+   {
+    "confidence": "low",
+    "dst": "BHARTIARTL",
+    "note": "IT/digital services to Airtel",
+    "src": "INFY",
+    "type": "supplies"
+   }
+  ]
+ },
+ "BPCL": {
+  "companies": {
+   "AEGISLOG": {
+    "listed": true,
+    "name": "Aegis Logistics Ltd"
+   },
+   "BPCL": {
+    "listed": true,
+    "name": "Bharat Petroleum Corporation Ltd"
+   },
+   "CASTROLIND": {
+    "listed": true,
+    "name": "Castrol India Ltd"
+   },
+   "GAIL": {
+    "listed": true,
+    "name": "GAIL (India) Ltd"
+   },
+   "HINDPETRO": {
+    "listed": true,
+    "name": "Hindustan Petroleum Corporation Ltd"
+   },
+   "IGL": {
+    "listed": true,
+    "name": "Indraprastha Gas Ltd"
+   },
+   "IOC": {
+    "listed": true,
+    "name": "Indian Oil Corporation Ltd"
+   },
+   "MGL": {
+    "listed": true,
+    "name": "Mahanagar Gas Ltd"
+   },
+   "OIL": {
+    "listed": true,
+    "name": "Oil India Ltd"
+   },
+   "ONGC": {
+    "listed": true,
+    "name": "Oil & Natural Gas Corporation Ltd"
+   },
+   "PETRONET": {
+    "listed": true,
+    "name": "Petronet LNG Ltd"
+   },
+   "RELIANCE": {
+    "listed": true,
+    "name": "Reliance Industries Ltd"
+   }
+  },
+  "edges": [
+   {
+    "confidence": "high",
+    "dst": "BPCL",
+    "note": "Supplies domestic crude oil to refineries",
+    "src": "ONGC",
+    "type": "supplies"
+   },
+   {
+    "confidence": "medium",
+    "dst": "BPCL",
+    "note": "Domestic crude oil supplier",
+    "src": "OIL",
+    "type": "supplies"
+   },
+   {
+    "confidence": "high",
+    "dst": "BPCL",
+    "note": "Natural gas and LPG transmission supply",
+    "src": "GAIL",
+    "type": "supplies"
+   },
+   {
+    "confidence": "high",
+    "dst": "BPCL",
+    "note": "Regasified LNG supply; BPCL is a promoter",
+    "src": "PETRONET",
+    "type": "supplies"
+   },
+   {
+    "confidence": "high",
+    "dst": "PETRONET",
+    "note": "BPCL is a co-promoter shareholder of Petronet LNG",
+    "src": "BPCL",
+    "type": "group"
+   },
+   {
+    "confidence": "high",
+    "dst": "IGL",
+    "note": "BPCL co-promoter of Indraprastha Gas",
+    "src": "BPCL",
+    "type": "group"
+   },
+   {
+    "confidence": "high",
+    "dst": "BPCL",
+    "note": "Largest oil-marketing competitor",
+    "src": "IOC",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "BPCL",
+    "note": "Direct fuel-retail and refining competitor",
+    "src": "HINDPETRO",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "BPCL",
+    "note": "Private refiner/fuel-retail competitor",
+    "src": "RELIANCE",
+    "type": "competitor"
+   },
+   {
+    "confidence": "low",
+    "dst": "MGL",
+    "note": "City gas distribution overlap in western India",
+    "src": "BPCL",
+    "type": "competitor"
+   },
+   {
+    "confidence": "medium",
+    "dst": "BPCL",
+    "note": "Lubricants competitor (MAK vs Castrol)",
+    "src": "CASTROLIND",
+    "type": "competitor"
+   },
+   {
+    "confidence": "low",
+    "dst": "BPCL",
+    "note": "LPG/oil terminalling and logistics services",
+    "src": "AEGISLOG",
+    "type": "supplies"
+   }
+  ]
+ },
+ "BRITANNIA": {
+  "companies": {
+   "ADANIWILMAR": {
+    "listed": true,
+    "name": "AWL Agri Business Ltd"
+   },
+   "BIKAJI": {
+    "listed": true,
+    "name": "Bikaji Foods International Ltd"
+   },
+   "BRITANNIA": {
+    "listed": true,
+    "name": "Britannia Industries Ltd"
+   },
+   "DABUR": {
+    "listed": true,
+    "name": "Dabur India Ltd"
+   },
+   "DMART": {
+    "listed": true,
+    "name": "Avenue Supermarts Ltd (DMart)"
+   },
+   "GRASIM": {
+    "listed": true,
+    "name": "Grasim Industries (Wadia link n/a)"
+   },
+   "HINDUNILVR": {
+    "listed": true,
+    "name": "Hindustan Unilever Ltd"
+   },
+   "ITC": {
+    "listed": true,
+    "name": "ITC Ltd"
+   },
+   "MARICO": {
+    "listed": true,
+    "name": "Marico Ltd"
+   },
+   "NESTLEIND": {
+    "listed": true,
+    "name": "Nestle India Ltd"
+   },
+   "PATANJALI": {
+    "listed": true,
+    "name": "Patanjali Foods Ltd"
+   },
+   "TATACONSUM": {
+    "listed": true,
+    "name": "Tata Consumer Products Ltd"
+   },
+   "VARBEV": {
+    "listed": true,
+    "name": "Varun Beverages Ltd"
+   }
+  },
+  "edges": [
+   {
+    "confidence": "low",
+    "dst": "BRITANNIA",
+    "note": "Edible oils/flour supply into packaged foods chain",
+    "src": "PATANJALI",
+    "type": "supplies"
+   },
+   {
+    "confidence": "medium",
+    "dst": "BRITANNIA",
+    "note": "Edible oil and wheat flour raw-material supplier",
+    "src": "ADANIWILMAR",
+    "type": "supplies"
+   },
+   {
+    "confidence": "high",
+    "dst": "BRITANNIA",
+    "note": "Competes in biscuits and packaged foods",
+    "src": "NESTLEIND",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "BRITANNIA",
+    "note": "Sunfeast biscuits directly compete",
+    "src": "ITC",
+    "type": "competitor"
+   },
+   {
+    "confidence": "medium",
+    "dst": "BRITANNIA",
+    "note": "Compete across packaged food/snacks",
+    "src": "TATACONSUM",
+    "type": "competitor"
+   },
+   {
+    "confidence": "medium",
+    "dst": "BRITANNIA",
+    "note": "Broad FMCG rival in foods/nutrition",
+    "src": "HINDUNILVR",
+    "type": "competitor"
+   },
+   {
+    "confidence": "medium",
+    "dst": "BRITANNIA",
+    "note": "Snacks and packaged foods competitor",
+    "src": "BIKAJI",
+    "type": "competitor"
+   },
+   {
+    "confidence": "low",
+    "dst": "BRITANNIA",
+    "note": "Foods (oats/breakfast) overlap",
+    "src": "MARICO",
+    "type": "competitor"
+   },
+   {
+    "confidence": "low",
+    "dst": "BRITANNIA",
+    "note": "Packaged foods/beverages overlap",
+    "src": "DABUR",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "DMART",
+    "note": "Supplies biscuits/dairy to modern-trade retailer",
+    "src": "BRITANNIA",
+    "type": "supplies"
+   },
+   {
+    "confidence": "low",
+    "dst": "BRITANNIA",
+    "note": "Packaged FMCG distribution overlap",
+    "src": "VARBEV",
+    "type": "competitor"
+   }
+  ]
+ },
+ "CIPLA": {
+  "companies": {
+   "APOLLOHOSP": {
+    "listed": true,
+    "name": "Apollo Hospitals Enterprise Ltd"
+   },
+   "AUROPHARMA": {
+    "listed": true,
+    "name": "Aurobindo Pharma Ltd"
+   },
+   "CIPLA": {
+    "listed": true,
+    "name": "Cipla Ltd"
+   },
+   "DIVISLAB": {
+    "listed": true,
+    "name": "Divi's Laboratories Ltd"
+   },
+   "DRREDDY": {
+    "listed": true,
+    "name": "Dr. Reddy's Laboratories Ltd"
+   },
+   "GLENMARK": {
+    "listed": true,
+    "name": "Glenmark Pharmaceuticals Ltd"
+   },
+   "LAURUSLABS": {
+    "listed": true,
+    "name": "Laurus Labs Ltd"
+   },
+   "LUPIN": {
+    "listed": true,
+    "name": "Lupin Ltd"
+   },
+   "MANKIND": {
+    "listed": true,
+    "name": "Mankind Pharma Ltd"
+   },
+   "SUNPHARMA": {
+    "listed": true,
+    "name": "Sun Pharmaceutical Industries Ltd"
+   },
+   "TORNTPHARM": {
+    "listed": true,
+    "name": "Torrent Pharmaceuticals Ltd"
+   },
+   "ZYDUSLIFE": {
+    "listed": true,
+    "name": "Zydus Lifesciences Ltd"
+   }
+  },
+  "edges": [
+   {
+    "confidence": "high",
+    "dst": "CIPLA",
+    "note": "Supplies APIs and intermediates",
+    "src": "DIVISLAB",
+    "type": "supplies"
+   },
+   {
+    "confidence": "medium",
+    "dst": "CIPLA",
+    "note": "API supplier, notably ARV intermediates",
+    "src": "LAURUSLABS",
+    "type": "supplies"
+   },
+   {
+    "confidence": "high",
+    "dst": "CIPLA",
+    "note": "Largest Indian pharma rival across segments",
+    "src": "SUNPHARMA",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "CIPLA",
+    "note": "Generics and respiratory competitor",
+    "src": "DRREDDY",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "CIPLA",
+    "note": "Respiratory and US generics rival",
+    "src": "LUPIN",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "CIPLA",
+    "note": "Respiratory and dermatology competitor",
+    "src": "GLENMARK",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "CIPLA",
+    "note": "US generics competitor",
+    "src": "AUROPHARMA",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "CIPLA",
+    "note": "Domestic branded formulations rival",
+    "src": "TORNTPHARM",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "CIPLA",
+    "note": "Generics competitor",
+    "src": "ZYDUSLIFE",
+    "type": "competitor"
+   },
+   {
+    "confidence": "medium",
+    "dst": "CIPLA",
+    "note": "Domestic formulations and consumer health rival",
+    "src": "MANKIND",
+    "type": "competitor"
+   },
+   {
+    "confidence": "medium",
+    "dst": "APOLLOHOSP",
+    "note": "Supplies drugs to hospital/pharmacy retail channel",
+    "src": "CIPLA",
+    "type": "supplies"
+   }
+  ]
+ },
+ "COALINDIA": {
+  "companies": {
+   "ADANIENT": {
+    "listed": true,
+    "name": "Adani Enterprises Ltd"
+   },
+   "ADANIPOWER": {
+    "listed": true,
+    "name": "Adani Power Ltd"
+   },
+   "BEML": {
+    "listed": true,
+    "name": "BEML Ltd"
+   },
+   "COALINDIA": {
+    "listed": true,
+    "name": "Coal India Ltd"
+   },
+   "JSWSTEEL": {
+    "listed": true,
+    "name": "JSW Steel Ltd"
+   },
+   "LT": {
+    "listed": true,
+    "name": "Larsen & Toubro Ltd"
+   },
+   "NLCINDIA": {
+    "listed": true,
+    "name": "NLC India Ltd"
+   },
+   "NMDC": {
+    "listed": true,
+    "name": "NMDC Ltd"
+   },
+   "NTPC": {
+    "listed": true,
+    "name": "NTPC Ltd"
+   },
+   "SAIL": {
+    "listed": true,
+    "name": "Steel Authority of India Ltd"
+   },
+   "SBIN": {
+    "listed": true,
+    "name": "State Bank of India"
+   },
+   "TATASTEEL": {
+    "listed": true,
+    "name": "Tata Steel Ltd"
+   }
+  },
+  "edges": [
+   {
+    "confidence": "high",
+    "dst": "NTPC",
+    "note": "Largest coal supplier to NTPC power plants",
+    "src": "COALINDIA",
+    "type": "supplies"
+   },
+   {
+    "confidence": "medium",
+    "dst": "JSWSTEEL",
+    "note": "Supplies thermal and coking coal",
+    "src": "COALINDIA",
+    "type": "supplies"
+   },
+   {
+    "confidence": "high",
+    "dst": "SAIL",
+    "note": "Supplies coal to steel plants",
+    "src": "COALINDIA",
+    "type": "supplies"
+   },
+   {
+    "confidence": "medium",
+    "dst": "TATASTEEL",
+    "note": "Supplies domestic coal",
+    "src": "COALINDIA",
+    "type": "supplies"
+   },
+   {
+    "confidence": "medium",
+    "dst": "ADANIPOWER",
+    "note": "Fuel supply agreements for power plants",
+    "src": "COALINDIA",
+    "type": "supplies"
+   },
+   {
+    "confidence": "high",
+    "dst": "COALINDIA",
+    "note": "Supplies mining equipment and dumpers",
+    "src": "BEML",
+    "type": "supplies"
+   },
+   {
+    "confidence": "medium",
+    "dst": "COALINDIA",
+    "note": "Supplies mining machinery and EPC services",
+    "src": "LT",
+    "type": "supplies"
+   },
+   {
+    "confidence": "medium",
+    "dst": "COALINDIA",
+    "note": "Fellow state-owned mining company",
+    "src": "NMDC",
+    "type": "competitor"
+   },
+   {
+    "confidence": "medium",
+    "dst": "COALINDIA",
+    "note": "State-owned lignite and coal miner",
+    "src": "NLCINDIA",
+    "type": "competitor"
+   },
+   {
+    "confidence": "medium",
+    "dst": "COALINDIA",
+    "note": "Private coal mining and trading rival",
+    "src": "ADANIENT",
+    "type": "competitor"
+   },
+   {
+    "confidence": "medium",
+    "dst": "COALINDIA",
+    "note": "Banker to Coal India",
+    "src": "SBIN",
+    "type": "finances"
+   }
+  ]
+ },
+ "DIVISLAB": {
+  "companies": {
+   "AARTIIND": {
+    "listed": true,
+    "name": "Aarti Industries Ltd"
+   },
+   "AUROPHARMA": {
+    "listed": true,
+    "name": "Aurobindo Pharma Ltd"
+   },
+   "CIPLA": {
+    "listed": true,
+    "name": "Cipla Ltd"
+   },
+   "DIVISLAB": {
+    "listed": true,
+    "name": "Divi's Laboratories Ltd"
+   },
+   "DRREDDY": {
+    "listed": true,
+    "name": "Dr. Reddy's Laboratories Ltd"
+   },
+   "GLAND": {
+    "listed": true,
+    "name": "Gland Pharma Ltd"
+   },
+   "LAURUSLABS": {
+    "listed": true,
+    "name": "Laurus Labs Ltd"
+   },
+   "LUPIN": {
+    "listed": true,
+    "name": "Lupin Ltd"
+   },
+   "PIIND": {
+    "listed": true,
+    "name": "PI Industries Ltd"
+   },
+   "SUNPHARMA": {
+    "listed": true,
+    "name": "Sun Pharmaceutical Industries Ltd"
+   },
+   "SYNGENE": {
+    "listed": true,
+    "name": "Syngene International Ltd"
+   },
+   "ZYDUSLIFE": {
+    "listed": true,
+    "name": "Zydus Lifesciences Ltd"
+   }
+  },
+  "edges": [
+   {
+    "confidence": "high",
+    "dst": "DRREDDY",
+    "note": "Supplies APIs and custom-synthesis intermediates",
+    "src": "DIVISLAB",
+    "type": "supplies"
+   },
+   {
+    "confidence": "high",
+    "dst": "CIPLA",
+    "note": "Supplies active pharmaceutical ingredients",
+    "src": "DIVISLAB",
+    "type": "supplies"
+   },
+   {
+    "confidence": "medium",
+    "dst": "SUNPHARMA",
+    "note": "API and intermediate supplier",
+    "src": "DIVISLAB",
+    "type": "supplies"
+   },
+   {
+    "confidence": "medium",
+    "dst": "LUPIN",
+    "note": "API supplier to formulations maker",
+    "src": "DIVISLAB",
+    "type": "supplies"
+   },
+   {
+    "confidence": "medium",
+    "dst": "AUROPHARMA",
+    "note": "API and intermediates supply",
+    "src": "DIVISLAB",
+    "type": "supplies"
+   },
+   {
+    "confidence": "high",
+    "dst": "DIVISLAB",
+    "note": "Rival API / custom-synthesis manufacturer",
+    "src": "LAURUSLABS",
+    "type": "competitor"
+   },
+   {
+    "confidence": "medium",
+    "dst": "DIVISLAB",
+    "note": "Supplies specialty/pharma intermediates and chemicals",
+    "src": "AARTIIND",
+    "type": "supplies"
+   },
+   {
+    "confidence": "medium",
+    "dst": "DIVISLAB",
+    "note": "Competes in contract research/manufacturing (CRAMS)",
+    "src": "SYNGENE",
+    "type": "competitor"
+   },
+   {
+    "confidence": "low",
+    "dst": "DIVISLAB",
+    "note": "Custom-synthesis/CSM peer",
+    "src": "PIIND",
+    "type": "competitor"
+   },
+   {
+    "confidence": "low",
+    "dst": "DIVISLAB",
+    "note": "Peer in contract pharma manufacturing",
+    "src": "GLAND",
+    "type": "competitor"
+   },
+   {
+    "confidence": "low",
+    "dst": "DIVISLAB",
+    "note": "API customer among generics makers",
+    "src": "ZYDUSLIFE",
+    "type": "supplies"
+   }
+  ]
+ },
+ "DRREDDY": {
+  "companies": {
+   "APOLLOHOSP": {
+    "listed": true,
+    "name": "Apollo Hospitals Enterprise Ltd"
+   },
+   "AUROPHARMA": {
+    "listed": true,
+    "name": "Aurobindo Pharma Ltd"
+   },
+   "CIPLA": {
+    "listed": true,
+    "name": "Cipla Ltd"
+   },
+   "DIVISLAB": {
+    "listed": true,
+    "name": "Divi's Laboratories Ltd"
+   },
+   "DRREDDY": {
+    "listed": true,
+    "name": "Dr. Reddy's Laboratories Ltd"
+   },
+   "GLAND": {
+    "listed": true,
+    "name": "Gland Pharma Ltd"
+   },
+   "LAURUSLABS": {
+    "listed": true,
+    "name": "Laurus Labs Ltd"
+   },
+   "LUPIN": {
+    "listed": true,
+    "name": "Lupin Ltd"
+   },
+   "MANKIND": {
+    "listed": true,
+    "name": "Mankind Pharma Ltd"
+   },
+   "SUNPHARMA": {
+    "listed": true,
+    "name": "Sun Pharmaceutical Industries Ltd"
+   },
+   "TORNTPHARM": {
+    "listed": true,
+    "name": "Torrent Pharmaceuticals Ltd"
+   },
+   "ZYDUSLIFE": {
+    "listed": true,
+    "name": "Zydus Lifesciences Ltd"
+   }
+  },
+  "edges": [
+   {
+    "confidence": "high",
+    "dst": "DRREDDY",
+    "note": "Supplies active pharmaceutical ingredients (APIs)",
+    "src": "DIVISLAB",
+    "type": "supplies"
+   },
+   {
+    "confidence": "medium",
+    "dst": "DRREDDY",
+    "note": "API and intermediates supplier",
+    "src": "LAURUSLABS",
+    "type": "supplies"
+   },
+   {
+    "confidence": "high",
+    "dst": "DRREDDY",
+    "note": "Leading generics/formulations rival in India and US",
+    "src": "SUNPHARMA",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "DRREDDY",
+    "note": "Direct generics and respiratory competitor",
+    "src": "CIPLA",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "DRREDDY",
+    "note": "US generics competitor",
+    "src": "LUPIN",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "DRREDDY",
+    "note": "US generics and injectables rival",
+    "src": "AUROPHARMA",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "DRREDDY",
+    "note": "Generics competitor in India and US",
+    "src": "ZYDUSLIFE",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "DRREDDY",
+    "note": "Domestic branded formulations rival",
+    "src": "TORNTPHARM",
+    "type": "competitor"
+   },
+   {
+    "confidence": "medium",
+    "dst": "DRREDDY",
+    "note": "Domestic formulations competitor",
+    "src": "MANKIND",
+    "type": "competitor"
+   },
+   {
+    "confidence": "low",
+    "dst": "DRREDDY",
+    "note": "Contract injectable manufacturing supplier",
+    "src": "GLAND",
+    "type": "supplies"
+   },
+   {
+    "confidence": "medium",
+    "dst": "APOLLOHOSP",
+    "note": "Supplies medicines to hospital/pharmacy channel",
+    "src": "DRREDDY",
+    "type": "supplies"
+   }
+  ]
+ },
+ "EICHERMOT": {
+  "companies": {
+   "APOLLOTYRE": {
+    "listed": true,
+    "name": "Apollo Tyres Ltd"
+   },
+   "ASHOKLEY": {
+    "listed": true,
+    "name": "Ashok Leyland Ltd"
+   },
+   "BAJAJ-AUTO": {
+    "listed": true,
+    "name": "Bajaj Auto Ltd"
+   },
+   "BOSCHLTD": {
+    "listed": true,
+    "name": "Bosch Ltd"
+   },
+   "EICHERMOT": {
+    "listed": true,
+    "name": "Eicher Motors Ltd"
+   },
+   "ENDURANCE": {
+    "listed": true,
+    "name": "Endurance Technologies Ltd"
+   },
+   "EXIDEIND": {
+    "listed": true,
+    "name": "Exide Industries Ltd"
+   },
+   "HEROMOTOCO": {
+    "listed": true,
+    "name": "Hero MotoCorp Ltd"
+   },
+   "MOTHERSON": {
+    "listed": true,
+    "name": "Samvardhana Motherson International Ltd"
+   },
+   "TATAMOTORS": {
+    "listed": true,
+    "name": "Tata Motors Ltd"
+   },
+   "TVSMOTOR": {
+    "listed": true,
+    "name": "TVS Motor Company Ltd"
+   },
+   "VOLVO": {
+    "listed": false,
+    "name": "AB Volvo"
+   }
+  },
+  "edges": [
+   {
+    "confidence": "high",
+    "dst": "EICHERMOT",
+    "note": "VE Commercial Vehicles JV partner",
+    "src": "VOLVO",
+    "type": "group"
+   },
+   {
+    "confidence": "high",
+    "dst": "EICHERMOT",
+    "note": "Rival motorcycle manufacturer",
+    "src": "HEROMOTOCO",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "EICHERMOT",
+    "note": "Competes in premium motorcycles",
+    "src": "BAJAJ-AUTO",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "EICHERMOT",
+    "note": "Rival two-wheeler maker",
+    "src": "TVSMOTOR",
+    "type": "competitor"
+   },
+   {
+    "confidence": "medium",
+    "dst": "EICHERMOT",
+    "note": "Competes via VECV in commercial vehicles",
+    "src": "TATAMOTORS",
+    "type": "competitor"
+   },
+   {
+    "confidence": "medium",
+    "dst": "EICHERMOT",
+    "note": "Competes in trucks and buses",
+    "src": "ASHOKLEY",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "EICHERMOT",
+    "note": "Supplies fuel systems and electricals",
+    "src": "BOSCHLTD",
+    "type": "supplies"
+   },
+   {
+    "confidence": "medium",
+    "dst": "EICHERMOT",
+    "note": "Supplies wiring and auto components",
+    "src": "MOTHERSON",
+    "type": "supplies"
+   },
+   {
+    "confidence": "medium",
+    "dst": "EICHERMOT",
+    "note": "Supplies suspension and braking parts",
+    "src": "ENDURANCE",
+    "type": "supplies"
+   },
+   {
+    "confidence": "medium",
+    "dst": "EICHERMOT",
+    "note": "Supplies automotive batteries",
+    "src": "EXIDEIND",
+    "type": "supplies"
+   },
+   {
+    "confidence": "medium",
+    "dst": "EICHERMOT",
+    "note": "Supplies tyres for motorcycles",
+    "src": "APOLLOTYRE",
+    "type": "supplies"
+   }
+  ]
+ },
+ "GRASIM": {
+  "companies": {
+   "ABCAPITAL": {
+    "listed": true,
+    "name": "Aditya Birla Capital Ltd"
+   },
+   "ABFRL": {
+    "listed": true,
+    "name": "Aditya Birla Fashion & Retail Ltd"
+   },
+   "ACC": {
+    "listed": true,
+    "name": "ACC Ltd"
+   },
+   "AMBUJACEM": {
+    "listed": true,
+    "name": "Ambuja Cements Ltd"
+   },
+   "ASIANPAINT": {
+    "listed": true,
+    "name": "Asian Paints Ltd"
+   },
+   "COALINDIA": {
+    "listed": true,
+    "name": "Coal India Ltd"
+   },
+   "GRASIM": {
+    "listed": true,
+    "name": "Grasim Industries Ltd"
+   },
+   "HINDALCO": {
+    "listed": true,
+    "name": "Hindalco Industries Ltd"
+   },
+   "SBIN": {
+    "listed": true,
+    "name": "State Bank of India"
+   },
+   "SHREECEM": {
+    "listed": true,
+    "name": "Shree Cement Ltd"
+   },
+   "ULTRACEMCO": {
+    "listed": true,
+    "name": "UltraTech Cement Ltd"
+   }
+  },
+  "edges": [
+   {
+    "confidence": "high",
+    "dst": "ULTRACEMCO",
+    "note": "Holds controlling stake in UltraTech Cement",
+    "src": "GRASIM",
+    "type": "group"
+   },
+   {
+    "confidence": "high",
+    "dst": "ABCAPITAL",
+    "note": "Aditya Birla Group financial services arm",
+    "src": "GRASIM",
+    "type": "group"
+   },
+   {
+    "confidence": "high",
+    "dst": "HINDALCO",
+    "note": "Fellow Aditya Birla Group flagship",
+    "src": "GRASIM",
+    "type": "group"
+   },
+   {
+    "confidence": "high",
+    "dst": "ABFRL",
+    "note": "Aditya Birla Group fashion retailer",
+    "src": "GRASIM",
+    "type": "group"
+   },
+   {
+    "confidence": "medium",
+    "dst": "GRASIM",
+    "note": "Rival in paints via Birla Opus",
+    "src": "ASIANPAINT",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "AMBUJACEM",
+    "note": "Leading cement makers competing",
+    "src": "ULTRACEMCO",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "ACC",
+    "note": "Competes in cement market",
+    "src": "ULTRACEMCO",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "SHREECEM",
+    "note": "Competes in cement market",
+    "src": "ULTRACEMCO",
+    "type": "competitor"
+   },
+   {
+    "confidence": "medium",
+    "dst": "GRASIM",
+    "note": "Supplies coal for VSF and cement power",
+    "src": "COALINDIA",
+    "type": "supplies"
+   },
+   {
+    "confidence": "medium",
+    "dst": "GRASIM",
+    "note": "Lender to Grasim Industries",
+    "src": "SBIN",
+    "type": "finances"
+   }
+  ]
+ },
+ "HCLTECH": {
+  "companies": {
+   "COFORGE": {
+    "listed": true,
+    "name": "Coforge Ltd"
+   },
+   "HCLTECH": {
+    "listed": true,
+    "name": "HCL Technologies Ltd"
+   },
+   "HDFCBANK": {
+    "listed": true,
+    "name": "HDFC Bank Ltd"
+   },
+   "INFY": {
+    "listed": true,
+    "name": "Infosys Ltd"
+   },
+   "LTIM": {
+    "listed": true,
+    "name": "LTIMindtree Ltd"
+   },
+   "MPHASIS": {
+    "listed": true,
+    "name": "Mphasis Ltd"
+   },
+   "PERSISTENT": {
+    "listed": true,
+    "name": "Persistent Systems Ltd"
+   },
+   "TCS": {
+    "listed": true,
+    "name": "Tata Consultancy Services Ltd"
+   },
+   "TECHM": {
+    "listed": true,
+    "name": "Tech Mahindra Ltd"
+   },
+   "WIPRO": {
+    "listed": true,
+    "name": "Wipro Ltd"
+   }
+  },
+  "edges": [
+   {
+    "confidence": "high",
+    "dst": "HCLTECH",
+    "note": "Largest Indian IT services rival",
+    "src": "TCS",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "HCLTECH",
+    "note": "Top-tier IT services competitor",
+    "src": "INFY",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "HCLTECH",
+    "note": "Large-cap IT services competitor",
+    "src": "WIPRO",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "HCLTECH",
+    "note": "IT services and engineering competitor",
+    "src": "TECHM",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "HCLTECH",
+    "note": "Mid-tier IT services competitor",
+    "src": "LTIM",
+    "type": "competitor"
+   },
+   {
+    "confidence": "medium",
+    "dst": "HCLTECH",
+    "note": "Competes in digital IT services",
+    "src": "COFORGE",
+    "type": "competitor"
+   },
+   {
+    "confidence": "medium",
+    "dst": "HCLTECH",
+    "note": "Competes in software engineering services",
+    "src": "PERSISTENT",
+    "type": "competitor"
+   },
+   {
+    "confidence": "medium",
+    "dst": "HCLTECH",
+    "note": "Competes in application and BPO services",
+    "src": "MPHASIS",
+    "type": "competitor"
+   },
+   {
+    "confidence": "medium",
+    "dst": "HDFCBANK",
+    "note": "Provides IT and digital services to banks",
+    "src": "HCLTECH",
+    "type": "supplies"
+   },
+   {
+    "confidence": "medium",
+    "dst": "TECHM",
+    "note": "Both bid for global outsourcing deals",
+    "src": "HCLTECH",
+    "type": "competitor"
+   }
+  ]
+ },
+ "HDFCBANK": {
+  "companies": {
+   "AXISBANK": {
+    "listed": true,
+    "name": "Axis Bank Ltd"
+   },
+   "BAJFINANCE": {
+    "listed": true,
+    "name": "Bajaj Finance Ltd"
+   },
+   "HDBFS": {
+    "listed": true,
+    "name": "HDB Financial Services Ltd"
+   },
+   "HDFCAMC": {
+    "listed": true,
+    "name": "HDFC Asset Management Company Ltd"
+   },
+   "HDFCBANK": {
+    "listed": true,
+    "name": "HDFC Bank Ltd"
+   },
+   "HDFCLIFE": {
+    "listed": true,
+    "name": "HDFC Life Insurance Company Ltd"
+   },
+   "ICICIBANK": {
+    "listed": true,
+    "name": "ICICI Bank Ltd"
+   },
+   "INDUSINDBK": {
+    "listed": true,
+    "name": "IndusInd Bank Ltd"
+   },
+   "INFY": {
+    "listed": true,
+    "name": "Infosys Ltd"
+   },
+   "KOTAKBANK": {
+    "listed": true,
+    "name": "Kotak Mahindra Bank Ltd"
+   },
+   "SBIN": {
+    "listed": true,
+    "name": "State Bank of India"
+   },
+   "TCS": {
+    "listed": true,
+    "name": "Tata Consultancy Services Ltd"
+   }
+  },
+  "edges": [
+   {
+    "confidence": "high",
+    "dst": "HDFCLIFE",
+    "note": "HDFC Life is part of the HDFC group",
+    "src": "HDFCBANK",
+    "type": "group"
+   },
+   {
+    "confidence": "high",
+    "dst": "HDFCAMC",
+    "note": "HDFC AMC is part of the HDFC group",
+    "src": "HDFCBANK",
+    "type": "group"
+   },
+   {
+    "confidence": "high",
+    "dst": "HDBFS",
+    "note": "HDB Financial Services is HDFC Bank subsidiary",
+    "src": "HDFCBANK",
+    "type": "group"
+   },
+   {
+    "confidence": "high",
+    "dst": "ICICIBANK",
+    "note": "Largest private bank rivals",
+    "src": "HDFCBANK",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "AXISBANK",
+    "note": "Private bank competitor",
+    "src": "HDFCBANK",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "KOTAKBANK",
+    "note": "Private bank competitor",
+    "src": "HDFCBANK",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "SBIN",
+    "note": "Competes with SBI in retail banking",
+    "src": "HDFCBANK",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "INDUSINDBK",
+    "note": "Private bank competitor",
+    "src": "HDFCBANK",
+    "type": "competitor"
+   },
+   {
+    "confidence": "medium",
+    "dst": "BAJFINANCE",
+    "note": "Competes in retail/consumer lending",
+    "src": "HDFCBANK",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "HDFCBANK",
+    "note": "IT services provider to the bank",
+    "src": "TCS",
+    "type": "supplies"
+   },
+   {
+    "confidence": "medium",
+    "dst": "HDFCBANK",
+    "note": "Finacle core banking / IT services",
+    "src": "INFY",
+    "type": "supplies"
+   }
+  ]
+ },
+ "HDFCLIFE": {
+  "companies": {
+   "BAJAJFINSV": {
+    "listed": true,
+    "name": "Bajaj Finserv Ltd"
+   },
+   "HDFCAMC": {
+    "listed": true,
+    "name": "HDFC Asset Management Co Ltd"
+   },
+   "HDFCBANK": {
+    "listed": true,
+    "name": "HDFC Bank Ltd"
+   },
+   "HDFCLIFE": {
+    "listed": true,
+    "name": "HDFC Life Insurance Co Ltd"
+   },
+   "ICICIPRULI": {
+    "listed": true,
+    "name": "ICICI Prudential Life Insurance Co Ltd"
+   },
+   "LICI": {
+    "listed": true,
+    "name": "Life Insurance Corporation of India"
+   },
+   "MFSL": {
+    "listed": true,
+    "name": "Max Financial Services Ltd"
+   },
+   "SBILIFE": {
+    "listed": true,
+    "name": "SBI Life Insurance Co Ltd"
+   }
+  },
+  "edges": [
+   {
+    "confidence": "high",
+    "dst": "HDFCLIFE",
+    "note": "HDFC Bank is promoter and parent",
+    "src": "HDFCBANK",
+    "type": "group"
+   },
+   {
+    "confidence": "high",
+    "dst": "HDFCLIFE",
+    "note": "Bancassurance distribution of policies",
+    "src": "HDFCBANK",
+    "type": "supplies"
+   },
+   {
+    "confidence": "high",
+    "dst": "HDFCLIFE",
+    "note": "Fellow HDFC group financial company",
+    "src": "HDFCAMC",
+    "type": "group"
+   },
+   {
+    "confidence": "high",
+    "dst": "HDFCLIFE",
+    "note": "Leading private life insurer rival",
+    "src": "SBILIFE",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "HDFCLIFE",
+    "note": "Top private life insurance competitor",
+    "src": "ICICIPRULI",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "HDFCLIFE",
+    "note": "Dominant state-owned life insurer",
+    "src": "LICI",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "HDFCLIFE",
+    "note": "Max Life parent; private life insurer rival",
+    "src": "MFSL",
+    "type": "competitor"
+   },
+   {
+    "confidence": "medium",
+    "dst": "HDFCLIFE",
+    "note": "Bajaj Allianz Life is a competing insurer",
+    "src": "BAJAJFINSV",
+    "type": "competitor"
+   }
+  ]
+ },
+ "HEROMOTOCO": {
+  "companies": {
+   "APOLLOTYRE": {
+    "listed": true,
+    "name": "Apollo Tyres Ltd"
+   },
+   "BAJAJ-AUTO": {
+    "listed": true,
+    "name": "Bajaj Auto Ltd"
+   },
+   "BOSCHLTD": {
+    "listed": true,
+    "name": "Bosch Ltd"
+   },
+   "EICHERMOT": {
+    "listed": true,
+    "name": "Eicher Motors Ltd"
+   },
+   "ENDURANCE": {
+    "listed": true,
+    "name": "Endurance Technologies Ltd"
+   },
+   "EXIDEIND": {
+    "listed": true,
+    "name": "Exide Industries Ltd"
+   },
+   "HEROFIN": {
+    "listed": false,
+    "name": "Hero FinCorp Ltd"
+   },
+   "HEROMOTOCO": {
+    "listed": true,
+    "name": "Hero MotoCorp Ltd"
+   },
+   "HMSI": {
+    "listed": false,
+    "name": "Honda Motorcycle & Scooter India"
+   },
+   "MOTHERSON": {
+    "listed": true,
+    "name": "Samvardhana Motherson International Ltd"
+   },
+   "MUNJALSHOW": {
+    "listed": true,
+    "name": "Munjal Showa Ltd"
+   },
+   "TVSMOTOR": {
+    "listed": true,
+    "name": "TVS Motor Company Ltd"
+   }
+  },
+  "edges": [
+   {
+    "confidence": "high",
+    "dst": "HEROMOTOCO",
+    "note": "Rival two-wheeler manufacturer",
+    "src": "BAJAJ-AUTO",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "HEROMOTOCO",
+    "note": "Rival two-wheeler maker",
+    "src": "TVSMOTOR",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "HEROMOTOCO",
+    "note": "Honda scooters and bikes; former JV partner",
+    "src": "HMSI",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "HEROMOTOCO",
+    "note": "Royal Enfield competes in motorcycles",
+    "src": "EICHERMOT",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "HEROMOTOCO",
+    "note": "Group NBFC finances two-wheeler buyers",
+    "src": "HEROFIN",
+    "type": "finances"
+   },
+   {
+    "confidence": "high",
+    "dst": "HEROMOTOCO",
+    "note": "Supplies fuel injection and electricals",
+    "src": "BOSCHLTD",
+    "type": "supplies"
+   },
+   {
+    "confidence": "medium",
+    "dst": "HEROMOTOCO",
+    "note": "Supplies wiring and components",
+    "src": "MOTHERSON",
+    "type": "supplies"
+   },
+   {
+    "confidence": "medium",
+    "dst": "HEROMOTOCO",
+    "note": "Supplies castings and suspension parts",
+    "src": "ENDURANCE",
+    "type": "supplies"
+   },
+   {
+    "confidence": "high",
+    "dst": "HEROMOTOCO",
+    "note": "Supplies shock absorbers and struts",
+    "src": "MUNJALSHOW",
+    "type": "supplies"
+   },
+   {
+    "confidence": "medium",
+    "dst": "HEROMOTOCO",
+    "note": "Supplies automotive batteries",
+    "src": "EXIDEIND",
+    "type": "supplies"
+   },
+   {
+    "confidence": "medium",
+    "dst": "HEROMOTOCO",
+    "note": "Supplies tyres for two-wheelers",
+    "src": "APOLLOTYRE",
+    "type": "supplies"
+   }
+  ]
+ },
+ "HINDALCO": {
+  "companies": {
+   "ABCAPITAL": {
+    "listed": true,
+    "name": "Aditya Birla Capital Ltd"
+   },
+   "COALINDIA": {
+    "listed": true,
+    "name": "Coal India Ltd"
+   },
+   "GRASIM": {
+    "listed": true,
+    "name": "Grasim Industries Ltd"
+   },
+   "HINDALCO": {
+    "listed": true,
+    "name": "Hindalco Industries Ltd"
+   },
+   "HINDCOPPER": {
+    "listed": true,
+    "name": "Hindustan Copper Ltd"
+   },
+   "MARUTI": {
+    "listed": true,
+    "name": "Maruti Suzuki India Ltd"
+   },
+   "NATIONALUM": {
+    "listed": true,
+    "name": "National Aluminium Co Ltd"
+   },
+   "NOVELIS": {
+    "listed": false,
+    "name": "Novelis Inc"
+   },
+   "NTPC": {
+    "listed": true,
+    "name": "NTPC Ltd"
+   },
+   "TATAMOTORS": {
+    "listed": true,
+    "name": "Tata Motors Ltd"
+   },
+   "TATASTEEL": {
+    "listed": true,
+    "name": "Tata Steel Ltd"
+   },
+   "ULTRACEMCO": {
+    "listed": true,
+    "name": "UltraTech Cement Ltd"
+   },
+   "VEDL": {
+    "listed": true,
+    "name": "Vedanta Ltd"
+   }
+  },
+  "edges": [
+   {
+    "confidence": "high",
+    "dst": "NOVELIS",
+    "note": "Novelis is wholly-owned aluminium rolling/recycling subsidiary",
+    "src": "HINDALCO",
+    "type": "group"
+   },
+   {
+    "confidence": "high",
+    "dst": "GRASIM",
+    "note": "Both Aditya Birla Group flagship companies",
+    "src": "HINDALCO",
+    "type": "group"
+   },
+   {
+    "confidence": "high",
+    "dst": "ULTRACEMCO",
+    "note": "UltraTech is Grasim/Aditya Birla Group cement arm",
+    "src": "GRASIM",
+    "type": "group"
+   },
+   {
+    "confidence": "high",
+    "dst": "HINDALCO",
+    "note": "Aditya Birla Group financial-services affiliate",
+    "src": "ABCAPITAL",
+    "type": "group"
+   },
+   {
+    "confidence": "high",
+    "dst": "HINDALCO",
+    "note": "Coal supplied for captive power and alumina smelting",
+    "src": "COALINDIA",
+    "type": "supplies"
+   },
+   {
+    "confidence": "medium",
+    "dst": "HINDALCO",
+    "note": "Grid power supplier to aluminium smelters",
+    "src": "NTPC",
+    "type": "supplies"
+   },
+   {
+    "confidence": "high",
+    "dst": "TATAMOTORS",
+    "note": "Aluminium sheet/extrusions to auto manufacturers",
+    "src": "HINDALCO",
+    "type": "supplies"
+   },
+   {
+    "confidence": "medium",
+    "dst": "MARUTI",
+    "note": "Aluminium for auto body and components",
+    "src": "HINDALCO",
+    "type": "supplies"
+   },
+   {
+    "confidence": "high",
+    "dst": "HINDALCO",
+    "note": "Rival primary aluminium producer in India",
+    "src": "NATIONALUM",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "HINDALCO",
+    "note": "Vedanta aluminium competes in primary aluminium",
+    "src": "VEDL",
+    "type": "competitor"
+   },
+   {
+    "confidence": "low",
+    "dst": "HINDALCO",
+    "note": "Domestic copper concentrate supply overlap",
+    "src": "HINDCOPPER",
+    "type": "supplies"
+   },
+   {
+    "confidence": "medium",
+    "dst": "TATASTEEL",
+    "note": "Compete as diversified Indian metals majors",
+    "src": "HINDALCO",
+    "type": "competitor"
+   }
+  ]
+ },
+ "HINDUNILVR": {
+  "companies": {
+   "BRITANNIA": {
+    "listed": true,
+    "name": "Britannia Industries Ltd"
+   },
+   "COLPAL": {
+    "listed": true,
+    "name": "Colgate-Palmolive (India) Ltd"
+   },
+   "DABUR": {
+    "listed": true,
+    "name": "Dabur India Ltd"
+   },
+   "DMART": {
+    "listed": true,
+    "name": "Avenue Supermarts Ltd"
+   },
+   "GODREJCP": {
+    "listed": true,
+    "name": "Godrej Consumer Products Ltd"
+   },
+   "HINDUNILVR": {
+    "listed": true,
+    "name": "Hindustan Unilever Ltd"
+   },
+   "ITC": {
+    "listed": true,
+    "name": "ITC Ltd"
+   },
+   "MARICO": {
+    "listed": true,
+    "name": "Marico Ltd"
+   },
+   "NESTLEIND": {
+    "listed": true,
+    "name": "Nestle India Ltd"
+   },
+   "RRETAIL": {
+    "listed": false,
+    "name": "Reliance Retail Ventures Ltd"
+   },
+   "TATACONSUM": {
+    "listed": true,
+    "name": "Tata Consumer Products Ltd"
+   },
+   "UNILEVER": {
+    "listed": false,
+    "name": "Unilever PLC"
+   }
+  },
+  "edges": [
+   {
+    "confidence": "high",
+    "dst": "HINDUNILVR",
+    "note": "Unilever is majority promoter of HUL",
+    "src": "UNILEVER",
+    "type": "group"
+   },
+   {
+    "confidence": "high",
+    "dst": "ITC",
+    "note": "FMCG rivals in personal, home care and foods",
+    "src": "HINDUNILVR",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "NESTLEIND",
+    "note": "Packaged foods competitor",
+    "src": "HINDUNILVR",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "DABUR",
+    "note": "FMCG competitor",
+    "src": "HINDUNILVR",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "GODREJCP",
+    "note": "Home & personal care competitor",
+    "src": "HINDUNILVR",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "MARICO",
+    "note": "Personal care and foods competitor",
+    "src": "HINDUNILVR",
+    "type": "competitor"
+   },
+   {
+    "confidence": "medium",
+    "dst": "BRITANNIA",
+    "note": "Foods competitor",
+    "src": "HINDUNILVR",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "COLPAL",
+    "note": "Oral care competitor",
+    "src": "HINDUNILVR",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "TATACONSUM",
+    "note": "Tea, coffee and foods competitor",
+    "src": "HINDUNILVR",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "DMART",
+    "note": "Supplies FMCG products to DMart stores",
+    "src": "HINDUNILVR",
+    "type": "supplies"
+   },
+   {
+    "confidence": "medium",
+    "dst": "RRETAIL",
+    "note": "Supplies FMCG to Reliance Retail",
+    "src": "HINDUNILVR",
+    "type": "supplies"
+   }
+  ]
+ },
+ "ICICIBANK": {
+  "companies": {
+   "AXISBANK": {
+    "listed": true,
+    "name": "Axis Bank Ltd"
+   },
+   "BAJFINANCE": {
+    "listed": true,
+    "name": "Bajaj Finance Ltd"
+   },
+   "HDFCBANK": {
+    "listed": true,
+    "name": "HDFC Bank Ltd"
+   },
+   "ICICIBANK": {
+    "listed": true,
+    "name": "ICICI Bank Ltd"
+   },
+   "ICICIGI": {
+    "listed": true,
+    "name": "ICICI Lombard General Insurance Co Ltd"
+   },
+   "ICICIPRULI": {
+    "listed": true,
+    "name": "ICICI Prudential Life Insurance Co Ltd"
+   },
+   "INDUSINDBK": {
+    "listed": true,
+    "name": "IndusInd Bank Ltd"
+   },
+   "INFY": {
+    "listed": true,
+    "name": "Infosys Ltd"
+   },
+   "KOTAKBANK": {
+    "listed": true,
+    "name": "Kotak Mahindra Bank Ltd"
+   },
+   "SBIN": {
+    "listed": true,
+    "name": "State Bank of India"
+   },
+   "TCS": {
+    "listed": true,
+    "name": "Tata Consultancy Services Ltd"
+   }
+  },
+  "edges": [
+   {
+    "confidence": "high",
+    "dst": "ICICIPRULI",
+    "note": "ICICI Prudential Life is an ICICI group company",
+    "src": "ICICIBANK",
+    "type": "group"
+   },
+   {
+    "confidence": "high",
+    "dst": "ICICIGI",
+    "note": "ICICI Lombard general insurance is ICICI group",
+    "src": "ICICIBANK",
+    "type": "group"
+   },
+   {
+    "confidence": "high",
+    "dst": "HDFCBANK",
+    "note": "Largest private bank rivals",
+    "src": "ICICIBANK",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "AXISBANK",
+    "note": "Private bank competitor",
+    "src": "ICICIBANK",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "KOTAKBANK",
+    "note": "Private bank competitor",
+    "src": "ICICIBANK",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "SBIN",
+    "note": "Competes with SBI in retail banking",
+    "src": "ICICIBANK",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "INDUSINDBK",
+    "note": "Private bank competitor",
+    "src": "ICICIBANK",
+    "type": "competitor"
+   },
+   {
+    "confidence": "medium",
+    "dst": "BAJFINANCE",
+    "note": "Competes in retail lending",
+    "src": "ICICIBANK",
+    "type": "competitor"
+   },
+   {
+    "confidence": "medium",
+    "dst": "ICICIBANK",
+    "note": "IT services provider to the bank",
+    "src": "TCS",
+    "type": "supplies"
+   },
+   {
+    "confidence": "medium",
+    "dst": "ICICIBANK",
+    "note": "IT / core banking services",
+    "src": "INFY",
+    "type": "supplies"
+   }
+  ]
+ },
+ "INDUSINDBK": {
+  "companies": {
+   "AUBANK": {
+    "listed": true,
+    "name": "AU Small Finance Bank Ltd"
+   },
+   "AXISBANK": {
+    "listed": true,
+    "name": "Axis Bank Ltd"
+   },
+   "BAJFINANCE": {
+    "listed": true,
+    "name": "Bajaj Finance Ltd"
+   },
+   "BANDHANBNK": {
+    "listed": true,
+    "name": "Bandhan Bank Ltd"
+   },
+   "FEDERALBNK": {
+    "listed": true,
+    "name": "Federal Bank Ltd"
+   },
+   "HDFCBANK": {
+    "listed": true,
+    "name": "HDFC Bank Ltd"
+   },
+   "ICICIBANK": {
+    "listed": true,
+    "name": "ICICI Bank Ltd"
+   },
+   "INDUSINDBK": {
+    "listed": true,
+    "name": "IndusInd Bank Ltd"
+   },
+   "KOTAKBANK": {
+    "listed": true,
+    "name": "Kotak Mahindra Bank Ltd"
+   },
+   "RBLBANK": {
+    "listed": true,
+    "name": "RBL Bank Ltd"
+   },
+   "SBIN": {
+    "listed": true,
+    "name": "State Bank of India"
+   },
+   "SHRIRAMFIN": {
+    "listed": true,
+    "name": "Shriram Finance Ltd"
+   }
+  },
+  "edges": [
+   {
+    "confidence": "medium",
+    "dst": "BAJFINANCE",
+    "note": "Compete in vehicle/consumer lending",
+    "src": "INDUSINDBK",
+    "type": "competitor"
+   },
+   {
+    "confidence": "medium",
+    "dst": "SHRIRAMFIN",
+    "note": "Compete in commercial-vehicle financing",
+    "src": "INDUSINDBK",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "INDUSINDBK",
+    "note": "Larger private-bank competitor",
+    "src": "HDFCBANK",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "INDUSINDBK",
+    "note": "Private-bank competitor",
+    "src": "ICICIBANK",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "INDUSINDBK",
+    "note": "Private-bank competitor",
+    "src": "AXISBANK",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "INDUSINDBK",
+    "note": "Private-bank competitor",
+    "src": "KOTAKBANK",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "INDUSINDBK",
+    "note": "Largest bank competitor for deposits/loans",
+    "src": "SBIN",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "INDUSINDBK",
+    "note": "Mid-size private-bank competitor",
+    "src": "FEDERALBNK",
+    "type": "competitor"
+   },
+   {
+    "confidence": "medium",
+    "dst": "INDUSINDBK",
+    "note": "Microfinance/retail-bank competitor",
+    "src": "BANDHANBNK",
+    "type": "competitor"
+   },
+   {
+    "confidence": "medium",
+    "dst": "INDUSINDBK",
+    "note": "Vehicle-finance and retail competitor",
+    "src": "AUBANK",
+    "type": "competitor"
+   },
+   {
+    "confidence": "medium",
+    "dst": "INDUSINDBK",
+    "note": "Cards and retail-lending competitor",
+    "src": "RBLBANK",
+    "type": "competitor"
+   },
+   {
+    "confidence": "low",
+    "dst": "HDFCBANK",
+    "note": "Both finance retail/MSME borrowers (market overlap)",
+    "src": "INDUSINDBK",
+    "type": "finances"
+   }
+  ]
+ },
+ "INFY": {
+  "companies": {
+   "AXISBANK": {
+    "listed": true,
+    "name": "Axis Bank Ltd"
+   },
+   "BHARTIARTL": {
+    "listed": true,
+    "name": "Bharti Airtel Ltd"
+   },
+   "HCLTECH": {
+    "listed": true,
+    "name": "HCL Technologies Ltd"
+   },
+   "HDFCBANK": {
+    "listed": true,
+    "name": "HDFC Bank Ltd"
+   },
+   "ICICIBANK": {
+    "listed": true,
+    "name": "ICICI Bank Ltd"
+   },
+   "INFY": {
+    "listed": true,
+    "name": "Infosys Ltd"
+   },
+   "LTIM": {
+    "listed": true,
+    "name": "LTIMindtree Ltd"
+   },
+   "SBIN": {
+    "listed": true,
+    "name": "State Bank of India"
+   },
+   "TCS": {
+    "listed": true,
+    "name": "Tata Consultancy Services Ltd"
+   },
+   "TECHM": {
+    "listed": true,
+    "name": "Tech Mahindra Ltd"
+   },
+   "WIPRO": {
+    "listed": true,
+    "name": "Wipro Ltd"
+   }
+  },
+  "edges": [
+   {
+    "confidence": "high",
+    "dst": "TCS",
+    "note": "Top Indian IT services rivals",
+    "src": "INFY",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "WIPRO",
+    "note": "IT services competitor",
+    "src": "INFY",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "HCLTECH",
+    "note": "IT services competitor",
+    "src": "INFY",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "TECHM",
+    "note": "IT services competitor",
+    "src": "INFY",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "LTIM",
+    "note": "IT services competitor",
+    "src": "INFY",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "HDFCBANK",
+    "note": "IT services and Finacle core banking",
+    "src": "INFY",
+    "type": "supplies"
+   },
+   {
+    "confidence": "medium",
+    "dst": "ICICIBANK",
+    "note": "IT / Finacle core banking services",
+    "src": "INFY",
+    "type": "supplies"
+   },
+   {
+    "confidence": "medium",
+    "dst": "AXISBANK",
+    "note": "IT / core banking services",
+    "src": "INFY",
+    "type": "supplies"
+   },
+   {
+    "confidence": "low",
+    "dst": "SBIN",
+    "note": "IT services to the bank",
+    "src": "INFY",
+    "type": "supplies"
+   },
+   {
+    "confidence": "low",
+    "dst": "BHARTIARTL",
+    "note": "IT/digital services to telecom operator",
+    "src": "INFY",
+    "type": "supplies"
+   }
+  ]
+ },
+ "ITC": {
+  "companies": {
+   "BAT": {
+    "listed": false,
+    "name": "British American Tobacco PLC"
+   },
+   "BRITANNIA": {
+    "listed": true,
+    "name": "Britannia Industries Ltd"
+   },
+   "DABUR": {
+    "listed": true,
+    "name": "Dabur India Ltd"
+   },
+   "DMART": {
+    "listed": true,
+    "name": "Avenue Supermarts Ltd"
+   },
+   "GODFRYPHLP": {
+    "listed": true,
+    "name": "Godfrey Phillips India Ltd"
+   },
+   "GODREJCP": {
+    "listed": true,
+    "name": "Godrej Consumer Products Ltd"
+   },
+   "HINDUNILVR": {
+    "listed": true,
+    "name": "Hindustan Unilever Ltd"
+   },
+   "INDHOTEL": {
+    "listed": true,
+    "name": "The Indian Hotels Company Ltd"
+   },
+   "ITC": {
+    "listed": true,
+    "name": "ITC Ltd"
+   },
+   "ITCHOTELS": {
+    "listed": true,
+    "name": "ITC Hotels Ltd"
+   },
+   "NESTLEIND": {
+    "listed": true,
+    "name": "Nestle India Ltd"
+   },
+   "TATACONSUM": {
+    "listed": true,
+    "name": "Tata Consumer Products Ltd"
+   },
+   "VSTIND": {
+    "listed": true,
+    "name": "VST Industries Ltd"
+   }
+  },
+  "edges": [
+   {
+    "confidence": "high",
+    "dst": "ITC",
+    "note": "British American Tobacco is largest shareholder",
+    "src": "BAT",
+    "type": "group"
+   },
+   {
+    "confidence": "high",
+    "dst": "ITCHOTELS",
+    "note": "ITC Hotels demerged from ITC in 2025",
+    "src": "ITC",
+    "type": "group"
+   },
+   {
+    "confidence": "high",
+    "dst": "HINDUNILVR",
+    "note": "FMCG rivals across categories",
+    "src": "ITC",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "NESTLEIND",
+    "note": "Packaged foods competitor",
+    "src": "ITC",
+    "type": "competitor"
+   },
+   {
+    "confidence": "medium",
+    "dst": "DABUR",
+    "note": "FMCG competitor",
+    "src": "ITC",
+    "type": "competitor"
+   },
+   {
+    "confidence": "medium",
+    "dst": "GODREJCP",
+    "note": "FMCG competitor",
+    "src": "ITC",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "BRITANNIA",
+    "note": "Biscuits and foods competitor",
+    "src": "ITC",
+    "type": "competitor"
+   },
+   {
+    "confidence": "medium",
+    "dst": "TATACONSUM",
+    "note": "Packaged foods competitor",
+    "src": "ITC",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "GODFRYPHLP",
+    "note": "Cigarette market competitor",
+    "src": "ITC",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "VSTIND",
+    "note": "Cigarette market competitor",
+    "src": "ITC",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "INDHOTEL",
+    "note": "ITC Hotels vs Indian Hotels (Taj)",
+    "src": "ITCHOTELS",
+    "type": "competitor"
+   },
+   {
+    "confidence": "medium",
+    "dst": "DMART",
+    "note": "Supplies FMCG and cigarettes to DMart",
+    "src": "ITC",
+    "type": "supplies"
+   }
+  ]
+ },
+ "JSWSTEEL": {
+  "companies": {
+   "ADANIPORTS": {
+    "listed": true,
+    "name": "Adani Ports & SEZ Ltd"
+   },
+   "COALINDIA": {
+    "listed": true,
+    "name": "Coal India Ltd"
+   },
+   "HDFCBANK": {
+    "listed": true,
+    "name": "HDFC Bank Ltd"
+   },
+   "JINDALSTEL": {
+    "listed": true,
+    "name": "Jindal Steel & Power Ltd"
+   },
+   "JSWENERGY": {
+    "listed": true,
+    "name": "JSW Energy Ltd"
+   },
+   "JSWINFRA": {
+    "listed": true,
+    "name": "JSW Infrastructure Ltd"
+   },
+   "JSWSTEEL": {
+    "listed": true,
+    "name": "JSW Steel Ltd"
+   },
+   "MARUTI": {
+    "listed": true,
+    "name": "Maruti Suzuki India Ltd"
+   },
+   "NMDC": {
+    "listed": true,
+    "name": "NMDC Ltd"
+   },
+   "SAIL": {
+    "listed": true,
+    "name": "Steel Authority of India Ltd"
+   },
+   "SBIN": {
+    "listed": true,
+    "name": "State Bank of India"
+   },
+   "TATAMOTORS": {
+    "listed": true,
+    "name": "Tata Motors Ltd"
+   },
+   "TATASTEEL": {
+    "listed": true,
+    "name": "Tata Steel Ltd"
+   }
+  },
+  "edges": [
+   {
+    "confidence": "high",
+    "dst": "JSWSTEEL",
+    "note": "Supplies iron ore for steelmaking",
+    "src": "NMDC",
+    "type": "supplies"
+   },
+   {
+    "confidence": "medium",
+    "dst": "JSWSTEEL",
+    "note": "Supplies coal for captive power and blast furnaces",
+    "src": "COALINDIA",
+    "type": "supplies"
+   },
+   {
+    "confidence": "high",
+    "dst": "JSWSTEEL",
+    "note": "Both flagship JSW Group companies",
+    "src": "JSWENERGY",
+    "type": "group"
+   },
+   {
+    "confidence": "high",
+    "dst": "JSWSTEEL",
+    "note": "JSW Group port arm; handles JSW Steel cargo",
+    "src": "JSWINFRA",
+    "type": "group"
+   },
+   {
+    "confidence": "high",
+    "dst": "JSWSTEEL",
+    "note": "Provides port and logistics services",
+    "src": "JSWINFRA",
+    "type": "supplies"
+   },
+   {
+    "confidence": "high",
+    "dst": "JSWSTEEL",
+    "note": "Leading private integrated steel producers",
+    "src": "TATASTEEL",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "JSWSTEEL",
+    "note": "Competing private steel producer",
+    "src": "JINDALSTEL",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "JSWSTEEL",
+    "note": "Large domestic steel producer",
+    "src": "SAIL",
+    "type": "competitor"
+   },
+   {
+    "confidence": "medium",
+    "dst": "MARUTI",
+    "note": "Supplies automotive-grade flat steel",
+    "src": "JSWSTEEL",
+    "type": "supplies"
+   },
+   {
+    "confidence": "medium",
+    "dst": "TATAMOTORS",
+    "note": "Supplies auto and structural steel",
+    "src": "JSWSTEEL",
+    "type": "supplies"
+   },
+   {
+    "confidence": "low",
+    "dst": "JSWSTEEL",
+    "note": "Port handling for raw material imports",
+    "src": "ADANIPORTS",
+    "type": "supplies"
+   },
+   {
+    "confidence": "high",
+    "dst": "JSWSTEEL",
+    "note": "Major lender to JSW Steel",
+    "src": "SBIN",
+    "type": "finances"
+   },
+   {
+    "confidence": "medium",
+    "dst": "JSWSTEEL",
+    "note": "Provides banking and credit facilities",
+    "src": "HDFCBANK",
+    "type": "finances"
+   }
+  ]
+ },
+ "KOTAKBANK": {
+  "companies": {
+   "AXISBANK": {
+    "listed": true,
+    "name": "Axis Bank Ltd"
+   },
+   "BAJFINANCE": {
+    "listed": true,
+    "name": "Bajaj Finance Ltd"
+   },
+   "HDFCBANK": {
+    "listed": true,
+    "name": "HDFC Bank Ltd"
+   },
+   "ICICIBANK": {
+    "listed": true,
+    "name": "ICICI Bank Ltd"
+   },
+   "IDFCFIRSTB": {
+    "listed": true,
+    "name": "IDFC First Bank Ltd"
+   },
+   "INDUSINDBK": {
+    "listed": true,
+    "name": "IndusInd Bank Ltd"
+   },
+   "INFY": {
+    "listed": true,
+    "name": "Infosys Ltd"
+   },
+   "KOTAKBANK": {
+    "listed": true,
+    "name": "Kotak Mahindra Bank Ltd"
+   },
+   "KOTAKLIFE": {
+    "listed": false,
+    "name": "Kotak Mahindra Life Insurance Co Ltd"
+   },
+   "SBIN": {
+    "listed": true,
+    "name": "State Bank of India"
+   },
+   "TCS": {
+    "listed": true,
+    "name": "Tata Consultancy Services Ltd"
+   }
+  },
+  "edges": [
+   {
+    "confidence": "high",
+    "dst": "KOTAKLIFE",
+    "note": "Kotak Mahindra Life Insurance is a subsidiary",
+    "src": "KOTAKBANK",
+    "type": "group"
+   },
+   {
+    "confidence": "high",
+    "dst": "HDFCBANK",
+    "note": "Private bank competitor",
+    "src": "KOTAKBANK",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "ICICIBANK",
+    "note": "Private bank competitor",
+    "src": "KOTAKBANK",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "AXISBANK",
+    "note": "Private bank competitor",
+    "src": "KOTAKBANK",
+    "type": "competitor"
+   },
+   {
+    "confidence": "medium",
+    "dst": "SBIN",
+    "note": "Competes in retail banking",
+    "src": "KOTAKBANK",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "INDUSINDBK",
+    "note": "Private bank competitor",
+    "src": "KOTAKBANK",
+    "type": "competitor"
+   },
+   {
+    "confidence": "medium",
+    "dst": "IDFCFIRSTB",
+    "note": "Private bank competitor",
+    "src": "KOTAKBANK",
+    "type": "competitor"
+   },
+   {
+    "confidence": "medium",
+    "dst": "BAJFINANCE",
+    "note": "Competes in retail lending",
+    "src": "KOTAKBANK",
+    "type": "competitor"
+   },
+   {
+    "confidence": "medium",
+    "dst": "KOTAKBANK",
+    "note": "IT services provider to the bank",
+    "src": "TCS",
+    "type": "supplies"
+   },
+   {
+    "confidence": "medium",
+    "dst": "KOTAKBANK",
+    "note": "IT / core banking services",
+    "src": "INFY",
+    "type": "supplies"
+   }
+  ]
+ },
+ "LT": {
+  "companies": {
+   "ABB": {
+    "listed": true,
+    "name": "ABB India Ltd"
+   },
+   "BHEL": {
+    "listed": true,
+    "name": "Bharat Heavy Electricals Ltd"
+   },
+   "LT": {
+    "listed": true,
+    "name": "Larsen & Toubro Ltd"
+   },
+   "LTF": {
+    "listed": true,
+    "name": "L&T Finance Ltd"
+   },
+   "LTIM": {
+    "listed": true,
+    "name": "LTIMindtree Ltd"
+   },
+   "LTTS": {
+    "listed": true,
+    "name": "L&T Technology Services Ltd"
+   },
+   "NTPC": {
+    "listed": true,
+    "name": "NTPC Ltd"
+   },
+   "ONGC": {
+    "listed": true,
+    "name": "Oil & Natural Gas Corp Ltd"
+   },
+   "RELIANCE": {
+    "listed": true,
+    "name": "Reliance Industries Ltd"
+   },
+   "SBIN": {
+    "listed": true,
+    "name": "State Bank of India"
+   },
+   "SIEMENS": {
+    "listed": true,
+    "name": "Siemens Ltd"
+   }
+  },
+  "edges": [
+   {
+    "confidence": "high",
+    "dst": "LTIM",
+    "note": "LTIMindtree is the L&T group IT arm",
+    "src": "LT",
+    "type": "group"
+   },
+   {
+    "confidence": "high",
+    "dst": "LTTS",
+    "note": "L&T Technology Services is a subsidiary",
+    "src": "LT",
+    "type": "group"
+   },
+   {
+    "confidence": "high",
+    "dst": "LTF",
+    "note": "L&T Finance is the L&T group NBFC",
+    "src": "LT",
+    "type": "group"
+   },
+   {
+    "confidence": "medium",
+    "dst": "BHEL",
+    "note": "Compete in power and heavy engineering EPC",
+    "src": "LT",
+    "type": "competitor"
+   },
+   {
+    "confidence": "medium",
+    "dst": "SIEMENS",
+    "note": "Compete in industrial and electrical systems",
+    "src": "LT",
+    "type": "competitor"
+   },
+   {
+    "confidence": "medium",
+    "dst": "ABB",
+    "note": "Compete in electrification and automation",
+    "src": "LT",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "ONGC",
+    "note": "EPC/engineering services for oil & gas projects",
+    "src": "LT",
+    "type": "supplies"
+   },
+   {
+    "confidence": "high",
+    "dst": "NTPC",
+    "note": "EPC services for power plants",
+    "src": "LT",
+    "type": "supplies"
+   },
+   {
+    "confidence": "medium",
+    "dst": "RELIANCE",
+    "note": "EPC for refinery and petrochem projects",
+    "src": "LT",
+    "type": "supplies"
+   },
+   {
+    "confidence": "low",
+    "dst": "LT",
+    "note": "Bank funding for L&T projects",
+    "src": "SBIN",
+    "type": "finances"
+   }
+  ]
+ },
+ "LTIM": {
+  "companies": {
+   "COFORGE": {
+    "listed": true,
+    "name": "Coforge Ltd"
+   },
+   "HCLTECH": {
+    "listed": true,
+    "name": "HCL Technologies Ltd"
+   },
+   "INFY": {
+    "listed": true,
+    "name": "Infosys Ltd"
+   },
+   "LT": {
+    "listed": true,
+    "name": "Larsen & Toubro Ltd"
+   },
+   "LTF": {
+    "listed": true,
+    "name": "L&T Finance Ltd"
+   },
+   "LTIM": {
+    "listed": true,
+    "name": "LTIMindtree Ltd"
+   },
+   "LTTS": {
+    "listed": true,
+    "name": "L&T Technology Services Ltd"
+   },
+   "MPHASIS": {
+    "listed": true,
+    "name": "Mphasis Ltd"
+   },
+   "PERSISTENT": {
+    "listed": true,
+    "name": "Persistent Systems Ltd"
+   },
+   "TCS": {
+    "listed": true,
+    "name": "Tata Consultancy Services Ltd"
+   },
+   "TECHM": {
+    "listed": true,
+    "name": "Tech Mahindra Ltd"
+   },
+   "WIPRO": {
+    "listed": true,
+    "name": "Wipro Ltd"
+   }
+  },
+  "edges": [
+   {
+    "confidence": "high",
+    "dst": "LTIM",
+    "note": "L&T is promoter/parent of LTIMindtree",
+    "src": "LT",
+    "type": "group"
+   },
+   {
+    "confidence": "high",
+    "dst": "LTTS",
+    "note": "Both L&T Group IT/engineering-services companies",
+    "src": "LTIM",
+    "type": "group"
+   },
+   {
+    "confidence": "high",
+    "dst": "LTF",
+    "note": "L&T Group affiliate (financial services)",
+    "src": "LTIM",
+    "type": "group"
+   },
+   {
+    "confidence": "high",
+    "dst": "LTIM",
+    "note": "IT-services competitor",
+    "src": "TCS",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "LTIM",
+    "note": "IT-services competitor",
+    "src": "INFY",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "LTIM",
+    "note": "IT-services competitor",
+    "src": "WIPRO",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "LTIM",
+    "note": "IT-services competitor",
+    "src": "HCLTECH",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "LTIM",
+    "note": "IT-services competitor",
+    "src": "TECHM",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "LTIM",
+    "note": "Mid-tier IT-services competitor",
+    "src": "COFORGE",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "LTIM",
+    "note": "Mid-tier IT-services competitor",
+    "src": "PERSISTENT",
+    "type": "competitor"
+   },
+   {
+    "confidence": "medium",
+    "dst": "LTIM",
+    "note": "Mid-tier IT-services competitor",
+    "src": "MPHASIS",
+    "type": "competitor"
+   }
+  ]
+ },
+ "M&M": {
+  "companies": {
+   "BHARATFORG": {
+    "listed": true,
+    "name": "Bharat Forge Ltd"
+   },
+   "BOSCHLTD": {
+    "listed": true,
+    "name": "Bosch Ltd"
+   },
+   "ESCORTS": {
+    "listed": true,
+    "name": "Escorts Kubota Ltd"
+   },
+   "EXIDEIND": {
+    "listed": true,
+    "name": "Exide Industries Ltd"
+   },
+   "M&M": {
+    "listed": true,
+    "name": "Mahindra & Mahindra Ltd"
+   },
+   "M&MFIN": {
+    "listed": true,
+    "name": "Mahindra & Mahindra Financial Services Ltd"
+   },
+   "MAHLIFE": {
+    "listed": true,
+    "name": "Mahindra Lifespace Developers Ltd"
+   },
+   "MAHLOG": {
+    "listed": true,
+    "name": "Mahindra Logistics Ltd"
+   },
+   "MARUTI": {
+    "listed": true,
+    "name": "Maruti Suzuki India Ltd"
+   },
+   "MOTHERSON": {
+    "listed": true,
+    "name": "Samvardhana Motherson International Ltd"
+   },
+   "MRF": {
+    "listed": true,
+    "name": "MRF Ltd"
+   },
+   "SWARAJENG": {
+    "listed": true,
+    "name": "Swaraj Engines Ltd"
+   },
+   "TATAMOTORS": {
+    "listed": true,
+    "name": "Tata Motors Ltd"
+   },
+   "TECHM": {
+    "listed": true,
+    "name": "Tech Mahindra Ltd"
+   }
+  },
+  "edges": [
+   {
+    "confidence": "high",
+    "dst": "M&MFIN",
+    "note": "Mahindra Finance, group NBFC",
+    "src": "M&M",
+    "type": "group"
+   },
+   {
+    "confidence": "high",
+    "dst": "TECHM",
+    "note": "Tech Mahindra, group IT arm",
+    "src": "M&M",
+    "type": "group"
+   },
+   {
+    "confidence": "high",
+    "dst": "MAHLIFE",
+    "note": "Mahindra Lifespace, group realty",
+    "src": "M&M",
+    "type": "group"
+   },
+   {
+    "confidence": "high",
+    "dst": "MAHLOG",
+    "note": "Mahindra Logistics, group company",
+    "src": "M&M",
+    "type": "group"
+   },
+   {
+    "confidence": "high",
+    "dst": "SWARAJENG",
+    "note": "Swaraj Engines, group affiliate",
+    "src": "M&M",
+    "type": "group"
+   },
+   {
+    "confidence": "high",
+    "dst": "M&M",
+    "note": "Diesel engines for Swaraj tractors",
+    "src": "SWARAJENG",
+    "type": "supplies"
+   },
+   {
+    "confidence": "high",
+    "dst": "TATAMOTORS",
+    "note": "SUV and commercial vehicle rival",
+    "src": "M&M",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "MARUTI",
+    "note": "Passenger vehicle and SUV rival",
+    "src": "M&M",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "ESCORTS",
+    "note": "Tractor market rival",
+    "src": "M&M",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "M&M",
+    "note": "Wiring harnesses and modules",
+    "src": "MOTHERSON",
+    "type": "supplies"
+   },
+   {
+    "confidence": "high",
+    "dst": "M&M",
+    "note": "Fuel systems and auto electricals",
+    "src": "BOSCHLTD",
+    "type": "supplies"
+   },
+   {
+    "confidence": "medium",
+    "dst": "M&M",
+    "note": "Automotive batteries",
+    "src": "EXIDEIND",
+    "type": "supplies"
+   },
+   {
+    "confidence": "medium",
+    "dst": "M&M",
+    "note": "Tyres for vehicles and tractors",
+    "src": "MRF",
+    "type": "supplies"
+   },
+   {
+    "confidence": "medium",
+    "dst": "M&M",
+    "note": "Forged components",
+    "src": "BHARATFORG",
+    "type": "supplies"
+   },
+   {
+    "confidence": "high",
+    "dst": "M&M",
+    "note": "Finances tractor and auto customers",
+    "src": "M&MFIN",
+    "type": "finances"
+   }
+  ]
+ },
+ "MARUTI": {
+  "companies": {
+   "APOLLOTYRE": {
+    "listed": true,
+    "name": "Apollo Tyres Ltd"
+   },
+   "ARE&M": {
+    "listed": true,
+    "name": "Amara Raja Energy & Mobility Ltd"
+   },
+   "BAJFINANCE": {
+    "listed": true,
+    "name": "Bajaj Finance Ltd"
+   },
+   "BHARATFORG": {
+    "listed": true,
+    "name": "Bharat Forge Ltd"
+   },
+   "BOSCHLTD": {
+    "listed": true,
+    "name": "Bosch Ltd"
+   },
+   "EXIDEIND": {
+    "listed": true,
+    "name": "Exide Industries Ltd"
+   },
+   "HDFCBANK": {
+    "listed": true,
+    "name": "HDFC Bank Ltd"
+   },
+   "HYUNDAI": {
+    "listed": true,
+    "name": "Hyundai Motor India Ltd"
+   },
+   "JAYBARMARU": {
+    "listed": true,
+    "name": "Jay Bharat Maruti Ltd"
+   },
+   "M&M": {
+    "listed": true,
+    "name": "Mahindra & Mahindra Ltd"
+   },
+   "MARUTI": {
+    "listed": true,
+    "name": "Maruti Suzuki India Ltd"
+   },
+   "MOTHERSON": {
+    "listed": true,
+    "name": "Samvardhana Motherson International Ltd"
+   },
+   "MRF": {
+    "listed": true,
+    "name": "MRF Ltd"
+   },
+   "SONACOMS": {
+    "listed": true,
+    "name": "Sona BLW Precision Forgings Ltd"
+   },
+   "SUNDRMFAST": {
+    "listed": true,
+    "name": "Sundram Fasteners Ltd"
+   },
+   "SUZUKI": {
+    "listed": false,
+    "name": "Suzuki Motor Corporation"
+   },
+   "TATAMOTORS": {
+    "listed": true,
+    "name": "Tata Motors Ltd"
+   }
+  },
+  "edges": [
+   {
+    "confidence": "high",
+    "dst": "MARUTI",
+    "note": "Suzuki Motor Corp is majority parent",
+    "src": "SUZUKI",
+    "type": "group"
+   },
+   {
+    "confidence": "high",
+    "dst": "TATAMOTORS",
+    "note": "Passenger vehicle rival",
+    "src": "MARUTI",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "M&M",
+    "note": "SUV segment rival",
+    "src": "MARUTI",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "HYUNDAI",
+    "note": "#2 passenger vehicle player",
+    "src": "MARUTI",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "MARUTI",
+    "note": "Wiring harnesses, mirrors and modules",
+    "src": "MOTHERSON",
+    "type": "supplies"
+   },
+   {
+    "confidence": "high",
+    "dst": "MARUTI",
+    "note": "Fuel injection and auto electricals",
+    "src": "BOSCHLTD",
+    "type": "supplies"
+   },
+   {
+    "confidence": "high",
+    "dst": "MARUTI",
+    "note": "Fasteners and powertrain components",
+    "src": "SUNDRMFAST",
+    "type": "supplies"
+   },
+   {
+    "confidence": "high",
+    "dst": "MARUTI",
+    "note": "Sheet-metal components, dedicated supplier",
+    "src": "JAYBARMARU",
+    "type": "supplies"
+   },
+   {
+    "confidence": "medium",
+    "dst": "MARUTI",
+    "note": "Tyres for passenger vehicles",
+    "src": "MRF",
+    "type": "supplies"
+   },
+   {
+    "confidence": "medium",
+    "dst": "MARUTI",
+    "note": "OEM tyres",
+    "src": "APOLLOTYRE",
+    "type": "supplies"
+   },
+   {
+    "confidence": "medium",
+    "dst": "MARUTI",
+    "note": "Automotive batteries",
+    "src": "EXIDEIND",
+    "type": "supplies"
+   },
+   {
+    "confidence": "medium",
+    "dst": "MARUTI",
+    "note": "Amara Raja automotive batteries",
+    "src": "ARE&M",
+    "type": "supplies"
+   },
+   {
+    "confidence": "medium",
+    "dst": "MARUTI",
+    "note": "Driveline gears and components",
+    "src": "SONACOMS",
+    "type": "supplies"
+   },
+   {
+    "confidence": "medium",
+    "dst": "MARUTI",
+    "note": "Forged powertrain and chassis parts",
+    "src": "BHARATFORG",
+    "type": "supplies"
+   },
+   {
+    "confidence": "medium",
+    "dst": "MARUTI",
+    "note": "Retail auto loans drive vehicle demand",
+    "src": "HDFCBANK",
+    "type": "finances"
+   },
+   {
+    "confidence": "low",
+    "dst": "MARUTI",
+    "note": "Consumer auto financing",
+    "src": "BAJFINANCE",
+    "type": "finances"
+   }
+  ]
+ },
+ "NESTLEIND": {
+  "companies": {
+   "BRITANNIA": {
+    "listed": true,
+    "name": "Britannia Industries Ltd"
+   },
+   "COLPAL": {
+    "listed": true,
+    "name": "Colgate-Palmolive India Ltd"
+   },
+   "DABUR": {
+    "listed": true,
+    "name": "Dabur India Ltd"
+   },
+   "DMART": {
+    "listed": true,
+    "name": "Avenue Supermarts Ltd"
+   },
+   "GODREJCP": {
+    "listed": true,
+    "name": "Godrej Consumer Products Ltd"
+   },
+   "HINDUNILVR": {
+    "listed": true,
+    "name": "Hindustan Unilever Ltd"
+   },
+   "ITC": {
+    "listed": true,
+    "name": "ITC Ltd"
+   },
+   "MARICO": {
+    "listed": true,
+    "name": "Marico Ltd"
+   },
+   "NESTLEIND": {
+    "listed": true,
+    "name": "Nestl\u00e9 India Ltd"
+   },
+   "NESTLESA": {
+    "listed": false,
+    "name": "Nestl\u00e9 S.A."
+   },
+   "TATACONSUM": {
+    "listed": true,
+    "name": "Tata Consumer Products Ltd"
+   },
+   "VBL": {
+    "listed": true,
+    "name": "Varun Beverages Ltd"
+   }
+  },
+  "edges": [
+   {
+    "confidence": "high",
+    "dst": "NESTLEIND",
+    "note": "Nestl\u00e9 S.A. is majority parent",
+    "src": "NESTLESA",
+    "type": "group"
+   },
+   {
+    "confidence": "high",
+    "dst": "HINDUNILVR",
+    "note": "FMCG foods and beverages rival",
+    "src": "NESTLEIND",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "BRITANNIA",
+    "note": "Packaged foods rival (biscuits/dairy)",
+    "src": "NESTLEIND",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "ITC",
+    "note": "Packaged foods rival (Sunfeast/Aashirvaad)",
+    "src": "NESTLEIND",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "TATACONSUM",
+    "note": "Beverages and foods rival",
+    "src": "NESTLEIND",
+    "type": "competitor"
+   },
+   {
+    "confidence": "low",
+    "dst": "VBL",
+    "note": "Beverages overlap in ready-to-drink",
+    "src": "NESTLEIND",
+    "type": "competitor"
+   },
+   {
+    "confidence": "medium",
+    "dst": "DABUR",
+    "note": "FMCG rival",
+    "src": "NESTLEIND",
+    "type": "competitor"
+   },
+   {
+    "confidence": "medium",
+    "dst": "MARICO",
+    "note": "FMCG foods rival",
+    "src": "NESTLEIND",
+    "type": "competitor"
+   },
+   {
+    "confidence": "low",
+    "dst": "GODREJCP",
+    "note": "FMCG rival",
+    "src": "NESTLEIND",
+    "type": "competitor"
+   },
+   {
+    "confidence": "low",
+    "dst": "COLPAL",
+    "note": "FMCG rival, limited overlap",
+    "src": "NESTLEIND",
+    "type": "competitor"
+   },
+   {
+    "confidence": "medium",
+    "dst": "DMART",
+    "note": "Supplies packaged foods to retail chains",
+    "src": "NESTLEIND",
+    "type": "supplies"
+   }
+  ]
+ },
+ "NTPC": {
+  "companies": {
+   "ADANIPOWER": {
+    "listed": true,
+    "name": "Adani Power Ltd"
+   },
+   "BHEL": {
+    "listed": true,
+    "name": "Bharat Heavy Electricals Ltd"
+   },
+   "COALINDIA": {
+    "listed": true,
+    "name": "Coal India Ltd"
+   },
+   "JSWENERGY": {
+    "listed": true,
+    "name": "JSW Energy Ltd"
+   },
+   "NHPC": {
+    "listed": true,
+    "name": "NHPC Ltd"
+   },
+   "NTPC": {
+    "listed": true,
+    "name": "NTPC Ltd"
+   },
+   "NTPCGREEN": {
+    "listed": true,
+    "name": "NTPC Green Energy Ltd"
+   },
+   "PFC": {
+    "listed": true,
+    "name": "Power Finance Corporation Ltd"
+   },
+   "POWERGRID": {
+    "listed": true,
+    "name": "Power Grid Corporation of India Ltd"
+   },
+   "RECLTD": {
+    "listed": true,
+    "name": "REC Ltd"
+   },
+   "SJVN": {
+    "listed": true,
+    "name": "SJVN Ltd"
+   },
+   "TATAPOWER": {
+    "listed": true,
+    "name": "Tata Power Company Ltd"
+   }
+  },
+  "edges": [
+   {
+    "confidence": "high",
+    "dst": "NTPC",
+    "note": "Primary coal supplier for thermal plants",
+    "src": "COALINDIA",
+    "type": "supplies"
+   },
+   {
+    "confidence": "high",
+    "dst": "NTPC",
+    "note": "Boilers, turbines and power equipment",
+    "src": "BHEL",
+    "type": "supplies"
+   },
+   {
+    "confidence": "high",
+    "dst": "POWERGRID",
+    "note": "Feeds generated power into the grid",
+    "src": "NTPC",
+    "type": "supplies"
+   },
+   {
+    "confidence": "high",
+    "dst": "NTPCGREEN",
+    "note": "NTPC Green Energy is renewables subsidiary",
+    "src": "NTPC",
+    "type": "group"
+   },
+   {
+    "confidence": "high",
+    "dst": "TATAPOWER",
+    "note": "Power generation rival",
+    "src": "NTPC",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "ADANIPOWER",
+    "note": "Thermal power generation rival",
+    "src": "NTPC",
+    "type": "competitor"
+   },
+   {
+    "confidence": "medium",
+    "dst": "JSWENERGY",
+    "note": "Power generation rival",
+    "src": "NTPC",
+    "type": "competitor"
+   },
+   {
+    "confidence": "medium",
+    "dst": "NHPC",
+    "note": "Central PSU power rival (hydro)",
+    "src": "NTPC",
+    "type": "competitor"
+   },
+   {
+    "confidence": "medium",
+    "dst": "SJVN",
+    "note": "Central PSU power rival",
+    "src": "NTPC",
+    "type": "competitor"
+   },
+   {
+    "confidence": "medium",
+    "dst": "NTPC",
+    "note": "Power sector project financing",
+    "src": "PFC",
+    "type": "finances"
+   },
+   {
+    "confidence": "medium",
+    "dst": "NTPC",
+    "note": "Power sector lending",
+    "src": "RECLTD",
+    "type": "finances"
+   }
+  ]
+ },
+ "ONGC": {
+  "companies": {
+   "BPCL": {
+    "listed": true,
+    "name": "Bharat Petroleum Corporation Ltd"
+   },
+   "GAIL": {
+    "listed": true,
+    "name": "GAIL (India) Ltd"
+   },
+   "HPCL": {
+    "listed": true,
+    "name": "Hindustan Petroleum Corporation Ltd"
+   },
+   "IOC": {
+    "listed": true,
+    "name": "Indian Oil Corporation Ltd"
+   },
+   "MRPL": {
+    "listed": true,
+    "name": "Mangalore Refinery and Petrochemicals Ltd"
+   },
+   "OIL": {
+    "listed": true,
+    "name": "Oil India Ltd"
+   },
+   "ONGC": {
+    "listed": true,
+    "name": "Oil and Natural Gas Corporation Ltd"
+   },
+   "OVL": {
+    "listed": false,
+    "name": "ONGC Videsh Ltd"
+   },
+   "RELIANCE": {
+    "listed": true,
+    "name": "Reliance Industries Ltd"
+   },
+   "VEDL": {
+    "listed": true,
+    "name": "Vedanta Ltd"
+   }
+  },
+  "edges": [
+   {
+    "confidence": "high",
+    "dst": "MRPL",
+    "note": "ONGC-controlled refiner subsidiary",
+    "src": "ONGC",
+    "type": "group"
+   },
+   {
+    "confidence": "high",
+    "dst": "HPCL",
+    "note": "ONGC holds majority stake in HPCL",
+    "src": "ONGC",
+    "type": "group"
+   },
+   {
+    "confidence": "high",
+    "dst": "OVL",
+    "note": "ONGC Videsh, overseas E&P arm",
+    "src": "ONGC",
+    "type": "group"
+   },
+   {
+    "confidence": "high",
+    "dst": "IOC",
+    "note": "Supplies crude oil to refiner",
+    "src": "ONGC",
+    "type": "supplies"
+   },
+   {
+    "confidence": "high",
+    "dst": "BPCL",
+    "note": "Supplies crude oil to refiner",
+    "src": "ONGC",
+    "type": "supplies"
+   },
+   {
+    "confidence": "high",
+    "dst": "HPCL",
+    "note": "Supplies crude oil to group refiner",
+    "src": "ONGC",
+    "type": "supplies"
+   },
+   {
+    "confidence": "high",
+    "dst": "MRPL",
+    "note": "Supplies crude to MRPL refinery",
+    "src": "ONGC",
+    "type": "supplies"
+   },
+   {
+    "confidence": "high",
+    "dst": "GAIL",
+    "note": "Supplies natural gas for transmission",
+    "src": "ONGC",
+    "type": "supplies"
+   },
+   {
+    "confidence": "high",
+    "dst": "OIL",
+    "note": "Fellow domestic upstream E&P player",
+    "src": "ONGC",
+    "type": "competitor"
+   },
+   {
+    "confidence": "medium",
+    "dst": "RELIANCE",
+    "note": "Domestic oil and gas E&P rival (KG basin)",
+    "src": "ONGC",
+    "type": "competitor"
+   },
+   {
+    "confidence": "medium",
+    "dst": "VEDL",
+    "note": "Cairn/Vedanta upstream oil rival",
+    "src": "ONGC",
+    "type": "competitor"
+   }
+  ]
+ },
+ "POWERGRID": {
+  "companies": {
+   "ABB": {
+    "listed": true,
+    "name": "ABB India Ltd"
+   },
+   "ADANIENSOL": {
+    "listed": true,
+    "name": "Adani Energy Solutions Ltd"
+   },
+   "BHEL": {
+    "listed": true,
+    "name": "Bharat Heavy Electricals Ltd"
+   },
+   "CGPOWER": {
+    "listed": true,
+    "name": "CG Power and Industrial Solutions Ltd"
+   },
+   "KALPATPOWR": {
+    "listed": true,
+    "name": "Kalpataru Projects International Ltd"
+   },
+   "KEC": {
+    "listed": true,
+    "name": "KEC International Ltd"
+   },
+   "NHPC": {
+    "listed": true,
+    "name": "NHPC Ltd"
+   },
+   "NTPC": {
+    "listed": true,
+    "name": "NTPC Ltd"
+   },
+   "PFC": {
+    "listed": true,
+    "name": "Power Finance Corporation Ltd"
+   },
+   "POWERGRID": {
+    "listed": true,
+    "name": "Power Grid Corporation of India Ltd"
+   },
+   "RECLTD": {
+    "listed": true,
+    "name": "REC Ltd"
+   },
+   "SIEMENS": {
+    "listed": true,
+    "name": "Siemens Ltd"
+   },
+   "TATAPOWER": {
+    "listed": true,
+    "name": "Tata Power Company Ltd"
+   }
+  },
+  "edges": [
+   {
+    "confidence": "medium",
+    "dst": "POWERGRID",
+    "note": "Substation and power equipment",
+    "src": "BHEL",
+    "type": "supplies"
+   },
+   {
+    "confidence": "high",
+    "dst": "POWERGRID",
+    "note": "Transmission line EPC and towers",
+    "src": "KEC",
+    "type": "supplies"
+   },
+   {
+    "confidence": "high",
+    "dst": "POWERGRID",
+    "note": "Transmission line EPC contractor",
+    "src": "KALPATPOWR",
+    "type": "supplies"
+   },
+   {
+    "confidence": "medium",
+    "dst": "POWERGRID",
+    "note": "Transmission switchgear and transformers",
+    "src": "SIEMENS",
+    "type": "supplies"
+   },
+   {
+    "confidence": "medium",
+    "dst": "POWERGRID",
+    "note": "Grid automation and transformers",
+    "src": "ABB",
+    "type": "supplies"
+   },
+   {
+    "confidence": "medium",
+    "dst": "POWERGRID",
+    "note": "Transformers and transmission equipment",
+    "src": "CGPOWER",
+    "type": "supplies"
+   },
+   {
+    "confidence": "high",
+    "dst": "ADANIENSOL",
+    "note": "Private inter-state transmission rival",
+    "src": "POWERGRID",
+    "type": "competitor"
+   },
+   {
+    "confidence": "medium",
+    "dst": "TATAPOWER",
+    "note": "Transmission business rival",
+    "src": "POWERGRID",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "POWERGRID",
+    "note": "Generator feeding power into the grid",
+    "src": "NTPC",
+    "type": "supplies"
+   },
+   {
+    "confidence": "medium",
+    "dst": "POWERGRID",
+    "note": "Hydro generator feeding the grid",
+    "src": "NHPC",
+    "type": "supplies"
+   },
+   {
+    "confidence": "medium",
+    "dst": "POWERGRID",
+    "note": "Power sector financing",
+    "src": "PFC",
+    "type": "finances"
+   },
+   {
+    "confidence": "medium",
+    "dst": "POWERGRID",
+    "note": "Power sector lending",
+    "src": "RECLTD",
+    "type": "finances"
+   }
+  ]
+ },
+ "RELIANCE": {
+  "companies": {
+   "BHARTIARTL": {
+    "listed": true,
+    "name": "Bharti Airtel Ltd"
+   },
+   "BPCL": {
+    "listed": true,
+    "name": "Bharat Petroleum Corp Ltd"
+   },
+   "DMART": {
+    "listed": true,
+    "name": "Avenue Supermarts Ltd"
+   },
+   "HINDUNILVR": {
+    "listed": true,
+    "name": "Hindustan Unilever Ltd"
+   },
+   "IDEA": {
+    "listed": true,
+    "name": "Vodafone Idea Ltd"
+   },
+   "IOC": {
+    "listed": true,
+    "name": "Indian Oil Corp Ltd"
+   },
+   "ITC": {
+    "listed": true,
+    "name": "ITC Ltd"
+   },
+   "JIOFIN": {
+    "listed": true,
+    "name": "Jio Financial Services Ltd"
+   },
+   "NETWORK18": {
+    "listed": true,
+    "name": "Network18 Media & Investments Ltd"
+   },
+   "ONGC": {
+    "listed": true,
+    "name": "Oil & Natural Gas Corp Ltd"
+   },
+   "RELIANCE": {
+    "listed": true,
+    "name": "Reliance Industries Ltd"
+   },
+   "RJIO": {
+    "listed": false,
+    "name": "Reliance Jio Infocomm Ltd"
+   },
+   "RRETAIL": {
+    "listed": false,
+    "name": "Reliance Retail Ventures Ltd"
+   },
+   "TRENT": {
+    "listed": true,
+    "name": "Trent Ltd"
+   }
+  },
+  "edges": [
+   {
+    "confidence": "high",
+    "dst": "RJIO",
+    "note": "Jio telecom is a Reliance subsidiary",
+    "src": "RELIANCE",
+    "type": "group"
+   },
+   {
+    "confidence": "high",
+    "dst": "RRETAIL",
+    "note": "Reliance Retail is a Reliance subsidiary",
+    "src": "RELIANCE",
+    "type": "group"
+   },
+   {
+    "confidence": "high",
+    "dst": "JIOFIN",
+    "note": "Jio Financial demerged from Reliance in 2023",
+    "src": "RELIANCE",
+    "type": "group"
+   },
+   {
+    "confidence": "high",
+    "dst": "NETWORK18",
+    "note": "Network18 media controlled by Reliance",
+    "src": "RELIANCE",
+    "type": "group"
+   },
+   {
+    "confidence": "high",
+    "dst": "BHARTIARTL",
+    "note": "Jio vs Airtel in mobile telecom",
+    "src": "RJIO",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "IDEA",
+    "note": "Jio vs Vodafone Idea in telecom",
+    "src": "RJIO",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "DMART",
+    "note": "Reliance Retail vs DMart in grocery retail",
+    "src": "RRETAIL",
+    "type": "competitor"
+   },
+   {
+    "confidence": "medium",
+    "dst": "TRENT",
+    "note": "Reliance Retail vs Trent in fashion retail",
+    "src": "RRETAIL",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "ONGC",
+    "note": "Both in oil & gas exploration and refining",
+    "src": "RELIANCE",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "BPCL",
+    "note": "Compete in fuel retailing and refining",
+    "src": "RELIANCE",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "IOC",
+    "note": "Compete in fuel retailing and refining",
+    "src": "RELIANCE",
+    "type": "competitor"
+   },
+   {
+    "confidence": "medium",
+    "dst": "HINDUNILVR",
+    "note": "Reliance Consumer brands vs HUL FMCG",
+    "src": "RRETAIL",
+    "type": "competitor"
+   },
+   {
+    "confidence": "medium",
+    "dst": "ITC",
+    "note": "Reliance Consumer brands vs ITC FMCG",
+    "src": "RRETAIL",
+    "type": "competitor"
+   }
+  ]
+ },
+ "SBILIFE": {
+  "companies": {
+   "BAJAJFINSV": {
+    "listed": true,
+    "name": "Bajaj Finserv Ltd"
+   },
+   "HDFCLIFE": {
+    "listed": true,
+    "name": "HDFC Life Insurance Co Ltd"
+   },
+   "ICICIPRULI": {
+    "listed": true,
+    "name": "ICICI Prudential Life Insurance Co Ltd"
+   },
+   "LICI": {
+    "listed": true,
+    "name": "Life Insurance Corporation of India"
+   },
+   "MFSL": {
+    "listed": true,
+    "name": "Max Financial Services Ltd"
+   },
+   "SBILIFE": {
+    "listed": true,
+    "name": "SBI Life Insurance Co Ltd"
+   },
+   "SBIN": {
+    "listed": true,
+    "name": "State Bank of India"
+   }
+  },
+  "edges": [
+   {
+    "confidence": "high",
+    "dst": "SBILIFE",
+    "note": "State Bank of India is promoter and parent",
+    "src": "SBIN",
+    "type": "group"
+   },
+   {
+    "confidence": "high",
+    "dst": "SBILIFE",
+    "note": "Bancassurance distribution via SBI branches",
+    "src": "SBIN",
+    "type": "supplies"
+   },
+   {
+    "confidence": "high",
+    "dst": "SBILIFE",
+    "note": "Leading private life insurer rival",
+    "src": "HDFCLIFE",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "SBILIFE",
+    "note": "Top private life insurance competitor",
+    "src": "ICICIPRULI",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "SBILIFE",
+    "note": "Dominant state-owned life insurer",
+    "src": "LICI",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "SBILIFE",
+    "note": "Max Life parent; private life insurer rival",
+    "src": "MFSL",
+    "type": "competitor"
+   },
+   {
+    "confidence": "medium",
+    "dst": "SBILIFE",
+    "note": "Bajaj Allianz Life is a competing insurer",
+    "src": "BAJAJFINSV",
+    "type": "competitor"
+   }
+  ]
+ },
+ "SBIN": {
+  "companies": {
+   "AXISBANK": {
+    "listed": true,
+    "name": "Axis Bank Ltd"
+   },
+   "BANKBARODA": {
+    "listed": true,
+    "name": "Bank of Baroda"
+   },
+   "CANBK": {
+    "listed": true,
+    "name": "Canara Bank"
+   },
+   "HDFCBANK": {
+    "listed": true,
+    "name": "HDFC Bank Ltd"
+   },
+   "ICICIBANK": {
+    "listed": true,
+    "name": "ICICI Bank Ltd"
+   },
+   "KOTAKBANK": {
+    "listed": true,
+    "name": "Kotak Mahindra Bank Ltd"
+   },
+   "PNB": {
+    "listed": true,
+    "name": "Punjab National Bank"
+   },
+   "SBICARD": {
+    "listed": true,
+    "name": "SBI Cards and Payment Services Ltd"
+   },
+   "SBILIFE": {
+    "listed": true,
+    "name": "SBI Life Insurance Company Ltd"
+   },
+   "SBIN": {
+    "listed": true,
+    "name": "State Bank of India"
+   },
+   "TCS": {
+    "listed": true,
+    "name": "Tata Consultancy Services Ltd"
+   }
+  },
+  "edges": [
+   {
+    "confidence": "high",
+    "dst": "SBILIFE",
+    "note": "SBI Life Insurance is an SBI subsidiary",
+    "src": "SBIN",
+    "type": "group"
+   },
+   {
+    "confidence": "high",
+    "dst": "SBICARD",
+    "note": "SBI Cards is an SBI subsidiary",
+    "src": "SBIN",
+    "type": "group"
+   },
+   {
+    "confidence": "high",
+    "dst": "HDFCBANK",
+    "note": "Competes in retail banking",
+    "src": "SBIN",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "ICICIBANK",
+    "note": "Competes in retail banking",
+    "src": "SBIN",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "AXISBANK",
+    "note": "Competes in retail banking",
+    "src": "SBIN",
+    "type": "competitor"
+   },
+   {
+    "confidence": "medium",
+    "dst": "KOTAKBANK",
+    "note": "Private bank competitor",
+    "src": "SBIN",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "PNB",
+    "note": "Public sector bank competitor",
+    "src": "SBIN",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "BANKBARODA",
+    "note": "Public sector bank competitor",
+    "src": "SBIN",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "CANBK",
+    "note": "Public sector bank competitor",
+    "src": "SBIN",
+    "type": "competitor"
+   },
+   {
+    "confidence": "medium",
+    "dst": "SBIN",
+    "note": "IT services provider to SBI",
+    "src": "TCS",
+    "type": "supplies"
+   }
+  ]
+ },
+ "SHRIRAMFIN": {
+  "companies": {
+   "ASHOKLEY": {
+    "listed": true,
+    "name": "Ashok Leyland Ltd"
+   },
+   "BAJFINANCE": {
+    "listed": true,
+    "name": "Bajaj Finance Ltd"
+   },
+   "CHOLAFIN": {
+    "listed": true,
+    "name": "Cholamandalam Investment & Finance Co Ltd"
+   },
+   "HDFCBANK": {
+    "listed": true,
+    "name": "HDFC Bank Ltd"
+   },
+   "INDUSINDBK": {
+    "listed": true,
+    "name": "IndusInd Bank Ltd"
+   },
+   "LTF": {
+    "listed": true,
+    "name": "L&T Finance Ltd"
+   },
+   "MARUTI": {
+    "listed": true,
+    "name": "Maruti Suzuki India Ltd"
+   },
+   "MMFSL": {
+    "listed": true,
+    "name": "Mahindra & Mahindra Financial Services Ltd"
+   },
+   "MUTHOOTFIN": {
+    "listed": true,
+    "name": "Muthoot Finance Ltd"
+   },
+   "SBIN": {
+    "listed": true,
+    "name": "State Bank of India"
+   },
+   "SHRIRAMFIN": {
+    "listed": true,
+    "name": "Shriram Finance Ltd"
+   },
+   "SUNDARMFIN": {
+    "listed": true,
+    "name": "Sundaram Finance Ltd"
+   },
+   "TATAMOTORS": {
+    "listed": true,
+    "name": "Tata Motors Ltd"
+   }
+  },
+  "edges": [
+   {
+    "confidence": "high",
+    "dst": "TATAMOTORS",
+    "note": "Finances buyers of commercial vehicles/trucks",
+    "src": "SHRIRAMFIN",
+    "type": "finances"
+   },
+   {
+    "confidence": "high",
+    "dst": "ASHOKLEY",
+    "note": "Finances commercial-vehicle purchases",
+    "src": "SHRIRAMFIN",
+    "type": "finances"
+   },
+   {
+    "confidence": "medium",
+    "dst": "MARUTI",
+    "note": "Finances used/new passenger-vehicle buyers",
+    "src": "SHRIRAMFIN",
+    "type": "finances"
+   },
+   {
+    "confidence": "high",
+    "dst": "SHRIRAMFIN",
+    "note": "Large NBFC competitor",
+    "src": "BAJFINANCE",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "SHRIRAMFIN",
+    "note": "Vehicle-finance NBFC competitor",
+    "src": "CHOLAFIN",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "SHRIRAMFIN",
+    "note": "Rural/vehicle-finance NBFC competitor",
+    "src": "MMFSL",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "SHRIRAMFIN",
+    "note": "Commercial-vehicle finance competitor",
+    "src": "SUNDARMFIN",
+    "type": "competitor"
+   },
+   {
+    "confidence": "medium",
+    "dst": "SHRIRAMFIN",
+    "note": "Retail/vehicle-finance NBFC competitor",
+    "src": "LTF",
+    "type": "competitor"
+   },
+   {
+    "confidence": "medium",
+    "dst": "SHRIRAMFIN",
+    "note": "NBFC competitor in retail lending",
+    "src": "MUTHOOTFIN",
+    "type": "competitor"
+   },
+   {
+    "confidence": "medium",
+    "dst": "SHRIRAMFIN",
+    "note": "Bank lends wholesale funding to NBFC",
+    "src": "HDFCBANK",
+    "type": "finances"
+   },
+   {
+    "confidence": "medium",
+    "dst": "SHRIRAMFIN",
+    "note": "Provides wholesale/term funding to NBFC",
+    "src": "SBIN",
+    "type": "finances"
+   },
+   {
+    "confidence": "medium",
+    "dst": "SHRIRAMFIN",
+    "note": "Competes in commercial-vehicle financing",
+    "src": "INDUSINDBK",
+    "type": "competitor"
+   }
+  ]
+ },
+ "SUNPHARMA": {
+  "companies": {
+   "ALKEM": {
+    "listed": true,
+    "name": "Alkem Laboratories Ltd"
+   },
+   "AUROPHARMA": {
+    "listed": true,
+    "name": "Aurobindo Pharma Ltd"
+   },
+   "CIPLA": {
+    "listed": true,
+    "name": "Cipla Ltd"
+   },
+   "DIVISLAB": {
+    "listed": true,
+    "name": "Divi's Laboratories Ltd"
+   },
+   "DRREDDY": {
+    "listed": true,
+    "name": "Dr. Reddy's Laboratories Ltd"
+   },
+   "GLENMARK": {
+    "listed": true,
+    "name": "Glenmark Pharmaceuticals Ltd"
+   },
+   "LAURUSLABS": {
+    "listed": true,
+    "name": "Laurus Labs Ltd"
+   },
+   "LUPIN": {
+    "listed": true,
+    "name": "Lupin Ltd"
+   },
+   "MANKIND": {
+    "listed": true,
+    "name": "Mankind Pharma Ltd"
+   },
+   "SPARC": {
+    "listed": true,
+    "name": "Sun Pharma Advanced Research Company Ltd"
+   },
+   "SUNPHARMA": {
+    "listed": true,
+    "name": "Sun Pharmaceutical Industries Ltd"
+   },
+   "TARO": {
+    "listed": false,
+    "name": "Taro Pharmaceutical Industries"
+   },
+   "TORNTPHARM": {
+    "listed": true,
+    "name": "Torrent Pharmaceuticals Ltd"
+   },
+   "ZYDUSLIFE": {
+    "listed": true,
+    "name": "Zydus Lifesciences Ltd"
+   }
+  },
+  "edges": [
+   {
+    "confidence": "high",
+    "dst": "DRREDDY",
+    "note": "Top Indian pharma rival",
+    "src": "SUNPHARMA",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "CIPLA",
+    "note": "Domestic formulations rival",
+    "src": "SUNPHARMA",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "LUPIN",
+    "note": "US generics rival",
+    "src": "SUNPHARMA",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "AUROPHARMA",
+    "note": "US generics rival",
+    "src": "SUNPHARMA",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "TORNTPHARM",
+    "note": "Domestic branded generics rival",
+    "src": "SUNPHARMA",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "ZYDUSLIFE",
+    "note": "Generics rival",
+    "src": "SUNPHARMA",
+    "type": "competitor"
+   },
+   {
+    "confidence": "medium",
+    "dst": "GLENMARK",
+    "note": "Formulations rival",
+    "src": "SUNPHARMA",
+    "type": "competitor"
+   },
+   {
+    "confidence": "medium",
+    "dst": "ALKEM",
+    "note": "Domestic formulations rival",
+    "src": "SUNPHARMA",
+    "type": "competitor"
+   },
+   {
+    "confidence": "medium",
+    "dst": "MANKIND",
+    "note": "Domestic branded generics rival",
+    "src": "SUNPHARMA",
+    "type": "competitor"
+   },
+   {
+    "confidence": "medium",
+    "dst": "SUNPHARMA",
+    "note": "Supplies APIs and intermediates",
+    "src": "DIVISLAB",
+    "type": "supplies"
+   },
+   {
+    "confidence": "medium",
+    "dst": "SUNPHARMA",
+    "note": "API and intermediate supplier",
+    "src": "LAURUSLABS",
+    "type": "supplies"
+   },
+   {
+    "confidence": "high",
+    "dst": "SPARC",
+    "note": "Sun Pharma Advanced Research, promoter linked",
+    "src": "SUNPHARMA",
+    "type": "group"
+   },
+   {
+    "confidence": "high",
+    "dst": "TARO",
+    "note": "Taro is Sun Pharma subsidiary",
+    "src": "SUNPHARMA",
+    "type": "group"
+   }
+  ]
+ },
+ "TATACONSUM": {
+  "companies": {
+   "BRITANNIA": {
+    "listed": true,
+    "name": "Britannia Industries Ltd"
+   },
+   "DABUR": {
+    "listed": true,
+    "name": "Dabur India Ltd"
+   },
+   "DMART": {
+    "listed": true,
+    "name": "Avenue Supermarts Ltd (DMart)"
+   },
+   "HINDUNILVR": {
+    "listed": true,
+    "name": "Hindustan Unilever Ltd"
+   },
+   "ITC": {
+    "listed": true,
+    "name": "ITC Ltd"
+   },
+   "MARICO": {
+    "listed": true,
+    "name": "Marico Ltd"
+   },
+   "NESTLEIND": {
+    "listed": true,
+    "name": "Nestle India Ltd"
+   },
+   "TATACONSUM": {
+    "listed": true,
+    "name": "Tata Consumer Products Ltd"
+   },
+   "TATAINVEST": {
+    "listed": true,
+    "name": "Tata Investment Corporation Ltd"
+   },
+   "TATASTEEL": {
+    "listed": true,
+    "name": "Tata Steel Ltd"
+   },
+   "TCS": {
+    "listed": true,
+    "name": "Tata Consultancy Services Ltd"
+   },
+   "TITAN": {
+    "listed": true,
+    "name": "Titan Company Ltd"
+   },
+   "VARBEV": {
+    "listed": true,
+    "name": "Varun Beverages Ltd"
+   }
+  },
+  "edges": [
+   {
+    "confidence": "high",
+    "dst": "TATASTEEL",
+    "note": "Both Tata Group companies under Tata Sons",
+    "src": "TATACONSUM",
+    "type": "group"
+   },
+   {
+    "confidence": "high",
+    "dst": "TCS",
+    "note": "Tata Group affiliate companies",
+    "src": "TATACONSUM",
+    "type": "group"
+   },
+   {
+    "confidence": "high",
+    "dst": "TITAN",
+    "note": "Tata Group consumer affiliate",
+    "src": "TATACONSUM",
+    "type": "group"
+   },
+   {
+    "confidence": "medium",
+    "dst": "TATACONSUM",
+    "note": "Tata Group holding/investment affiliate",
+    "src": "TATAINVEST",
+    "type": "group"
+   },
+   {
+    "confidence": "high",
+    "dst": "TATACONSUM",
+    "note": "Tea/coffee and foods rival (Brooke Bond vs Tata Tea)",
+    "src": "HINDUNILVR",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "TATACONSUM",
+    "note": "Coffee and packaged foods competitor",
+    "src": "NESTLEIND",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "TATACONSUM",
+    "note": "Packaged foods/staples competitor",
+    "src": "ITC",
+    "type": "competitor"
+   },
+   {
+    "confidence": "medium",
+    "dst": "TATACONSUM",
+    "note": "Packaged foods overlap",
+    "src": "BRITANNIA",
+    "type": "competitor"
+   },
+   {
+    "confidence": "medium",
+    "dst": "TATACONSUM",
+    "note": "Beverages and health-foods overlap",
+    "src": "DABUR",
+    "type": "competitor"
+   },
+   {
+    "confidence": "medium",
+    "dst": "TATACONSUM",
+    "note": "Foods/beverages overlap",
+    "src": "MARICO",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "DMART",
+    "note": "Supplies tea/salt/pulses to modern-trade retailer",
+    "src": "TATACONSUM",
+    "type": "supplies"
+   },
+   {
+    "confidence": "low",
+    "dst": "TATACONSUM",
+    "note": "Ready-to-drink beverages competitor",
+    "src": "VARBEV",
+    "type": "competitor"
+   }
+  ]
+ },
+ "TATAMOTORS": {
+  "companies": {
+   "ASHOKLEY": {
+    "listed": true,
+    "name": "Ashok Leyland Ltd"
+   },
+   "BHARATFORG": {
+    "listed": true,
+    "name": "Bharat Forge Ltd"
+   },
+   "BOSCHLTD": {
+    "listed": true,
+    "name": "Bosch Ltd"
+   },
+   "EICHERMOT": {
+    "listed": true,
+    "name": "Eicher Motors Ltd"
+   },
+   "EXIDEIND": {
+    "listed": true,
+    "name": "Exide Industries Ltd"
+   },
+   "JLR": {
+    "listed": false,
+    "name": "Jaguar Land Rover Automotive PLC"
+   },
+   "M&M": {
+    "listed": true,
+    "name": "Mahindra & Mahindra Ltd"
+   },
+   "MARUTI": {
+    "listed": true,
+    "name": "Maruti Suzuki India Ltd"
+   },
+   "MOTHERSON": {
+    "listed": true,
+    "name": "Samvardhana Motherson International Ltd"
+   },
+   "SONACOMS": {
+    "listed": true,
+    "name": "Sona BLW Precision Forgings Ltd"
+   },
+   "TATAMOTORS": {
+    "listed": true,
+    "name": "Tata Motors Ltd"
+   },
+   "TATAPOWER": {
+    "listed": true,
+    "name": "Tata Power Company Ltd"
+   },
+   "TATASONS": {
+    "listed": false,
+    "name": "Tata Sons Pvt Ltd"
+   },
+   "TATASTEEL": {
+    "listed": true,
+    "name": "Tata Steel Ltd"
+   },
+   "TATATECH": {
+    "listed": true,
+    "name": "Tata Technologies Ltd"
+   },
+   "TCS": {
+    "listed": true,
+    "name": "Tata Consultancy Services Ltd"
+   }
+  },
+  "edges": [
+   {
+    "confidence": "high",
+    "dst": "TATAMOTORS",
+    "note": "Tata Sons is promoter holding company",
+    "src": "TATASONS",
+    "type": "group"
+   },
+   {
+    "confidence": "high",
+    "dst": "TATAMOTORS",
+    "note": "Automotive flat steel, group company",
+    "src": "TATASTEEL",
+    "type": "supplies"
+   },
+   {
+    "confidence": "high",
+    "dst": "TATATECH",
+    "note": "Tata Technologies engineering subsidiary",
+    "src": "TATAMOTORS",
+    "type": "group"
+   },
+   {
+    "confidence": "high",
+    "dst": "JLR",
+    "note": "Jaguar Land Rover wholly-owned subsidiary",
+    "src": "TATAMOTORS",
+    "type": "group"
+   },
+   {
+    "confidence": "medium",
+    "dst": "TCS",
+    "note": "Fellow Tata group company",
+    "src": "TATAMOTORS",
+    "type": "group"
+   },
+   {
+    "confidence": "medium",
+    "dst": "TATAPOWER",
+    "note": "Fellow Tata group, EV charging tie-up",
+    "src": "TATAMOTORS",
+    "type": "group"
+   },
+   {
+    "confidence": "high",
+    "dst": "MARUTI",
+    "note": "Passenger vehicle rival",
+    "src": "TATAMOTORS",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "M&M",
+    "note": "SUV and commercial vehicle rival",
+    "src": "TATAMOTORS",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "ASHOKLEY",
+    "note": "Commercial vehicle rival",
+    "src": "TATAMOTORS",
+    "type": "competitor"
+   },
+   {
+    "confidence": "medium",
+    "dst": "EICHERMOT",
+    "note": "Commercial vehicle rival via VECV",
+    "src": "TATAMOTORS",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "TATAMOTORS",
+    "note": "Wiring harnesses, modules and mirrors",
+    "src": "MOTHERSON",
+    "type": "supplies"
+   },
+   {
+    "confidence": "high",
+    "dst": "TATAMOTORS",
+    "note": "Fuel injection and auto electronics",
+    "src": "BOSCHLTD",
+    "type": "supplies"
+   },
+   {
+    "confidence": "medium",
+    "dst": "TATAMOTORS",
+    "note": "Automotive batteries",
+    "src": "EXIDEIND",
+    "type": "supplies"
+   },
+   {
+    "confidence": "high",
+    "dst": "TATAMOTORS",
+    "note": "Forged crankshafts and axles",
+    "src": "BHARATFORG",
+    "type": "supplies"
+   },
+   {
+    "confidence": "medium",
+    "dst": "TATAMOTORS",
+    "note": "Driveline and EV components",
+    "src": "SONACOMS",
+    "type": "supplies"
+   }
+  ]
+ },
+ "TATAPOWER": {
+  "companies": {
+   "ADANIGREEN": {
+    "listed": true,
+    "name": "Adani Green Energy Ltd"
+   },
+   "ADANIPOWER": {
+    "listed": true,
+    "name": "Adani Power Ltd"
+   },
+   "COALINDIA": {
+    "listed": true,
+    "name": "Coal India Ltd"
+   },
+   "JSWENERGY": {
+    "listed": true,
+    "name": "JSW Energy Ltd"
+   },
+   "NHPC": {
+    "listed": true,
+    "name": "NHPC Ltd"
+   },
+   "NTPC": {
+    "listed": true,
+    "name": "NTPC Ltd"
+   },
+   "POWERGRID": {
+    "listed": true,
+    "name": "Power Grid Corporation of India Ltd"
+   },
+   "SUZLON": {
+    "listed": true,
+    "name": "Suzlon Energy Ltd"
+   },
+   "TATAMOTORS": {
+    "listed": true,
+    "name": "Tata Motors Ltd"
+   },
+   "TATAPOWER": {
+    "listed": true,
+    "name": "Tata Power Company Ltd"
+   },
+   "TATASTEEL": {
+    "listed": true,
+    "name": "Tata Steel Ltd"
+   },
+   "TCS": {
+    "listed": true,
+    "name": "Tata Consultancy Services Ltd"
+   }
+  },
+  "edges": [
+   {
+    "confidence": "high",
+    "dst": "TATASTEEL",
+    "note": "Both Tata Group companies",
+    "src": "TATAPOWER",
+    "type": "group"
+   },
+   {
+    "confidence": "high",
+    "dst": "TCS",
+    "note": "Tata Group affiliate",
+    "src": "TATAPOWER",
+    "type": "group"
+   },
+   {
+    "confidence": "high",
+    "dst": "TATAMOTORS",
+    "note": "Tata Group affiliate; EV-charging partner",
+    "src": "TATAPOWER",
+    "type": "group"
+   },
+   {
+    "confidence": "high",
+    "dst": "TATAPOWER",
+    "note": "Supplies thermal coal for power plants",
+    "src": "COALINDIA",
+    "type": "supplies"
+   },
+   {
+    "confidence": "medium",
+    "dst": "TATAPOWER",
+    "note": "Provides inter-state power transmission",
+    "src": "POWERGRID",
+    "type": "supplies"
+   },
+   {
+    "confidence": "low",
+    "dst": "TATAPOWER",
+    "note": "Supplies wind turbines for renewable projects",
+    "src": "SUZLON",
+    "type": "supplies"
+   },
+   {
+    "confidence": "high",
+    "dst": "TATAPOWER",
+    "note": "Largest power-generation competitor",
+    "src": "NTPC",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "TATAPOWER",
+    "note": "Thermal-power generation competitor",
+    "src": "ADANIPOWER",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "TATAPOWER",
+    "note": "Renewable-energy competitor",
+    "src": "ADANIGREEN",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "TATAPOWER",
+    "note": "Power-generation competitor",
+    "src": "JSWENERGY",
+    "type": "competitor"
+   },
+   {
+    "confidence": "medium",
+    "dst": "TATAPOWER",
+    "note": "Hydro/renewable generation competitor",
+    "src": "NHPC",
+    "type": "competitor"
+   }
+  ]
+ },
+ "TATASTEEL": {
+  "companies": {
+   "APLAPOLLO": {
+    "listed": true,
+    "name": "APL Apollo Tubes Ltd"
+   },
+   "COALINDIA": {
+    "listed": true,
+    "name": "Coal India Ltd"
+   },
+   "HINDALCO": {
+    "listed": true,
+    "name": "Hindalco Industries Ltd"
+   },
+   "JINDALSTEL": {
+    "listed": true,
+    "name": "Jindal Steel & Power Ltd"
+   },
+   "JSL": {
+    "listed": true,
+    "name": "Jindal Stainless Ltd"
+   },
+   "JSWSTEEL": {
+    "listed": true,
+    "name": "JSW Steel Ltd"
+   },
+   "MARUTI": {
+    "listed": true,
+    "name": "Maruti Suzuki India Ltd"
+   },
+   "NMDC": {
+    "listed": true,
+    "name": "NMDC Ltd"
+   },
+   "SAIL": {
+    "listed": true,
+    "name": "Steel Authority of India Ltd"
+   },
+   "TATAMOTORS": {
+    "listed": true,
+    "name": "Tata Motors Ltd"
+   },
+   "TATAPOWER": {
+    "listed": true,
+    "name": "Tata Power Company Ltd"
+   },
+   "TATASONS": {
+    "listed": false,
+    "name": "Tata Sons Pvt Ltd"
+   },
+   "TATASTEEL": {
+    "listed": true,
+    "name": "Tata Steel Ltd"
+   },
+   "TCS": {
+    "listed": true,
+    "name": "Tata Consultancy Services Ltd"
+   }
+  },
+  "edges": [
+   {
+    "confidence": "high",
+    "dst": "TATASTEEL",
+    "note": "Tata Sons is promoter holding company",
+    "src": "TATASONS",
+    "type": "group"
+   },
+   {
+    "confidence": "high",
+    "dst": "JSWSTEEL",
+    "note": "Largest steel producer rival",
+    "src": "TATASTEEL",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "JINDALSTEL",
+    "note": "Steel producer rival",
+    "src": "TATASTEEL",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "SAIL",
+    "note": "PSU steel producer rival",
+    "src": "TATASTEEL",
+    "type": "competitor"
+   },
+   {
+    "confidence": "medium",
+    "dst": "JSL",
+    "note": "Stainless steel rival",
+    "src": "TATASTEEL",
+    "type": "competitor"
+   },
+   {
+    "confidence": "medium",
+    "dst": "TATASTEEL",
+    "note": "Iron ore supplier",
+    "src": "NMDC",
+    "type": "supplies"
+   },
+   {
+    "confidence": "medium",
+    "dst": "TATASTEEL",
+    "note": "Coal for operations",
+    "src": "COALINDIA",
+    "type": "supplies"
+   },
+   {
+    "confidence": "high",
+    "dst": "TATAMOTORS",
+    "note": "Automotive steel to group OEM",
+    "src": "TATASTEEL",
+    "type": "supplies"
+   },
+   {
+    "confidence": "medium",
+    "dst": "MARUTI",
+    "note": "Flat steel for auto body panels",
+    "src": "TATASTEEL",
+    "type": "supplies"
+   },
+   {
+    "confidence": "low",
+    "dst": "APLAPOLLO",
+    "note": "HR coil feedstock for steel tubes",
+    "src": "TATASTEEL",
+    "type": "supplies"
+   },
+   {
+    "confidence": "medium",
+    "dst": "TATAPOWER",
+    "note": "Fellow Tata group company",
+    "src": "TATASTEEL",
+    "type": "group"
+   },
+   {
+    "confidence": "medium",
+    "dst": "TCS",
+    "note": "Fellow Tata group company",
+    "src": "TATASTEEL",
+    "type": "group"
+   },
+   {
+    "confidence": "low",
+    "dst": "HINDALCO",
+    "note": "Metals sector rival",
+    "src": "TATASTEEL",
+    "type": "competitor"
+   },
+   {
+    "confidence": "low",
+    "dst": "NMDC",
+    "note": "NMDC also produces steel at Nagarnar",
+    "src": "TATASTEEL",
+    "type": "competitor"
+   }
+  ]
+ },
+ "TCS": {
+  "companies": {
+   "HCLTECH": {
+    "listed": true,
+    "name": "HCL Technologies Ltd"
+   },
+   "HDFCBANK": {
+    "listed": true,
+    "name": "HDFC Bank Ltd"
+   },
+   "ICICIBANK": {
+    "listed": true,
+    "name": "ICICI Bank Ltd"
+   },
+   "INFY": {
+    "listed": true,
+    "name": "Infosys Ltd"
+   },
+   "LTIM": {
+    "listed": true,
+    "name": "LTIMindtree Ltd"
+   },
+   "SBIN": {
+    "listed": true,
+    "name": "State Bank of India"
+   },
+   "TATAMOTORS": {
+    "listed": true,
+    "name": "Tata Motors Ltd"
+   },
+   "TATAPOWER": {
+    "listed": true,
+    "name": "Tata Power Company Ltd"
+   },
+   "TATASONS": {
+    "listed": false,
+    "name": "Tata Sons Pvt Ltd"
+   },
+   "TATASTEEL": {
+    "listed": true,
+    "name": "Tata Steel Ltd"
+   },
+   "TCS": {
+    "listed": true,
+    "name": "Tata Consultancy Services Ltd"
+   },
+   "TECHM": {
+    "listed": true,
+    "name": "Tech Mahindra Ltd"
+   },
+   "TITAN": {
+    "listed": true,
+    "name": "Titan Company Ltd"
+   },
+   "WIPRO": {
+    "listed": true,
+    "name": "Wipro Ltd"
+   }
+  },
+  "edges": [
+   {
+    "confidence": "high",
+    "dst": "TCS",
+    "note": "Tata Sons is majority promoter of TCS",
+    "src": "TATASONS",
+    "type": "group"
+   },
+   {
+    "confidence": "high",
+    "dst": "TATAMOTORS",
+    "note": "Tata group company",
+    "src": "TATASONS",
+    "type": "group"
+   },
+   {
+    "confidence": "high",
+    "dst": "TATASTEEL",
+    "note": "Tata group company",
+    "src": "TATASONS",
+    "type": "group"
+   },
+   {
+    "confidence": "high",
+    "dst": "TITAN",
+    "note": "Tata group company",
+    "src": "TATASONS",
+    "type": "group"
+   },
+   {
+    "confidence": "high",
+    "dst": "TATAPOWER",
+    "note": "Tata group company",
+    "src": "TATASONS",
+    "type": "group"
+   },
+   {
+    "confidence": "high",
+    "dst": "INFY",
+    "note": "Top Indian IT services rivals",
+    "src": "TCS",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "WIPRO",
+    "note": "IT services competitor",
+    "src": "TCS",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "HCLTECH",
+    "note": "IT services competitor",
+    "src": "TCS",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "TECHM",
+    "note": "IT services competitor",
+    "src": "TCS",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "LTIM",
+    "note": "IT services competitor",
+    "src": "TCS",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "HDFCBANK",
+    "note": "Provides IT/software services to HDFC Bank",
+    "src": "TCS",
+    "type": "supplies"
+   },
+   {
+    "confidence": "medium",
+    "dst": "ICICIBANK",
+    "note": "Provides IT services to ICICI Bank",
+    "src": "TCS",
+    "type": "supplies"
+   },
+   {
+    "confidence": "medium",
+    "dst": "SBIN",
+    "note": "Provides IT services to SBI",
+    "src": "TCS",
+    "type": "supplies"
+   }
+  ]
+ },
+ "TECHM": {
+  "companies": {
+   "COFORGE": {
+    "listed": true,
+    "name": "Coforge Ltd"
+   },
+   "HCLTECH": {
+    "listed": true,
+    "name": "HCL Technologies Ltd"
+   },
+   "HDFCBANK": {
+    "listed": true,
+    "name": "HDFC Bank Ltd"
+   },
+   "INFY": {
+    "listed": true,
+    "name": "Infosys Ltd"
+   },
+   "LTIM": {
+    "listed": true,
+    "name": "LTIMindtree Ltd"
+   },
+   "M&M": {
+    "listed": true,
+    "name": "Mahindra & Mahindra Ltd"
+   },
+   "MPHASIS": {
+    "listed": true,
+    "name": "Mphasis Ltd"
+   },
+   "PERSISTENT": {
+    "listed": true,
+    "name": "Persistent Systems Ltd"
+   },
+   "TCS": {
+    "listed": true,
+    "name": "Tata Consultancy Services Ltd"
+   },
+   "TECHM": {
+    "listed": true,
+    "name": "Tech Mahindra Ltd"
+   },
+   "WIPRO": {
+    "listed": true,
+    "name": "Wipro Ltd"
+   }
+  },
+  "edges": [
+   {
+    "confidence": "high",
+    "dst": "TECHM",
+    "note": "Mahindra Group is promoter of Tech Mahindra",
+    "src": "M&M",
+    "type": "group"
+   },
+   {
+    "confidence": "high",
+    "dst": "TECHM",
+    "note": "Largest Indian IT services rival",
+    "src": "TCS",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "TECHM",
+    "note": "Top-tier IT services competitor",
+    "src": "INFY",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "TECHM",
+    "note": "Large-cap IT services competitor",
+    "src": "WIPRO",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "TECHM",
+    "note": "IT and engineering services competitor",
+    "src": "HCLTECH",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "TECHM",
+    "note": "Mid-tier IT services competitor",
+    "src": "LTIM",
+    "type": "competitor"
+   },
+   {
+    "confidence": "medium",
+    "dst": "TECHM",
+    "note": "Competes in digital and telecom IT",
+    "src": "COFORGE",
+    "type": "competitor"
+   },
+   {
+    "confidence": "medium",
+    "dst": "TECHM",
+    "note": "Competes in software engineering services",
+    "src": "PERSISTENT",
+    "type": "competitor"
+   },
+   {
+    "confidence": "medium",
+    "dst": "TECHM",
+    "note": "Competes in application services",
+    "src": "MPHASIS",
+    "type": "competitor"
+   },
+   {
+    "confidence": "medium",
+    "dst": "M&M",
+    "note": "Provides IT services to Mahindra Group",
+    "src": "TECHM",
+    "type": "supplies"
+   },
+   {
+    "confidence": "low",
+    "dst": "HDFCBANK",
+    "note": "Provides IT services to banking clients",
+    "src": "TECHM",
+    "type": "supplies"
+   }
+  ]
+ },
+ "TITAN": {
+  "companies": {
+   "KALYANKJIL": {
+    "listed": true,
+    "name": "Kalyan Jewellers India Ltd"
+   },
+   "MANAPPURAM": {
+    "listed": true,
+    "name": "Manappuram Finance Ltd"
+   },
+   "MUTHOOTFIN": {
+    "listed": true,
+    "name": "Muthoot Finance Ltd"
+   },
+   "PCJEWELLER": {
+    "listed": true,
+    "name": "PC Jeweller Ltd"
+   },
+   "RAJESHEXPO": {
+    "listed": true,
+    "name": "Rajesh Exports Ltd"
+   },
+   "SENCO": {
+    "listed": true,
+    "name": "Senco Gold Ltd"
+   },
+   "TATACONSUM": {
+    "listed": true,
+    "name": "Tata Consumer Products Ltd"
+   },
+   "TATAPOWER": {
+    "listed": true,
+    "name": "Tata Power Company Ltd"
+   },
+   "TATASONS": {
+    "listed": false,
+    "name": "Tata Sons Pvt Ltd"
+   },
+   "TATASTEEL": {
+    "listed": true,
+    "name": "Tata Steel Ltd"
+   },
+   "TCS": {
+    "listed": true,
+    "name": "Tata Consultancy Services Ltd"
+   },
+   "THANGAMAYL": {
+    "listed": true,
+    "name": "Thangamayil Jewellery Ltd"
+   },
+   "TITAN": {
+    "listed": true,
+    "name": "Titan Company Ltd"
+   },
+   "TRENT": {
+    "listed": true,
+    "name": "Trent Ltd"
+   }
+  },
+  "edges": [
+   {
+    "confidence": "high",
+    "dst": "TITAN",
+    "note": "Tata Sons is principal promoter",
+    "src": "TATASONS",
+    "type": "group"
+   },
+   {
+    "confidence": "high",
+    "dst": "KALYANKJIL",
+    "note": "Listed jewellery retail rival",
+    "src": "TITAN",
+    "type": "competitor"
+   },
+   {
+    "confidence": "medium",
+    "dst": "SENCO",
+    "note": "Jewellery retail rival",
+    "src": "TITAN",
+    "type": "competitor"
+   },
+   {
+    "confidence": "medium",
+    "dst": "THANGAMAYL",
+    "note": "South India jewellery rival",
+    "src": "TITAN",
+    "type": "competitor"
+   },
+   {
+    "confidence": "low",
+    "dst": "PCJEWELLER",
+    "note": "Jewellery retail rival",
+    "src": "TITAN",
+    "type": "competitor"
+   },
+   {
+    "confidence": "medium",
+    "dst": "RAJESHEXPO",
+    "note": "Jewellery and gold products rival",
+    "src": "TITAN",
+    "type": "competitor"
+   },
+   {
+    "confidence": "low",
+    "dst": "TITAN",
+    "note": "Gold refining and jewellery manufacturing",
+    "src": "RAJESHEXPO",
+    "type": "supplies"
+   },
+   {
+    "confidence": "high",
+    "dst": "TRENT",
+    "note": "Fellow Tata group retail company",
+    "src": "TITAN",
+    "type": "group"
+   },
+   {
+    "confidence": "high",
+    "dst": "TATACONSUM",
+    "note": "Tata group FMCG affiliate",
+    "src": "TITAN",
+    "type": "group"
+   },
+   {
+    "confidence": "medium",
+    "dst": "TCS",
+    "note": "Tata group affiliate",
+    "src": "TITAN",
+    "type": "group"
+   },
+   {
+    "confidence": "medium",
+    "dst": "TATASTEEL",
+    "note": "Tata group affiliate",
+    "src": "TITAN",
+    "type": "group"
+   },
+   {
+    "confidence": "medium",
+    "dst": "TATAPOWER",
+    "note": "Tata group affiliate",
+    "src": "TITAN",
+    "type": "group"
+   },
+   {
+    "confidence": "low",
+    "dst": "TITAN",
+    "note": "Gold loans influence jewellery demand",
+    "src": "MUTHOOTFIN",
+    "type": "finances"
+   },
+   {
+    "confidence": "low",
+    "dst": "TITAN",
+    "note": "Gold financing affects gold demand",
+    "src": "MANAPPURAM",
+    "type": "finances"
+   }
+  ]
+ },
+ "ULTRACEMCO": {
+  "companies": {
+   "ACC": {
+    "listed": true,
+    "name": "ACC Ltd"
+   },
+   "AMBUJACEM": {
+    "listed": true,
+    "name": "Ambuja Cements Ltd"
+   },
+   "COALINDIA": {
+    "listed": true,
+    "name": "Coal India Ltd"
+   },
+   "DALBHARAT": {
+    "listed": true,
+    "name": "Dalmia Bharat Ltd"
+   },
+   "DLF": {
+    "listed": true,
+    "name": "DLF Ltd"
+   },
+   "GRASIM": {
+    "listed": true,
+    "name": "Grasim Industries Ltd"
+   },
+   "HINDALCO": {
+    "listed": true,
+    "name": "Hindalco Industries Ltd"
+   },
+   "JKCEMENT": {
+    "listed": true,
+    "name": "JK Cement Ltd"
+   },
+   "JKLAKSHMI": {
+    "listed": true,
+    "name": "JK Lakshmi Cement Ltd"
+   },
+   "LT": {
+    "listed": true,
+    "name": "Larsen & Toubro Ltd"
+   },
+   "NTPC": {
+    "listed": true,
+    "name": "NTPC Ltd"
+   },
+   "NUVOCO": {
+    "listed": true,
+    "name": "Nuvoco Vistas Corporation Ltd"
+   },
+   "RAMCOCEM": {
+    "listed": true,
+    "name": "The Ramco Cements Ltd"
+   },
+   "SHREECEM": {
+    "listed": true,
+    "name": "Shree Cement Ltd"
+   },
+   "ULTRACEMCO": {
+    "listed": true,
+    "name": "UltraTech Cement Ltd"
+   }
+  },
+  "edges": [
+   {
+    "confidence": "high",
+    "dst": "ULTRACEMCO",
+    "note": "Grasim (Aditya Birla) is parent holding co",
+    "src": "GRASIM",
+    "type": "group"
+   },
+   {
+    "confidence": "high",
+    "dst": "HINDALCO",
+    "note": "Fellow Aditya Birla group company",
+    "src": "ULTRACEMCO",
+    "type": "group"
+   },
+   {
+    "confidence": "high",
+    "dst": "SHREECEM",
+    "note": "Cement industry rival",
+    "src": "ULTRACEMCO",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "AMBUJACEM",
+    "note": "Adani-owned cement rival",
+    "src": "ULTRACEMCO",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "ACC",
+    "note": "Adani-owned cement rival",
+    "src": "ULTRACEMCO",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "DALBHARAT",
+    "note": "Dalmia Bharat cement rival",
+    "src": "ULTRACEMCO",
+    "type": "competitor"
+   },
+   {
+    "confidence": "medium",
+    "dst": "JKCEMENT",
+    "note": "Cement rival",
+    "src": "ULTRACEMCO",
+    "type": "competitor"
+   },
+   {
+    "confidence": "medium",
+    "dst": "RAMCOCEM",
+    "note": "South India cement rival",
+    "src": "ULTRACEMCO",
+    "type": "competitor"
+   },
+   {
+    "confidence": "medium",
+    "dst": "NUVOCO",
+    "note": "Cement rival",
+    "src": "ULTRACEMCO",
+    "type": "competitor"
+   },
+   {
+    "confidence": "low",
+    "dst": "JKLAKSHMI",
+    "note": "Cement rival",
+    "src": "ULTRACEMCO",
+    "type": "competitor"
+   },
+   {
+    "confidence": "medium",
+    "dst": "ULTRACEMCO",
+    "note": "Coal and pet-coke for kilns",
+    "src": "COALINDIA",
+    "type": "supplies"
+   },
+   {
+    "confidence": "medium",
+    "dst": "ULTRACEMCO",
+    "note": "Fly ash for blended cement",
+    "src": "NTPC",
+    "type": "supplies"
+   },
+   {
+    "confidence": "medium",
+    "dst": "LT",
+    "note": "Cement for construction and infrastructure",
+    "src": "ULTRACEMCO",
+    "type": "supplies"
+   },
+   {
+    "confidence": "low",
+    "dst": "DLF",
+    "note": "Cement demand from real estate",
+    "src": "ULTRACEMCO",
+    "type": "supplies"
+   }
+  ]
+ },
+ "VEDL": {
+  "companies": {
+   "COALINDIA": {
+    "listed": true,
+    "name": "Coal India Ltd"
+   },
+   "HINDALCO": {
+    "listed": true,
+    "name": "Hindalco Industries Ltd"
+   },
+   "HINDCOPPER": {
+    "listed": true,
+    "name": "Hindustan Copper Ltd"
+   },
+   "HINDZINC": {
+    "listed": true,
+    "name": "Hindustan Zinc Ltd"
+   },
+   "JSWSTEEL": {
+    "listed": true,
+    "name": "JSW Steel Ltd"
+   },
+   "NATIONALUM": {
+    "listed": true,
+    "name": "National Aluminium Co Ltd"
+   },
+   "NMDC": {
+    "listed": true,
+    "name": "NMDC Ltd"
+   },
+   "ONGC": {
+    "listed": true,
+    "name": "Oil & Natural Gas Corporation Ltd"
+   },
+   "POWERGRID": {
+    "listed": true,
+    "name": "Power Grid Corporation of India Ltd"
+   },
+   "SAIL": {
+    "listed": true,
+    "name": "Steel Authority of India Ltd"
+   },
+   "TATASTEEL": {
+    "listed": true,
+    "name": "Tata Steel Ltd"
+   },
+   "VEDL": {
+    "listed": true,
+    "name": "Vedanta Ltd"
+   }
+  },
+  "edges": [
+   {
+    "confidence": "high",
+    "dst": "HINDZINC",
+    "note": "Hindustan Zinc is majority-owned Vedanta subsidiary",
+    "src": "VEDL",
+    "type": "group"
+   },
+   {
+    "confidence": "high",
+    "dst": "VEDL",
+    "note": "Supplies coal for aluminium smelting/captive power",
+    "src": "COALINDIA",
+    "type": "supplies"
+   },
+   {
+    "confidence": "low",
+    "dst": "VEDL",
+    "note": "Iron ore supply overlap for metals operations",
+    "src": "NMDC",
+    "type": "supplies"
+   },
+   {
+    "confidence": "low",
+    "dst": "VEDL",
+    "note": "Power transmission for energy-intensive smelters",
+    "src": "POWERGRID",
+    "type": "supplies"
+   },
+   {
+    "confidence": "high",
+    "dst": "VEDL",
+    "note": "Primary aluminium competitor",
+    "src": "HINDALCO",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "VEDL",
+    "note": "Aluminium and alumina competitor",
+    "src": "NATIONALUM",
+    "type": "competitor"
+   },
+   {
+    "confidence": "medium",
+    "dst": "VEDL",
+    "note": "Copper-production competitor",
+    "src": "HINDCOPPER",
+    "type": "competitor"
+   },
+   {
+    "confidence": "medium",
+    "dst": "VEDL",
+    "note": "Diversified-metals competitor",
+    "src": "TATASTEEL",
+    "type": "competitor"
+   },
+   {
+    "confidence": "medium",
+    "dst": "VEDL",
+    "note": "Metals-sector competitor",
+    "src": "JSWSTEEL",
+    "type": "competitor"
+   },
+   {
+    "confidence": "medium",
+    "dst": "VEDL",
+    "note": "Metals/mining competitor",
+    "src": "SAIL",
+    "type": "competitor"
+   },
+   {
+    "confidence": "medium",
+    "dst": "VEDL",
+    "note": "Cairn oil & gas competes in E&P",
+    "src": "ONGC",
+    "type": "competitor"
+   },
+   {
+    "confidence": "low",
+    "dst": "HINDCOPPER",
+    "note": "Copper smelting/production rivalry",
+    "src": "VEDL",
+    "type": "competitor"
+   }
+  ]
+ },
+ "WIPRO": {
+  "companies": {
+   "ACCENTURE": {
+    "listed": false,
+    "name": "Accenture plc"
+   },
+   "COFORGE": {
+    "listed": true,
+    "name": "Coforge Ltd"
+   },
+   "COGNIZANT": {
+    "listed": false,
+    "name": "Cognizant Technology Solutions"
+   },
+   "HCLTECH": {
+    "listed": true,
+    "name": "HCL Technologies Ltd"
+   },
+   "IBM": {
+    "listed": false,
+    "name": "International Business Machines Corp"
+   },
+   "INFY": {
+    "listed": true,
+    "name": "Infosys Ltd"
+   },
+   "LTIM": {
+    "listed": true,
+    "name": "LTIMindtree Ltd"
+   },
+   "MPHASIS": {
+    "listed": true,
+    "name": "Mphasis Ltd"
+   },
+   "PERSISTENT": {
+    "listed": true,
+    "name": "Persistent Systems Ltd"
+   },
+   "TCS": {
+    "listed": true,
+    "name": "Tata Consultancy Services Ltd"
+   },
+   "TECHM": {
+    "listed": true,
+    "name": "Tech Mahindra Ltd"
+   },
+   "WIPRO": {
+    "listed": true,
+    "name": "Wipro Ltd"
+   },
+   "WIPROENT": {
+    "listed": false,
+    "name": "Wipro Enterprises Pvt Ltd"
+   }
+  },
+  "edges": [
+   {
+    "confidence": "high",
+    "dst": "TCS",
+    "note": "Largest Indian IT services rival",
+    "src": "WIPRO",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "INFY",
+    "note": "Tier-1 IT services rival",
+    "src": "WIPRO",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "HCLTECH",
+    "note": "Tier-1 IT services rival",
+    "src": "WIPRO",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "TECHM",
+    "note": "IT services rival",
+    "src": "WIPRO",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "LTIM",
+    "note": "IT services rival",
+    "src": "WIPRO",
+    "type": "competitor"
+   },
+   {
+    "confidence": "medium",
+    "dst": "MPHASIS",
+    "note": "Mid-cap IT services rival",
+    "src": "WIPRO",
+    "type": "competitor"
+   },
+   {
+    "confidence": "medium",
+    "dst": "PERSISTENT",
+    "note": "IT services rival",
+    "src": "WIPRO",
+    "type": "competitor"
+   },
+   {
+    "confidence": "medium",
+    "dst": "COFORGE",
+    "note": "IT services rival",
+    "src": "WIPRO",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "ACCENTURE",
+    "note": "Global IT services rival",
+    "src": "WIPRO",
+    "type": "competitor"
+   },
+   {
+    "confidence": "high",
+    "dst": "COGNIZANT",
+    "note": "Global IT services rival",
+    "src": "WIPRO",
+    "type": "competitor"
+   },
+   {
+    "confidence": "medium",
+    "dst": "IBM",
+    "note": "Global IT services rival",
+    "src": "WIPRO",
+    "type": "competitor"
+   },
+   {
+    "confidence": "medium",
+    "dst": "WIPRO",
+    "note": "Premji-controlled affiliate (consumer/lighting)",
+    "src": "WIPROENT",
+    "type": "group"
+   }
+  ]
+ }
+}

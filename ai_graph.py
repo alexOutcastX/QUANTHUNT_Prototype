@@ -20,6 +20,10 @@ except ImportError:            # only needed at generation time, not on import
 API_KEY = os.environ.get("ANTHROPIC_API_KEY", "").strip()
 MODEL = os.environ.get("GRAPH_AI_MODEL", "claude-sonnet-5").strip()
 CACHE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "graph_cache.json")
+# Committed seed graphs (hand-generated, no API key needed). Merged into the
+# runtime cache on first load so common companies are served instantly and
+# keylessly — see _merge_seed(). Shipped with the app (not gitignored).
+SEED_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "graph_cache.seed.json")
 TTL = 30 * 86400          # regenerate monthly — relationships move slowly
 TIMEOUT = 75              # generation can take a while on big graphs
 EDGE_TYPES = {"supplies", "group", "competitor", "finances"}
@@ -52,7 +56,40 @@ def _load() -> dict:
                 _cache = json.load(f)
         except Exception:
             _cache = {}
+        _merge_seed()
     return _cache
+
+
+def _merge_seed():
+    """Fill the runtime cache with committed seed graphs for any symbol it lacks.
+
+    Seed entries are stamped with a fresh ts so they serve for the full TTL from
+    load (renewed on each restart). Runtime-generated graphs always win. Kept
+    in memory only — never written back to CACHE_FILE.
+    """
+    try:
+        with open(SEED_FILE) as f:
+            seed = json.load(f)
+    except Exception:
+        return
+    now = int(time.time())
+    for sym, g in (seed or {}).items():
+        sym = str(sym).upper().strip()
+        if sym in _cache or not isinstance(g, dict):
+            continue
+        comps, edges = g.get("companies"), g.get("edges")
+        if comps and edges:
+            _cache[sym] = {"ts": now, "companies": comps, "edges": edges}
+
+
+def cached_graph(symbol: str):
+    """Return a fresh cached/seeded graph for a symbol, or None. No key needed."""
+    symbol = symbol.upper().strip()
+    with _lock:
+        c = _load().get(symbol)
+    if c and time.time() - c.get("ts", 0) < TTL:
+        return {"companies": c["companies"], "edges": c["edges"]}
+    return None
 
 
 def _save():
