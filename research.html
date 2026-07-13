@@ -12,7 +12,8 @@
 <style>
   :root{--bg:#08090c;--s:#0e1116;--s2:#141821;--b:#1d232e;--b2:#2b3441;--t:#edf0f5;--m:#68748a;--m2:#a9b3c2;--g:#22c993;--r:#f4587a}
   html,body{margin:0;background:var(--bg);color:var(--t);font-family:ui-monospace,Menlo,Consolas,monospace}
-  #top{display:flex;align-items:baseline;gap:12px;padding:14px 18px;background:var(--s);border-bottom:1px solid var(--b)}
+  #top{display:flex;align-items:center;gap:12px;padding:14px 18px;background:var(--s);border-bottom:1px solid var(--b)}
+  #backbtn{flex:none}
   #top b{font-size:16px;letter-spacing:1px}
   #top span{color:var(--m);font-size:10px}
   #main{max-width:1100px;margin:0 auto;padding:16px}
@@ -49,11 +50,19 @@
   #newsbar{display:flex;align-items:center;gap:12px;margin:6px 0 4px}
   #newsmeta{color:var(--m);font-size:10px}
 </style></head><body>
-<div id="top"><b>Taur<span style="color:#fff;font-size:16px">Eye</span> TERMINAL</b><span id="crumbs">research</span></div>
+<div id="top"><button class="btn" id="backbtn" onclick="goBack()" title="Back">← Back</button><b>Taur<span style="color:#fff;font-size:16px">Eye</span> TERMINAL</b><span id="crumbs">research</span></div>
 <div id="main"><div class="msg">Loading…</div></div>
 <script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
 <script>
 (function(){
+  // Return to wherever this page was opened from. Opened in a new tab → close
+  // it; opened in-place (some webviews) → step back; otherwise fall back to the
+  // app home so the user is never stranded.
+  window.goBack = function() {
+    try { if (window.history.length > 1) { window.history.back(); return; } } catch (e) {}
+    try { window.close(); } catch (e) {}
+    setTimeout(function() { try { location.href = './'; } catch (e) {} }, 200);
+  };
   var P = new URLSearchParams(location.search);
   var main = document.getElementById('main');
   var num = function(v, d){ return (v == null || !isFinite(v)) ? '—' : (+v).toFixed(d == null ? 1 : d); };

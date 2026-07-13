@@ -20,8 +20,8 @@ import { parseNL } from '../nlScreen';
 import { PRESETS, presetActive, togglePreset } from '../presets';
 import {
   ActiveFilters,
+  DEF_BY_KEY,
   FILTER_DEFS,
-  FilterDef,
   RangeVal,
   Row,
   Signal,
@@ -164,7 +164,15 @@ export default function ScreenerScreen() {
   const [active, setActive] = useState<ActiveFilters>({});
   const [sortCol, setSortCol] = useState('signal');
   const [sortDir, setSortDir] = useState<1 | -1>(-1);
-  const [drawer, setDrawer] = useState(false);
+  // Inline filter panel: `filtersOpen` collapses/expands it (open by default);
+  // `shown` is the ordered list of filter-key rows displayed (derived from
+  // `active` on load and unioned as `active` grows); `extVersion` remounts the
+  // uncontrolled range inputs on non-typing changes so their defaultValues
+  // refresh without dropping focus mid-type.
+  const [filtersOpen, setFiltersOpen] = useState(true);
+  const [shown, setShown] = useState<string[]>([]);
+  const [extVersion, setExtVersion] = useState(0);
+  const bumpExt = useCallback(() => setExtVersion((v) => v + 1), []);
   const [track, setTrack] = useState<TrackEntry[]>([]);
   const [fundBusy, setFundBusy] = useState(false);
   const [detail, setDetail] = useState<Row | null>(null);
@@ -262,6 +270,17 @@ export default function ScreenerScreen() {
     if (!restored) return;
     AsyncStorage.setItem(FILTERS_KEY, JSON.stringify(active)).catch(() => {});
   }, [active, restored]);
+
+  // Union any keys present in `active` (from restore, presets, NL, shared links,
+  // or applied saved screens) into `shown` so they render as filter rows. Never
+  // removes rows here — emptying a filter keeps its row visible for editing;
+  // explicit removal handles deletion from both `active` and `shown`.
+  useEffect(() => {
+    setShown((prev) => {
+      const add = Object.keys(active).filter((k) => !prev.includes(k));
+      return add.length ? [...prev, ...add] : prev;
+    });
+  }, [active]);
 
   useEffect(() => {
     if (!restored) return;
@@ -638,6 +657,17 @@ export default function ScreenerScreen() {
         </ScrollView>
       </View>
 
+      {filtersOpen ? (
+        <FilterPanel
+          active={active}
+          setActive={setActive}
+          shown={shown}
+          setShown={setShown}
+          extVersion={extVersion}
+          bumpExt={bumpExt}
+        />
+      ) : null}
+
       <View style={styles.statsRow}>
         <Stat v={stats.total} l="Matches" c={theme.text} />
         <Stat v={stats.buy} l="Bullish" c={theme.green} />
@@ -679,8 +709,14 @@ export default function ScreenerScreen() {
           <TouchableOpacity style={styles.filterBtn} onPress={() => setColMenu(true)} activeOpacity={0.75}>
             <Text style={styles.filterTxt}>▤ Columns</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.filterBtn} onPress={() => setDrawer(true)} activeOpacity={0.75}>
-            <Text style={styles.filterTxt}>⚙ Filters{activeCount ? ` (${activeCount})` : ''}</Text>
+          <TouchableOpacity
+            style={[styles.filterBtn, filtersOpen && styles.filterBtnOn]}
+            onPress={() => setFiltersOpen((v) => !v)}
+            activeOpacity={0.75}
+          >
+            <Text style={[styles.filterTxt, filtersOpen && styles.filterTxtOn]}>
+              ⚙ Filters{activeCount ? ` (${activeCount})` : ''} {filtersOpen ? '▾' : '▸'}
+            </Text>
           </TouchableOpacity>
         </ScrollView>
       </View>
@@ -768,13 +804,6 @@ export default function ScreenerScreen() {
         </View>
       </ScrollView>
 
-      <FilterDrawer
-        visible={drawer}
-        active={active}
-        onClose={() => setDrawer(false)}
-        onApply={setActive}
-      />
-
       <ColumnMenu
         visible={colMenu}
         order={colOrder}
@@ -821,86 +850,129 @@ function Stat({ v, l, c }: { v: number; l: string; c: string }) {
   );
 }
 
-// ── Filter drawer ────────────────────────────────────────────────────────────
-function FilterDrawer({
-  visible,
+// ── Inline filter panel ───────────────────────────────────────────────────────
+// Lives in the page flow (not a modal) and edits `active` LIVE — every change
+// reflects immediately, exactly like presets. `shown` is the ordered list of
+// filter-key rows; emptying a value keeps its row, the × button removes it.
+function FilterPanel({
   active,
-  onClose,
-  onApply,
+  setActive,
+  shown,
+  setShown,
+  extVersion,
+  bumpExt,
 }: {
-  visible: boolean;
   active: ActiveFilters;
-  onClose: () => void;
-  onApply: (a: ActiveFilters) => void;
+  setActive: React.Dispatch<React.SetStateAction<ActiveFilters>>;
+  shown: string[];
+  setShown: React.Dispatch<React.SetStateAction<string[]>>;
+  extVersion: number;
+  bumpExt: () => void;
 }) {
-  const [draft, setDraft] = useState<ActiveFilters>(active);
   const [nlText, setNlText] = useState('');
-  // Bumped on non-typing draft changes (NL add, clear-all, reopen) so the
-  // uncontrolled range inputs remount with fresh defaultValues — but never
-  // while the user is typing in them, which would drop focus.
-  const [extVersion, setExtVersion] = useState(0);
-  useEffect(() => {
-    if (visible) {
-      setDraft(active);
-      setNlText('');
-      setExtVersion((v) => v + 1);
-    }
-  }, [visible, active]);
+  const [picker, setPicker] = useState(false);
 
   // Live plain-English preview — what the parser understood so far.
   const nlParsed = useMemo(() => (nlText.trim() ? parseNL(nlText) : null), [nlText]);
   const applyNl = () => {
     if (!nlParsed?.matchedAny) return;
-    setDraft((d) => ({ ...d, ...nlParsed.filters }));
+    setActive((a) => ({ ...a, ...nlParsed.filters })); // union effect adds keys to `shown`
     setNlText('');
-    setExtVersion((v) => v + 1);
+    bumpExt();
   };
 
+  // Live edits — range writes on every keystroke (no bump: keep focus); an
+  // emptied range deletes the key from `active` but keeps its row in `shown`.
   const setRange = (key: string, part: 'min' | 'max', text: string) => {
-    setDraft((d) => {
-      const cur = (d[key] as RangeVal) || {};
+    setActive((a) => {
+      const cur = (a[key] as RangeVal) || {};
       const num = text.trim() === '' ? undefined : parseFloat(text);
       const nextVal: RangeVal = { ...cur, [part]: isFinite(num as number) ? num : undefined };
-      const next = { ...d };
+      const next = { ...a };
       if (nextVal.min == null && nextVal.max == null) delete next[key];
       else next[key] = nextVal;
       return next;
     });
   };
   const setToggle = (key: string, on: boolean) =>
-    setDraft((d) => {
-      const next = { ...d };
+    setActive((a) => {
+      const next = { ...a };
       if (on) next[key] = true;
       else delete next[key];
       return next;
     });
   const setSelect = (key: string, val: string) =>
-    setDraft((d) => {
-      const next = { ...d };
+    setActive((a) => {
+      const next = { ...a };
       if (val) next[key] = val;
       else delete next[key];
       return next;
     });
 
-  const renderFilter = (def: FilterDef) => {
+  // Remove a row entirely — drop the key from both `active` and `shown`.
+  const removeRow = (key: string) => {
+    setActive((a) => {
+      if (a[key] === undefined) return a;
+      const next = { ...a };
+      delete next[key];
+      return next;
+    });
+    setShown((prev) => prev.filter((k) => k !== key));
+    bumpExt();
+  };
+
+  // Append a picked filter as an empty, ready-to-edit row (value stays unset so
+  // it doesn't yet constrain the universe).
+  const addFilter = (key: string) => {
+    setShown((prev) => (prev.includes(key) ? prev : [...prev, key]));
+    bumpExt();
+    setPicker(false);
+  };
+
+  const clearAll = () => {
+    setActive({}); // filters only; index lives in separate state and is untouched
+    setShown([]);
+    bumpExt();
+    setPicker(false);
+  };
+
+  const renderRow = (key: string) => {
+    const def = DEF_BY_KEY[key];
+    if (!def) return null;
+    const removeBtn = (
+      <TouchableOpacity
+        style={styles.removeBtn}
+        onPress={() => removeRow(def.key)}
+        hitSlop={8}
+        activeOpacity={0.75}
+      >
+        <Text style={styles.removeTxt}>×</Text>
+      </TouchableOpacity>
+    );
     if (def.type === 'toggle') {
       return (
         <View key={def.key} style={styles.fRow}>
-          <Text style={styles.fLabel}>{def.label}</Text>
-          <Switch
-            value={draft[def.key] === true}
-            onValueChange={(v) => setToggle(def.key, v)}
-            trackColor={{ true: theme.accent, false: theme.border2 }}
-            thumbColor={theme.text}
-          />
+          <Text style={styles.fLabel}>{def.label}{def.fund ? ' ·f' : ''}</Text>
+          <View style={styles.rowRight}>
+            <Switch
+              value={active[def.key] === true}
+              onValueChange={(v) => setToggle(def.key, v)}
+              trackColor={{ true: theme.accent, false: theme.border2 }}
+              thumbColor={theme.text}
+            />
+            {removeBtn}
+          </View>
         </View>
       );
     }
     if (def.type === 'select') {
-      const val = (draft[def.key] as string) || '';
+      const val = (active[def.key] as string) || '';
       return (
         <View key={def.key} style={styles.fCol}>
-          <Text style={styles.fLabel}>{def.label}{def.fund ? ' ·f' : ''}</Text>
+          <View style={styles.selHead}>
+            <Text style={styles.fLabel}>{def.label}{def.fund ? ' ·f' : ''}</Text>
+            {removeBtn}
+          </View>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 6 }}>
             {['', ...(def.options || [])].map((opt) => (
               <TouchableOpacity
@@ -916,7 +988,7 @@ function FilterDrawer({
         </View>
       );
     }
-    const rv = (draft[def.key] as RangeVal) || {};
+    const rv = (active[def.key] as RangeVal) || {};
     return (
       <View key={def.key} style={styles.fRow}>
         <Text style={styles.fLabel}>
@@ -924,96 +996,118 @@ function FilterDrawer({
           {def.unit ? ` (${def.unit})` : ''}
           {def.fund ? ' ·f' : ''}
         </Text>
-        <View style={styles.rangeInputs}>
-          <TextInput
-            key={`${def.key}-min-${extVersion}`}
-            style={styles.rInput}
-            placeholder="min"
-            placeholderTextColor={theme.muted}
-            keyboardType="numeric"
-            defaultValue={rv.min != null ? String(rv.min) : ''}
-            onChangeText={(t) => setRange(def.key, 'min', t)}
-          />
-          <TextInput
-            key={`${def.key}-max-${extVersion}`}
-            style={styles.rInput}
-            placeholder="max"
-            placeholderTextColor={theme.muted}
-            keyboardType="numeric"
-            defaultValue={rv.max != null ? String(rv.max) : ''}
-            onChangeText={(t) => setRange(def.key, 'max', t)}
-          />
+        <View style={styles.rowRight}>
+          <View style={styles.rangeInputs}>
+            <TextInput
+              key={`${def.key}-min-${extVersion}`}
+              style={styles.rInput}
+              placeholder="min"
+              placeholderTextColor={theme.muted}
+              keyboardType="numeric"
+              defaultValue={rv.min != null ? String(rv.min) : ''}
+              onChangeText={(t) => setRange(def.key, 'min', t)}
+            />
+            <TextInput
+              key={`${def.key}-max-${extVersion}`}
+              style={styles.rInput}
+              placeholder="max"
+              placeholderTextColor={theme.muted}
+              keyboardType="numeric"
+              defaultValue={rv.max != null ? String(rv.max) : ''}
+              onChangeText={(t) => setRange(def.key, 'max', t)}
+            />
+          </View>
+          {removeBtn}
         </View>
       </View>
     );
   };
 
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <Pressable style={styles.backdrop} onPress={onClose} />
-      <View style={styles.drawer}>
-        <View style={styles.drawerHead}>
-          <Text style={styles.drawerTitle}>All Filters</Text>
-          <TouchableOpacity
-            onPress={() => {
-              setDraft({});
-              setExtVersion((v) => v + 1);
-            }}
-            activeOpacity={0.75}
-          >
-            <Text style={styles.clearAll}>Clear all</Text>
-          </TouchableOpacity>
+    <View style={styles.panel}>
+      <ScrollView style={styles.panelScroll} keyboardShouldPersistTaps="handled" nestedScrollEnabled>
+        <View style={styles.nlBox}>
+          <View style={styles.nlRow}>
+            <TextInput
+              style={styles.nlInput}
+              value={nlText}
+              onChangeText={setNlText}
+              placeholder='Describe a screen — e.g. "golden crossover", "rsi below 30 and above 200 dma"'
+              placeholderTextColor={theme.muted}
+              returnKeyType="done"
+              onSubmitEditing={applyNl}
+            />
+            <TouchableOpacity
+              style={[styles.nlAdd, !nlParsed?.matchedAny && styles.nlAddOff]}
+              onPress={applyNl}
+              disabled={!nlParsed?.matchedAny}
+              activeOpacity={0.75}
+            >
+              <Text style={[styles.nlAddTxt, !nlParsed?.matchedAny && { color: theme.muted }]}>Build</Text>
+            </TouchableOpacity>
+          </View>
+          {nlParsed ? (
+            <Text style={styles.nlFeedback}>
+              {nlParsed.matchedAny ? '✓ ' + nlParsed.recognized.join(' · ') : 'Nothing recognised yet…'}
+              {nlParsed.unrecognized.length ? `   (ignored: ${nlParsed.unrecognized.join(', ')})` : ''}
+            </Text>
+          ) : null}
         </View>
-        <ScrollView keyboardShouldPersistTaps="handled">
-          <View style={styles.nlBox}>
-            <Text style={styles.nlLabel}>Describe a scan in plain English</Text>
-            <View style={styles.nlRow}>
-              <TextInput
-                style={styles.nlInput}
-                value={nlText}
-                onChangeText={setNlText}
-                placeholder='e.g. "rsi below 30 and above 200 dma"'
-                placeholderTextColor={theme.muted}
-                returnKeyType="done"
-                onSubmitEditing={applyNl}
-              />
-              <TouchableOpacity
-                style={[styles.nlAdd, !nlParsed?.matchedAny && styles.nlAddOff]}
-                onPress={applyNl}
-                disabled={!nlParsed?.matchedAny}
-                activeOpacity={0.75}
-              >
-                <Text style={[styles.nlAddTxt, !nlParsed?.matchedAny && { color: theme.muted }]}>Add</Text>
+
+        <View style={styles.panelBody}>
+          {shown.length === 0 ? (
+            <Text style={styles.emptyFilters}>No filters — showing the full universe.</Text>
+          ) : (
+            shown.map(renderRow)
+          )}
+
+          <View style={styles.panelActions}>
+            <TouchableOpacity
+              style={[styles.addFilterBtn, picker && styles.addFilterBtnOn]}
+              onPress={() => setPicker((v) => !v)}
+              activeOpacity={0.75}
+            >
+              <Text style={styles.addFilterTxt}>+ Add filter</Text>
+            </TouchableOpacity>
+            {shown.length ? (
+              <TouchableOpacity onPress={clearAll} activeOpacity={0.75}>
+                <Text style={styles.clearAll}>Clear all</Text>
               </TouchableOpacity>
-            </View>
-            {nlParsed ? (
-              <Text style={styles.nlFeedback}>
-                {nlParsed.matchedAny ? '✓ ' + nlParsed.recognized.join(' · ') : 'Nothing recognised yet…'}
-                {nlParsed.unrecognized.length ? `   (ignored: ${nlParsed.unrecognized.join(', ')})` : ''}
-              </Text>
             ) : null}
           </View>
-          {TE_GROUPS.map((g) => (
-            <View key={g} style={styles.group}>
-              <Text style={styles.groupTitle}>{g}</Text>
-              {FILTER_DEFS.filter((d) => d.group === g).map(renderFilter)}
+
+          {picker ? (
+            <View style={styles.picker}>
+              <ScrollView style={styles.pickerScroll} keyboardShouldPersistTaps="handled" nestedScrollEnabled>
+                {TE_GROUPS.map((g) => {
+                  const defs = FILTER_DEFS.filter((d) => d.group === g && !shown.includes(d.key));
+                  if (!defs.length) return null;
+                  return (
+                    <View key={g} style={styles.group}>
+                      <Text style={styles.groupTitle}>{g}</Text>
+                      <View style={styles.pickWrap}>
+                        {defs.map((d) => (
+                          <TouchableOpacity
+                            key={d.key}
+                            style={styles.pickChip}
+                            onPress={() => addFilter(d.key)}
+                            activeOpacity={0.75}
+                          >
+                            <Text style={styles.pickTxt}>{d.label}{d.fund ? ' ·f' : ''}</Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    </View>
+                  );
+                })}
+              </ScrollView>
             </View>
-          ))}
+          ) : null}
+
           <Text style={styles.fundNote}>·f = fundamental filter; applying one fetches company financials (may take a moment).</Text>
-        </ScrollView>
-        <View style={styles.drawerFoot}>
-          <Btn label="Cancel" kind="ghost" onPress={onClose} style={{ flex: 1 }} />
-          <Btn
-            label="Apply"
-            onPress={() => {
-              onApply(draft);
-              onClose();
-            }}
-            style={{ flex: 2 }}
-          />
         </View>
-      </View>
-    </Modal>
+      </ScrollView>
+    </View>
   );
 }
 
@@ -1285,6 +1379,8 @@ const styles = StyleSheet.create({
     paddingVertical: theme.sp.sm + 1,
   },
   filterTxt: { color: theme.text, fontSize: theme.fs.sm + 1, fontWeight: '600' },
+  filterBtnOn: { backgroundColor: theme.accent, borderColor: theme.accent },
+  filterTxtOn: { color: theme.onAccent, fontWeight: '700' },
   note: { color: theme.muted, fontSize: theme.fs.sm, paddingHorizontal: theme.sp.md, paddingBottom: theme.sp.sm },
   headerRow: {
     flexDirection: 'row',
@@ -1529,4 +1625,60 @@ const styles = StyleSheet.create({
     borderTopColor: theme.border,
     borderTopWidth: 1,
   },
+  // inline filter panel
+  panel: {
+    backgroundColor: theme.surface,
+    borderBottomColor: theme.border,
+    borderBottomWidth: 1,
+  },
+  panelScroll: { maxHeight: 360 },
+  panelBody: { paddingHorizontal: theme.sp.lg, paddingBottom: theme.sp.md },
+  rowRight: { flexDirection: 'row', alignItems: 'center', gap: theme.sp.sm },
+  selHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  removeBtn: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    borderColor: theme.border2,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  removeTxt: { color: theme.muted2, fontSize: theme.fs.lg, fontWeight: '700', lineHeight: 20 },
+  emptyFilters: { color: theme.muted, fontSize: theme.fs.md, paddingVertical: theme.sp.md },
+  panelActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: theme.sp.sm,
+  },
+  addFilterBtn: {
+    backgroundColor: theme.surface2,
+    borderColor: theme.border2,
+    borderWidth: 1,
+    borderRadius: theme.radius.sm + 2,
+    paddingHorizontal: theme.sp.md,
+    paddingVertical: theme.sp.sm + 1,
+  },
+  addFilterBtnOn: { backgroundColor: theme.accent, borderColor: theme.accent },
+  addFilterTxt: { color: theme.text, fontSize: theme.fs.sm + 1, fontWeight: '700' },
+  picker: {
+    marginTop: theme.sp.sm,
+    backgroundColor: theme.surface2,
+    borderColor: theme.border2,
+    borderWidth: 1,
+    borderRadius: theme.radius.md,
+    overflow: 'hidden',
+  },
+  pickerScroll: { maxHeight: 240 },
+  pickWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.sp.sm },
+  pickChip: {
+    backgroundColor: theme.surface,
+    borderColor: theme.border,
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 13,
+    paddingVertical: 7,
+  },
+  pickTxt: { color: theme.text, fontSize: theme.fs.sm },
 });
