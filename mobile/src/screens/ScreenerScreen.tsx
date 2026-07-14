@@ -1052,36 +1052,66 @@ function FilterPanel({
         ) : null}
       </View>
 
-      <View style={styles.ctrlRow}>
-        <TouchableOpacity
-          style={[styles.addFilterBtn, presetsOpen && styles.addFilterBtnOn]}
-          onPress={() => setPresetsOpen((v) => !v)}
-          activeOpacity={0.75}
-        >
-          <Text style={[styles.addFilterTxt, presetsOpen && { color: theme.onAccent }]}>
-            Preset scans {presetsOpen ? '▾' : '▸'}
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.addFilterBtn, picker && styles.addFilterBtnOn]}
-          onPress={() => setPicker((v) => !v)}
-          activeOpacity={0.75}
-        >
-          <Text style={[styles.addFilterTxt, picker && { color: theme.onAccent }]}>+ Add filter</Text>
-        </TouchableOpacity>
-        {shown.length ? (
-          <TouchableOpacity onPress={clearAll} activeOpacity={0.75}>
-            <Text style={styles.clearAll}>Clear all</Text>
+      <View style={styles.ctrlWrap}>
+        <View style={styles.ctrlRow}>
+          <TouchableOpacity
+            style={[styles.addFilterBtn, presetsOpen && styles.addFilterBtnOn]}
+            onPress={() => setPresetsOpen((v) => !v)}
+            activeOpacity={0.75}
+          >
+            <Text style={[styles.addFilterTxt, presetsOpen && { color: theme.onAccent }]}>
+              Preset scans {presetsOpen ? '▾' : '▸'}
+            </Text>
           </TouchableOpacity>
-        ) : null}
-        <View style={styles.ctrlRight}>
-          <TouchableOpacity style={styles.filterBtn} onPress={onShare} activeOpacity={0.75}>
-            <Text style={styles.filterTxt}>↗ Share</Text>
+          <TouchableOpacity
+            style={[styles.addFilterBtn, picker && styles.addFilterBtnOn]}
+            onPress={() => setPicker((v) => !v)}
+            activeOpacity={0.75}
+          >
+            <Text style={[styles.addFilterTxt, picker && { color: theme.onAccent }]}>+ Add filter {picker ? '▾' : '▸'}</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.filterBtn} onPress={onSaveScreen} activeOpacity={0.75}>
-            <Text style={styles.filterTxt}>💾 Save screen{savedCount ? ` (${savedCount})` : ''}</Text>
-          </TouchableOpacity>
+          {shown.length ? (
+            <TouchableOpacity onPress={clearAll} activeOpacity={0.75}>
+              <Text style={styles.clearAll}>Clear all</Text>
+            </TouchableOpacity>
+          ) : null}
+          <View style={styles.ctrlRight}>
+            <TouchableOpacity style={styles.filterBtn} onPress={onShare} activeOpacity={0.75}>
+              <Text style={styles.filterTxt}>↗ Share</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.filterBtn} onPress={onSaveScreen} activeOpacity={0.75}>
+              <Text style={styles.filterTxt}>💾 Save screen{savedCount ? ` (${savedCount})` : ''}</Text>
+            </TouchableOpacity>
+          </View>
         </View>
+        {picker ? (
+          <View style={styles.pickerDrop}>
+            <ScrollView style={styles.pickerScroll} keyboardShouldPersistTaps="handled" nestedScrollEnabled>
+              {TE_GROUPS.map((g) => {
+                const defs = FILTER_DEFS.filter((d) => d.group === g && !shown.includes(d.key));
+                if (!defs.length) return null;
+                return (
+                  <View key={g} style={styles.group}>
+                    <Text style={styles.groupTitle}>{g}</Text>
+                    <View style={styles.pickWrap}>
+                      {defs.map((d) => (
+                        <TouchableOpacity
+                          key={d.key}
+                          style={styles.pickChip}
+                          onPress={() => addFilter(d.key)}
+                          activeOpacity={0.75}
+                        >
+                          <Text style={styles.pickTxt}>{d.label}{d.fund ? ' ·f' : ''}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </View>
+                );
+              })}
+              <Text style={styles.fundNote}>·f = fundamental filter; applying one fetches company financials (may take a moment).</Text>
+            </ScrollView>
+          </View>
+        ) : null}
       </View>
 
       {presetsOpen ? (
@@ -1108,35 +1138,6 @@ function FilterPanel({
         ) : (
           shown.map(renderRow)
         )}
-
-        {picker ? (
-          <View style={styles.picker}>
-            <ScrollView style={styles.pickerScroll} keyboardShouldPersistTaps="handled" nestedScrollEnabled>
-              {TE_GROUPS.map((g) => {
-                const defs = FILTER_DEFS.filter((d) => d.group === g && !shown.includes(d.key));
-                if (!defs.length) return null;
-                return (
-                  <View key={g} style={styles.group}>
-                    <Text style={styles.groupTitle}>{g}</Text>
-                    <View style={styles.pickWrap}>
-                      {defs.map((d) => (
-                        <TouchableOpacity
-                          key={d.key}
-                          style={styles.pickChip}
-                          onPress={() => addFilter(d.key)}
-                          activeOpacity={0.75}
-                        >
-                          <Text style={styles.pickTxt}>{d.label}{d.fund ? ' ·f' : ''}</Text>
-                        </TouchableOpacity>
-                      ))}
-                    </View>
-                  </View>
-                );
-              })}
-            </ScrollView>
-            <Text style={styles.fundNote}>·f = fundamental filter; applying one fetches company financials (may take a moment).</Text>
-          </View>
-        ) : null}
       </View>
     </View>
   );
@@ -1413,6 +1414,28 @@ const styles = StyleSheet.create({
     paddingTop: theme.sp.sm,
   },
   ctrlRight: { marginLeft: 'auto', flexDirection: 'row', alignItems: 'center', gap: theme.sp.sm },
+  // Anchor for the add-filter dropdown; keeps it above the table when open.
+  ctrlWrap: { zIndex: 60 },
+  pickerDrop: {
+    position: 'absolute',
+    top: '100%',
+    left: theme.sp.lg,
+    marginTop: 4,
+    width: 680,
+    maxWidth: '94%',
+    maxHeight: 360,
+    backgroundColor: theme.surface2,
+    borderColor: theme.border2,
+    borderWidth: 1,
+    borderRadius: theme.radius.md,
+    overflow: 'hidden',
+    zIndex: 100,
+    elevation: 16,
+    shadowColor: '#000',
+    shadowOpacity: 0.5,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 8 },
+  },
   nameTxt: { color: theme.muted2, fontSize: theme.fs.sm },
   exchTxt: { color: theme.muted, fontSize: theme.fs.xs + 1, fontFamily: theme.mono },
   ltp: { fontWeight: '700' },
@@ -1661,11 +1684,14 @@ const styles = StyleSheet.create({
     borderTopColor: theme.border,
     borderTopWidth: 1,
   },
-  // inline filter panel
+  // inline filter panel. zIndex lifts the whole panel's stacking context above
+  // the table (RN-web gives sibling Views z-index 0, so the later table would
+  // otherwise paint over the add-filter dropdown).
   panel: {
     backgroundColor: theme.surface,
     borderBottomColor: theme.border,
     borderBottomWidth: 1,
+    zIndex: 50,
   },
   panelBody: { paddingHorizontal: theme.sp.lg, paddingBottom: theme.sp.sm },
   rowRight: { flexDirection: 'row', alignItems: 'center', gap: theme.sp.sm },
@@ -1691,15 +1717,7 @@ const styles = StyleSheet.create({
   },
   addFilterBtnOn: { backgroundColor: theme.accent, borderColor: theme.accent },
   addFilterTxt: { color: theme.text, fontSize: theme.fs.sm + 1, fontWeight: '700' },
-  picker: {
-    marginTop: theme.sp.sm,
-    backgroundColor: theme.surface2,
-    borderColor: theme.border2,
-    borderWidth: 1,
-    borderRadius: theme.radius.md,
-    overflow: 'hidden',
-  },
-  pickerScroll: { maxHeight: 240 },
+  pickerScroll: { maxHeight: 358 },
   pickWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.sp.sm },
   pickChip: {
     backgroundColor: theme.surface,
