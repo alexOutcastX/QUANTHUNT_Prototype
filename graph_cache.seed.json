@@ -2892,6 +2892,10 @@
    "GICRE": {
     "name": "General Insurance Corporation of India",
     "listed": true
+   },
+   "BAJAJHFL": {
+    "name": "Bajaj Housing Finance Ltd",
+    "listed": true
    }
   },
   "edges": [
@@ -3052,6 +3056,13 @@
    {
     "src": "BAJAJ-AUTO",
     "dst": "BAJFINANCE",
+    "type": "group",
+    "note": "Fellow Bajaj group company",
+    "confidence": "high"
+   },
+   {
+    "src": "BAJAJ-AUTO",
+    "dst": "BAJAJHFL",
     "type": "group",
     "note": "Fellow Bajaj group company",
     "confidence": "high"
@@ -3287,6 +3298,13 @@
    {
     "src": "BAJAJFINSV",
     "dst": "BAJAJ-AUTO",
+    "type": "group",
+    "note": "Fellow Bajaj group company",
+    "confidence": "high"
+   },
+   {
+    "src": "BAJAJFINSV",
+    "dst": "BAJAJHFL",
     "type": "group",
     "note": "Fellow Bajaj group company",
     "confidence": "high"
@@ -3526,6 +3544,13 @@
    {
     "src": "BAJFINANCE",
     "dst": "BAJAJ-AUTO",
+    "type": "group",
+    "note": "Fellow Bajaj group company",
+    "confidence": "high"
+   },
+   {
+    "src": "BAJFINANCE",
+    "dst": "BAJAJHLDNG",
     "type": "group",
     "note": "Fellow Bajaj group company",
     "confidence": "high"
@@ -5240,6 +5265,10 @@
    "GICRE": {
     "name": "General Insurance Corp of India",
     "listed": true
+   },
+   "CGPOWER": {
+    "name": "CG Power & Industrial Solutions Ltd",
+    "listed": true
    }
   },
   "edges": [
@@ -5396,6 +5425,13 @@
     "type": "invests",
     "note": "GIC Re holds minority equity stake",
     "confidence": "low"
+   },
+   {
+    "src": "CHOLAFIN",
+    "dst": "CGPOWER",
+    "type": "group",
+    "note": "Fellow Murugappa group company",
+    "confidence": "high"
    }
   ]
  },
@@ -11012,6 +11048,14 @@
    "TRENT": {
     "name": "Trent Ltd",
     "listed": true
+   },
+   "TMPV": {
+    "name": "Tata Motors Passenger Vehicles Ltd",
+    "listed": true
+   },
+   "TMCV": {
+    "name": "Tata Motors Commercial Vehicles Ltd",
+    "listed": true
    }
   },
   "edges": [
@@ -11186,6 +11230,20 @@
    {
     "src": "INDHOTEL",
     "dst": "TRENT",
+    "type": "group",
+    "note": "Fellow Tata group company (Tata Sons)",
+    "confidence": "high"
+   },
+   {
+    "src": "INDHOTEL",
+    "dst": "TMPV",
+    "type": "group",
+    "note": "Fellow Tata group company (Tata Sons)",
+    "confidence": "high"
+   },
+   {
+    "src": "INDHOTEL",
+    "dst": "TMCV",
     "type": "group",
     "note": "Fellow Tata group company (Tata Sons)",
     "confidence": "high"
@@ -13096,6 +13154,13 @@
     "type": "invests",
     "note": "LIC institutional holder",
     "confidence": "medium"
+   },
+   {
+    "src": "JSWSTEEL",
+    "dst": "JSWENERGY",
+    "type": "group",
+    "note": "Fellow JSW group company",
+    "confidence": "high"
    }
   ]
  },
@@ -20232,6 +20297,14 @@
    "INDHOTEL": {
     "name": "Indian Hotels Co Ltd (Taj)",
     "listed": true
+   },
+   "TMPV": {
+    "name": "Tata Motors Passenger Vehicles Ltd",
+    "listed": true
+   },
+   "TMCV": {
+    "name": "Tata Motors Commercial Vehicles Ltd",
+    "listed": true
    }
   },
   "edges": [
@@ -20451,6 +20524,20 @@
     "type": "group",
     "note": "Fellow Tata group company (Tata Sons)",
     "confidence": "high"
+   },
+   {
+    "src": "TATACONSUM",
+    "dst": "TMPV",
+    "type": "group",
+    "note": "Fellow Tata group company (Tata Sons)",
+    "confidence": "high"
+   },
+   {
+    "src": "TATACONSUM",
+    "dst": "TMCV",
+    "type": "group",
+    "note": "Fellow Tata group company (Tata Sons)",
+    "confidence": "high"
    }
   ]
  },
@@ -20562,6 +20649,14 @@
    },
    "INDHOTEL": {
     "name": "Indian Hotels Co Ltd (Taj)",
+    "listed": true
+   },
+   "TMPV": {
+    "name": "Tata Motors Passenger Vehicles Ltd",
+    "listed": true
+   },
+   "TMCV": {
+    "name": "Tata Motors Commercial Vehicles Ltd",
     "listed": true
    }
   },
@@ -20775,6 +20870,20 @@
     "type": "group",
     "note": "Fellow Tata group company (Tata Sons)",
     "confidence": "high"
+   },
+   {
+    "src": "TATAMOTORS",
+    "dst": "TMPV",
+    "type": "group",
+    "note": "Fellow Tata group company (Tata Sons)",
+    "confidence": "high"
+   },
+   {
+    "src": "TATAMOTORS",
+    "dst": "TMCV",
+    "type": "group",
+    "note": "Fellow Tata group company (Tata Sons)",
+    "confidence": "high"
    }
   ]
  },
@@ -20874,6 +20983,14 @@
    },
    "INDHOTEL": {
     "name": "Indian Hotels Co Ltd (Taj)",
+    "listed": true
+   },
+   "TMPV": {
+    "name": "Tata Motors Passenger Vehicles Ltd",
+    "listed": true
+   },
+   "TMCV": {
+    "name": "Tata Motors Commercial Vehicles Ltd",
     "listed": true
    }
   },
@@ -21073,6 +21190,20 @@
     "type": "group",
     "note": "Fellow Tata group company (Tata Sons)",
     "confidence": "high"
+   },
+   {
+    "src": "TATAPOWER",
+    "dst": "TMPV",
+    "type": "group",
+    "note": "Fellow Tata group company (Tata Sons)",
+    "confidence": "high"
+   },
+   {
+    "src": "TATAPOWER",
+    "dst": "TMCV",
+    "type": "group",
+    "note": "Fellow Tata group company (Tata Sons)",
+    "confidence": "high"
    }
   ]
  },
@@ -21160,6 +21291,14 @@
    },
    "INDHOTEL": {
     "name": "Indian Hotels Co Ltd (Taj)",
+    "listed": true
+   },
+   "TMPV": {
+    "name": "Tata Motors Passenger Vehicles Ltd",
+    "listed": true
+   },
+   "TMCV": {
+    "name": "Tata Motors Commercial Vehicles Ltd",
     "listed": true
    }
   },
@@ -21387,6 +21526,20 @@
     "type": "group",
     "note": "Fellow Tata group company (Tata Sons)",
     "confidence": "high"
+   },
+   {
+    "src": "TATASTEEL",
+    "dst": "TMPV",
+    "type": "group",
+    "note": "Fellow Tata group company (Tata Sons)",
+    "confidence": "high"
+   },
+   {
+    "src": "TATASTEEL",
+    "dst": "TMCV",
+    "type": "group",
+    "note": "Fellow Tata group company (Tata Sons)",
+    "confidence": "high"
    }
   ]
  },
@@ -21486,6 +21639,14 @@
    },
    "INDHOTEL": {
     "name": "Indian Hotels Co Ltd (Taj)",
+    "listed": true
+   },
+   "TMPV": {
+    "name": "Tata Motors Passenger Vehicles Ltd",
+    "listed": true
+   },
+   "TMCV": {
+    "name": "Tata Motors Commercial Vehicles Ltd",
     "listed": true
    }
   },
@@ -21696,6 +21857,20 @@
    {
     "src": "TCS",
     "dst": "INDHOTEL",
+    "type": "group",
+    "note": "Fellow Tata group company (Tata Sons)",
+    "confidence": "high"
+   },
+   {
+    "src": "TCS",
+    "dst": "TMPV",
+    "type": "group",
+    "note": "Fellow Tata group company (Tata Sons)",
+    "confidence": "high"
+   },
+   {
+    "src": "TCS",
+    "dst": "TMCV",
     "type": "group",
     "note": "Fellow Tata group company (Tata Sons)",
     "confidence": "high"
@@ -22031,6 +22206,14 @@
    "INDHOTEL": {
     "name": "Indian Hotels Co Ltd (Taj)",
     "listed": true
+   },
+   "TMPV": {
+    "name": "Tata Motors Passenger Vehicles Ltd",
+    "listed": true
+   },
+   "TMCV": {
+    "name": "Tata Motors Commercial Vehicles Ltd",
+    "listed": true
    }
   },
   "edges": [
@@ -22219,6 +22402,20 @@
    {
     "src": "TITAN",
     "dst": "INDHOTEL",
+    "type": "group",
+    "note": "Fellow Tata group company (Tata Sons)",
+    "confidence": "high"
+   },
+   {
+    "src": "TITAN",
+    "dst": "TMPV",
+    "type": "group",
+    "note": "Fellow Tata group company (Tata Sons)",
+    "confidence": "high"
+   },
+   {
+    "src": "TITAN",
+    "dst": "TMCV",
     "type": "group",
     "note": "Fellow Tata group company (Tata Sons)",
     "confidence": "high"
@@ -22542,6 +22739,14 @@
    "TATAPOWER": {
     "name": "Tata Power Co Ltd",
     "listed": true
+   },
+   "TMPV": {
+    "name": "Tata Motors Passenger Vehicles Ltd",
+    "listed": true
+   },
+   "TMCV": {
+    "name": "Tata Motors Commercial Vehicles Ltd",
+    "listed": true
    }
   },
   "edges": [
@@ -22723,6 +22928,20 @@
    {
     "src": "TRENT",
     "dst": "TATAPOWER",
+    "type": "group",
+    "note": "Fellow Tata group company (Tata Sons)",
+    "confidence": "high"
+   },
+   {
+    "src": "TRENT",
+    "dst": "TMPV",
+    "type": "group",
+    "note": "Fellow Tata group company (Tata Sons)",
+    "confidence": "high"
+   },
+   {
+    "src": "TRENT",
+    "dst": "TMCV",
     "type": "group",
     "note": "Fellow Tata group company (Tata Sons)",
     "confidence": "high"
@@ -24287,6 +24506,3514 @@
     "type": "invests",
     "note": "Holds ~64% controlling stake in Zydus Wellness",
     "confidence": "high"
+   }
+  ]
+ },
+ "TMPV": {
+  "companies": {
+   "TMPV": {
+    "name": "Tata Motors Passenger Vehicles Ltd",
+    "listed": true
+   },
+   "TMCV": {
+    "name": "Tata Motors Commercial Vehicles Ltd",
+    "listed": true
+   },
+   "TATASONS": {
+    "name": "Tata Sons Pvt Ltd",
+    "listed": false
+   },
+   "JLR": {
+    "name": "Jaguar Land Rover Automotive plc",
+    "listed": false
+   },
+   "TATASTEEL": {
+    "name": "Tata Steel Ltd",
+    "listed": true
+   },
+   "BOSCHLTD": {
+    "name": "Bosch Ltd",
+    "listed": true
+   },
+   "MOTHERSON": {
+    "name": "Samvardhana Motherson International Ltd",
+    "listed": true
+   },
+   "SONACOMS": {
+    "name": "Sona BLW Precision Forgings Ltd",
+    "listed": true
+   },
+   "EXIDEIND": {
+    "name": "Exide Industries Ltd",
+    "listed": true
+   },
+   "APOLLOTYRE": {
+    "name": "Apollo Tyres Ltd",
+    "listed": true
+   },
+   "TATAELXSI": {
+    "name": "Tata Elxsi Ltd",
+    "listed": true
+   },
+   "TATAPOWER": {
+    "name": "Tata Power Co Ltd",
+    "listed": true
+   },
+   "LICI": {
+    "name": "Life Insurance Corporation of India",
+    "listed": true
+   },
+   "CONSUMERS": {
+    "name": "Indian retail consumers (households)",
+    "listed": false
+   },
+   "DEALERS": {
+    "name": "Tata PV dealer network",
+    "listed": false
+   },
+   "MARUTI": {
+    "name": "Maruti Suzuki India Ltd",
+    "listed": true
+   },
+   "HYUNDAI": {
+    "name": "Hyundai Motor India Ltd",
+    "listed": true
+   },
+   "M&M": {
+    "name": "Mahindra & Mahindra Ltd",
+    "listed": true
+   },
+   "TCS": {
+    "name": "Tata Consultancy Services Ltd",
+    "listed": true
+   },
+   "TATAMOTORS": {
+    "name": "Tata Motors Ltd",
+    "listed": true
+   },
+   "TITAN": {
+    "name": "Titan Company Ltd",
+    "listed": true
+   },
+   "TATACONSUM": {
+    "name": "Tata Consumer Products Ltd",
+    "listed": true
+   },
+   "TRENT": {
+    "name": "Trent Ltd",
+    "listed": true
+   },
+   "INDHOTEL": {
+    "name": "Indian Hotels Co Ltd (Taj)",
+    "listed": true
+   }
+  },
+  "edges": [
+   {
+    "src": "TATASTEEL",
+    "dst": "TMPV",
+    "type": "supplies",
+    "note": "Auto-grade steel for PV body panels and chassis",
+    "confidence": "high"
+   },
+   {
+    "src": "BOSCHLTD",
+    "dst": "TMPV",
+    "type": "supplies",
+    "note": "Powertrain, fuel injection and automotive electronics",
+    "confidence": "high"
+   },
+   {
+    "src": "MOTHERSON",
+    "dst": "TMPV",
+    "type": "supplies",
+    "note": "Wiring harnesses, mirrors and polymer modules",
+    "confidence": "high"
+   },
+   {
+    "src": "SONACOMS",
+    "dst": "TMPV",
+    "type": "supplies",
+    "note": "EV differential gears and driveline components",
+    "confidence": "medium"
+   },
+   {
+    "src": "EXIDEIND",
+    "dst": "TMPV",
+    "type": "supplies",
+    "note": "Automotive batteries for the PV lineup",
+    "confidence": "medium"
+   },
+   {
+    "src": "APOLLOTYRE",
+    "dst": "TMPV",
+    "type": "supplies",
+    "note": "OEM tyre fitments for Tata cars and SUVs",
+    "confidence": "medium"
+   },
+   {
+    "src": "TATAELXSI",
+    "dst": "TMPV",
+    "type": "supplies",
+    "note": "Vehicle design and embedded software engineering services",
+    "confidence": "high"
+   },
+   {
+    "src": "TATAPOWER",
+    "dst": "TMPV",
+    "type": "supplies",
+    "note": "EV charging network partner for Tata EV customers",
+    "confidence": "medium"
+   },
+   {
+    "src": "TATASONS",
+    "dst": "TMPV",
+    "type": "invests",
+    "note": "Promoter; ~42% stake carried over from Tata Motors demerger",
+    "confidence": "high"
+   },
+   {
+    "src": "LICI",
+    "dst": "TMPV",
+    "type": "invests",
+    "note": "Large domestic institutional shareholder",
+    "confidence": "medium"
+   },
+   {
+    "src": "TMPV",
+    "dst": "CONSUMERS",
+    "type": "supplies",
+    "note": "Cars and SUVs to Indian households; #1 in electric PVs",
+    "confidence": "high"
+   },
+   {
+    "src": "TMPV",
+    "dst": "DEALERS",
+    "type": "supplies",
+    "note": "Vehicles billed to nationwide dealer network",
+    "confidence": "high"
+   },
+   {
+    "src": "TMPV",
+    "dst": "JLR",
+    "type": "invests",
+    "note": "Owns 100% of Jaguar Land Rover (UK luxury marques)",
+    "confidence": "high"
+   },
+   {
+    "src": "TMPV",
+    "dst": "TMCV",
+    "type": "group",
+    "note": "Sibling from 2025 Tata Motors PV/CV demerger",
+    "confidence": "high"
+   },
+   {
+    "src": "TATASONS",
+    "dst": "TATASTEEL",
+    "type": "group",
+    "note": "Fellow Tata group company under Tata Sons",
+    "confidence": "high"
+   },
+   {
+    "src": "MARUTI",
+    "dst": "TMPV",
+    "type": "competitor",
+    "note": "Market-leading rival in Indian passenger vehicles",
+    "confidence": "high"
+   },
+   {
+    "src": "HYUNDAI",
+    "dst": "TMPV",
+    "type": "competitor",
+    "note": "Rival in hatchbacks, SUVs and EVs",
+    "confidence": "high"
+   },
+   {
+    "src": "M&M",
+    "dst": "TMPV",
+    "type": "competitor",
+    "note": "Rival in SUVs and electric vehicles",
+    "confidence": "high"
+   },
+   {
+    "src": "MOTHERSON",
+    "dst": "MARUTI",
+    "type": "supplies",
+    "note": "Also a major component supplier to Maruti Suzuki",
+    "confidence": "high"
+   },
+   {
+    "src": "BOSCHLTD",
+    "dst": "M&M",
+    "type": "supplies",
+    "note": "Powertrain components for Mahindra vehicles",
+    "confidence": "medium"
+   },
+   {
+    "src": "TMPV",
+    "dst": "TCS",
+    "type": "group",
+    "note": "Fellow Tata group company (Tata Sons)",
+    "confidence": "high"
+   },
+   {
+    "src": "TMPV",
+    "dst": "TATAMOTORS",
+    "type": "group",
+    "note": "Fellow Tata group company (Tata Sons)",
+    "confidence": "high"
+   },
+   {
+    "src": "TMPV",
+    "dst": "TATASTEEL",
+    "type": "group",
+    "note": "Fellow Tata group company (Tata Sons)",
+    "confidence": "high"
+   },
+   {
+    "src": "TMPV",
+    "dst": "TITAN",
+    "type": "group",
+    "note": "Fellow Tata group company (Tata Sons)",
+    "confidence": "high"
+   },
+   {
+    "src": "TMPV",
+    "dst": "TATAPOWER",
+    "type": "group",
+    "note": "Fellow Tata group company (Tata Sons)",
+    "confidence": "high"
+   },
+   {
+    "src": "TMPV",
+    "dst": "TATACONSUM",
+    "type": "group",
+    "note": "Fellow Tata group company (Tata Sons)",
+    "confidence": "high"
+   },
+   {
+    "src": "TMPV",
+    "dst": "TRENT",
+    "type": "group",
+    "note": "Fellow Tata group company (Tata Sons)",
+    "confidence": "high"
+   },
+   {
+    "src": "TMPV",
+    "dst": "INDHOTEL",
+    "type": "group",
+    "note": "Fellow Tata group company (Tata Sons)",
+    "confidence": "high"
+   }
+  ]
+ },
+ "TMCV": {
+  "companies": {
+   "TMCV": {
+    "name": "Tata Motors Commercial Vehicles Ltd",
+    "listed": true
+   },
+   "TMPV": {
+    "name": "Tata Motors Passenger Vehicles Ltd",
+    "listed": true
+   },
+   "TATASONS": {
+    "name": "Tata Sons Pvt Ltd",
+    "listed": false
+   },
+   "TATASTEEL": {
+    "name": "Tata Steel Ltd",
+    "listed": true
+   },
+   "BHARATFORG": {
+    "name": "Bharat Forge Ltd",
+    "listed": true
+   },
+   "CUMMINSIND": {
+    "name": "Cummins India Ltd",
+    "listed": true
+   },
+   "BOSCHLTD": {
+    "name": "Bosch Ltd",
+    "listed": true
+   },
+   "ZFCVINDIA": {
+    "name": "ZF Commercial Vehicle Control Systems India Ltd",
+    "listed": true
+   },
+   "APOLLOTYRE": {
+    "name": "Apollo Tyres Ltd",
+    "listed": true
+   },
+   "EXIDEIND": {
+    "name": "Exide Industries Ltd",
+    "listed": true
+   },
+   "LICI": {
+    "name": "Life Insurance Corporation of India",
+    "listed": true
+   },
+   "VRLLOG": {
+    "name": "VRL Logistics Ltd",
+    "listed": true
+   },
+   "TCI": {
+    "name": "Transport Corporation of India Ltd",
+    "listed": true
+   },
+   "DELHIVERY": {
+    "name": "Delhivery Ltd",
+    "listed": true
+   },
+   "ASHOKLEY": {
+    "name": "Ashok Leyland Ltd",
+    "listed": true
+   },
+   "EICHERMOT": {
+    "name": "Eicher Motors Ltd",
+    "listed": true
+   },
+   "VECV": {
+    "name": "VE Commercial Vehicles Ltd (Volvo Eicher)",
+    "listed": false
+   },
+   "M&M": {
+    "name": "Mahindra & Mahindra Ltd",
+    "listed": true
+   },
+   "TCS": {
+    "name": "Tata Consultancy Services Ltd",
+    "listed": true
+   },
+   "TATAMOTORS": {
+    "name": "Tata Motors Ltd",
+    "listed": true
+   },
+   "TITAN": {
+    "name": "Titan Company Ltd",
+    "listed": true
+   },
+   "TATAPOWER": {
+    "name": "Tata Power Co Ltd",
+    "listed": true
+   },
+   "TATACONSUM": {
+    "name": "Tata Consumer Products Ltd",
+    "listed": true
+   },
+   "TRENT": {
+    "name": "Trent Ltd",
+    "listed": true
+   },
+   "INDHOTEL": {
+    "name": "Indian Hotels Co Ltd (Taj)",
+    "listed": true
+   }
+  },
+  "edges": [
+   {
+    "src": "TATASTEEL",
+    "dst": "TMCV",
+    "type": "supplies",
+    "note": "Steel for truck frames, cabs and load bodies",
+    "confidence": "high"
+   },
+   {
+    "src": "BHARATFORG",
+    "dst": "TMCV",
+    "type": "supplies",
+    "note": "Forged axles, crankshafts and chassis components",
+    "confidence": "high"
+   },
+   {
+    "src": "CUMMINSIND",
+    "dst": "TMCV",
+    "type": "supplies",
+    "note": "Diesel engines for heavy trucks via long JV history",
+    "confidence": "high"
+   },
+   {
+    "src": "BOSCHLTD",
+    "dst": "TMCV",
+    "type": "supplies",
+    "note": "Fuel injection and vehicle electronics",
+    "confidence": "high"
+   },
+   {
+    "src": "ZFCVINDIA",
+    "dst": "TMCV",
+    "type": "supplies",
+    "note": "Braking and CV control systems",
+    "confidence": "high"
+   },
+   {
+    "src": "APOLLOTYRE",
+    "dst": "TMCV",
+    "type": "supplies",
+    "note": "Truck-bus radial tyres for OEM fitment",
+    "confidence": "medium"
+   },
+   {
+    "src": "EXIDEIND",
+    "dst": "TMCV",
+    "type": "supplies",
+    "note": "Batteries for commercial vehicles",
+    "confidence": "medium"
+   },
+   {
+    "src": "TATASONS",
+    "dst": "TMCV",
+    "type": "invests",
+    "note": "Promoter holding after Tata Motors demerger",
+    "confidence": "high"
+   },
+   {
+    "src": "LICI",
+    "dst": "TMCV",
+    "type": "invests",
+    "note": "Large domestic institutional shareholder",
+    "confidence": "medium"
+   },
+   {
+    "src": "TMCV",
+    "dst": "VRLLOG",
+    "type": "supplies",
+    "note": "Trucks and buses for VRL's road transport fleet",
+    "confidence": "high"
+   },
+   {
+    "src": "TMCV",
+    "dst": "TCI",
+    "type": "supplies",
+    "note": "Trucks for Transport Corp of India's fleet",
+    "confidence": "medium"
+   },
+   {
+    "src": "TMCV",
+    "dst": "DELHIVERY",
+    "type": "supplies",
+    "note": "Trucks for e-commerce logistics fleet",
+    "confidence": "medium"
+   },
+   {
+    "src": "TMCV",
+    "dst": "TMPV",
+    "type": "group",
+    "note": "Sibling from 2025 Tata Motors PV/CV demerger",
+    "confidence": "high"
+   },
+   {
+    "src": "TATASONS",
+    "dst": "TATASTEEL",
+    "type": "group",
+    "note": "Fellow Tata group company under Tata Sons",
+    "confidence": "high"
+   },
+   {
+    "src": "ASHOKLEY",
+    "dst": "TMCV",
+    "type": "competitor",
+    "note": "#2 rival in Indian trucks and buses",
+    "confidence": "high"
+   },
+   {
+    "src": "EICHERMOT",
+    "dst": "TMCV",
+    "type": "competitor",
+    "note": "Competes via VECV trucks in light/medium CVs",
+    "confidence": "high"
+   },
+   {
+    "src": "VECV",
+    "dst": "TMCV",
+    "type": "competitor",
+    "note": "Volvo-Eicher JV competes across truck segments",
+    "confidence": "high"
+   },
+   {
+    "src": "M&M",
+    "dst": "TMCV",
+    "type": "competitor",
+    "note": "Rival in pickups and light commercial vehicles",
+    "confidence": "medium"
+   },
+   {
+    "src": "EICHERMOT",
+    "dst": "VECV",
+    "type": "invests",
+    "note": "Holds 54.4% of VE Commercial Vehicles JV with Volvo",
+    "confidence": "high"
+   },
+   {
+    "src": "BHARATFORG",
+    "dst": "ASHOKLEY",
+    "type": "supplies",
+    "note": "Forgings also supplied to Ashok Leyland",
+    "confidence": "medium"
+   },
+   {
+    "src": "TMCV",
+    "dst": "TCS",
+    "type": "group",
+    "note": "Fellow Tata group company (Tata Sons)",
+    "confidence": "high"
+   },
+   {
+    "src": "TMCV",
+    "dst": "TATAMOTORS",
+    "type": "group",
+    "note": "Fellow Tata group company (Tata Sons)",
+    "confidence": "high"
+   },
+   {
+    "src": "TMCV",
+    "dst": "TATASTEEL",
+    "type": "group",
+    "note": "Fellow Tata group company (Tata Sons)",
+    "confidence": "high"
+   },
+   {
+    "src": "TMCV",
+    "dst": "TITAN",
+    "type": "group",
+    "note": "Fellow Tata group company (Tata Sons)",
+    "confidence": "high"
+   },
+   {
+    "src": "TMCV",
+    "dst": "TATAPOWER",
+    "type": "group",
+    "note": "Fellow Tata group company (Tata Sons)",
+    "confidence": "high"
+   },
+   {
+    "src": "TMCV",
+    "dst": "TATACONSUM",
+    "type": "group",
+    "note": "Fellow Tata group company (Tata Sons)",
+    "confidence": "high"
+   },
+   {
+    "src": "TMCV",
+    "dst": "TRENT",
+    "type": "group",
+    "note": "Fellow Tata group company (Tata Sons)",
+    "confidence": "high"
+   },
+   {
+    "src": "TMCV",
+    "dst": "INDHOTEL",
+    "type": "group",
+    "note": "Fellow Tata group company (Tata Sons)",
+    "confidence": "high"
+   }
+  ]
+ },
+ "ETERNAL": {
+  "companies": {
+   "ETERNAL": {
+    "name": "Eternal Ltd (Zomato + Blinkit)",
+    "listed": true
+   },
+   "BLINKIT": {
+    "name": "Blinkit (quick commerce arm)",
+    "listed": false
+   },
+   "SWIGGY": {
+    "name": "Swiggy Ltd",
+    "listed": true
+   },
+   "ZEPTO": {
+    "name": "Zepto (Kiranakart Technologies)",
+    "listed": false
+   },
+   "DMART": {
+    "name": "Avenue Supermarts Ltd",
+    "listed": true
+   },
+   "HINDUNILVR": {
+    "name": "Hindustan Unilever Ltd",
+    "listed": true
+   },
+   "NESTLEIND": {
+    "name": "Nestle India Ltd",
+    "listed": true
+   },
+   "BRITANNIA": {
+    "name": "Britannia Industries Ltd",
+    "listed": true
+   },
+   "RESTAURANTS": {
+    "name": "Partner restaurants (unlisted)",
+    "listed": false
+   },
+   "PAYTM": {
+    "name": "One97 Communications Ltd (Paytm)",
+    "listed": true
+   },
+   "NAUKRI": {
+    "name": "Info Edge (India) Ltd",
+    "listed": true
+   },
+   "LICI": {
+    "name": "Life Insurance Corporation of India",
+    "listed": true
+   },
+   "CONSUMERS": {
+    "name": "Indian retail consumers (households)",
+    "listed": false
+   }
+  },
+  "edges": [
+   {
+    "src": "HINDUNILVR",
+    "dst": "ETERNAL",
+    "type": "supplies",
+    "note": "FMCG inventory stocked in Blinkit dark stores",
+    "confidence": "high"
+   },
+   {
+    "src": "NESTLEIND",
+    "dst": "ETERNAL",
+    "type": "supplies",
+    "note": "Packaged foods for Blinkit quick commerce",
+    "confidence": "medium"
+   },
+   {
+    "src": "BRITANNIA",
+    "dst": "ETERNAL",
+    "type": "supplies",
+    "note": "Biscuits and bakery SKUs for Blinkit",
+    "confidence": "medium"
+   },
+   {
+    "src": "RESTAURANTS",
+    "dst": "ETERNAL",
+    "type": "supplies",
+    "note": "Partner restaurants prepare food fulfilled via Zomato",
+    "confidence": "high"
+   },
+   {
+    "src": "PAYTM",
+    "dst": "ETERNAL",
+    "type": "supplies",
+    "note": "Payment gateway services for order checkout",
+    "confidence": "medium"
+   },
+   {
+    "src": "NAUKRI",
+    "dst": "ETERNAL",
+    "type": "invests",
+    "note": "Info Edge was earliest Zomato backer; still a key holder",
+    "confidence": "high"
+   },
+   {
+    "src": "LICI",
+    "dst": "ETERNAL",
+    "type": "invests",
+    "note": "LIC stake crossed 5% in 2025",
+    "confidence": "medium"
+   },
+   {
+    "src": "ETERNAL",
+    "dst": "CONSUMERS",
+    "type": "supplies",
+    "note": "Zomato delivery, Blinkit 10-min commerce, District tickets",
+    "confidence": "high"
+   },
+   {
+    "src": "ETERNAL",
+    "dst": "RESTAURANTS",
+    "type": "supplies",
+    "note": "Hyperpure B2B ingredient supply to restaurants",
+    "confidence": "high"
+   },
+   {
+    "src": "ETERNAL",
+    "dst": "BLINKIT",
+    "type": "invests",
+    "note": "Wholly owned quick-commerce arm (acquired 2022)",
+    "confidence": "high"
+   },
+   {
+    "src": "SWIGGY",
+    "dst": "ETERNAL",
+    "type": "competitor",
+    "note": "Head-to-head rival in food delivery and Instamart",
+    "confidence": "high"
+   },
+   {
+    "src": "ZEPTO",
+    "dst": "ETERNAL",
+    "type": "competitor",
+    "note": "Quick-commerce rival to Blinkit",
+    "confidence": "high"
+   },
+   {
+    "src": "DMART",
+    "dst": "ETERNAL",
+    "type": "competitor",
+    "note": "Value grocery retail overlaps with Blinkit basket",
+    "confidence": "medium"
+   },
+   {
+    "src": "HINDUNILVR",
+    "dst": "DMART",
+    "type": "supplies",
+    "note": "Core FMCG supplier to DMart stores",
+    "confidence": "high"
+   },
+   {
+    "src": "SWIGGY",
+    "dst": "CONSUMERS",
+    "type": "supplies",
+    "note": "Food delivery and Instamart to households",
+    "confidence": "high"
+   },
+   {
+    "src": "SWIGGY",
+    "dst": "ZEPTO",
+    "type": "competitor",
+    "note": "Instamart vs Zepto in quick commerce",
+    "confidence": "high"
+   }
+  ]
+ },
+ "INDIGO": {
+  "companies": {
+   "INDIGO": {
+    "name": "InterGlobe Aviation Ltd (IndiGo)",
+    "listed": true
+   },
+   "INTERGLOBE": {
+    "name": "InterGlobe Enterprises Pvt Ltd",
+    "listed": false
+   },
+   "IOC": {
+    "name": "Indian Oil Corp Ltd",
+    "listed": true
+   },
+   "BPCL": {
+    "name": "Bharat Petroleum Corporation Ltd",
+    "listed": true
+   },
+   "AIRBUS": {
+    "name": "Airbus SE",
+    "listed": false
+   },
+   "CFM": {
+    "name": "CFM International (GE-Safran)",
+    "listed": false
+   },
+   "INDHOTEL": {
+    "name": "Indian Hotels Co Ltd (TajSATS)",
+    "listed": true
+   },
+   "GMRAIRPORT": {
+    "name": "GMR Airports Ltd",
+    "listed": true
+   },
+   "LICI": {
+    "name": "Life Insurance Corporation of India",
+    "listed": true
+   },
+   "CONSUMERS": {
+    "name": "Indian retail consumers (households)",
+    "listed": false
+   },
+   "MMYT": {
+    "name": "MakeMyTrip Ltd (NASDAQ)",
+    "listed": false
+   },
+   "DELHIVERY": {
+    "name": "Delhivery Ltd",
+    "listed": true
+   },
+   "TCS": {
+    "name": "Tata Consultancy Services Ltd",
+    "listed": true
+   },
+   "AIRINDIA": {
+    "name": "Air India Ltd (Tata)",
+    "listed": false
+   },
+   "SPICEJET": {
+    "name": "SpiceJet Ltd",
+    "listed": true
+   },
+   "AKASA": {
+    "name": "Akasa Air (SNV Aviation)",
+    "listed": false
+   },
+   "TATASONS": {
+    "name": "Tata Sons Pvt Ltd",
+    "listed": false
+   }
+  },
+  "edges": [
+   {
+    "src": "IOC",
+    "dst": "INDIGO",
+    "type": "supplies",
+    "note": "ATF jet fuel, IndiGo's single largest cost line",
+    "confidence": "high"
+   },
+   {
+    "src": "BPCL",
+    "dst": "INDIGO",
+    "type": "supplies",
+    "note": "ATF jet fuel at major Indian airports",
+    "confidence": "high"
+   },
+   {
+    "src": "AIRBUS",
+    "dst": "INDIGO",
+    "type": "supplies",
+    "note": "A320neo/A321 fleet; ~900+ aircraft on order",
+    "confidence": "high"
+   },
+   {
+    "src": "CFM",
+    "dst": "INDIGO",
+    "type": "supplies",
+    "note": "LEAP-1A engines powering the neo fleet",
+    "confidence": "high"
+   },
+   {
+    "src": "INDHOTEL",
+    "dst": "INDIGO",
+    "type": "supplies",
+    "note": "TajSATS in-flight catering",
+    "confidence": "medium"
+   },
+   {
+    "src": "GMRAIRPORT",
+    "dst": "INDIGO",
+    "type": "supplies",
+    "note": "Hub airport infrastructure at Delhi and Hyderabad",
+    "confidence": "medium"
+   },
+   {
+    "src": "INTERGLOBE",
+    "dst": "INDIGO",
+    "type": "invests",
+    "note": "Promoter InterGlobe Enterprises (Bhatia family) ~35%",
+    "confidence": "high"
+   },
+   {
+    "src": "LICI",
+    "dst": "INDIGO",
+    "type": "invests",
+    "note": "Domestic institutional shareholder",
+    "confidence": "medium"
+   },
+   {
+    "src": "INDIGO",
+    "dst": "CONSUMERS",
+    "type": "supplies",
+    "note": "India's largest airline, ~60% domestic pax share",
+    "confidence": "high"
+   },
+   {
+    "src": "INDIGO",
+    "dst": "MMYT",
+    "type": "supplies",
+    "note": "Seat inventory distributed via OTA channels",
+    "confidence": "medium"
+   },
+   {
+    "src": "INDIGO",
+    "dst": "DELHIVERY",
+    "type": "supplies",
+    "note": "Belly and freighter cargo capacity for express logistics",
+    "confidence": "low"
+   },
+   {
+    "src": "INDIGO",
+    "dst": "TCS",
+    "type": "supplies",
+    "note": "Corporate travel for large Indian enterprises",
+    "confidence": "low"
+   },
+   {
+    "src": "AIRINDIA",
+    "dst": "INDIGO",
+    "type": "competitor",
+    "note": "Tata-owned full-service rival, main challenger",
+    "confidence": "high"
+   },
+   {
+    "src": "SPICEJET",
+    "dst": "INDIGO",
+    "type": "competitor",
+    "note": "Low-cost carrier rival",
+    "confidence": "high"
+   },
+   {
+    "src": "AKASA",
+    "dst": "INDIGO",
+    "type": "competitor",
+    "note": "New low-cost entrant taking domestic share",
+    "confidence": "high"
+   },
+   {
+    "src": "TATASONS",
+    "dst": "AIRINDIA",
+    "type": "invests",
+    "note": "Owns Air India after 2022 privatisation",
+    "confidence": "high"
+   },
+   {
+    "src": "AIRBUS",
+    "dst": "AIRINDIA",
+    "type": "supplies",
+    "note": "Aircraft from Air India's 2023 mega-order",
+    "confidence": "high"
+   },
+   {
+    "src": "IOC",
+    "dst": "SPICEJET",
+    "type": "supplies",
+    "note": "ATF supply to SpiceJet",
+    "confidence": "medium"
+   }
+  ]
+ },
+ "LICI": {
+  "companies": {
+   "LICI": {
+    "name": "Life Insurance Corporation of India",
+    "listed": true
+   },
+   "GOI": {
+    "name": "Government of India",
+    "listed": false
+   },
+   "TCS": {
+    "name": "Tata Consultancy Services Ltd",
+    "listed": true
+   },
+   "INFY": {
+    "name": "Infosys Ltd",
+    "listed": true
+   },
+   "GICRE": {
+    "name": "General Insurance Corporation of India",
+    "listed": true
+   },
+   "CONSUMERS": {
+    "name": "Indian retail consumers (policyholders)",
+    "listed": false
+   },
+   "SBIAMC": {
+    "name": "SBI Funds Management Ltd",
+    "listed": false
+   },
+   "RELIANCE": {
+    "name": "Reliance Industries Ltd",
+    "listed": true
+   },
+   "ITC": {
+    "name": "ITC Ltd",
+    "listed": true
+   },
+   "SBIN": {
+    "name": "State Bank of India",
+    "listed": true
+   },
+   "LT": {
+    "name": "Larsen & Toubro Ltd",
+    "listed": true
+   },
+   "LICHSGFIN": {
+    "name": "LIC Housing Finance Ltd",
+    "listed": true
+   },
+   "HDFCLIFE": {
+    "name": "HDFC Life Insurance Co Ltd",
+    "listed": true
+   },
+   "SBILIFE": {
+    "name": "SBI Life Insurance Co Ltd",
+    "listed": true
+   },
+   "ICICIPRULI": {
+    "name": "ICICI Prudential Life Insurance Co Ltd",
+    "listed": true
+   }
+  },
+  "edges": [
+   {
+    "src": "CONSUMERS",
+    "dst": "LICI",
+    "type": "finances",
+    "note": "Policyholder premiums fund India's largest insurer",
+    "confidence": "high"
+   },
+   {
+    "src": "GICRE",
+    "dst": "LICI",
+    "type": "supplies",
+    "note": "Reinsurance cover from national reinsurer",
+    "confidence": "high"
+   },
+   {
+    "src": "TCS",
+    "dst": "LICI",
+    "type": "supplies",
+    "note": "Core policy-administration IT systems",
+    "confidence": "high"
+   },
+   {
+    "src": "INFY",
+    "dst": "LICI",
+    "type": "supplies",
+    "note": "NextGen digital platform transformation deal",
+    "confidence": "medium"
+   },
+   {
+    "src": "GOI",
+    "dst": "LICI",
+    "type": "invests",
+    "note": "Government of India holds ~96.5% post-IPO",
+    "confidence": "high"
+   },
+   {
+    "src": "SBIAMC",
+    "dst": "LICI",
+    "type": "invests",
+    "note": "Domestic mutual funds hold part of the small free float",
+    "confidence": "low"
+   },
+   {
+    "src": "LICI",
+    "dst": "GOI",
+    "type": "finances",
+    "note": "Largest institutional buyer of government securities",
+    "confidence": "high"
+   },
+   {
+    "src": "LICI",
+    "dst": "LT",
+    "type": "finances",
+    "note": "Holds ~12% of L&T equity plus debt exposure",
+    "confidence": "high"
+   },
+   {
+    "src": "LICI",
+    "dst": "CONSUMERS",
+    "type": "supplies",
+    "note": "Life cover, annuities and claim payouts to policyholders",
+    "confidence": "high"
+   },
+   {
+    "src": "LICI",
+    "dst": "RELIANCE",
+    "type": "invests",
+    "note": "Multi-billion-dollar equity stake in Reliance",
+    "confidence": "high"
+   },
+   {
+    "src": "LICI",
+    "dst": "ITC",
+    "type": "invests",
+    "note": "~15% stake; largest institutional holder of ITC",
+    "confidence": "high"
+   },
+   {
+    "src": "LICI",
+    "dst": "SBIN",
+    "type": "invests",
+    "note": "Major equity stake in State Bank of India",
+    "confidence": "high"
+   },
+   {
+    "src": "LICI",
+    "dst": "LICHSGFIN",
+    "type": "group",
+    "note": "Promoter with ~45% of LIC Housing Finance",
+    "confidence": "high"
+   },
+   {
+    "src": "HDFCLIFE",
+    "dst": "LICI",
+    "type": "competitor",
+    "note": "Largest private life insurance rival",
+    "confidence": "high"
+   },
+   {
+    "src": "SBILIFE",
+    "dst": "LICI",
+    "type": "competitor",
+    "note": "Bank-led private life insurance rival",
+    "confidence": "high"
+   },
+   {
+    "src": "ICICIPRULI",
+    "dst": "LICI",
+    "type": "competitor",
+    "note": "Private life insurance rival",
+    "confidence": "high"
+   },
+   {
+    "src": "GOI",
+    "dst": "SBIN",
+    "type": "invests",
+    "note": "Majority owner (~57%) of State Bank of India",
+    "confidence": "high"
+   },
+   {
+    "src": "GOI",
+    "dst": "GICRE",
+    "type": "invests",
+    "note": "Majority state ownership of national reinsurer",
+    "confidence": "high"
+   }
+  ]
+ },
+ "HYUNDAI": {
+  "companies": {
+   "HYUNDAI": {
+    "name": "Hyundai Motor India Ltd",
+    "listed": true
+   },
+   "HMC-KOREA": {
+    "name": "Hyundai Motor Company (Korea)",
+    "listed": false
+   },
+   "MOBIS": {
+    "name": "Hyundai Mobis Co Ltd",
+    "listed": false
+   },
+   "KIA": {
+    "name": "Kia India (Kia Corp)",
+    "listed": false
+   },
+   "MOTHERSON": {
+    "name": "Samvardhana Motherson International Ltd",
+    "listed": true
+   },
+   "BOSCHLTD": {
+    "name": "Bosch Ltd",
+    "listed": true
+   },
+   "SONACOMS": {
+    "name": "Sona BLW Precision Forgings Ltd",
+    "listed": true
+   },
+   "JSWSTEEL": {
+    "name": "JSW Steel Ltd",
+    "listed": true
+   },
+   "EXIDEIND": {
+    "name": "Exide Industries Ltd",
+    "listed": true
+   },
+   "LICI": {
+    "name": "Life Insurance Corporation of India",
+    "listed": true
+   },
+   "CONSUMERS": {
+    "name": "Indian retail consumers (households)",
+    "listed": false
+   },
+   "DEALERS": {
+    "name": "Hyundai dealer network",
+    "listed": false
+   },
+   "MARUTI": {
+    "name": "Maruti Suzuki India Ltd",
+    "listed": true
+   },
+   "TMPV": {
+    "name": "Tata Motors Passenger Vehicles Ltd",
+    "listed": true
+   },
+   "M&M": {
+    "name": "Mahindra & Mahindra Ltd",
+    "listed": true
+   },
+   "SUZUKI": {
+    "name": "Suzuki Motor Corporation",
+    "listed": false
+   }
+  },
+  "edges": [
+   {
+    "src": "MOBIS",
+    "dst": "HYUNDAI",
+    "type": "supplies",
+    "note": "Modules and core parts from group supplier Hyundai Mobis",
+    "confidence": "high"
+   },
+   {
+    "src": "MOTHERSON",
+    "dst": "HYUNDAI",
+    "type": "supplies",
+    "note": "Wiring harnesses and polymer modules",
+    "confidence": "high"
+   },
+   {
+    "src": "BOSCHLTD",
+    "dst": "HYUNDAI",
+    "type": "supplies",
+    "note": "Powertrain and electronics components",
+    "confidence": "medium"
+   },
+   {
+    "src": "SONACOMS",
+    "dst": "HYUNDAI",
+    "type": "supplies",
+    "note": "Driveline and precision forged components",
+    "confidence": "medium"
+   },
+   {
+    "src": "JSWSTEEL",
+    "dst": "HYUNDAI",
+    "type": "supplies",
+    "note": "Auto-grade steel for Chennai and Pune plants",
+    "confidence": "medium"
+   },
+   {
+    "src": "EXIDEIND",
+    "dst": "HYUNDAI",
+    "type": "supplies",
+    "note": "Automotive batteries for OEM fitment",
+    "confidence": "medium"
+   },
+   {
+    "src": "HMC-KOREA",
+    "dst": "HYUNDAI",
+    "type": "invests",
+    "note": "Promoter Hyundai Motor Co Korea holds ~82% post 2024 IPO",
+    "confidence": "high"
+   },
+   {
+    "src": "LICI",
+    "dst": "HYUNDAI",
+    "type": "invests",
+    "note": "Anchor/institutional investor since the IPO",
+    "confidence": "medium"
+   },
+   {
+    "src": "HYUNDAI",
+    "dst": "CONSUMERS",
+    "type": "supplies",
+    "note": "#2 carmaker by India passenger vehicle sales",
+    "confidence": "high"
+   },
+   {
+    "src": "HYUNDAI",
+    "dst": "DEALERS",
+    "type": "supplies",
+    "note": "Vehicles billed to nationwide dealer network",
+    "confidence": "high"
+   },
+   {
+    "src": "HYUNDAI",
+    "dst": "HMC-KOREA",
+    "type": "supplies",
+    "note": "Exports made-in-India cars to group's global markets",
+    "confidence": "high"
+   },
+   {
+    "src": "HYUNDAI",
+    "dst": "HMC-KOREA",
+    "type": "group",
+    "note": "Indian arm of the Hyundai Motor Group",
+    "confidence": "high"
+   },
+   {
+    "src": "HMC-KOREA",
+    "dst": "KIA",
+    "type": "invests",
+    "note": "Hyundai Motor Co holds ~34% of Kia Corp",
+    "confidence": "high"
+   },
+   {
+    "src": "MARUTI",
+    "dst": "HYUNDAI",
+    "type": "competitor",
+    "note": "Market leader rival in Indian PVs",
+    "confidence": "high"
+   },
+   {
+    "src": "TMPV",
+    "dst": "HYUNDAI",
+    "type": "competitor",
+    "note": "Rival in SUVs and EVs",
+    "confidence": "high"
+   },
+   {
+    "src": "M&M",
+    "dst": "HYUNDAI",
+    "type": "competitor",
+    "note": "Rival in the SUV segment",
+    "confidence": "high"
+   },
+   {
+    "src": "KIA",
+    "dst": "HYUNDAI",
+    "type": "competitor",
+    "note": "Group affiliate but rival brand in the Indian market",
+    "confidence": "high"
+   },
+   {
+    "src": "MOTHERSON",
+    "dst": "MARUTI",
+    "type": "supplies",
+    "note": "Also a major component supplier to Maruti Suzuki",
+    "confidence": "high"
+   },
+   {
+    "src": "SUZUKI",
+    "dst": "MARUTI",
+    "type": "invests",
+    "note": "Parent Suzuki Motor holds ~58% of Maruti",
+    "confidence": "high"
+   }
+  ]
+ },
+ "SWIGGY": {
+  "companies": {
+   "SWIGGY": {
+    "name": "Swiggy Ltd",
+    "listed": true
+   },
+   "RESTAURANTS": {
+    "name": "Restaurant partners (unlisted)",
+    "listed": false
+   },
+   "HINDUNILVR": {
+    "name": "Hindustan Unilever Ltd",
+    "listed": true
+   },
+   "NESTLEIND": {
+    "name": "Nestle India Ltd",
+    "listed": true
+   },
+   "ITC": {
+    "name": "ITC Ltd",
+    "listed": true
+   },
+   "TVSMOTOR": {
+    "name": "TVS Motor Company Ltd",
+    "listed": true
+   },
+   "CONSUMERS": {
+    "name": "Indian retail consumers (households)",
+    "listed": false
+   },
+   "PROSUS": {
+    "name": "Prosus NV (Naspers group)",
+    "listed": false
+   },
+   "SOFTBANK": {
+    "name": "SoftBank Group Corp (Vision Fund)",
+    "listed": false
+   },
+   "ETERNAL": {
+    "name": "Eternal Ltd (Zomato/Blinkit)",
+    "listed": true
+   },
+   "RRETAIL": {
+    "name": "Reliance Retail Ltd (JioMart)",
+    "listed": false
+   },
+   "DMART": {
+    "name": "Avenue Supermarts Ltd (DMart)",
+    "listed": true
+   },
+   "NAUKRI": {
+    "name": "Info Edge (India) Ltd",
+    "listed": true
+   }
+  },
+  "edges": [
+   {
+    "src": "RESTAURANTS",
+    "dst": "SWIGGY",
+    "type": "supplies",
+    "note": "Lakhs of partner restaurants supply prepared food listed on the Swiggy delivery platform",
+    "confidence": "high"
+   },
+   {
+    "src": "HINDUNILVR",
+    "dst": "SWIGGY",
+    "type": "supplies",
+    "note": "HUL soaps, detergents and foods stocked in Instamart quick-commerce dark stores",
+    "confidence": "high"
+   },
+   {
+    "src": "NESTLEIND",
+    "dst": "SWIGGY",
+    "type": "supplies",
+    "note": "Maggi, KitKat and Nescafe are top-selling Instamart SKUs sourced from Nestle India",
+    "confidence": "high"
+   },
+   {
+    "src": "ITC",
+    "dst": "SWIGGY",
+    "type": "supplies",
+    "note": "ITC Aashirvaad, Sunfeast and Bingo FMCG lines sold via Instamart",
+    "confidence": "high"
+   },
+   {
+    "src": "TVSMOTOR",
+    "dst": "SWIGGY",
+    "type": "supplies",
+    "note": "Two-wheelers incl. TVS models form the delivery fleet; EV fleet tie-ups piloted",
+    "confidence": "low"
+   },
+   {
+    "src": "SWIGGY",
+    "dst": "CONSUMERS",
+    "type": "supplies",
+    "note": "Delivers food, Instamart groceries and Genie pickups to urban Indian households",
+    "confidence": "high"
+   },
+   {
+    "src": "SWIGGY",
+    "dst": "RESTAURANTS",
+    "type": "finances",
+    "note": "Swiggy Capital Assist channels working-capital loans to partner restaurants via lenders",
+    "confidence": "medium"
+   },
+   {
+    "src": "PROSUS",
+    "dst": "SWIGGY",
+    "type": "invests",
+    "note": "Prosus is the largest shareholder, holding roughly a quarter of Swiggy post-IPO",
+    "confidence": "high"
+   },
+   {
+    "src": "SOFTBANK",
+    "dst": "SWIGGY",
+    "type": "invests",
+    "note": "SoftBank Vision Fund 2 is a major pre-IPO investor still holding a stake",
+    "confidence": "high"
+   },
+   {
+    "src": "ETERNAL",
+    "dst": "SWIGGY",
+    "type": "competitor",
+    "note": "Zomato vs Swiggy in food delivery; Blinkit vs Instamart in quick commerce",
+    "confidence": "high"
+   },
+   {
+    "src": "RRETAIL",
+    "dst": "SWIGGY",
+    "type": "competitor",
+    "note": "JioMart's rapid grocery delivery competes with Instamart",
+    "confidence": "medium"
+   },
+   {
+    "src": "DMART",
+    "dst": "SWIGGY",
+    "type": "competitor",
+    "note": "DMart Ready grocery e-commerce overlaps with Instamart's basket",
+    "confidence": "medium"
+   },
+   {
+    "src": "HINDUNILVR",
+    "dst": "ETERNAL",
+    "type": "supplies",
+    "note": "HUL FMCG range also stocked by rival Blinkit dark stores",
+    "confidence": "high"
+   },
+   {
+    "src": "NAUKRI",
+    "dst": "ETERNAL",
+    "type": "invests",
+    "note": "Info Edge was Zomato's earliest backer and retains a large stake in Eternal",
+    "confidence": "high"
+   },
+   {
+    "src": "HINDUNILVR",
+    "dst": "ITC",
+    "type": "competitor",
+    "note": "Head-to-head across foods, personal care and home care categories",
+    "confidence": "high"
+   },
+   {
+    "src": "ETERNAL",
+    "dst": "CONSUMERS",
+    "type": "supplies",
+    "note": "Zomato food delivery and Blinkit serve the same urban consumer base",
+    "confidence": "high"
+   }
+  ]
+ },
+ "ABB": {
+  "companies": {
+   "ABB": {
+    "name": "ABB India Ltd",
+    "listed": true
+   },
+   "ABB-ZURICH": {
+    "name": "ABB Ltd (Zurich, global parent)",
+    "listed": false
+   },
+   "LICI": {
+    "name": "Life Insurance Corporation of India",
+    "listed": true
+   },
+   "TATASTEEL": {
+    "name": "Tata Steel Ltd",
+    "listed": true
+   },
+   "HINDCOPPER": {
+    "name": "Hindustan Copper Ltd",
+    "listed": true
+   },
+   "POWERGRID": {
+    "name": "Power Grid Corp of India Ltd",
+    "listed": true
+   },
+   "NTPC": {
+    "name": "NTPC Ltd",
+    "listed": true
+   },
+   "INDIANRAILWAYS": {
+    "name": "Indian Railways (Ministry of Railways)",
+    "listed": false
+   },
+   "SIEMENS": {
+    "name": "Siemens Ltd (India)",
+    "listed": true
+   },
+   "CGPOWER": {
+    "name": "CG Power & Industrial Solutions Ltd",
+    "listed": true
+   },
+   "HAVELLS": {
+    "name": "Havells India Ltd",
+    "listed": true
+   },
+   "SCHNEIDER": {
+    "name": "Schneider Electric Infrastructure Ltd",
+    "listed": false
+   }
+  },
+  "edges": [
+   {
+    "src": "TATASTEEL",
+    "dst": "ABB",
+    "type": "supplies",
+    "note": "Steel and electrical steel inputs for motors, switchgear and transformer fabrication",
+    "confidence": "medium"
+   },
+   {
+    "src": "HINDCOPPER",
+    "dst": "ABB",
+    "type": "supplies",
+    "note": "Copper feedstock for windings, busbars and cables in electrification products",
+    "confidence": "medium"
+   },
+   {
+    "src": "ABB-ZURICH",
+    "dst": "ABB",
+    "type": "supplies",
+    "note": "Parent licenses technology and supplies components/drives to the Indian arm",
+    "confidence": "high"
+   },
+   {
+    "src": "ABB",
+    "dst": "POWERGRID",
+    "type": "supplies",
+    "note": "Grid automation, substation and HVDC-related equipment for transmission projects",
+    "confidence": "high"
+   },
+   {
+    "src": "ABB",
+    "dst": "NTPC",
+    "type": "supplies",
+    "note": "Motors, drives and plant automation systems for thermal and renewable plants",
+    "confidence": "medium"
+   },
+   {
+    "src": "ABB",
+    "dst": "INDIANRAILWAYS",
+    "type": "supplies",
+    "note": "Traction transformers, propulsion converters and electrification gear for railways/metros",
+    "confidence": "high"
+   },
+   {
+    "src": "ABB",
+    "dst": "TATASTEEL",
+    "type": "supplies",
+    "note": "Industrial automation, drives and process electrification for steel plants",
+    "confidence": "medium"
+   },
+   {
+    "src": "ABB-ZURICH",
+    "dst": "ABB",
+    "type": "invests",
+    "note": "ABB Ltd Zurich is promoter with ~75% stake in ABB India",
+    "confidence": "high"
+   },
+   {
+    "src": "LICI",
+    "dst": "ABB",
+    "type": "invests",
+    "note": "LIC is a significant domestic institutional shareholder in ABB India",
+    "confidence": "medium"
+   },
+   {
+    "src": "SIEMENS",
+    "dst": "ABB",
+    "type": "competitor",
+    "note": "Direct rival across electrification, automation and smart infrastructure",
+    "confidence": "high"
+   },
+   {
+    "src": "CGPOWER",
+    "dst": "ABB",
+    "type": "competitor",
+    "note": "Competes in LT/HT motors, drives and switchgear",
+    "confidence": "high"
+   },
+   {
+    "src": "HAVELLS",
+    "dst": "ABB",
+    "type": "competitor",
+    "note": "Overlap in switchgear and low-voltage electrical equipment",
+    "confidence": "medium"
+   },
+   {
+    "src": "SCHNEIDER",
+    "dst": "ABB",
+    "type": "competitor",
+    "note": "Competes in energy management, grid and industrial automation products",
+    "confidence": "high"
+   },
+   {
+    "src": "SIEMENS",
+    "dst": "INDIANRAILWAYS",
+    "type": "supplies",
+    "note": "9000HP locomotive order and rail electrification/signalling supplies",
+    "confidence": "high"
+   },
+   {
+    "src": "CGPOWER",
+    "dst": "POWERGRID",
+    "type": "supplies",
+    "note": "Power and distribution transformers, switchgear for grid utilities",
+    "confidence": "high"
+   },
+   {
+    "src": "NTPC",
+    "dst": "POWERGRID",
+    "type": "supplies",
+    "note": "NTPC generation is evacuated over Power Grid's interstate transmission network",
+    "confidence": "high"
+   }
+  ]
+ },
+ "BAJAJHLDNG": {
+  "companies": {
+   "BAJAJHLDNG": {
+    "name": "Bajaj Holdings & Investment Ltd",
+    "listed": true
+   },
+   "BAJAJ-AUTO": {
+    "name": "Bajaj Auto Ltd",
+    "listed": true
+   },
+   "BAJAJFINSV": {
+    "name": "Bajaj Finserv Ltd",
+    "listed": true
+   },
+   "BAJFINANCE": {
+    "name": "Bajaj Finance Ltd",
+    "listed": true
+   },
+   "BAJAJHFL": {
+    "name": "Bajaj Housing Finance Ltd",
+    "listed": true
+   },
+   "MAHSCOOTER": {
+    "name": "Maharashtra Scooters Ltd",
+    "listed": true
+   },
+   "BAJAJALLGI": {
+    "name": "Bajaj Allianz General Insurance Co Ltd",
+    "listed": false
+   },
+   "BAJAJ-FAMILY": {
+    "name": "Bajaj family promoter group",
+    "listed": false
+   },
+   "LICI": {
+    "name": "Life Insurance Corporation of India",
+    "listed": true
+   },
+   "JSWHL": {
+    "name": "JSW Holdings Ltd",
+    "listed": true
+   },
+   "TVSHLTD": {
+    "name": "TVS Holdings Ltd",
+    "listed": true
+   },
+   "CHOLAHLDNG": {
+    "name": "Cholamandalam Financial Holdings Ltd",
+    "listed": true
+   },
+   "CONSUMERS": {
+    "name": "Indian retail consumers (households)",
+    "listed": false
+   }
+  },
+  "edges": [
+   {
+    "src": "BAJAJ-AUTO",
+    "dst": "BAJAJHLDNG",
+    "type": "finances",
+    "note": "Dividends on BHIL's ~35% Bajaj Auto stake are its largest income stream",
+    "confidence": "high"
+   },
+   {
+    "src": "BAJAJFINSV",
+    "dst": "BAJAJHLDNG",
+    "type": "finances",
+    "note": "Dividend flows from the ~39% Bajaj Finserv holding fund BHIL's investment book",
+    "confidence": "high"
+   },
+   {
+    "src": "BAJAJHLDNG",
+    "dst": "BAJAJ-AUTO",
+    "type": "invests",
+    "note": "Holds ~35% of Bajaj Auto as the group's primary holding vehicle",
+    "confidence": "high"
+   },
+   {
+    "src": "BAJAJHLDNG",
+    "dst": "BAJAJFINSV",
+    "type": "invests",
+    "note": "Holds ~39% of Bajaj Finserv, the group's financial services holding co",
+    "confidence": "high"
+   },
+   {
+    "src": "BAJAJHLDNG",
+    "dst": "MAHSCOOTER",
+    "type": "invests",
+    "note": "Holds ~51% of Maharashtra Scooters, itself an investment company",
+    "confidence": "high"
+   },
+   {
+    "src": "BAJAJ-FAMILY",
+    "dst": "BAJAJHLDNG",
+    "type": "invests",
+    "note": "Bajaj family and group entities are promoters with majority control of BHIL",
+    "confidence": "high"
+   },
+   {
+    "src": "LICI",
+    "dst": "BAJAJHLDNG",
+    "type": "invests",
+    "note": "LIC is a notable public institutional shareholder in BHIL",
+    "confidence": "medium"
+   },
+   {
+    "src": "MAHSCOOTER",
+    "dst": "BAJFINANCE",
+    "type": "invests",
+    "note": "Maharashtra Scooters holds a strategic ~3% stake in Bajaj Finance",
+    "confidence": "high"
+   },
+   {
+    "src": "MAHSCOOTER",
+    "dst": "BAJAJ-AUTO",
+    "type": "invests",
+    "note": "Cross-holding: MSL carries a long-term equity stake in Bajaj Auto",
+    "confidence": "medium"
+   },
+   {
+    "src": "BAJAJFINSV",
+    "dst": "BAJFINANCE",
+    "type": "invests",
+    "note": "Bajaj Finserv is promoter of Bajaj Finance with a ~51% stake",
+    "confidence": "high"
+   },
+   {
+    "src": "BAJFINANCE",
+    "dst": "BAJAJHFL",
+    "type": "invests",
+    "note": "Bajaj Finance holds ~89% of Bajaj Housing Finance post its 2024 IPO",
+    "confidence": "high"
+   },
+   {
+    "src": "BAJAJFINSV",
+    "dst": "BAJAJALLGI",
+    "type": "invests",
+    "note": "Bajaj Finserv owns ~74% of the Bajaj Allianz general insurance JV",
+    "confidence": "high"
+   },
+   {
+    "src": "BAJAJHLDNG",
+    "dst": "BAJFINANCE",
+    "type": "group",
+    "note": "Same Bajaj group; BHIL sits atop the family shareholding structure",
+    "confidence": "high"
+   },
+   {
+    "src": "BAJAJHLDNG",
+    "dst": "BAJAJHFL",
+    "type": "group",
+    "note": "Bajaj group companies via the Finserv-Finance chain",
+    "confidence": "high"
+   },
+   {
+    "src": "BAJFINANCE",
+    "dst": "CONSUMERS",
+    "type": "finances",
+    "note": "Consumer durable, personal and SME loans to millions of retail borrowers",
+    "confidence": "high"
+   },
+   {
+    "src": "JSWHL",
+    "dst": "BAJAJHLDNG",
+    "type": "competitor",
+    "note": "Comparable listed promoter holding company (JSW group)",
+    "confidence": "medium"
+   },
+   {
+    "src": "TVSHLTD",
+    "dst": "BAJAJHLDNG",
+    "type": "competitor",
+    "note": "Peer listed holding company of the TVS group",
+    "confidence": "medium"
+   },
+   {
+    "src": "CHOLAHLDNG",
+    "dst": "BAJAJHLDNG",
+    "type": "competitor",
+    "note": "Peer financial holding company (Murugappa group)",
+    "confidence": "medium"
+   },
+   {
+    "src": "BAJAJHLDNG",
+    "dst": "BAJAJ-AUTO",
+    "type": "group",
+    "note": "Fellow Bajaj group company",
+    "confidence": "high"
+   },
+   {
+    "src": "BAJAJHLDNG",
+    "dst": "BAJAJFINSV",
+    "type": "group",
+    "note": "Fellow Bajaj group company",
+    "confidence": "high"
+   }
+  ]
+ },
+ "BAJAJHFL": {
+  "companies": {
+   "BAJAJHFL": {
+    "name": "Bajaj Housing Finance Ltd",
+    "listed": true
+   },
+   "BAJFINANCE": {
+    "name": "Bajaj Finance Ltd",
+    "listed": true
+   },
+   "BAJAJFINSV": {
+    "name": "Bajaj Finserv Ltd",
+    "listed": true
+   },
+   "BAJAJHLDNG": {
+    "name": "Bajaj Holdings & Investment Ltd",
+    "listed": true
+   },
+   "LICI": {
+    "name": "Life Insurance Corporation of India",
+    "listed": true
+   },
+   "SBIN": {
+    "name": "State Bank of India",
+    "listed": true
+   },
+   "HDFCBANK": {
+    "name": "HDFC Bank Ltd",
+    "listed": true
+   },
+   "HOMEBUYERS": {
+    "name": "Retail home buyers (unlisted sink)",
+    "listed": false
+   },
+   "LODHA": {
+    "name": "Macrotech Developers Ltd (Lodha)",
+    "listed": true
+   },
+   "DLF": {
+    "name": "DLF Ltd",
+    "listed": true
+   },
+   "LICHSGFIN": {
+    "name": "LIC Housing Finance Ltd",
+    "listed": true
+   },
+   "PNBHOUSING": {
+    "name": "PNB Housing Finance Ltd",
+    "listed": true
+   },
+   "CANFINHOME": {
+    "name": "Can Fin Homes Ltd",
+    "listed": true
+   },
+   "PNB": {
+    "name": "Punjab National Bank",
+    "listed": true
+   },
+   "CANBK": {
+    "name": "Canara Bank",
+    "listed": true
+   },
+   "BAJAJ-AUTO": {
+    "name": "Bajaj Auto Ltd",
+    "listed": true
+   }
+  },
+  "edges": [
+   {
+    "src": "BAJFINANCE",
+    "dst": "BAJAJHFL",
+    "type": "finances",
+    "note": "Parent capital infusions and funding support underpin BHFL's mortgage book growth",
+    "confidence": "high"
+   },
+   {
+    "src": "SBIN",
+    "dst": "BAJAJHFL",
+    "type": "finances",
+    "note": "Bank term loans form a large share of BHFL's diversified borrowing mix",
+    "confidence": "medium"
+   },
+   {
+    "src": "HDFCBANK",
+    "dst": "BAJAJHFL",
+    "type": "finances",
+    "note": "Bank lines and NCD subscriptions among lenders funding the HFC",
+    "confidence": "medium"
+   },
+   {
+    "src": "BAJFINANCE",
+    "dst": "BAJAJHFL",
+    "type": "invests",
+    "note": "Bajaj Finance is promoter with ~89% shareholding after the IPO",
+    "confidence": "high"
+   },
+   {
+    "src": "LICI",
+    "dst": "BAJAJHFL",
+    "type": "invests",
+    "note": "LIC among institutional investors that anchored the 2024 IPO",
+    "confidence": "medium"
+   },
+   {
+    "src": "BAJAJHFL",
+    "dst": "HOMEBUYERS",
+    "type": "finances",
+    "note": "Core business: home loans and loans against property to retail borrowers",
+    "confidence": "high"
+   },
+   {
+    "src": "BAJAJHFL",
+    "dst": "LODHA",
+    "type": "finances",
+    "note": "Developer/construction finance to residential builders incl. large listed players",
+    "confidence": "low"
+   },
+   {
+    "src": "BAJAJHFL",
+    "dst": "DLF",
+    "type": "finances",
+    "note": "Lease rental discounting and developer funding to commercial realty",
+    "confidence": "low"
+   },
+   {
+    "src": "BAJAJHFL",
+    "dst": "BAJAJFINSV",
+    "type": "group",
+    "note": "Bajaj Finserv is ultimate financial-services parent of BHFL",
+    "confidence": "high"
+   },
+   {
+    "src": "BAJAJHFL",
+    "dst": "BAJAJHLDNG",
+    "type": "group",
+    "note": "Part of the wider Bajaj group under Bajaj Holdings' promoter structure",
+    "confidence": "medium"
+   },
+   {
+    "src": "LICHSGFIN",
+    "dst": "BAJAJHFL",
+    "type": "competitor",
+    "note": "Largest listed HFC rival in retail home loans",
+    "confidence": "high"
+   },
+   {
+    "src": "PNBHOUSING",
+    "dst": "BAJAJHFL",
+    "type": "competitor",
+    "note": "Competes in prime and affordable housing finance",
+    "confidence": "high"
+   },
+   {
+    "src": "CANFINHOME",
+    "dst": "BAJAJHFL",
+    "type": "competitor",
+    "note": "South-India-focused HFC competing for salaried home-loan borrowers",
+    "confidence": "high"
+   },
+   {
+    "src": "HDFCBANK",
+    "dst": "BAJAJHFL",
+    "type": "competitor",
+    "note": "Post-HDFC merger, the bank's mortgage book is the sector's biggest rival",
+    "confidence": "high"
+   },
+   {
+    "src": "LICI",
+    "dst": "LICHSGFIN",
+    "type": "invests",
+    "note": "LIC is promoter of LIC Housing Finance with a ~45% stake",
+    "confidence": "high"
+   },
+   {
+    "src": "PNB",
+    "dst": "PNBHOUSING",
+    "type": "invests",
+    "note": "Punjab National Bank is promoter holding ~28% of PNB Housing",
+    "confidence": "high"
+   },
+   {
+    "src": "CANBK",
+    "dst": "CANFINHOME",
+    "type": "invests",
+    "note": "Canara Bank is promoter of Can Fin Homes with a ~30% stake",
+    "confidence": "high"
+   },
+   {
+    "src": "LICHSGFIN",
+    "dst": "HOMEBUYERS",
+    "type": "finances",
+    "note": "Rival HFC lends to the same retail home-buyer pool",
+    "confidence": "high"
+   },
+   {
+    "src": "BAJAJHFL",
+    "dst": "BAJAJ-AUTO",
+    "type": "group",
+    "note": "Fellow Bajaj group company",
+    "confidence": "high"
+   },
+   {
+    "src": "BAJAJHFL",
+    "dst": "BAJFINANCE",
+    "type": "group",
+    "note": "Fellow Bajaj group company",
+    "confidence": "high"
+   }
+  ]
+ },
+ "CANBK": {
+  "companies": {
+   "CANBK": {
+    "name": "Canara Bank",
+    "listed": true
+   },
+   "GOI": {
+    "name": "Government of India",
+    "listed": false
+   },
+   "LICI": {
+    "name": "Life Insurance Corporation of India",
+    "listed": true
+   },
+   "INFY": {
+    "name": "Infosys Ltd",
+    "listed": true
+   },
+   "TCS": {
+    "name": "Tata Consultancy Services Ltd",
+    "listed": true
+   },
+   "NPCI": {
+    "name": "National Payments Corporation of India",
+    "listed": false
+   },
+   "NTPC": {
+    "name": "NTPC Ltd",
+    "listed": true
+   },
+   "RELIANCE": {
+    "name": "Reliance Industries Ltd",
+    "listed": true
+   },
+   "CANFINHOME": {
+    "name": "Can Fin Homes Ltd",
+    "listed": true
+   },
+   "CANARAROBECO": {
+    "name": "Canara Robeco Asset Management Co Ltd",
+    "listed": false
+   },
+   "CANARAHSBC": {
+    "name": "Canara HSBC Life Insurance Co Ltd",
+    "listed": false
+   },
+   "SBIN": {
+    "name": "State Bank of India",
+    "listed": true
+   },
+   "PNB": {
+    "name": "Punjab National Bank",
+    "listed": true
+   },
+   "BANKBARODA": {
+    "name": "Bank of Baroda",
+    "listed": true
+   },
+   "UNIONBANK": {
+    "name": "Union Bank of India",
+    "listed": true
+   },
+   "CONSUMERS": {
+    "name": "Indian retail consumers (households)",
+    "listed": false
+   }
+  },
+  "edges": [
+   {
+    "src": "CONSUMERS",
+    "dst": "CANBK",
+    "type": "finances",
+    "note": "Household deposits (~Rs 13+ lakh cr deposit base) fund the bank's balance sheet",
+    "confidence": "high"
+   },
+   {
+    "src": "GOI",
+    "dst": "CANBK",
+    "type": "finances",
+    "note": "Government recapitalisation infusions strengthened PSB capital through 2017-21",
+    "confidence": "high"
+   },
+   {
+    "src": "NPCI",
+    "dst": "CANBK",
+    "type": "supplies",
+    "note": "UPI, RuPay and IMPS payment rails power the bank's digital transactions",
+    "confidence": "high"
+   },
+   {
+    "src": "TCS",
+    "dst": "CANBK",
+    "type": "supplies",
+    "note": "IT services and banking platform support for core and digital channels",
+    "confidence": "medium"
+   },
+   {
+    "src": "INFY",
+    "dst": "CANBK",
+    "type": "supplies",
+    "note": "IT vendors incl. Infosys serve PSB core-banking and digital stacks",
+    "confidence": "medium"
+   },
+   {
+    "src": "GOI",
+    "dst": "CANBK",
+    "type": "invests",
+    "note": "Government of India is promoter holding ~63% of Canara Bank",
+    "confidence": "high"
+   },
+   {
+    "src": "LICI",
+    "dst": "CANBK",
+    "type": "invests",
+    "note": "LIC is a large institutional shareholder in the bank",
+    "confidence": "medium"
+   },
+   {
+    "src": "CANBK",
+    "dst": "NTPC",
+    "type": "finances",
+    "note": "Term lending to power and infrastructure corporates incl. NTPC group projects",
+    "confidence": "medium"
+   },
+   {
+    "src": "CANBK",
+    "dst": "RELIANCE",
+    "type": "finances",
+    "note": "Participates in consortium working-capital and term facilities to large corporates",
+    "confidence": "medium"
+   },
+   {
+    "src": "CANBK",
+    "dst": "CONSUMERS",
+    "type": "finances",
+    "note": "Retail home, vehicle, gold and personal loans to households",
+    "confidence": "high"
+   },
+   {
+    "src": "CANBK",
+    "dst": "CANFINHOME",
+    "type": "group",
+    "note": "Canara Bank is promoter of Can Fin Homes (~30% stake)",
+    "confidence": "high"
+   },
+   {
+    "src": "CANBK",
+    "dst": "CANARAROBECO",
+    "type": "group",
+    "note": "51:49 mutual fund JV with Robeco; IPO plans announced",
+    "confidence": "high"
+   },
+   {
+    "src": "CANBK",
+    "dst": "CANARAHSBC",
+    "type": "invests",
+    "note": "Holds majority (~51%) of Canara HSBC Life Insurance JV",
+    "confidence": "high"
+   },
+   {
+    "src": "CANBK",
+    "dst": "NPCI",
+    "type": "invests",
+    "note": "Canara Bank is among the promoter-shareholder banks of NPCI",
+    "confidence": "medium"
+   },
+   {
+    "src": "SBIN",
+    "dst": "CANBK",
+    "type": "competitor",
+    "note": "Largest PSB rival across deposits, retail and corporate credit",
+    "confidence": "high"
+   },
+   {
+    "src": "PNB",
+    "dst": "CANBK",
+    "type": "competitor",
+    "note": "Peer public sector bank competing nationwide",
+    "confidence": "high"
+   },
+   {
+    "src": "BANKBARODA",
+    "dst": "CANBK",
+    "type": "competitor",
+    "note": "Similar-sized PSB competing in retail and corporate banking",
+    "confidence": "high"
+   },
+   {
+    "src": "UNIONBANK",
+    "dst": "CANBK",
+    "type": "competitor",
+    "note": "Peer PSB with overlapping branch and lending footprint",
+    "confidence": "high"
+   },
+   {
+    "src": "GOI",
+    "dst": "SBIN",
+    "type": "invests",
+    "note": "GOI holds ~57% of State Bank of India",
+    "confidence": "high"
+   },
+   {
+    "src": "GOI",
+    "dst": "NTPC",
+    "type": "invests",
+    "note": "GOI is majority owner (~51%) of NTPC",
+    "confidence": "high"
+   },
+   {
+    "src": "CANFINHOME",
+    "dst": "CONSUMERS",
+    "type": "finances",
+    "note": "Subsidiary-style HFC lends home loans to the same retail base",
+    "confidence": "high"
+   }
+  ]
+ },
+ "CGPOWER": {
+  "companies": {
+   "CGPOWER": {
+    "name": "CG Power & Industrial Solutions Ltd",
+    "listed": true
+   },
+   "TIINDIA": {
+    "name": "Tube Investments of India Ltd",
+    "listed": true
+   },
+   "MURUGAPPA": {
+    "name": "Murugappa family promoter group",
+    "listed": false
+   },
+   "LICI": {
+    "name": "Life Insurance Corporation of India",
+    "listed": true
+   },
+   "TATASTEEL": {
+    "name": "Tata Steel Ltd",
+    "listed": true
+   },
+   "HINDCOPPER": {
+    "name": "Hindustan Copper Ltd",
+    "listed": true
+   },
+   "POWERGRID": {
+    "name": "Power Grid Corp of India Ltd",
+    "listed": true
+   },
+   "INDIANRAILWAYS": {
+    "name": "Indian Railways (Ministry of Railways)",
+    "listed": false
+   },
+   "NTPC": {
+    "name": "NTPC Ltd",
+    "listed": true
+   },
+   "ABB": {
+    "name": "ABB India Ltd",
+    "listed": true
+   },
+   "SIEMENS": {
+    "name": "Siemens Ltd (India)",
+    "listed": true
+   },
+   "BHEL": {
+    "name": "Bharat Heavy Electricals Ltd",
+    "listed": true
+   },
+   "HAVELLS": {
+    "name": "Havells India Ltd",
+    "listed": true
+   },
+   "CHOLAFIN": {
+    "name": "Cholamandalam Investment and Finance Co Ltd",
+    "listed": true
+   },
+   "CARBORUNIV": {
+    "name": "Carborundum Universal Ltd",
+    "listed": true
+   },
+   "CONSUMERS": {
+    "name": "Indian retail consumers (households)",
+    "listed": false
+   }
+  },
+  "edges": [
+   {
+    "src": "TATASTEEL",
+    "dst": "CGPOWER",
+    "type": "supplies",
+    "note": "Steel and electrical steel laminations for motors and transformer cores",
+    "confidence": "medium"
+   },
+   {
+    "src": "HINDCOPPER",
+    "dst": "CGPOWER",
+    "type": "supplies",
+    "note": "Copper inputs for windings and conductors in motors and transformers",
+    "confidence": "medium"
+   },
+   {
+    "src": "CGPOWER",
+    "dst": "POWERGRID",
+    "type": "supplies",
+    "note": "Power transformers, switchgear and reactors for transmission utilities",
+    "confidence": "high"
+   },
+   {
+    "src": "CGPOWER",
+    "dst": "INDIANRAILWAYS",
+    "type": "supplies",
+    "note": "Traction motors, transformers and Kavach signalling equipment for railways",
+    "confidence": "high"
+   },
+   {
+    "src": "CGPOWER",
+    "dst": "NTPC",
+    "type": "supplies",
+    "note": "Industrial motors and drives for power generation plants",
+    "confidence": "medium"
+   },
+   {
+    "src": "TIINDIA",
+    "dst": "CGPOWER",
+    "type": "invests",
+    "note": "Tube Investments (Murugappa) acquired control in 2020; holds ~58%",
+    "confidence": "high"
+   },
+   {
+    "src": "LICI",
+    "dst": "CGPOWER",
+    "type": "invests",
+    "note": "LIC is a significant institutional shareholder",
+    "confidence": "medium"
+   },
+   {
+    "src": "CGPOWER",
+    "dst": "CHOLAFIN",
+    "type": "group",
+    "note": "Fellow Murugappa group company (Cholamandalam finance arm)",
+    "confidence": "high"
+   },
+   {
+    "src": "CGPOWER",
+    "dst": "CARBORUNIV",
+    "type": "group",
+    "note": "Fellow Murugappa group company in abrasives and ceramics",
+    "confidence": "high"
+   },
+   {
+    "src": "MURUGAPPA",
+    "dst": "TIINDIA",
+    "type": "group",
+    "note": "Murugappa family is promoter of Tube Investments, CG Power's parent",
+    "confidence": "high"
+   },
+   {
+    "src": "ABB",
+    "dst": "CGPOWER",
+    "type": "competitor",
+    "note": "Competes in motors, drives and switchgear",
+    "confidence": "high"
+   },
+   {
+    "src": "SIEMENS",
+    "dst": "CGPOWER",
+    "type": "competitor",
+    "note": "Rival in transformers, motors and rail electrification",
+    "confidence": "high"
+   },
+   {
+    "src": "BHEL",
+    "dst": "CGPOWER",
+    "type": "competitor",
+    "note": "PSU rival in transformers and heavy electrical equipment",
+    "confidence": "high"
+   },
+   {
+    "src": "HAVELLS",
+    "dst": "CGPOWER",
+    "type": "competitor",
+    "note": "Overlap in motors, switchgear and consumer electricals",
+    "confidence": "medium"
+   },
+   {
+    "src": "ABB",
+    "dst": "POWERGRID",
+    "type": "supplies",
+    "note": "Rival ABB also supplies grid automation and substation gear to Power Grid",
+    "confidence": "high"
+   },
+   {
+    "src": "SIEMENS",
+    "dst": "INDIANRAILWAYS",
+    "type": "supplies",
+    "note": "Siemens supplies locomotives and signalling to the same rail customer",
+    "confidence": "high"
+   },
+   {
+    "src": "BHEL",
+    "dst": "NTPC",
+    "type": "supplies",
+    "note": "BHEL is the dominant boiler-turbine-generator supplier to NTPC",
+    "confidence": "high"
+   },
+   {
+    "src": "CHOLAFIN",
+    "dst": "CONSUMERS",
+    "type": "finances",
+    "note": "Group NBFC lends vehicle and SME loans to retail borrowers",
+    "confidence": "high"
+   }
+  ]
+ },
+ "HAVELLS": {
+  "companies": {
+   "HAVELLS": {
+    "name": "Havells India Ltd",
+    "listed": true
+   },
+   "QRG-FAMILY": {
+    "name": "QRG / Rai Gupta promoter family",
+    "listed": false
+   },
+   "LICI": {
+    "name": "Life Insurance Corporation of India",
+    "listed": true
+   },
+   "HINDCOPPER": {
+    "name": "Hindustan Copper Ltd",
+    "listed": true
+   },
+   "RELIANCE": {
+    "name": "Reliance Industries Ltd",
+    "listed": true
+   },
+   "DMART": {
+    "name": "Avenue Supermarts Ltd",
+    "listed": true
+   },
+   "RRETAIL": {
+    "name": "Reliance Retail Ltd",
+    "listed": false
+   },
+   "CONSUMERS": {
+    "name": "Indian retail consumers (households)",
+    "listed": false
+   },
+   "LODHA": {
+    "name": "Macrotech Developers Ltd",
+    "listed": true
+   },
+   "DLF": {
+    "name": "DLF Ltd",
+    "listed": true
+   },
+   "CROMPTON": {
+    "name": "Crompton Greaves Consumer Electricals Ltd",
+    "listed": true
+   },
+   "POLYCAB": {
+    "name": "Polycab India Ltd",
+    "listed": true
+   },
+   "VOLTAS": {
+    "name": "Voltas Ltd",
+    "listed": true
+   },
+   "BAJAJELEC": {
+    "name": "Bajaj Electricals Ltd",
+    "listed": true
+   },
+   "ORIENTELEC": {
+    "name": "Orient Electric Ltd",
+    "listed": true
+   }
+  },
+  "edges": [
+   {
+    "src": "HINDCOPPER",
+    "dst": "HAVELLS",
+    "type": "supplies",
+    "note": "Domestic refined copper feeds Havells' cables, wires and winding operations",
+    "confidence": "medium"
+   },
+   {
+    "src": "RELIANCE",
+    "dst": "HAVELLS",
+    "type": "supplies",
+    "note": "Polymers/PVC compounds for cable insulation, switchgear and appliance housings",
+    "confidence": "medium"
+   },
+   {
+    "src": "HAVELLS",
+    "dst": "CONSUMERS",
+    "type": "supplies",
+    "note": "Fans, lighting, switchgear and Lloyd ACs sold to households via dealer network",
+    "confidence": "high"
+   },
+   {
+    "src": "HAVELLS",
+    "dst": "DMART",
+    "type": "supplies",
+    "note": "Appliances and lighting retailed through DMart's large-format stores",
+    "confidence": "medium"
+   },
+   {
+    "src": "HAVELLS",
+    "dst": "RRETAIL",
+    "type": "supplies",
+    "note": "Lloyd ACs and Havells appliances stocked in Reliance Digital/Retail formats",
+    "confidence": "medium"
+   },
+   {
+    "src": "HAVELLS",
+    "dst": "LODHA",
+    "type": "supplies",
+    "note": "Wires, switchgear and fixtures supplied into Lodha residential projects",
+    "confidence": "medium"
+   },
+   {
+    "src": "HAVELLS",
+    "dst": "DLF",
+    "type": "supplies",
+    "note": "Electricals and cabling for DLF realty and commercial developments",
+    "confidence": "low"
+   },
+   {
+    "src": "QRG-FAMILY",
+    "dst": "HAVELLS",
+    "type": "invests",
+    "note": "QRG (Rai Gupta) promoter family holds ~59% of Havells India",
+    "confidence": "high"
+   },
+   {
+    "src": "LICI",
+    "dst": "HAVELLS",
+    "type": "invests",
+    "note": "LIC is a large domestic institutional shareholder in Havells",
+    "confidence": "medium"
+   },
+   {
+    "src": "HAVELLS",
+    "dst": "CROMPTON",
+    "type": "competitor",
+    "note": "Head-to-head in fans, pumps, lighting and small appliances",
+    "confidence": "high"
+   },
+   {
+    "src": "HAVELLS",
+    "dst": "POLYCAB",
+    "type": "competitor",
+    "note": "Compete in wires & cables and fast-moving electrical goods",
+    "confidence": "high"
+   },
+   {
+    "src": "HAVELLS",
+    "dst": "VOLTAS",
+    "type": "competitor",
+    "note": "Lloyd ACs compete directly with Voltas room air conditioners",
+    "confidence": "high"
+   },
+   {
+    "src": "HAVELLS",
+    "dst": "BAJAJELEC",
+    "type": "competitor",
+    "note": "Rivals in fans, appliances and consumer lighting",
+    "confidence": "high"
+   },
+   {
+    "src": "HAVELLS",
+    "dst": "ORIENTELEC",
+    "type": "competitor",
+    "note": "Compete in fans, lighting and home electricals",
+    "confidence": "medium"
+   },
+   {
+    "src": "HINDCOPPER",
+    "dst": "POLYCAB",
+    "type": "supplies",
+    "note": "Copper cathode/rod also feeds Polycab's cable production",
+    "confidence": "medium"
+   },
+   {
+    "src": "POLYCAB",
+    "dst": "LODHA",
+    "type": "supplies",
+    "note": "Cables and wiring supplied into Lodha construction projects",
+    "confidence": "medium"
+   },
+   {
+    "src": "DMART",
+    "dst": "CONSUMERS",
+    "type": "supplies",
+    "note": "Value retail chain selling appliances and FMCG to households",
+    "confidence": "high"
+   },
+   {
+    "src": "RRETAIL",
+    "dst": "CONSUMERS",
+    "type": "supplies",
+    "note": "Reliance Retail sells electronics and appliances to Indian households",
+    "confidence": "high"
+   }
+  ]
+ },
+ "ICICIGI": {
+  "companies": {
+   "ICICIGI": {
+    "name": "ICICI Lombard General Insurance Co Ltd",
+    "listed": true
+   },
+   "ICICIBANK": {
+    "name": "ICICI Bank Ltd",
+    "listed": true
+   },
+   "ICICIPRULI": {
+    "name": "ICICI Prudential Life Insurance Co Ltd",
+    "listed": true
+   },
+   "GICRE": {
+    "name": "General Insurance Corporation of India",
+    "listed": true
+   },
+   "LICI": {
+    "name": "Life Insurance Corporation of India",
+    "listed": true
+   },
+   "TCS": {
+    "name": "Tata Consultancy Services Ltd",
+    "listed": true
+   },
+   "INFY": {
+    "name": "Infosys Ltd",
+    "listed": true
+   },
+   "APOLLOHOSP": {
+    "name": "Apollo Hospitals Enterprise Ltd",
+    "listed": true
+   },
+   "MAXHEALTH": {
+    "name": "Max Healthcare Institute Ltd",
+    "listed": true
+   },
+   "PBFINTECH": {
+    "name": "PB Fintech Ltd (Policybazaar)",
+    "listed": true
+   },
+   "MARUTI": {
+    "name": "Maruti Suzuki India Ltd",
+    "listed": true
+   },
+   "TATAMOTORS": {
+    "name": "Tata Motors Ltd",
+    "listed": true
+   },
+   "CONSUMERS": {
+    "name": "Indian policyholders (households)",
+    "listed": false
+   },
+   "STARHEALTH": {
+    "name": "Star Health & Allied Insurance Co Ltd",
+    "listed": true
+   },
+   "BAJAJALLGI": {
+    "name": "Bajaj Allianz General Insurance Co Ltd",
+    "listed": false
+   },
+   "GODIGIT": {
+    "name": "Go Digit General Insurance Ltd",
+    "listed": false
+   },
+   "NIACL": {
+    "name": "The New India Assurance Co Ltd",
+    "listed": true
+   }
+  },
+  "edges": [
+   {
+    "src": "GICRE",
+    "dst": "ICICIGI",
+    "type": "supplies",
+    "note": "GIC Re provides obligatory-cession and treaty reinsurance capacity",
+    "confidence": "high"
+   },
+   {
+    "src": "APOLLOHOSP",
+    "dst": "ICICIGI",
+    "type": "supplies",
+    "note": "Network hospital delivering cashless treatment against health claims",
+    "confidence": "medium"
+   },
+   {
+    "src": "MAXHEALTH",
+    "dst": "ICICIGI",
+    "type": "supplies",
+    "note": "Cashless network hospital servicing ICICI Lombard health policies",
+    "confidence": "medium"
+   },
+   {
+    "src": "TCS",
+    "dst": "ICICIGI",
+    "type": "supplies",
+    "note": "IT services/platforms for policy admin and claims systems",
+    "confidence": "low"
+   },
+   {
+    "src": "INFY",
+    "dst": "ICICIGI",
+    "type": "supplies",
+    "note": "IT and digital services for insurance operations",
+    "confidence": "low"
+   },
+   {
+    "src": "PBFINTECH",
+    "dst": "ICICIGI",
+    "type": "supplies",
+    "note": "Policybazaar marketplace distributes ICICI Lombard policies",
+    "confidence": "medium"
+   },
+   {
+    "src": "ICICIBANK",
+    "dst": "ICICIGI",
+    "type": "invests",
+    "note": "Promoter ICICI Bank holds ~48% of ICICI Lombard",
+    "confidence": "high"
+   },
+   {
+    "src": "LICI",
+    "dst": "ICICIGI",
+    "type": "invests",
+    "note": "LIC holds an institutional equity stake in ICICI Lombard",
+    "confidence": "medium"
+   },
+   {
+    "src": "ICICIGI",
+    "dst": "CONSUMERS",
+    "type": "finances",
+    "note": "Pays motor, health and property claims to retail policyholders",
+    "confidence": "high"
+   },
+   {
+    "src": "ICICIGI",
+    "dst": "MARUTI",
+    "type": "finances",
+    "note": "OEM tie-up motor cover; claims paid on Maruti-channel policies",
+    "confidence": "low"
+   },
+   {
+    "src": "ICICIGI",
+    "dst": "TATAMOTORS",
+    "type": "finances",
+    "note": "Motor insurance tie-ups covering Tata vehicle buyers' claims",
+    "confidence": "low"
+   },
+   {
+    "src": "ICICIGI",
+    "dst": "ICICIBANK",
+    "type": "group",
+    "note": "Part of ICICI group; bancassurance via ICICI Bank branches",
+    "confidence": "high"
+   },
+   {
+    "src": "ICICIGI",
+    "dst": "ICICIPRULI",
+    "type": "group",
+    "note": "Sister ICICI group insurer (life vs general)",
+    "confidence": "high"
+   },
+   {
+    "src": "ICICIGI",
+    "dst": "STARHEALTH",
+    "type": "competitor",
+    "note": "Competes in retail health insurance",
+    "confidence": "high"
+   },
+   {
+    "src": "ICICIGI",
+    "dst": "BAJAJALLGI",
+    "type": "competitor",
+    "note": "Rival private multi-line general insurer",
+    "confidence": "high"
+   },
+   {
+    "src": "ICICIGI",
+    "dst": "GODIGIT",
+    "type": "competitor",
+    "note": "Digital-first rival in motor and retail general insurance",
+    "confidence": "high"
+   },
+   {
+    "src": "ICICIGI",
+    "dst": "NIACL",
+    "type": "competitor",
+    "note": "Largest PSU general insurer competing across all lines",
+    "confidence": "high"
+   },
+   {
+    "src": "ICICIBANK",
+    "dst": "ICICIPRULI",
+    "type": "invests",
+    "note": "ICICI Bank is promoter shareholder of ICICI Prudential Life",
+    "confidence": "high"
+   },
+   {
+    "src": "ICICIBANK",
+    "dst": "CONSUMERS",
+    "type": "finances",
+    "note": "Retail loans and deposits for the same household base",
+    "confidence": "high"
+   },
+   {
+    "src": "GICRE",
+    "dst": "STARHEALTH",
+    "type": "supplies",
+    "note": "Reinsurance capacity also backs Star Health's book",
+    "confidence": "medium"
+   }
+  ]
+ },
+ "JSWENERGY": {
+  "companies": {
+   "JSWENERGY": {
+    "name": "JSW Energy Ltd",
+    "listed": true
+   },
+   "JSW-GROUP": {
+    "name": "JSW Group (Sajjan Jindal promoter entities)",
+    "listed": false
+   },
+   "JSWSTEEL": {
+    "name": "JSW Steel Ltd",
+    "listed": true
+   },
+   "JSWINFRA": {
+    "name": "JSW Infrastructure Ltd",
+    "listed": true
+   },
+   "LICI": {
+    "name": "Life Insurance Corporation of India",
+    "listed": true
+   },
+   "COALINDIA": {
+    "name": "Coal India Ltd",
+    "listed": true
+   },
+   "BHEL": {
+    "name": "Bharat Heavy Electricals Ltd",
+    "listed": true
+   },
+   "PFC": {
+    "name": "Power Finance Corporation Ltd",
+    "listed": true
+   },
+   "RECLTD": {
+    "name": "REC Ltd",
+    "listed": true
+   },
+   "DISCOMS": {
+    "name": "State power distribution companies (discoms)",
+    "listed": false
+   },
+   "NTPC": {
+    "name": "NTPC Ltd",
+    "listed": true
+   },
+   "TATAPOWER": {
+    "name": "Tata Power Co Ltd",
+    "listed": true
+   },
+   "ADANIPOWER": {
+    "name": "Adani Power Ltd",
+    "listed": true
+   },
+   "TORNTPOWER": {
+    "name": "Torrent Power Ltd",
+    "listed": true
+   }
+  },
+  "edges": [
+   {
+    "src": "COALINDIA",
+    "dst": "JSWENERGY",
+    "type": "supplies",
+    "note": "Domestic coal linkages fuel JSW Energy's thermal plants",
+    "confidence": "high"
+   },
+   {
+    "src": "BHEL",
+    "dst": "JSWENERGY",
+    "type": "supplies",
+    "note": "Boilers, turbines and generation equipment for power projects",
+    "confidence": "medium"
+   },
+   {
+    "src": "PFC",
+    "dst": "JSWENERGY",
+    "type": "finances",
+    "note": "Project debt for thermal and renewable capacity",
+    "confidence": "medium"
+   },
+   {
+    "src": "RECLTD",
+    "dst": "JSWENERGY",
+    "type": "finances",
+    "note": "Power-sector lender funding generation and RE projects",
+    "confidence": "medium"
+   },
+   {
+    "src": "JSW-GROUP",
+    "dst": "JSWENERGY",
+    "type": "invests",
+    "note": "Sajjan Jindal / JSW group promoters hold ~69%",
+    "confidence": "high"
+   },
+   {
+    "src": "LICI",
+    "dst": "JSWENERGY",
+    "type": "invests",
+    "note": "LIC holds an institutional equity stake",
+    "confidence": "medium"
+   },
+   {
+    "src": "JSWENERGY",
+    "dst": "DISCOMS",
+    "type": "supplies",
+    "note": "Sells power to state discoms under long-term PPAs and merchant sales",
+    "confidence": "high"
+   },
+   {
+    "src": "JSWENERGY",
+    "dst": "JSWSTEEL",
+    "type": "supplies",
+    "note": "Group captive power supply to JSW Steel plants",
+    "confidence": "high"
+   },
+   {
+    "src": "JSWENERGY",
+    "dst": "JSWSTEEL",
+    "type": "group",
+    "note": "Fellow JSW group flagship under Sajjan Jindal",
+    "confidence": "high"
+   },
+   {
+    "src": "JSWENERGY",
+    "dst": "JSWINFRA",
+    "type": "group",
+    "note": "Sister JSW group ports and infrastructure arm",
+    "confidence": "high"
+   },
+   {
+    "src": "JSWENERGY",
+    "dst": "TATAPOWER",
+    "type": "competitor",
+    "note": "Rival private IPP across thermal and renewables",
+    "confidence": "high"
+   },
+   {
+    "src": "JSWENERGY",
+    "dst": "ADANIPOWER",
+    "type": "competitor",
+    "note": "Competes in merchant and PPA thermal generation",
+    "confidence": "high"
+   },
+   {
+    "src": "JSWENERGY",
+    "dst": "NTPC",
+    "type": "competitor",
+    "note": "Competes with India's largest generator for PPAs and RE tenders",
+    "confidence": "high"
+   },
+   {
+    "src": "JSWENERGY",
+    "dst": "TORNTPOWER",
+    "type": "competitor",
+    "note": "Rival integrated private power utility",
+    "confidence": "medium"
+   },
+   {
+    "src": "JSWINFRA",
+    "dst": "JSWSTEEL",
+    "type": "supplies",
+    "note": "Port and cargo handling for JSW Steel raw materials",
+    "confidence": "high"
+   },
+   {
+    "src": "COALINDIA",
+    "dst": "NTPC",
+    "type": "supplies",
+    "note": "Largest coal supplier to NTPC's thermal fleet",
+    "confidence": "high"
+   },
+   {
+    "src": "TATAPOWER",
+    "dst": "DISCOMS",
+    "type": "supplies",
+    "note": "Sells generation output to state discoms under PPAs",
+    "confidence": "high"
+   },
+   {
+    "src": "PFC",
+    "dst": "NTPC",
+    "type": "finances",
+    "note": "Power-sector project lending to NTPC capacity",
+    "confidence": "medium"
+   }
+  ]
+ },
+ "LODHA": {
+  "companies": {
+   "LODHA": {
+    "name": "Macrotech Developers Ltd (Lodha)",
+    "listed": true
+   },
+   "LODHA-FAMILY": {
+    "name": "Lodha promoter family",
+    "listed": false
+   },
+   "LICI": {
+    "name": "Life Insurance Corporation of India",
+    "listed": true
+   },
+   "ULTRACEMCO": {
+    "name": "UltraTech Cement Ltd",
+    "listed": true
+   },
+   "AMBUJACEM": {
+    "name": "Ambuja Cements Ltd",
+    "listed": true
+   },
+   "JSWSTEEL": {
+    "name": "JSW Steel Ltd",
+    "listed": true
+   },
+   "TATASTEEL": {
+    "name": "Tata Steel Ltd",
+    "listed": true
+   },
+   "HAVELLS": {
+    "name": "Havells India Ltd",
+    "listed": true
+   },
+   "POLYCAB": {
+    "name": "Polycab India Ltd",
+    "listed": true
+   },
+   "HDFCBANK": {
+    "name": "HDFC Bank Ltd",
+    "listed": true
+   },
+   "BAJAJHFL": {
+    "name": "Bajaj Housing Finance Ltd",
+    "listed": true
+   },
+   "CONSUMERS": {
+    "name": "Indian homebuyers (households)",
+    "listed": false
+   },
+   "RRETAIL": {
+    "name": "Reliance Retail Ltd",
+    "listed": false
+   },
+   "DLF": {
+    "name": "DLF Ltd",
+    "listed": true
+   },
+   "GODREJPROP": {
+    "name": "Godrej Properties Ltd",
+    "listed": true
+   },
+   "OBEROIRLTY": {
+    "name": "Oberoi Realty Ltd",
+    "listed": true
+   },
+   "PRESTIGE": {
+    "name": "Prestige Estates Projects Ltd",
+    "listed": true
+   }
+  },
+  "edges": [
+   {
+    "src": "ULTRACEMCO",
+    "dst": "LODHA",
+    "type": "supplies",
+    "note": "Bulk cement and RMC for Lodha's residential construction",
+    "confidence": "high"
+   },
+   {
+    "src": "AMBUJACEM",
+    "dst": "LODHA",
+    "type": "supplies",
+    "note": "Cement supply into Mumbai-region project pipeline",
+    "confidence": "medium"
+   },
+   {
+    "src": "JSWSTEEL",
+    "dst": "LODHA",
+    "type": "supplies",
+    "note": "TMT and structural steel for high-rise construction",
+    "confidence": "medium"
+   },
+   {
+    "src": "TATASTEEL",
+    "dst": "LODHA",
+    "type": "supplies",
+    "note": "Construction steel (Tiscon) supplied into projects",
+    "confidence": "medium"
+   },
+   {
+    "src": "HAVELLS",
+    "dst": "LODHA",
+    "type": "supplies",
+    "note": "Wires, switchgear and fixtures fitted in Lodha developments",
+    "confidence": "medium"
+   },
+   {
+    "src": "POLYCAB",
+    "dst": "LODHA",
+    "type": "supplies",
+    "note": "Cables and wiring for residential and commercial towers",
+    "confidence": "medium"
+   },
+   {
+    "src": "HDFCBANK",
+    "dst": "LODHA",
+    "type": "finances",
+    "note": "Construction finance and working-capital lines to the developer",
+    "confidence": "medium"
+   },
+   {
+    "src": "BAJAJHFL",
+    "dst": "LODHA",
+    "type": "finances",
+    "note": "Developer/lease-rental financing exposure to Macrotech projects",
+    "confidence": "medium"
+   },
+   {
+    "src": "LODHA-FAMILY",
+    "dst": "LODHA",
+    "type": "invests",
+    "note": "Lodha promoter family holds ~72% of Macrotech Developers",
+    "confidence": "high"
+   },
+   {
+    "src": "LICI",
+    "dst": "LODHA",
+    "type": "invests",
+    "note": "Institutional equity holding in Macrotech",
+    "confidence": "low"
+   },
+   {
+    "src": "LODHA",
+    "dst": "CONSUMERS",
+    "type": "supplies",
+    "note": "Sells premium and affordable homes to Indian homebuyers",
+    "confidence": "high"
+   },
+   {
+    "src": "LODHA",
+    "dst": "RRETAIL",
+    "type": "supplies",
+    "note": "Leases retail/commercial space in townships to Reliance Retail formats",
+    "confidence": "low"
+   },
+   {
+    "src": "LODHA",
+    "dst": "DLF",
+    "type": "competitor",
+    "note": "Rival large listed residential developer",
+    "confidence": "high"
+   },
+   {
+    "src": "LODHA",
+    "dst": "GODREJPROP",
+    "type": "competitor",
+    "note": "Competes in premium residential across metros",
+    "confidence": "high"
+   },
+   {
+    "src": "LODHA",
+    "dst": "OBEROIRLTY",
+    "type": "competitor",
+    "note": "Direct rival in Mumbai luxury residential",
+    "confidence": "high"
+   },
+   {
+    "src": "LODHA",
+    "dst": "PRESTIGE",
+    "type": "competitor",
+    "note": "Competes as Prestige expands into MMR residential",
+    "confidence": "medium"
+   },
+   {
+    "src": "HDFCBANK",
+    "dst": "CONSUMERS",
+    "type": "finances",
+    "note": "Home loans to buyers of Lodha and other developers' units",
+    "confidence": "high"
+   },
+   {
+    "src": "BAJAJHFL",
+    "dst": "CONSUMERS",
+    "type": "finances",
+    "note": "Retail housing loans funding home purchases",
+    "confidence": "high"
+   },
+   {
+    "src": "ULTRACEMCO",
+    "dst": "DLF",
+    "type": "supplies",
+    "note": "Cement supply into DLF's construction pipeline",
+    "confidence": "medium"
+   }
+  ]
+ },
+ "SHREECEM": {
+  "companies": {
+   "SHREECEM": {
+    "name": "Shree Cement Ltd",
+    "listed": true
+   },
+   "BANGUR-FAMILY": {
+    "name": "Bangur promoter family",
+    "listed": false
+   },
+   "LICI": {
+    "name": "Life Insurance Corporation of India",
+    "listed": true
+   },
+   "GICRE": {
+    "name": "General Insurance Corporation of India",
+    "listed": true
+   },
+   "COALINDIA": {
+    "name": "Coal India Ltd",
+    "listed": true
+   },
+   "RELIANCE": {
+    "name": "Reliance Industries Ltd",
+    "listed": true
+   },
+   "LT": {
+    "name": "Larsen & Toubro Ltd",
+    "listed": true
+   },
+   "LODHA": {
+    "name": "Macrotech Developers Ltd",
+    "listed": true
+   },
+   "DLF": {
+    "name": "DLF Ltd",
+    "listed": true
+   },
+   "CONSUMERS": {
+    "name": "Individual home builders / cement trade buyers",
+    "listed": false
+   },
+   "ULTRACEMCO": {
+    "name": "UltraTech Cement Ltd",
+    "listed": true
+   },
+   "AMBUJACEM": {
+    "name": "Ambuja Cements Ltd",
+    "listed": true
+   },
+   "ACC": {
+    "name": "ACC Ltd",
+    "listed": true
+   },
+   "DALBHARAT": {
+    "name": "Dalmia Bharat Ltd",
+    "listed": true
+   },
+   "JKCEMENT": {
+    "name": "JK Cement Ltd",
+    "listed": true
+   }
+  },
+  "edges": [
+   {
+    "src": "COALINDIA",
+    "dst": "SHREECEM",
+    "type": "supplies",
+    "note": "Coal for kilns and Shree's large captive power plants",
+    "confidence": "high"
+   },
+   {
+    "src": "RELIANCE",
+    "dst": "SHREECEM",
+    "type": "supplies",
+    "note": "Refinery petcoke used as kiln fuel; limestone from own mines",
+    "confidence": "medium"
+   },
+   {
+    "src": "SHREECEM",
+    "dst": "LT",
+    "type": "supplies",
+    "note": "Cement into L&T infrastructure and construction projects",
+    "confidence": "medium"
+   },
+   {
+    "src": "SHREECEM",
+    "dst": "LODHA",
+    "type": "supplies",
+    "note": "Cement supply to realty developers' project pipeline",
+    "confidence": "low"
+   },
+   {
+    "src": "SHREECEM",
+    "dst": "DLF",
+    "type": "supplies",
+    "note": "Cement into north-India realty construction",
+    "confidence": "low"
+   },
+   {
+    "src": "SHREECEM",
+    "dst": "CONSUMERS",
+    "type": "supplies",
+    "note": "Bulk of volumes sold via dealers to individual home builders",
+    "confidence": "high"
+   },
+   {
+    "src": "BANGUR-FAMILY",
+    "dst": "SHREECEM",
+    "type": "invests",
+    "note": "Bangur promoter family holds ~63% of Shree Cement",
+    "confidence": "high"
+   },
+   {
+    "src": "LICI",
+    "dst": "SHREECEM",
+    "type": "invests",
+    "note": "LIC holds an institutional equity stake",
+    "confidence": "medium"
+   },
+   {
+    "src": "GICRE",
+    "dst": "SHREECEM",
+    "type": "invests",
+    "note": "GIC Re holds a small institutional equity position",
+    "confidence": "low"
+   },
+   {
+    "src": "SHREECEM",
+    "dst": "ULTRACEMCO",
+    "type": "competitor",
+    "note": "Competes with India's largest cement maker nationwide",
+    "confidence": "high"
+   },
+   {
+    "src": "SHREECEM",
+    "dst": "AMBUJACEM",
+    "type": "competitor",
+    "note": "Rival in north and west India cement markets",
+    "confidence": "high"
+   },
+   {
+    "src": "SHREECEM",
+    "dst": "ACC",
+    "type": "competitor",
+    "note": "Competes across overlapping cement markets",
+    "confidence": "high"
+   },
+   {
+    "src": "SHREECEM",
+    "dst": "DALBHARAT",
+    "type": "competitor",
+    "note": "Rival mid-large cement producer expanding pan-India",
+    "confidence": "medium"
+   },
+   {
+    "src": "SHREECEM",
+    "dst": "JKCEMENT",
+    "type": "competitor",
+    "note": "Direct north-India grey cement rival",
+    "confidence": "medium"
+   },
+   {
+    "src": "AMBUJACEM",
+    "dst": "ACC",
+    "type": "group",
+    "note": "Both part of Adani group cement business",
+    "confidence": "high"
+   },
+   {
+    "src": "ULTRACEMCO",
+    "dst": "LT",
+    "type": "supplies",
+    "note": "Cement supply into L&T construction projects",
+    "confidence": "medium"
+   },
+   {
+    "src": "COALINDIA",
+    "dst": "ULTRACEMCO",
+    "type": "supplies",
+    "note": "Coal linkages fuel UltraTech kilns and captive power",
+    "confidence": "medium"
    }
   ]
  }
