@@ -1,10 +1,17 @@
-name: Android APK (Capacitor + Capgo)
+name: Android APK + Capgo OTA
 
-# Manual trigger — builds the TaurEye Android APK from the Capacitor project and
-# uploads it as a downloadable artifact. GitHub's ubuntu runners ship the
-# Android SDK, so no local Android tooling is needed. Optionally publishes an
-# over-the-air bundle to Capgo when a CAPGO_TOKEN secret is present.
+# Two automated paths:
+#  • OTA (ota job): on every push to `production` that touches mobile/**, publish
+#    an over-the-air bundle to Capgo so installed phones auto-update — this runs
+#    alongside the web deploy, keeping the app in sync with what's live. No-op
+#    (succeeds) until a CAPGO_TOKEN secret is set.
+#  • APK (apk job): on manual dispatch, build a debug APK artifact for the first
+#    install / version bumps (the container that ships this has no Android SDK,
+#    so the APK is built here on a runner that does).
 on:
+  push:
+    branches: [production]
+    paths: ['mobile/**']
   workflow_dispatch:
     inputs:
       api_base:
@@ -12,58 +19,73 @@ on:
         required: false
         default: 'http://161.118.174.177'
       capgo_upload:
-        description: 'Also upload an OTA bundle to Capgo (needs CAPGO_TOKEN secret)'
+        description: 'Also publish an OTA bundle to Capgo'
         type: boolean
         required: false
         default: false
 
 jobs:
-  build:
+  # ── Build an installable debug APK (manual) ──────────────────────────────────
+  apk:
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: mobile
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
+        with: { node-version: '20' }
       - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '21'
-
-      # ubuntu-latest already has the Android SDK; this just exposes ANDROID_HOME.
+        with: { distribution: temurin, java-version: '21' }
       - uses: android-actions/setup-android@v3
-
-      - name: Install deps
-        run: npm ci
-
-      - name: Export web bundle (API base baked in)
+      - run: npm ci
+      - name: Export web bundle
         run: npx expo export --platform web --output-dir dist
         env:
           EXPO_PUBLIC_API_BASE: ${{ github.event.inputs.api_base }}
-
-      - name: Capacitor sync
-        run: npx cap sync android
-
+      - run: npx cap sync android
       - name: Build debug APK
         run: cd android && ./gradlew assembleDebug --no-daemon
-
-      - name: Upload APK artifact
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
           name: taureye-android-debug
           path: mobile/android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
-
-      # ── Optional OTA publish to Capgo ────────────────────────────────────────
-      # Set a CAPGO_TOKEN repo secret and tick capgo_upload. First run also needs
-      # the app registered once: `npx @capgo/cli app add com.taureye.app`.
-      - name: Publish OTA bundle to Capgo
-        if: ${{ github.event.inputs.capgo_upload == 'true' && env.CAPGO_TOKEN != '' }}
+      - name: Publish OTA bundle to Capgo (optional)
+        if: github.event.inputs.capgo_upload == 'true'
         env:
           CAPGO_TOKEN: ${{ secrets.CAPGO_TOKEN }}
-        run: npx @capgo/cli@latest bundle upload -a "$CAPGO_TOKEN" -c production --path dist
+        run: |
+          if [ -z "$CAPGO_TOKEN" ]; then echo "No CAPGO_TOKEN secret — skipping."; exit 0; fi
+          VER="$(node -p "require('./app.json').expo.version.split('.').slice(0,2).join('.')").${{ github.run_number }}"
+          npx @capgo/cli@latest bundle upload -a "$CAPGO_TOKEN" -c production -b "$VER" --path dist
+
+  # ── Auto-publish OTA on every production ship ────────────────────────────────
+  ota:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - run: npm ci
+      - name: Export web bundle (API base baked in)
+        run: npx expo export --platform web --output-dir dist
+        env:
+          EXPO_PUBLIC_API_BASE: http://161.118.174.177
+      - name: Publish OTA bundle to Capgo
+        env:
+          CAPGO_TOKEN: ${{ secrets.CAPGO_TOKEN }}
+        run: |
+          if [ -z "$CAPGO_TOKEN" ]; then
+            echo "No CAPGO_TOKEN secret set — skipping OTA publish."
+            echo "Add the secret and register once (npx @capgo/cli app add com.taureye.app) to enable."
+            exit 0
+          fi
+          VER="$(node -p "require('./app.json').expo.version.split('.').slice(0,2).join('.')").${{ github.run_number }}"
+          echo "Publishing OTA bundle $VER to Capgo channel production…"
+          npx @capgo/cli@latest bundle upload -a "$CAPGO_TOKEN" -c production -b "$VER" --path dist

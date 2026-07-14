@@ -30,10 +30,18 @@ import apikeys as _apikeys      # public-API key issue/verify (hashed, store-bac
 # Support both normal run and PyInstaller frozen exe
 _BASE_DIR = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
 app = Flask(__name__, template_folder=_BASE_DIR, static_folder=_BASE_DIR)
-# Same-origin by default; set CORS_ORIGINS (comma-separated) to allow specific
-# cross-origin callers. The SPA is served same-origin, so no wildcard needed.
-_CORS_ORIGINS = [o.strip() for o in os.environ.get("CORS_ORIGINS", "").split(",") if o.strip()]
-CORS(app, origins=_CORS_ORIGINS or [], supports_credentials=True)
+# CORS is an explicit allowlist — never a wildcard (credentials are sent). The
+# web SPA is served same-origin (no CORS needed). The Capacitor mobile shell
+# loads from a localhost WebView origin, so those exact origins are allowed;
+# extend with CORS_ORIGINS (comma-separated, e.g. an https domain) as needed.
+_CAPACITOR_ORIGINS = [
+    "https://localhost", "http://localhost",
+    "capacitor://localhost", "ionic://localhost",
+]
+_CORS_ORIGINS = _CAPACITOR_ORIGINS + [
+    o.strip() for o in os.environ.get("CORS_ORIGINS", "").split(",") if o.strip()
+]
+CORS(app, origins=_CORS_ORIGINS, supports_credentials=True)
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("quanthunt")
 
