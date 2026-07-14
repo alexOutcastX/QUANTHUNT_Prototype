@@ -80,16 +80,12 @@ function DesktopShell({ version }: { version: string }) {
       <View style={styles.brandBar}>
         <Brand version={version} big />
         <Text style={styles.tagline}>NSE · BSE Live Screener</Text>
-        <TouchableOpacity
-          style={styles.legalBtn}
-          onPress={() => Linking.openURL((API_BASE || '') + '/legal.html').catch(() => {})}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.navScroll}
+          contentContainerStyle={styles.pagesRow}
         >
-          <Text style={styles.legalTxt}>DISCLAIMER</Text>
-        </TouchableOpacity>
-      </View>
-      <TickerStrip />
-      <View style={styles.pagesBar}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pagesRow}>
           {PAGES.map((it) => {
             const on = active === it.k;
             return (
@@ -103,7 +99,14 @@ function DesktopShell({ version }: { version: string }) {
             );
           })}
         </ScrollView>
+        <TouchableOpacity
+          style={styles.legalBtn}
+          onPress={() => Linking.openURL((API_BASE || '') + '/legal.html').catch(() => {})}
+        >
+          <Text style={styles.legalTxt}>DISCLAIMER</Text>
+        </TouchableOpacity>
       </View>
+      <TickerStrip />
       <View style={styles.main}>
         {cur(nav)}
       </View>
@@ -154,21 +157,23 @@ export default function Shell() {
 
 const styles = StyleSheet.create({
   desktop: { flex: 1, backgroundColor: theme.bg },
+  // Single top bar: brand + tagline + page nav + disclaimer. No vertical
+  // padding — the nav items set the bar height so their active underline
+  // sits flush with the bar's bottom border.
   brandBar: {
     flexDirection: 'row',
-    alignItems: 'baseline',
+    alignItems: 'center',
     gap: 14,
     paddingHorizontal: 18,
-    paddingVertical: 12,
     backgroundColor: theme.surface,
     borderBottomColor: theme.border,
     borderBottomWidth: 1,
   },
   tagline: { color: theme.muted, fontSize: 10, fontFamily: theme.mono },
-  legalBtn: { marginLeft: 'auto' },
+  legalBtn: { marginLeft: 'auto', paddingLeft: 10 },
   legalTxt: { color: theme.muted, fontSize: 9, fontFamily: theme.mono, letterSpacing: 1 },
-  pagesBar: { backgroundColor: theme.surface, borderBottomColor: theme.border, borderBottomWidth: 1 },
-  pagesRow: { paddingHorizontal: 10, gap: 2 },
+  navScroll: { flexGrow: 0, marginLeft: 10 },
+  pagesRow: { gap: 2, alignItems: 'center' },
   pageItem: {
     alignItems: 'center',
     paddingVertical: 13,
