@@ -3,6 +3,10 @@
   "version": "1.0.0",
   "main": "index.ts",
   "dependencies": {
+    "@capacitor/android": "^8.4.2",
+    "@capacitor/cli": "^8.4.2",
+    "@capacitor/core": "^8.4.2",
+    "@capgo/capacitor-updater": "^8.51.0",
     "@expo/metro-runtime": "~6.1.1",
     "@react-native-async-storage/async-storage": "^2.2.0",
     "@react-navigation/bottom-tabs": "^7.18.8",
@@ -26,7 +30,11 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "export:web": "expo export --platform web && node scripts/postexport.js"
+    "export:web": "expo export --platform web && node scripts/postexport.js",
+    "cap:build": "expo export --platform web --output-dir dist",
+    "cap:sync": "npm run cap:build && cap sync android",
+    "cap:open": "cap open android",
+    "cap:apk": "cd android && ./gradlew assembleDebug"
   },
   "private": true
 }
