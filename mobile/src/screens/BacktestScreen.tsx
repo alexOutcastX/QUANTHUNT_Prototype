@@ -199,6 +199,18 @@ export default function BacktestScreen() {
   const [result, setResult] = useState<BacktestResult | null>(null);
   const [html, setHtml] = useState('');
 
+  // One-shot symbol handoff from the Multibagger analyser's "Backtest" action.
+  useEffect(() => {
+    AsyncStorage.getItem('taureye.backtest.prefill')
+      .then((v) => {
+        if (v) {
+          setSym(v);
+          AsyncStorage.removeItem('taureye.backtest.prefill').catch(() => {});
+        }
+      })
+      .catch(() => {});
+  }, []);
+
   // Restore persisted custom rules once, before saving anything back.
   useEffect(() => {
     (async () => {
