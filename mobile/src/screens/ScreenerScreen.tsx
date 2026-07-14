@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  FlatList,
   Modal,
   Pressable,
   RefreshControl,
@@ -63,12 +62,19 @@ const fmtVol = (v: number | null | undefined) => {
   return String(Math.round(v));
 };
 const n1 = (v: number | null | undefined) => (v == null || !isFinite(v) ? '—' : v.toFixed(1));
-// Market cap arrives in ₹ crore; compact to L (lakh cr) / K (thousand cr).
+// Indian-grouped price (1,31,285.00) and volume (1,08,258) — TaurEye style.
+const fmtIN = (v: number | null | undefined) =>
+  v == null || !isFinite(v)
+    ? '—'
+    : v.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const fmtVolIN = (v: number | null | undefined) =>
+  v == null || !isFinite(v) ? '—' : Math.round(v).toLocaleString('en-IN');
+// Market cap arrives in ₹ crore; render as ₹55.73k cr / ₹1.23L cr / ₹820 cr.
 const fmtMcap = (v: number | null | undefined) => {
   if (v == null || !isFinite(v)) return '—';
-  if (v >= 1e5) return (v / 1e5).toFixed(2) + 'L';
-  if (v >= 1e3) return (v / 1e3).toFixed(1) + 'K';
-  return v.toFixed(0);
+  if (v >= 1e5) return '₹' + (v / 1e5).toFixed(2) + 'L cr';
+  if (v >= 1e3) return '₹' + (v / 1e3).toFixed(2) + 'k cr';
+  return '₹' + v.toFixed(0) + ' cr';
 };
 const fnum2 = (r: Row, k: string, d = 1): string => {
   const f = r._fund as Record<string, unknown> | null | undefined;
@@ -79,24 +85,33 @@ const fnum2 = (r: Row, k: string, d = 1): string => {
 type Col = {
   key: string;
   label: string;
-  w: number;
+  w: number; // min width; cells also flex-grow so the table fills the page
+  flex?: number; // flex-grow weight (default 1; 0 = fixed)
   align?: 'left' | 'right';
   render: (r: Row) => React.ReactNode;
 };
 
+// TaurEye-style column set: Symbol/Name/Exch/LTP/%Chg/Volume/RelVol/RSI/
+// vs 50DMA/52w Hi/Mkt Cap/Signal visible; everything else opt-in via ▤ Columns.
 const COLS: Col[] = [
-  { key: 'sym', label: 'Symbol', w: 92, align: 'left', render: (r) => <Text style={styles.symTxt}>{r.sym}</Text> },
-  { key: 'price', label: 'Price', w: 72, render: (r) => <Text style={styles.cell}>{r.price != null ? r.price.toFixed(1) : '—'}</Text> },
-  { key: 'chg', label: 'Chg%', w: 62, render: (r) => <Text style={[styles.cell, { color: colorOf(r.chg) }]}>{pct(r.chg)}</Text> },
+  { key: 'sym', label: 'Symbol', w: 96, flex: 0, align: 'left', render: (r) => <Text style={styles.symTxt}>{r.sym}</Text> },
+  { key: 'name', label: 'Name', w: 190, flex: 3, align: 'left', render: (r) => <Text style={styles.nameTxt} numberOfLines={1}>{r.name || '—'}</Text> },
+  { key: 'exchange', label: 'Exch', w: 48, flex: 0, render: (r) => <Text style={styles.exchTxt}>{r.exchange || 'NSE'}</Text> },
+  { key: 'price', label: 'LTP', w: 100, render: (r) => <Text style={[styles.cell, styles.ltp]}>{fmtIN(r.price)}</Text> },
+  { key: 'chg', label: '% Chg', w: 72, render: (r) => <Text style={[styles.cell, { color: colorOf(r.chg) }]}>{pct(r.chg)}</Text> },
+  { key: 'volume', label: 'Volume', w: 92, render: (r) => <Text style={styles.cell}>{fmtVolIN(r.volume)}</Text> },
+  { key: 'relvol', label: 'Rel Vol', w: 62, render: (r) => <Text style={styles.cell}>{r.relvol != null ? r.relvol.toFixed(2) + 'x' : '—'}</Text> },
   { key: 'rsi', label: 'RSI', w: 48, render: (r) => <Text style={styles.cell}>{r.rsi != null ? r.rsi.toFixed(0) : '—'}</Text> },
-  { key: 'd20', label: '20DMA', w: 62, render: (r) => <Text style={[styles.cell, { color: colorOf(r.d20) }]}>{pct(r.d20, 1)}</Text> },
-  { key: 'd50', label: '50DMA', w: 62, render: (r) => <Text style={[styles.cell, { color: colorOf(r.d50) }]}>{pct(r.d50, 1)}</Text> },
-  { key: 'd200', label: '200DMA', w: 64, render: (r) => <Text style={[styles.cell, { color: colorOf(r.d200) }]}>{pct(r.d200, 1)}</Text> },
+  { key: 'd50', label: 'vs 50DMA', w: 80, render: (r) => <Text style={[styles.cell, { color: colorOf(r.d50) }]}>{pct(r.d50)}</Text> },
+  { key: 'pct_from_high', label: '52w Hi', w: 72, render: (r) => <Text style={[styles.cell, { color: colorOf(r.pct_from_high) }]}>{pct(r.pct_from_high)}</Text> },
+  { key: 'market_cap_cr', label: 'Mkt Cap', w: 96, render: (r) => <Text style={styles.cell}>{fmtMcap((r._fund as { market_cap_cr?: number } | null)?.market_cap_cr)}</Text> },
+  { key: 'signal', label: 'Signal', w: 66, render: (r) => { const s = calcSignal(r); return <Text style={[styles.cell, styles.sig, { color: sigColor(s) }]}>{s.toUpperCase()}</Text>; } },
+  // Extras — hidden by default, available from the Columns menu.
+  { key: 'd20', label: 'vs 20DMA', w: 78, render: (r) => <Text style={[styles.cell, { color: colorOf(r.d20) }]}>{pct(r.d20, 1)}</Text> },
+  { key: 'd200', label: 'vs 200DMA', w: 84, render: (r) => <Text style={[styles.cell, { color: colorOf(r.d200) }]}>{pct(r.d200, 1)}</Text> },
   { key: 'willr', label: 'W%R', w: 52, render: (r) => <Text style={styles.cell}>{r.willr != null ? r.willr.toFixed(0) : '—'}</Text> },
   { key: 'bollb', label: 'BB%', w: 50, render: (r) => <Text style={styles.cell}>{r.bollb != null ? r.bollb.toFixed(2) : '—'}</Text> },
-  { key: 'relvol', label: 'RVol', w: 52, render: (r) => <Text style={styles.cell}>{r.relvol != null ? r.relvol.toFixed(1) + 'x' : '—'}</Text> },
-  { key: 'volume', label: 'Vol', w: 58, render: (r) => <Text style={styles.cell}>{fmtVol(r.volume)}</Text> },
-  { key: 'beta', label: 'Beta', w: 46, render: (r) => <Text style={styles.cell}>{r.beta != null ? r.beta.toFixed(2) : '—'}</Text> },
+  { key: 'beta', label: 'Beta', w: 48, render: (r) => <Text style={styles.cell}>{r.beta != null ? r.beta.toFixed(2) : '—'}</Text> },
   {
     key: 'sqzMom', label: 'Sqz', w: 52,
     render: (r) => (
@@ -106,30 +121,60 @@ const COLS: Col[] = [
     ),
   },
   // Nearest zone only — the full S1-S3 / R1-R3 ladder lives in the Report modal.
-  { key: 's1', label: 'Support', w: 62, render: (r) => <Text style={styles.cell}>{n1(r.s1)}</Text> },
-  { key: 'r1', label: 'Resist', w: 62, render: (r) => <Text style={styles.cell}>{n1(r.r1)}</Text> },
-  // Fundamentals (bulk-cached server-side; stream in shortly after load)
-  { key: 'market_cap_cr', label: 'MCap(cr)', w: 66, render: (r) => <Text style={styles.cell}>{fmtMcap((r._fund as { market_cap_cr?: number } | null)?.market_cap_cr)}</Text> },
+  { key: 's1', label: 'Support', w: 66, render: (r) => <Text style={styles.cell}>{n1(r.s1)}</Text> },
+  { key: 'r1', label: 'Resist', w: 66, render: (r) => <Text style={styles.cell}>{n1(r.r1)}</Text> },
   { key: 'pe', label: 'P/E', w: 52, render: (r) => <Text style={styles.cell}>{fnum2(r, 'pe')}</Text> },
   { key: 'pb', label: 'P/B', w: 48, render: (r) => <Text style={styles.cell}>{fnum2(r, 'pb')}</Text> },
   { key: 'roe', label: 'ROE%', w: 52, render: (r) => <Text style={styles.cell}>{fnum2(r, 'roe')}</Text> },
   { key: 'roce', label: 'ROCE%', w: 56, render: (r) => <Text style={styles.cell}>{fnum2(r, 'roce')}</Text> },
-  { key: 'debt_equity', label: 'D/E', w: 46, render: (r) => <Text style={styles.cell}>{fnum2(r, 'debt_equity', 2)}</Text> },
-  { key: 'dividend_yield', label: 'Div%', w: 48, render: (r) => <Text style={styles.cell}>{fnum2(r, 'dividend_yield')}</Text> },
-  { key: 'signal', label: 'Signal', w: 64, render: (r) => { const s = calcSignal(r); return <Text style={[styles.cell, styles.sig, { color: sigColor(s) }]}>{s.toUpperCase()}</Text>; } },
+  { key: 'debt_equity', label: 'D/E', w: 48, render: (r) => <Text style={styles.cell}>{fnum2(r, 'debt_equity', 2)}</Text> },
+  { key: 'dividend_yield', label: 'Div%', w: 50, render: (r) => <Text style={styles.cell}>{fnum2(r, 'dividend_yield')}</Text> },
 ];
 const ACTIONS_W = 252; // per-row action cell (B / S / Chart / ★ / Report)
 const COL_META = COLS.map((c) => ({ key: c.key, label: c.label }));
 
-// Compact default: niche columns start hidden (re-enable via ▤ Columns). The
-// v2 key intentionally ignores v1 prefs so the leaner default reaches everyone.
-const DEFAULT_HIDDEN = ['willr', 'bollb', 'beta', 'pb', 'roce', 'debt_equity', 'dividend_yield'];
+// Cells flex-grow from their minimum width so the table fills the viewport
+// (like the TaurEye site); with many extra columns enabled it overflows into
+// the horizontal scroll instead.
+const cellFlex = (c: Col) => ({
+  flexBasis: c.w,
+  flexGrow: c.flex ?? 1,
+  flexShrink: 0,
+  minWidth: c.w,
+});
+
+// TaurEye default view: extras start hidden (re-enable via ▤ Columns). The
+// v3 key intentionally ignores older prefs so the new default reaches everyone.
+const DEFAULT_HIDDEN = ['d20', 'd200', 'willr', 'bollb', 'beta', 'sqzMom', 's1', 'r1',
+  'pe', 'pb', 'roe', 'roce', 'debt_equity', 'dividend_yield'];
 
 const FILTERS_KEY = 'taureye.screener.filters.v1';
 const INDEX_KEY = 'taureye.screener.index.v1';
-const COLS_KEY = 'taureye.screener.cols.v2';
+const COLS_KEY = 'taureye.screener.cols.v3';
 const PAGE_KEY = 'taureye.screener.pagesize.v1';
-const FOPEN_KEY = 'taureye.screener.filtersopen.v1';
+
+// Universe name/exchange lookup (fetched once per app session) so the table
+// can show full company names like the TaurEye site.
+let namesPromise: Promise<Record<string, { name: string; exchange: string }>> | null = null;
+function loadNames(): Promise<Record<string, { name: string; exchange: string }>> {
+  if (!namesPromise) {
+    namesPromise = api
+      .universe()
+      .then((r) => {
+        const m: Record<string, { name: string; exchange: string }> = {};
+        (r.symbols || []).forEach((s) => {
+          const k = (s.symbol || '').toUpperCase();
+          if (k && !m[k]) m[k] = { name: s.name || k, exchange: s.exchange || 'NSE' };
+        });
+        return m;
+      })
+      .catch(() => {
+        namesPromise = null;
+        return {};
+      });
+  }
+  return namesPromise;
+}
 
 const PAGE_SIZES: (number | 'all')[] = [25, 50, 100, 'all'];
 type PageSize = number | 'all';
@@ -152,13 +197,10 @@ export default function ScreenerScreen() {
   const [active, setActive] = useState<ActiveFilters>({});
   const [sortCol, setSortCol] = useState('signal');
   const [sortDir, setSortDir] = useState<1 | -1>(-1);
-  // Inline filter panel: `filtersOpen` collapses/expands it (collapsed by
-  // default to keep the chrome light — the choice persists); `shown` is the
-  // ordered list of filter-key rows displayed (derived from `active` on load
-  // and unioned as `active` grows); `extVersion` remounts the uncontrolled
-  // range inputs on non-typing changes so their defaultValues refresh without
-  // dropping focus mid-type.
-  const [filtersOpen, setFiltersOpen] = useState(false);
+  // Inline screen builder: `shown` is the ordered list of filter-key rows
+  // displayed (derived from `active` on load and unioned as `active` grows);
+  // `extVersion` remounts the uncontrolled range inputs on non-typing changes
+  // so their defaultValues refresh without dropping focus mid-type.
   const [shown, setShown] = useState<string[]>([]);
   const [extVersion, setExtVersion] = useState(0);
   const bumpExt = useCallback(() => setExtVersion((v) => v + 1), []);
@@ -219,10 +261,9 @@ export default function ScreenerScreen() {
   useEffect(() => {
     (async () => {
       try {
-        const [rawCols, rawPage, rawOpen] = await Promise.all([
+        const [rawCols, rawPage] = await Promise.all([
           AsyncStorage.getItem(COLS_KEY),
           AsyncStorage.getItem(PAGE_KEY),
-          AsyncStorage.getItem(FOPEN_KEY),
         ]);
         if (rawCols) {
           const p = JSON.parse(rawCols);
@@ -233,7 +274,6 @@ export default function ScreenerScreen() {
           const v = JSON.parse(rawPage);
           if (v === 'all' || (typeof v === 'number' && [25, 50, 100].includes(v))) setPageSize(v);
         }
-        if (rawOpen === '1') setFiltersOpen(true);
       } catch {
         /* defaults */
       } finally {
@@ -251,11 +291,6 @@ export default function ScreenerScreen() {
     if (!prefsRestored) return;
     AsyncStorage.setItem(PAGE_KEY, JSON.stringify(pageSize)).catch(() => {});
   }, [pageSize, prefsRestored]);
-
-  useEffect(() => {
-    if (!prefsRestored) return;
-    AsyncStorage.setItem(FOPEN_KEY, filtersOpen ? '1' : '0').catch(() => {});
-  }, [filtersOpen, prefsRestored]);
 
   useEffect(() => {
     loadSavedScreens().then(setSaved);
@@ -291,7 +326,7 @@ export default function ScreenerScreen() {
     setError(null);
     setNote('');
     try {
-      const idx = await api.indexConstituents(name);
+      const [idx, names] = await Promise.all([api.indexConstituents(name), loadNames()]);
       if (seq !== loadSeq.current) return;
       const cons = (idx.data || []).filter((c) => c.symbol);
       if (!cons.length) {
@@ -302,7 +337,8 @@ export default function ScreenerScreen() {
       // 1) The index feed already carries live NSE quotes — show them instantly.
       const seeded: Row[] = cons.map((c) => ({
         sym: c.symbol,
-        exchange: 'NSE',
+        name: names[c.symbol.toUpperCase()]?.name,
+        exchange: names[c.symbol.toUpperCase()]?.exchange || 'NSE',
         price: c.price,
         prevClose: c.prevClose,
         chg: c.chg,
@@ -481,7 +517,9 @@ export default function ScreenerScreen() {
     return { total: filtered.length, buy, sell, neutral };
   }, [filtered]);
 
-  const activeCount = Object.keys(active).length;
+  // "showing X–Y" bounds for the current page.
+  const showFrom = sorted.length ? (pageSize === 'all' ? 1 : page * pageSize + 1) : 0;
+  const showTo = pageSize === 'all' ? sorted.length : Math.min((page + 1) * (pageSize as number), sorted.length);
 
   const onSort = (col: string) => {
     if (col === sortCol) setSortDir((d) => (d === 1 ? -1 : 1));
@@ -562,23 +600,23 @@ export default function ScreenerScreen() {
     toast(`Applied "${s.name}"`);
   };
 
-  const renderRow = ({ item }: { item: Row }) => {
+  const renderRow = (item: Row) => {
     const dir = trackDirOf(item.sym);
     const starred = isWatched(item.sym);
     return (
-      <View style={styles.dataRow}>
+      <View key={item.sym} style={styles.dataRow}>
         {visibleCols.map((c) =>
           c.key === 'sym' ? (
             <TouchableOpacity
               key={c.key}
-              style={[styles.td, { width: c.w, alignItems: 'flex-start' }]}
+              style={[styles.td, cellFlex(c), { alignItems: 'flex-start' }]}
               onPress={() => setDetail(item)}
               activeOpacity={0.75}
             >
               {c.render(item)}
             </TouchableOpacity>
           ) : (
-            <View key={c.key} style={[styles.td, { width: c.w, alignItems: c.align === 'left' ? 'flex-start' : 'flex-end' }]}>
+            <View key={c.key} style={[styles.td, cellFlex(c), { alignItems: c.align === 'left' ? 'flex-start' : 'flex-end' }]}>
               {c.render(item)}
             </View>
           ),
@@ -637,20 +675,29 @@ export default function ScreenerScreen() {
         </ScrollView>
       </View>
 
-      {filtersOpen ? (
-        <FilterPanel
-          active={active}
-          setActive={setActive}
-          shown={shown}
-          setShown={setShown}
-          extVersion={extVersion}
-          bumpExt={bumpExt}
-        />
-      ) : null}
+      <ScrollView
+        style={styles.page}
+        keyboardShouldPersistTaps="handled"
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.accent} />
+        }
+      >
+      <FilterPanel
+        active={active}
+        setActive={setActive}
+        shown={shown}
+        setShown={setShown}
+        extVersion={extVersion}
+        bumpExt={bumpExt}
+        savedCount={saved.length}
+        onShare={onShare}
+        onSaveScreen={() => setSavedModal(true)}
+      />
 
       <View style={styles.statsRow}>
         <Text style={styles.statsTxt} numberOfLines={1}>
-          <Text style={styles.statsN}>{stats.total}</Text> matches{'   '}
+          <Text style={styles.statsN}>{stats.total}</Text> matches
+          {stats.total ? ` · showing ${showFrom}–${showTo}` : ''}{'   '}
           <Text style={{ color: theme.green }}>{stats.buy}▲</Text>{'  '}
           <Text style={{ color: theme.red }}>{stats.sell}▼</Text>{'  '}
           <Text style={{ color: theme.muted2 }}>{stats.neutral}—</Text>
@@ -661,23 +708,8 @@ export default function ScreenerScreen() {
           style={styles.actionsScroll}
           contentContainerStyle={styles.actionsScrollInner}
         >
-          <TouchableOpacity
-            style={[styles.filterBtn, filtersOpen && styles.filterBtnOn]}
-            onPress={() => setFiltersOpen((v) => !v)}
-            activeOpacity={0.75}
-          >
-            <Text style={[styles.filterTxt, filtersOpen && styles.filterTxtOn]}>
-              ⚙ Scans & Filters{activeCount ? ` (${activeCount})` : ''} {filtersOpen ? '▾' : '▸'}
-            </Text>
-          </TouchableOpacity>
           <TouchableOpacity style={styles.filterBtn} onPress={() => setColMenu(true)} activeOpacity={0.75}>
-            <Text style={styles.filterTxt}>▤ Columns</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.filterBtn} onPress={() => setSavedModal(true)} activeOpacity={0.75}>
-            <Text style={styles.filterTxt}>💾 Save{saved.length ? ` (${saved.length})` : ''}</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.filterBtn} onPress={onShare} activeOpacity={0.75}>
-            <Text style={styles.filterTxt}>↗ Share</Text>
+            <Text style={styles.filterTxt}>⚙ Columns {COLS.length - colHidden.length}</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.filterBtn}
@@ -700,11 +732,6 @@ export default function ScreenerScreen() {
           >
             <Text style={styles.filterTxt}>⇩ PDF</Text>
           </TouchableOpacity>
-        </ScrollView>
-      </View>
-
-      <View style={styles.pageBar}>
-        <View style={styles.pageSizes}>
           <Text style={styles.pageLabel}>Rows</Text>
           {PAGE_SIZES.map((sz) => (
             <TouchableOpacity
@@ -718,13 +745,6 @@ export default function ScreenerScreen() {
               </Text>
             </TouchableOpacity>
           ))}
-        </View>
-        <Text style={styles.note} numberOfLines={1}>
-          {note}
-          {fundBusy ? ' · loading fundamentals…' : ''}
-          {error ? ` · ${error}` : ''}
-        </Text>
-        <View style={styles.pageNav}>
           <TouchableOpacity
             style={[styles.pageBtn, page <= 0 && styles.pageBtnOff]}
             onPress={() => setPage((p) => Math.max(0, p - 1))}
@@ -742,16 +762,22 @@ export default function ScreenerScreen() {
           >
             <Text style={styles.pageBtnTxt}>Next ›</Text>
           </TouchableOpacity>
-        </View>
+        </ScrollView>
       </View>
 
-      <ScrollView horizontal showsHorizontalScrollIndicator>
-        <View style={{ width: tableW }}>
+      <Text style={styles.note} numberOfLines={1}>
+        {note}
+        {fundBusy ? ' · loading fundamentals…' : ''}
+        {error ? ` · ${error}` : ''}
+      </Text>
+
+      <ScrollView horizontal showsHorizontalScrollIndicator contentContainerStyle={styles.tableStretch}>
+        <View style={{ minWidth: tableW, flexGrow: 1 }}>
           <View style={styles.headerRow}>
             {visibleCols.map((c) => (
               <TouchableOpacity
                 key={c.key}
-                style={[styles.th, { width: c.w, alignItems: c.align === 'left' ? 'flex-start' : 'flex-end' }]}
+                style={[styles.th, cellFlex(c), { alignItems: c.align === 'left' ? 'flex-start' : 'flex-end' }]}
                 onPress={() => onSort(c.key)}
                 activeOpacity={0.75}
               >
@@ -765,24 +791,17 @@ export default function ScreenerScreen() {
               <Text style={styles.thTxt}>Actions</Text>
             </View>
           </View>
-          <FlatList
-            data={pageRows}
-            keyExtractor={(r) => r.sym}
-            renderItem={renderRow}
-            refreshControl={
-              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.accent} />
-            }
-            ListEmptyComponent={
-              <EmptyState
-                icon="⌕"
-                title="No matches"
-                hint="Loosen or clear a filter to see more of this index."
-              />
-            }
-            initialNumToRender={20}
-            windowSize={11}
-          />
+          {pageRows.length === 0 ? (
+            <EmptyState
+              icon="⌕"
+              title="No matches"
+              hint="Loosen or clear a filter to see more of this index."
+            />
+          ) : (
+            pageRows.map(renderRow)
+          )}
         </View>
+      </ScrollView>
       </ScrollView>
 
       <ColumnMenu
@@ -833,6 +852,9 @@ function FilterPanel({
   setShown,
   extVersion,
   bumpExt,
+  savedCount,
+  onShare,
+  onSaveScreen,
 }: {
   active: ActiveFilters;
   setActive: React.Dispatch<React.SetStateAction<ActiveFilters>>;
@@ -840,9 +862,13 @@ function FilterPanel({
   setShown: React.Dispatch<React.SetStateAction<string[]>>;
   extVersion: number;
   bumpExt: () => void;
+  savedCount: number;
+  onShare: () => void;
+  onSaveScreen: () => void;
 }) {
   const [nlText, setNlText] = useState('');
   const [picker, setPicker] = useState(false);
+  const [presetsOpen, setPresetsOpen] = useState(false);
 
   // Live plain-English preview — what the parser understood so far.
   const nlParsed = useMemo(() => (nlText.trim() ? parseNL(nlText) : null), [nlText]);
@@ -997,9 +1023,69 @@ function FilterPanel({
 
   return (
     <View style={styles.panel}>
-      <ScrollView style={styles.panelScroll} keyboardShouldPersistTaps="handled" nestedScrollEnabled>
+      <View style={styles.nlBox}>
+        <View style={styles.nlRow}>
+          <Text style={styles.spark}>✨</Text>
+          <TextInput
+            style={styles.nlInput}
+            value={nlText}
+            onChangeText={setNlText}
+            placeholder='Describe a screen — e.g. "golden crossover", "rsi below 30 and above 200 dma"'
+            placeholderTextColor={theme.muted}
+            returnKeyType="done"
+            onSubmitEditing={applyNl}
+          />
+          <TouchableOpacity
+            style={[styles.nlAdd, !nlParsed?.matchedAny && styles.nlAddOff]}
+            onPress={applyNl}
+            disabled={!nlParsed?.matchedAny}
+            activeOpacity={0.75}
+          >
+            <Text style={[styles.nlAddTxt, !nlParsed?.matchedAny && { color: theme.muted }]}>Build</Text>
+          </TouchableOpacity>
+        </View>
+        {nlParsed ? (
+          <Text style={styles.nlFeedback}>
+            {nlParsed.matchedAny ? '✓ ' + nlParsed.recognized.join(' · ') : 'Nothing recognised yet…'}
+            {nlParsed.unrecognized.length ? `   (ignored: ${nlParsed.unrecognized.join(', ')})` : ''}
+          </Text>
+        ) : null}
+      </View>
+
+      <View style={styles.ctrlRow}>
+        <TouchableOpacity
+          style={[styles.addFilterBtn, presetsOpen && styles.addFilterBtnOn]}
+          onPress={() => setPresetsOpen((v) => !v)}
+          activeOpacity={0.75}
+        >
+          <Text style={[styles.addFilterTxt, presetsOpen && { color: theme.onAccent }]}>
+            Preset scans {presetsOpen ? '▾' : '▸'}
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.addFilterBtn, picker && styles.addFilterBtnOn]}
+          onPress={() => setPicker((v) => !v)}
+          activeOpacity={0.75}
+        >
+          <Text style={[styles.addFilterTxt, picker && { color: theme.onAccent }]}>+ Add filter</Text>
+        </TouchableOpacity>
+        {shown.length ? (
+          <TouchableOpacity onPress={clearAll} activeOpacity={0.75}>
+            <Text style={styles.clearAll}>Clear all</Text>
+          </TouchableOpacity>
+        ) : null}
+        <View style={styles.ctrlRight}>
+          <TouchableOpacity style={styles.filterBtn} onPress={onShare} activeOpacity={0.75}>
+            <Text style={styles.filterTxt}>↗ Share</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.filterBtn} onPress={onSaveScreen} activeOpacity={0.75}>
+            <Text style={styles.filterTxt}>💾 Save screen{savedCount ? ` (${savedCount})` : ''}</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {presetsOpen ? (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.presetRow}>
-          <Text style={styles.presetLabel}>Scans</Text>
           {PRESETS.map((p) => {
             const on = presetActive(active, p);
             return (
@@ -1014,87 +1100,44 @@ function FilterPanel({
             );
           })}
         </ScrollView>
-        <View style={styles.nlBox}>
-          <View style={styles.nlRow}>
-            <TextInput
-              style={styles.nlInput}
-              value={nlText}
-              onChangeText={setNlText}
-              placeholder='Describe a screen — e.g. "golden crossover", "rsi below 30 and above 200 dma"'
-              placeholderTextColor={theme.muted}
-              returnKeyType="done"
-              onSubmitEditing={applyNl}
-            />
-            <TouchableOpacity
-              style={[styles.nlAdd, !nlParsed?.matchedAny && styles.nlAddOff]}
-              onPress={applyNl}
-              disabled={!nlParsed?.matchedAny}
-              activeOpacity={0.75}
-            >
-              <Text style={[styles.nlAddTxt, !nlParsed?.matchedAny && { color: theme.muted }]}>Build</Text>
-            </TouchableOpacity>
-          </View>
-          {nlParsed ? (
-            <Text style={styles.nlFeedback}>
-              {nlParsed.matchedAny ? '✓ ' + nlParsed.recognized.join(' · ') : 'Nothing recognised yet…'}
-              {nlParsed.unrecognized.length ? `   (ignored: ${nlParsed.unrecognized.join(', ')})` : ''}
-            </Text>
-          ) : null}
-        </View>
+      ) : null}
 
-        <View style={styles.panelBody}>
-          {shown.length === 0 ? (
-            <Text style={styles.emptyFilters}>No filters — showing the full universe.</Text>
-          ) : (
-            shown.map(renderRow)
-          )}
+      <View style={styles.panelBody}>
+        {shown.length === 0 ? (
+          <Text style={styles.emptyFilters}>No filters — showing the full universe.</Text>
+        ) : (
+          shown.map(renderRow)
+        )}
 
-          <View style={styles.panelActions}>
-            <TouchableOpacity
-              style={[styles.addFilterBtn, picker && styles.addFilterBtnOn]}
-              onPress={() => setPicker((v) => !v)}
-              activeOpacity={0.75}
-            >
-              <Text style={styles.addFilterTxt}>+ Add filter</Text>
-            </TouchableOpacity>
-            {shown.length ? (
-              <TouchableOpacity onPress={clearAll} activeOpacity={0.75}>
-                <Text style={styles.clearAll}>Clear all</Text>
-              </TouchableOpacity>
-            ) : null}
-          </View>
-
-          {picker ? (
-            <View style={styles.picker}>
-              <ScrollView style={styles.pickerScroll} keyboardShouldPersistTaps="handled" nestedScrollEnabled>
-                {TE_GROUPS.map((g) => {
-                  const defs = FILTER_DEFS.filter((d) => d.group === g && !shown.includes(d.key));
-                  if (!defs.length) return null;
-                  return (
-                    <View key={g} style={styles.group}>
-                      <Text style={styles.groupTitle}>{g}</Text>
-                      <View style={styles.pickWrap}>
-                        {defs.map((d) => (
-                          <TouchableOpacity
-                            key={d.key}
-                            style={styles.pickChip}
-                            onPress={() => addFilter(d.key)}
-                            activeOpacity={0.75}
-                          >
-                            <Text style={styles.pickTxt}>{d.label}{d.fund ? ' ·f' : ''}</Text>
-                          </TouchableOpacity>
-                        ))}
-                      </View>
+        {picker ? (
+          <View style={styles.picker}>
+            <ScrollView style={styles.pickerScroll} keyboardShouldPersistTaps="handled" nestedScrollEnabled>
+              {TE_GROUPS.map((g) => {
+                const defs = FILTER_DEFS.filter((d) => d.group === g && !shown.includes(d.key));
+                if (!defs.length) return null;
+                return (
+                  <View key={g} style={styles.group}>
+                    <Text style={styles.groupTitle}>{g}</Text>
+                    <View style={styles.pickWrap}>
+                      {defs.map((d) => (
+                        <TouchableOpacity
+                          key={d.key}
+                          style={styles.pickChip}
+                          onPress={() => addFilter(d.key)}
+                          activeOpacity={0.75}
+                        >
+                          <Text style={styles.pickTxt}>{d.label}{d.fund ? ' ·f' : ''}</Text>
+                        </TouchableOpacity>
+                      ))}
                     </View>
-                  );
-                })}
-              </ScrollView>
-            </View>
-          ) : null}
-
-          <Text style={styles.fundNote}>·f = fundamental filter; applying one fetches company financials (may take a moment).</Text>
-        </View>
-      </ScrollView>
+                  </View>
+                );
+              })}
+            </ScrollView>
+            <Text style={styles.fundNote}>·f = fundamental filter; applying one fetches company financials (may take a moment).</Text>
+          </View>
+        ) : null}
+      </View>
     </View>
   );
 }
@@ -1357,6 +1400,22 @@ const styles = StyleSheet.create({
   },
   statsTxt: { color: theme.muted, fontSize: theme.fs.sm, fontFamily: theme.mono, flexShrink: 1 },
   statsN: { color: theme.text, fontWeight: '700' },
+  // Page-level vertical scroll (the builder, toolbar and table all live inside
+  // it, so the mouse wheel always scrolls the results).
+  page: { flex: 1 },
+  tableStretch: { minWidth: '100%' },
+  spark: { fontSize: 15, alignSelf: 'center' },
+  ctrlRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.sp.sm,
+    paddingHorizontal: theme.sp.lg,
+    paddingTop: theme.sp.sm,
+  },
+  ctrlRight: { marginLeft: 'auto', flexDirection: 'row', alignItems: 'center', gap: theme.sp.sm },
+  nameTxt: { color: theme.muted2, fontSize: theme.fs.sm },
+  exchTxt: { color: theme.muted, fontSize: theme.fs.xs + 1, fontFamily: theme.mono },
+  ltp: { fontWeight: '700' },
   filterBtn: {
     backgroundColor: theme.surface2,
     borderColor: theme.border2,
@@ -1368,7 +1427,7 @@ const styles = StyleSheet.create({
   filterTxt: { color: theme.text, fontSize: theme.fs.sm + 1, fontWeight: '600' },
   filterBtnOn: { backgroundColor: theme.accent, borderColor: theme.accent },
   filterTxtOn: { color: theme.onAccent, fontWeight: '700' },
-  note: { color: theme.muted, fontSize: theme.fs.sm, flex: 1, paddingHorizontal: theme.sp.sm, textAlign: 'center' },
+  note: { color: theme.muted, fontSize: theme.fs.sm, paddingHorizontal: theme.sp.md, paddingBottom: theme.sp.xs },
   headerRow: {
     flexDirection: 'row',
     borderBottomColor: theme.border2,
@@ -1412,6 +1471,8 @@ const styles = StyleSheet.create({
   // per-row actions
   actionsCell: {
     width: ACTIONS_W,
+    flexGrow: 0,
+    flexShrink: 0,
     flexDirection: 'row',
     gap: 5,
     paddingHorizontal: 6,
@@ -1432,15 +1493,6 @@ const styles = StyleSheet.create({
   actionsScroll: { marginLeft: 'auto', flexGrow: 0 },
   actionsScrollInner: { gap: theme.sp.sm, alignItems: 'center' },
   // pagination
-  pageBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: theme.sp.md,
-    paddingBottom: theme.sp.sm,
-    gap: theme.sp.sm,
-  },
-  pageSizes: { flexDirection: 'row', alignItems: 'center', gap: theme.sp.xs },
   pageLabel: {
     color: theme.muted,
     fontSize: theme.fs.xs + 1,
@@ -1460,7 +1512,6 @@ const styles = StyleSheet.create({
   pageChipOn: { backgroundColor: theme.accent, borderColor: theme.accent },
   pageChipTxt: { color: theme.muted2, fontSize: theme.fs.sm, fontFamily: theme.mono },
   pageChipTxtOn: { color: theme.onAccent, fontWeight: '700' },
-  pageNav: { flexDirection: 'row', alignItems: 'center', gap: theme.sp.sm },
   pageBtn: {
     backgroundColor: theme.surface2,
     borderColor: theme.border2,
@@ -1616,8 +1667,7 @@ const styles = StyleSheet.create({
     borderBottomColor: theme.border,
     borderBottomWidth: 1,
   },
-  panelScroll: { maxHeight: 360 },
-  panelBody: { paddingHorizontal: theme.sp.lg, paddingBottom: theme.sp.md },
+  panelBody: { paddingHorizontal: theme.sp.lg, paddingBottom: theme.sp.sm },
   rowRight: { flexDirection: 'row', alignItems: 'center', gap: theme.sp.sm },
   selHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   removeBtn: {
@@ -1630,13 +1680,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   removeTxt: { color: theme.muted2, fontSize: theme.fs.lg, fontWeight: '700', lineHeight: 20 },
-  emptyFilters: { color: theme.muted, fontSize: theme.fs.md, paddingVertical: theme.sp.md },
-  panelActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: theme.sp.sm,
-  },
+  emptyFilters: { color: theme.muted, fontSize: theme.fs.sm, paddingVertical: theme.sp.sm },
   addFilterBtn: {
     backgroundColor: theme.surface2,
     borderColor: theme.border2,
