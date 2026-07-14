@@ -7,7 +7,7 @@ import HtmlView from '../components/HtmlView';
 import StockDetail from '../components/StockDetail';
 import SymbolInput from '../components/SymbolInput';
 import { Row } from '../screener';
-import { ACTIONS_W, COLS, DEFAULT_HIDDEN, cellFlex, loadNames } from './ScreenerScreen';
+import { ACTIONS_W, COLS, Col, DEFAULT_HIDDEN, cellFlex, loadNames } from './ScreenerScreen';
 import { TrackDir, TrackEntry, addTrack, loadTrack, removeTrack } from '../tracklist';
 import { addSymbol, loadWatchlist, normSymbol, removeSymbol } from '../watchlist';
 import { Btn, Card, EmptyState, Loading, ScreenTitle, SectionTitle, StatTile } from '../ui';
@@ -16,16 +16,17 @@ import { theme } from '../theme';
 const GOLD = '#f5c518';
 const BT_PREFILL_KEY = 'taureye.backtest.prefill';
 
-// The fixed multibagger screen — non-editable by design, and run SERVER-SIDE
-// over the whole listed NSE universe (see mb_screen.py): small/mid base,
-// quality returns, low leverage, price in an uptrend. The analyser then does
-// the deep read on ownership/growth/valuation per stock.
+// The screen is simply "analyser score ≥ 60" computed SERVER-SIDE over the
+// whole listed NSE universe (see mb_screen.py); a data-coverage floor keeps
+// thin-data stocks from sneaking in on one strong pillar.
 const FIXED_CHIPS = [
-  'Mkt cap < ₹20,000 cr',
-  'ROE > 15%',
-  'D/E < 0.6',
-  'Above 200-DMA',
+  'Analyser score ≥ 60',
+  'Full NSE universe',
+  'Data coverage ≥ 60%',
 ];
+
+// Rows in this list carry the analyser score alongside the screener fields.
+type MbRow = Row & { mbScore?: number };
 
 const tierColor = (score: number) =>
   score >= 75 ? theme.green : score >= 60 ? theme.accent : score >= 45 ? GOLD : theme.red;
@@ -134,13 +135,14 @@ function MbList({
     (async () => {
       try {
         const names = await loadNames();
-        const build = (rs: MbScreenRow[]): Row[] =>
+        const build = (rs: MbScreenRow[]): MbRow[] =>
           rs.map((c) => ({
             sym: c.symbol,
             name: names[c.symbol.toUpperCase()]?.name,
             exchange: names[c.symbol.toUpperCase()]?.exchange || 'NSE',
             price: c.price,
             d200: c.vs_200dma,
+            mbScore: c.score,
             _fund: { market_cap_cr: c.market_cap_cr, roe: c.roe, debt_equity: c.debt_equity, sector: c.sector } as Row['_fund'],
           }));
         // 1) Poll the server-side full-universe screen. Matches stream in
@@ -151,7 +153,7 @@ function MbList({
             setRows(build(snap.results));
             setLoading(false);
           }
-          setNote(`Screening the whole universe server-side… ${snap.progress || ''} · ${snap.results.length} so far`);
+          setNote(`Scoring the whole universe server-side… ${snap.progress || ''} · ${snap.results.length} so far`);
           await new Promise((r) => setTimeout(r, 4000));
           snap = await api.mbScreen();
         }
@@ -162,7 +164,7 @@ function MbList({
           return;
         }
         const asof = snap.asof ? new Date(snap.asof * 1000).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : '';
-        const meta = `universe ${snap.universe.toLocaleString('en-IN')} · ${snap.uptrend.toLocaleString('en-IN')} in uptrend${asof ? ` · as of ${asof}` : ''}${snap.refreshing ? ' · refreshing…' : ''}`;
+        const meta = `universe ${snap.universe.toLocaleString('en-IN')} analysed${asof ? ` · as of ${asof}` : ''}${snap.refreshing ? ' · refreshing…' : ''}`;
         const seeded = build(snap.results);
         setRows(seeded);
         setLoading(false);
@@ -205,9 +207,31 @@ function MbList({
     };
   }, []);
 
-  const visibleCols = useMemo(() => COLS.filter((c) => !DEFAULT_HIDDEN.includes(c.key)), []);
+  // The analyser score gets its own column, right after Exch.
+  const scoreCol: Col = useMemo(
+    () => ({
+      key: 'mb_score',
+      label: 'Score',
+      w: 58,
+      flex: 0,
+      render: (r) => {
+        const s = (r as MbRow).mbScore;
+        return (
+          <Text style={{ fontFamily: theme.mono, fontWeight: '700', fontSize: theme.fs.sm, color: s == null ? theme.muted : tierColor(s) }}>
+            {s ?? '—'}
+          </Text>
+        );
+      },
+    }),
+    [],
+  );
+  const visibleCols = useMemo(() => {
+    const base = COLS.filter((c) => !DEFAULT_HIDDEN.includes(c.key));
+    const at = base.findIndex((c) => c.key === 'exchange') + 1;
+    return [...base.slice(0, at || 3), scoreCol, ...base.slice(at || 3)];
+  }, [scoreCol]);
   const tableW = useMemo(() => visibleCols.reduce((a, c) => a + c.w, 0) + ACTIONS_W, [visibleCols]);
-  const matches = rows; // the server already applied the fixed screen (sorted smallest mcap first)
+  const matches = rows; // the server already applied the score screen (best score first)
   const warming = false;
 
   const trackDirOf = (sym: string): TrackDir | null => track.find((t) => t.sym === sym)?.dir ?? null;
