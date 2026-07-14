@@ -1,22 +1,20 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { api } from '../api';
+import { MomentumHit, api } from '../api';
 import StockDetail from '../components/StockDetail';
-import { MomentumRead, SETUP_LABEL, SetupKind, classify } from '../momentum';
 import { Row } from '../screener';
-import { loadNames } from './ScreenerScreen';
 import { addSymbol, loadWatchlist, normSymbol, removeSymbol } from '../watchlist';
 import { EmptyState, Loading, ScreenTitle } from '../ui';
 import { theme } from '../theme';
 
 const GOLD = '#f5c518';
 
-const INDICES = [
-  'NIFTY 50', 'NIFTY 100', 'NIFTY BANK', 'NIFTY IT', 'NIFTY AUTO',
-  'NIFTY PHARMA', 'NIFTY FMCG', 'NIFTY METAL', 'NIFTY MIDCAP 100',
-  'NIFTY SMALLCAP 100',
-];
-
+type SetupKind = MomentumHit['setup'];
+const SETUP_LABEL: Record<SetupKind, string> = {
+  breakout: 'BREAKOUT WATCH',
+  fired: 'BREAKOUT FIRED',
+  pullback: 'PULLBACK REVERSAL',
+};
 const SETUP_FILTERS: { key: 'all' | SetupKind; label: string }[] = [
   { key: 'all', label: 'All setups' },
   { key: 'breakout', label: '⚡ Breakout watch' },
@@ -33,14 +31,22 @@ const fmtIN = (v: number | null | undefined) =>
   v == null || !isFinite(v)
     ? '—'
     : v.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const fmtAsof = (epoch: number) =>
+  new Date(epoch * 1000).toLocaleString('en-IN', {
+    day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit',
+  });
 
-type Hit = { row: Row; read: MomentumRead };
+// Session caches — switching tabs doesn't refetch.
+let momCache: MomentumHit[] | null = null;
+let momNote = '';
+let momAsof = 0;
 
 export default function MomentumScreen() {
-  const [indexName, setIndexName] = useState('NIFTY 100');
-  const [rows, setRows] = useState<Row[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [note, setNote] = useState('');
+  const [hits, setHits] = useState<MomentumHit[]>(momCache || []);
+  const [note, setNote] = useState(momNote);
+  const [loading, setLoading] = useState(!momCache);
+  const [asof, setAsof] = useState(momAsof);
+  const [tick, setTick] = useState(0);
   const [setupFilter, setSetupFilter] = useState<'all' | SetupKind>('all');
   const [expanded, setExpanded] = useState<string | null>(null);
   const [detail, setDetail] = useState<Row | null>(null);
@@ -50,44 +56,49 @@ export default function MomentumScreen() {
     loadWatchlist().then(setWatch);
   }, []);
 
-  // Load index constituents + streamed technicals (same pipeline as the
-  // Screener); classification happens per render over whatever has arrived.
-  useEffect(() => {
-    let cancelled = false;
+  const forceRefresh = () => {
+    if (loading) return;
+    momCache = null;
+    momNote = '';
+    setHits([]);
     setLoading(true);
-    setRows([]);
-    setExpanded(null);
+    setNote('Restarting the universe radar…');
+    setTick((t) => t + 1);
+  };
+
+  // Poll the server-side full NSE+BSE radar; setups stream in live.
+  useEffect(() => {
+    if (momCache && tick === 0) return;
+    let cancelled = false;
     (async () => {
       try {
-        const [idx, names] = await Promise.all([api.indexConstituents(indexName), loadNames()]);
+        let snap = await api.momentumScreen(tick > 0);
+        while (!cancelled && snap.status === 'running') {
+          if (snap.results.length) {
+            setHits(snap.results);
+            setLoading(false);
+          }
+          setNote(`Scanning the whole NSE + BSE universe server-side… ${snap.progress || ''}`);
+          await new Promise((r) => setTimeout(r, 4000));
+          snap = await api.momentumScreen();
+        }
         if (cancelled) return;
-        const cons = (idx.data || []).filter((c) => c.symbol);
-        if (!cons.length) {
-          setNote(idx.error || 'No constituents returned.');
+        if (snap.status === 'error' && !snap.results.length) {
+          setNote(snap.error || 'Radar failed — retry shortly.');
           setLoading(false);
           return;
         }
-        const seeded: Row[] = cons.map((c) => ({
-          sym: c.symbol,
-          name: names[c.symbol.toUpperCase()]?.name,
-          exchange: names[c.symbol.toUpperCase()]?.exchange || 'NSE',
-          price: c.price, prevClose: c.prevClose, chg: c.chg, absChg: c.absChg, volume: c.volume,
-        }));
-        setRows(seeded);
+        const meta = `${snap.universe_nse.toLocaleString('en-IN')} NSE${snap.universe_bse ? ` + ${snap.universe_bse.toLocaleString('en-IN')} BSE` : ''} scanned${snap.refreshing ? ' · refreshing…' : ''}`;
+        setHits(snap.results);
         setLoading(false);
-        const syms = seeded.map((r) => r.sym);
-        setNote(`scanning ${syms.length} stocks…`);
-        await api.scan(syms, {
-          onBatch: (data, done) => {
-            if (cancelled) return;
-            setRows((prev) => prev.map((r) => (data[r.sym] ? { ...r, ...data[r.sym], price: r.price ?? data[r.sym].price, chg: r.chg ?? data[r.sym].chg, volume: r.volume ?? data[r.sym].volume } : r)));
-            setNote(`technicals ${Math.min(done, syms.length)}/${syms.length}`);
-          },
-        });
-        if (!cancelled) setNote(`${syms.length} stocks scanned`);
+        setNote(meta);
+        setAsof(snap.asof);
+        momCache = snap.results;
+        momNote = meta;
+        momAsof = snap.asof;
       } catch (e) {
         if (!cancelled) {
-          setNote(e instanceof Error ? e.message : 'Failed to load');
+          setNote(e instanceof Error ? e.message : 'Failed to load the radar');
           setLoading(false);
         }
       }
@@ -95,59 +106,37 @@ export default function MomentumScreen() {
     return () => {
       cancelled = true;
     };
-  }, [indexName]);
+  }, [tick]);
 
-  const hits = useMemo<Hit[]>(() => {
-    const out: Hit[] = [];
-    rows.forEach((row) => {
-      const read = classify(row);
-      if (read && (setupFilter === 'all' || read.setup === setupFilter)) out.push({ row, read });
-    });
-    return out.sort((a, b) => b.read.score - a.read.score);
-  }, [rows, setupFilter]);
-
+  const shown = useMemo(
+    () => hits.filter((h) => setupFilter === 'all' || h.setup === setupFilter),
+    [hits, setupFilter],
+  );
   const counts = useMemo(() => {
     const c: Record<string, number> = { breakout: 0, fired: 0, pullback: 0 };
-    rows.forEach((row) => {
-      const read = classify(row);
-      if (read) c[read.setup]++;
-    });
+    hits.forEach((h) => c[h.setup]++);
     return c;
-  }, [rows]);
+  }, [hits]);
 
   const isWatched = (sym: string) => watch.includes(normSymbol(sym));
-  const toggleWatch = async (row: Row) => {
-    if (isWatched(row.sym)) setWatch(await removeSymbol(watch, normSymbol(row.sym)));
-    else setWatch(await addSymbol(watch, row.sym));
+  const toggleWatch = async (sym: string) => {
+    if (isWatched(sym)) setWatch(await removeSymbol(watch, normSymbol(sym)));
+    else setWatch(await addSymbol(watch, sym));
   };
+  const openChart = (h: MomentumHit) =>
+    setDetail({ sym: h.symbol, name: h.name, exchange: h.exchange, price: h.price, chg: h.chg });
 
   return (
     <View style={styles.container}>
       <ScreenTitle
         title="Momentum radar"
-        sub="Stocks setting up to break out or reverse a pullback · technical score + follow-through probability"
+        sub="Whole NSE + BSE universe · breakout & pullback-reversal setups · technical score + follow-through probability"
       />
-      <View style={styles.chipsRow}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipsInner}>
-          {INDICES.map((idx) => (
-            <TouchableOpacity
-              key={idx}
-              style={[styles.chip, idx === indexName && styles.chipOn]}
-              onPress={() => setIndexName(idx)}
-              activeOpacity={0.75}
-            >
-              <Text style={[styles.chipTxt, idx === indexName && styles.chipTxtOn]}>{idx.replace('NIFTY ', '')}</Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-      </View>
       <View style={styles.chipsRow}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipsInner}>
           {SETUP_FILTERS.map((f) => {
             const count =
-              f.key === 'all'
-                ? counts.breakout + counts.fired + counts.pullback
-                : counts[f.key] || 0;
+              f.key === 'all' ? counts.breakout + counts.fired + counts.pullback : counts[f.key] || 0;
             return (
               <TouchableOpacity
                 key={f.key}
@@ -161,24 +150,34 @@ export default function MomentumScreen() {
               </TouchableOpacity>
             );
           })}
+          <TouchableOpacity
+            style={[styles.updBtn, loading && { opacity: 0.5 }]}
+            onPress={forceRefresh}
+            disabled={loading}
+            activeOpacity={0.75}
+          >
+            <Text style={styles.updTxt}>⟳ Update list</Text>
+          </TouchableOpacity>
           <Text style={styles.note} numberOfLines={1}>{note} · tap a row for the technical read</Text>
         </ScrollView>
       </View>
+      {asof ? <Text style={styles.lastUpd}>Setups last updated {fmtAsof(asof)}</Text> : null}
 
       <ScrollView style={{ flex: 1 }}>
-        {loading ? <Loading label={`Loading ${indexName}…`} /> : null}
-        {!loading && !hits.length ? (
+        {loading ? <Loading label="Scanning the universe — setups stream in as they're found…" /> : null}
+        {!loading && !shown.length ? (
           <EmptyState
             icon="◇"
             title="No qualifying setups right now"
-            hint="Setups appear as technicals stream in. Try another index, or check back — compression and pullback windows come and go."
+            hint="Compression and pullback windows come and go — hit ⟳ Update list or check back later."
           />
         ) : null}
 
-        {hits.length ? (
+        {shown.length ? (
           <View style={styles.headerRow}>
             <Text style={[styles.th, { width: 96 }]}>SYMBOL</Text>
             <Text style={[styles.th, { flex: 3, minWidth: 170 }]}>NAME</Text>
+            <Text style={[styles.th, { width: 46 }]}>EXCH</Text>
             <Text style={[styles.th, { width: 150 }]}>SETUP</Text>
             <Text style={[styles.thR, { width: 56 }]}>SCORE</Text>
             <Text style={[styles.thR, { width: 56 }]}>PROB</Text>
@@ -192,36 +191,37 @@ export default function MomentumScreen() {
           </View>
         ) : null}
 
-        {hits.map(({ row, read }) => {
-          const open = expanded === row.sym;
-          const c = setupColor(read.setup);
+        {shown.map((h) => {
+          const open = expanded === h.symbol;
+          const c = setupColor(h.setup);
           return (
-            <View key={row.sym}>
+            <View key={h.symbol}>
               <TouchableOpacity
                 style={styles.dataRow}
-                onPress={() => setExpanded(open ? null : row.sym)}
+                onPress={() => setExpanded(open ? null : h.symbol)}
                 activeOpacity={0.8}
               >
-                <Text style={[styles.sym, { width: 96 }]}>{row.sym}</Text>
-                <Text style={[styles.name, { flex: 3, minWidth: 170 }]} numberOfLines={1}>{row.name || '—'}</Text>
+                <Text style={[styles.sym, { width: 96 }]}>{h.symbol}</Text>
+                <Text style={[styles.name, { flex: 3, minWidth: 170 }]} numberOfLines={1}>{h.name || '—'}</Text>
+                <Text style={[styles.exch, { width: 46 }]}>{h.exchange}</Text>
                 <View style={{ width: 150 }}>
-                  <Text style={[styles.setupBadge, { color: c, borderColor: c }]}>{SETUP_LABEL[read.setup]}</Text>
+                  <Text style={[styles.setupBadge, { color: c, borderColor: c }]}>{SETUP_LABEL[h.setup]}</Text>
                 </View>
-                <Text style={[styles.cellR, { width: 56, color: c, fontWeight: '700' }]}>{read.score}</Text>
-                <Text style={[styles.cellR, { width: 56 }]}>{read.probability}%</Text>
-                <Text style={[styles.cellR, { width: 96, fontWeight: '700' }]}>{fmtIN(row.price)}</Text>
-                <Text style={[styles.cellR, { width: 70, color: (row.chg ?? 0) >= 0 ? theme.green : theme.red }]}>{pct(row.chg, 2)}</Text>
-                <Text style={[styles.cellR, { width: 48 }]}>{row.rsi != null ? row.rsi.toFixed(0) : '—'}</Text>
-                <Text style={[styles.cellR, { width: 60 }]}>{row.relvol != null ? row.relvol.toFixed(2) + 'x' : '—'}</Text>
-                <Text style={[styles.cellR, { width: 80, color: (row.d200 ?? 0) >= 0 ? theme.green : theme.red }]}>{pct(row.d200)}</Text>
-                <Text style={[styles.cellR, { width: 70, color: theme.red }]}>{pct(row.pct_from_high)}</Text>
+                <Text style={[styles.cellR, { width: 56, color: c, fontWeight: '700' }]}>{h.score}</Text>
+                <Text style={[styles.cellR, { width: 56 }]}>{h.probability}%</Text>
+                <Text style={[styles.cellR, { width: 96, fontWeight: '700' }]}>{fmtIN(h.price)}</Text>
+                <Text style={[styles.cellR, { width: 70, color: (h.chg ?? 0) >= 0 ? theme.green : theme.red }]}>{pct(h.chg, 2)}</Text>
+                <Text style={[styles.cellR, { width: 48 }]}>{h.rsi != null ? h.rsi.toFixed(0) : '—'}</Text>
+                <Text style={[styles.cellR, { width: 60 }]}>{h.relvol != null ? h.relvol.toFixed(2) + 'x' : '—'}</Text>
+                <Text style={[styles.cellR, { width: 80, color: (h.d200 ?? 0) >= 0 ? theme.green : theme.red }]}>{pct(h.d200)}</Text>
+                <Text style={[styles.cellR, { width: 70, color: theme.red }]}>{pct(h.pct_from_high)}</Text>
                 <View style={styles.actions}>
-                  <TouchableOpacity style={styles.aBtn} onPress={() => setDetail(row)} activeOpacity={0.75}>
+                  <TouchableOpacity style={styles.aBtn} onPress={() => openChart(h)} activeOpacity={0.75}>
                     <Text style={styles.aTxt}>Chart</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity style={styles.aBtn} onPress={() => toggleWatch(row)} activeOpacity={0.75}>
-                    <Text style={[styles.aTxt, isWatched(row.sym) && { color: theme.green }]}>
-                      {isWatched(row.sym) ? '★' : '☆'}
+                  <TouchableOpacity style={styles.aBtn} onPress={() => toggleWatch(h.symbol)} activeOpacity={0.75}>
+                    <Text style={[styles.aTxt, isWatched(h.symbol) && { color: theme.green }]}>
+                      {isWatched(h.symbol) ? '★' : '☆'}
                     </Text>
                   </TouchableOpacity>
                 </View>
@@ -229,15 +229,15 @@ export default function MomentumScreen() {
               {open ? (
                 <View style={styles.readBox}>
                   <View style={styles.probTrack}>
-                    <View style={[styles.probFill, { width: `${read.probability}%`, backgroundColor: c }]} />
+                    <View style={[styles.probFill, { width: `${h.probability}%`, backgroundColor: c }]} />
                   </View>
                   <Text style={styles.readMeta}>
-                    Technical score {read.score}/100 · indicative follow-through probability {read.probability}%
+                    Technical score {h.score}/100 · indicative follow-through probability {h.probability}%
                   </Text>
-                  {read.signals.map((s) => (
+                  {h.signals.map((s) => (
                     <Text key={s} style={styles.sigTxt}>▲ <Text style={styles.sigBody}>{s}</Text></Text>
                   ))}
-                  {read.cautions.map((s) => (
+                  {h.cautions.map((s) => (
                     <Text key={s} style={styles.cauTxt}>▼ <Text style={styles.sigBody}>{s}</Text></Text>
                   ))}
                 </View>
@@ -246,7 +246,7 @@ export default function MomentumScreen() {
           );
         })}
 
-        {hits.length ? (
+        {shown.length ? (
           <Text style={styles.method}>
             Setups: BREAKOUT WATCH — TTM squeeze compression near the 52-week high with volume building;
             BREAKOUT FIRED — squeeze release / fresh high / Camarilla break on the latest bar;
@@ -263,7 +263,7 @@ export default function MomentumScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.bg },
-  chipsRow: { paddingBottom: theme.sp.sm },
+  chipsRow: { paddingBottom: theme.sp.xs },
   chipsInner: { paddingHorizontal: theme.sp.lg, gap: theme.sp.sm, alignItems: 'center' },
   chip: {
     backgroundColor: theme.surface2,
@@ -276,7 +276,17 @@ const styles = StyleSheet.create({
   chipOn: { backgroundColor: theme.accent, borderColor: theme.accent },
   chipTxt: { color: theme.muted2, fontSize: theme.fs.sm },
   chipTxtOn: { color: theme.onAccent, fontWeight: '700' },
+  updBtn: {
+    backgroundColor: theme.surface2,
+    borderColor: theme.border2,
+    borderWidth: 1,
+    borderRadius: theme.radius.sm + 2,
+    paddingHorizontal: theme.sp.md,
+    paddingVertical: 5,
+  },
+  updTxt: { color: theme.text, fontSize: theme.fs.sm, fontWeight: '700' },
   note: { color: theme.muted, fontSize: theme.fs.sm, marginLeft: theme.sp.sm },
+  lastUpd: { color: theme.muted, fontSize: theme.fs.xs + 1, paddingHorizontal: theme.sp.lg, paddingBottom: theme.sp.sm },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -299,6 +309,7 @@ const styles = StyleSheet.create({
   },
   sym: { color: theme.accent, fontFamily: theme.mono, fontWeight: '700', fontSize: theme.fs.sm + 1, paddingHorizontal: theme.sp.xs },
   name: { color: theme.muted2, fontSize: theme.fs.sm, paddingHorizontal: theme.sp.xs },
+  exch: { color: theme.muted, fontSize: theme.fs.xs + 1, fontFamily: theme.mono, paddingHorizontal: theme.sp.xs },
   setupBadge: {
     borderWidth: 1,
     borderRadius: 999,
