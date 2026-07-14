@@ -215,6 +215,8 @@ const FUND_SORT = new Set([
 export function getSortVal(s: Row, col: string): number | string {
   if (col === 'signal' || col === 'strength') return SIGNAL_ORDER[calcSignal(s)];
   if (col === 'sym') return s.sym;
+  if (col === 'name') return s.name || s.sym;
+  if (col === 'exchange') return s.exchange || '';
   if (col === 'relvol') return s.avgvol && s.volume ? s.volume / s.avgvol : 0;
   if (FUND_SORT.has(col)) {
     const v = s._fund ? (s._fund as Record<string, unknown>)[col] : null;
