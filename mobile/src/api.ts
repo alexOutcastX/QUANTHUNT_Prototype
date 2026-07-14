@@ -388,6 +388,35 @@ export type MbScreenResp = {
   error?: string | null;
 };
 
+// Full NSE+BSE momentum radar (from /momentum/screen).
+export type MomentumHit = {
+  symbol: string;
+  name: string;
+  exchange: string;
+  price: number | null;
+  chg: number | null;
+  rsi: number | null;
+  relvol: number | null;
+  d200: number | null;
+  pct_from_high: number | null;
+  setup: 'breakout' | 'fired' | 'pullback';
+  score: number;
+  probability: number;
+  signals: string[];
+  cautions: string[];
+};
+export type MomentumScreenResp = {
+  status: 'idle' | 'running' | 'done' | 'error';
+  refreshing?: boolean;
+  progress?: string;
+  asof: number;
+  universe_nse: number;
+  universe_bse: number;
+  matches: number;
+  results: MomentumHit[];
+  error?: string | null;
+};
+
 export type RiskReport = {
   ok: boolean;
   reason?: string;
@@ -501,6 +530,8 @@ export const api = {
     ),
   multibagger: (symbol: string) =>
     getJson<MultibaggerReport>('/multibagger?symbol=' + encodeURIComponent(symbol), 60000),
+  momentumScreen: (refresh = false) =>
+    getJson<MomentumScreenResp>('/momentum/screen' + (refresh ? '?refresh=1' : ''), 30000),
   mbScreen: (refresh = false) =>
     getJson<MbScreenResp>('/multibagger/screen' + (refresh ? '?refresh=1' : ''), 30000),
   riskPortfolio: (holdings: RiskHolding[], conf = 0.95) =>

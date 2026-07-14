@@ -86,15 +86,16 @@ def _beta(close, idx_ret):
         return None
 
 
-def _compute_row(sym, idx_ret):
-    """Compute the technical snapshot for one symbol. Returns dict or None."""
+def _compute_row(sym, idx_ret, suffix=".NS"):
+    """Compute the technical snapshot for one symbol. Returns dict or None.
+    `suffix` selects the exchange feed (".NS" NSE, ".BO" BSE-only listings)."""
     try:
         import yfinance as yf
         import ta
     except Exception:
         return None
 
-    yf_sym = sym if sym.startswith("^") else f"{sym}.NS"
+    yf_sym = sym if sym.startswith("^") else f"{sym}{suffix}"
     try:
         df = yf.Ticker(yf_sym).history(period="1y", interval="1d", auto_adjust=True)
     except Exception:
