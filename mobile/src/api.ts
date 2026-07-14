@@ -338,6 +338,30 @@ export type OptionChain = {
 };
 
 // Portfolio risk report (from /risk/portfolio).
+// Multibagger-potential report (from /multibagger).
+export type MbPillar = { key: string; label: string; weight: number; score: number | null; note: string };
+export type MbCheck = { label: string; state: 'pass' | 'fail' | 'unknown' };
+export type MultibaggerReport = {
+  symbol: string;
+  name: string;
+  sector?: string | null;
+  industry?: string | null;
+  price?: number | null;
+  about?: string;
+  score: number;
+  coverage_pct: number;
+  tier: string;
+  probability_pct: number;
+  pillars: MbPillar[];
+  strengths: string[];
+  red_flags: string[];
+  checklist: MbCheck[];
+  metrics: Record<string, number | null>;
+  methodology: string;
+  disclaimer: string;
+  error?: string;
+};
+
 export type RiskReport = {
   ok: boolean;
   reason?: string;
@@ -449,6 +473,8 @@ export const api = {
         (expiry ? '&expiry=' + encodeURIComponent(expiry) : ''),
       30000,
     ),
+  multibagger: (symbol: string) =>
+    getJson<MultibaggerReport>('/multibagger?symbol=' + encodeURIComponent(symbol), 60000),
   riskPortfolio: (holdings: RiskHolding[], conf = 0.95) =>
     postJson<RiskReport>('/risk/portfolio', { holdings, conf }),
   corpAnnouncements: (s: string) => getJson<{ items: Announcement[]; source: string }>('/corporate/announcements?symbol=' + encodeURIComponent(s)),
