@@ -82,7 +82,7 @@ const fnum2 = (r: Row, k: string, d = 1): string => {
   return typeof v === 'number' && isFinite(v) ? v.toFixed(d) : '—';
 };
 
-type Col = {
+export type Col = {
   key: string;
   label: string;
   w: number; // min width; cells also flex-grow so the table fills the page
@@ -93,7 +93,9 @@ type Col = {
 
 // TaurEye-style column set: Symbol/Name/Exch/LTP/%Chg/Volume/RelVol/RSI/
 // vs 50DMA/52w Hi/Mkt Cap/Signal visible; everything else opt-in via ▤ Columns.
-const COLS: Col[] = [
+// Exported (with cellFlex/ACTIONS_W/DEFAULT_HIDDEN/loadNames) so the
+// Multibagger screener renders the identical table.
+export const COLS: Col[] = [
   { key: 'sym', label: 'Symbol', w: 96, flex: 0, align: 'left', render: (r) => <Text style={styles.symTxt}>{r.sym}</Text> },
   { key: 'name', label: 'Name', w: 190, flex: 3, align: 'left', render: (r) => <Text style={styles.nameTxt} numberOfLines={1}>{r.name || '—'}</Text> },
   { key: 'exchange', label: 'Exch', w: 48, flex: 0, render: (r) => <Text style={styles.exchTxt}>{r.exchange || 'NSE'}</Text> },
@@ -130,13 +132,13 @@ const COLS: Col[] = [
   { key: 'debt_equity', label: 'D/E', w: 48, render: (r) => <Text style={styles.cell}>{fnum2(r, 'debt_equity', 2)}</Text> },
   { key: 'dividend_yield', label: 'Div%', w: 50, render: (r) => <Text style={styles.cell}>{fnum2(r, 'dividend_yield')}</Text> },
 ];
-const ACTIONS_W = 252; // per-row action cell (B / S / Chart / ★ / Report)
+export const ACTIONS_W = 252; // per-row action cell (B / S / Chart / ★ / Report)
 const COL_META = COLS.map((c) => ({ key: c.key, label: c.label }));
 
 // Cells flex-grow from their minimum width so the table fills the viewport
 // (like the TaurEye site); with many extra columns enabled it overflows into
 // the horizontal scroll instead.
-const cellFlex = (c: Col) => ({
+export const cellFlex = (c: Col) => ({
   flexBasis: c.w,
   flexGrow: c.flex ?? 1,
   flexShrink: 0,
@@ -145,7 +147,7 @@ const cellFlex = (c: Col) => ({
 
 // TaurEye default view: extras start hidden (re-enable via ▤ Columns). The
 // v3 key intentionally ignores older prefs so the new default reaches everyone.
-const DEFAULT_HIDDEN = ['d20', 'd200', 'willr', 'bollb', 'beta', 'sqzMom', 's1', 'r1',
+export const DEFAULT_HIDDEN = ['d20', 'd200', 'willr', 'bollb', 'beta', 'sqzMom', 's1', 'r1',
   'pe', 'pb', 'roe', 'roce', 'debt_equity', 'dividend_yield'];
 
 const FILTERS_KEY = 'taureye.screener.filters.v1';
@@ -156,7 +158,7 @@ const PAGE_KEY = 'taureye.screener.pagesize.v1';
 // Universe name/exchange lookup (fetched once per app session) so the table
 // can show full company names like the TaurEye site.
 let namesPromise: Promise<Record<string, { name: string; exchange: string }>> | null = null;
-function loadNames(): Promise<Record<string, { name: string; exchange: string }>> {
+export function loadNames(): Promise<Record<string, { name: string; exchange: string }>> {
   if (!namesPromise) {
     namesPromise = api
       .universe()
