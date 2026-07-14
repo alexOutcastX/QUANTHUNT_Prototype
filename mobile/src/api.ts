@@ -362,6 +362,29 @@ export type MultibaggerReport = {
   error?: string;
 };
 
+// Full-universe fixed multibagger screen (from /multibagger/screen).
+export type MbScreenRow = {
+  symbol: string;
+  price: number;
+  vs_200dma: number;
+  market_cap_cr: number;
+  roe: number;
+  debt_equity: number;
+  sector?: string | null;
+};
+export type MbScreenResp = {
+  status: 'idle' | 'running' | 'done' | 'error';
+  refreshing?: boolean;
+  progress?: string;
+  asof: number;
+  universe: number;
+  uptrend: number;
+  matches: number;
+  results: MbScreenRow[];
+  criteria: Record<string, unknown>;
+  error?: string | null;
+};
+
 export type RiskReport = {
   ok: boolean;
   reason?: string;
@@ -475,6 +498,7 @@ export const api = {
     ),
   multibagger: (symbol: string) =>
     getJson<MultibaggerReport>('/multibagger?symbol=' + encodeURIComponent(symbol), 60000),
+  mbScreen: () => getJson<MbScreenResp>('/multibagger/screen', 30000),
   riskPortfolio: (holdings: RiskHolding[], conf = 0.95) =>
     postJson<RiskReport>('/risk/portfolio', { holdings, conf }),
   corpAnnouncements: (s: string) => getJson<{ items: Announcement[]; source: string }>('/corporate/announcements?symbol=' + encodeURIComponent(s)),
