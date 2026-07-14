@@ -141,6 +141,14 @@ function MobileShell({ version }: { version: string }) {
 export default function Shell() {
   const { isDesktop } = useResponsive();
   const version = useVersion();
+  // Web: clamp browser pinch-zoom. Page-level zoom trapped users inside the
+  // Terminal graph (page zoom + graph zoom stacked with no way back) — the
+  // graph has its own pinch/wheel zoom with an always-visible ⛶ FIT reset.
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    const m = document.querySelector('meta[name="viewport"]');
+    if (m) m.setAttribute('content', 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no');
+  }, []);
   return isDesktop ? <DesktopShell version={version} /> : <MobileShell version={version} />;
 }
 
