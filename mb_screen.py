@@ -128,13 +128,14 @@ def _run(universe_fn):
             _thread = None
 
 
-def ensure_started(universe_fn) -> None:
-    """Kick the background screen if results are stale and no job is running."""
+def ensure_started(universe_fn, force: bool = False) -> None:
+    """Kick the background screen if results are stale (or force=True) and no
+    job is already running."""
     global _thread
     with _lock:
         if _thread is not None:
             return
-        if _state["status"] == "done" and time.time() - _state["asof"] < TTL:
+        if not force and _state["status"] == "done" and time.time() - _state["asof"] < TTL:
             return
         _thread = threading.Thread(target=_run, args=(universe_fn,),
                                    name="mb-screen", daemon=True)

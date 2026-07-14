@@ -501,7 +501,8 @@ export const api = {
     ),
   multibagger: (symbol: string) =>
     getJson<MultibaggerReport>('/multibagger?symbol=' + encodeURIComponent(symbol), 60000),
-  mbScreen: () => getJson<MbScreenResp>('/multibagger/screen', 30000),
+  mbScreen: (refresh = false) =>
+    getJson<MbScreenResp>('/multibagger/screen' + (refresh ? '?refresh=1' : ''), 30000),
   riskPortfolio: (holdings: RiskHolding[], conf = 0.95) =>
     postJson<RiskReport>('/risk/portfolio', { holdings, conf }),
   corpAnnouncements: (s: string) => getJson<{ items: Announcement[]; source: string }>('/corporate/announcements?symbol=' + encodeURIComponent(s)),
