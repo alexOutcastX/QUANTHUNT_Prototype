@@ -108,26 +108,43 @@ def _run(universe_fn, fund):
 
         with _lock:
             _state["uptrend"] = len(uptrend)
+            # A fresh run replaces the previous results progressively.
+            _state["results"] = []
 
         # Stage 2 — fundamentals gate (provider chain, 7-day disk cache).
+        # Parallel workers: a cold symbol costs 1-3s of scraping, so a serial
+        # sweep over ~900 uptrend stocks took 30-45 minutes. Eight workers cut
+        # that to a few minutes, and matches are published LIVE so the tab
+        # fills in while the job runs; cached symbols are near-instant.
+        from concurrent.futures import ThreadPoolExecutor
+
         results = []
-        for j, (s, px, v200) in enumerate(uptrend):
+        done_ct = [0]
+
+        def check(item):
+            s, px, v200 = item
             try:
                 f = fund.get_one(s) or {}
             except Exception:
                 f = {}
             mc, roe, de = f.get("market_cap_cr"), f.get("roe"), f.get("debt_equity")
+            hit = None
             if (mc is not None and 0 < mc < CRITERIA["mcap_max_cr"]
                     and roe is not None and roe > CRITERIA["roe_min"]
                     and de is not None and de < CRITERIA["de_max"]):
-                results.append({
-                    "symbol": s, "price": px, "vs_200dma": v200,
-                    "market_cap_cr": mc, "roe": roe, "debt_equity": de,
-                    "sector": f.get("sector"),
-                })
-            if j % 25 == 0:
-                with _lock:
-                    _state["progress"] = f"{j}/{len(uptrend)} fundamentals · {len(results)} matches"
+                hit = {"symbol": s, "price": px, "vs_200dma": v200,
+                       "market_cap_cr": mc, "roe": roe, "debt_equity": de,
+                       "sector": f.get("sector")}
+            with _lock:
+                done_ct[0] += 1
+                if hit:
+                    results.append(hit)
+                    _state["results"] = sorted(results, key=lambda r: r["market_cap_cr"])
+                if done_ct[0] % 10 == 0:
+                    _state["progress"] = f"{done_ct[0]}/{len(uptrend)} fundamentals · {len(results)} matches"
+
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            list(pool.map(check, uptrend))
 
         results.sort(key=lambda r: r["market_cap_cr"])   # smallest base first
         with _lock:
