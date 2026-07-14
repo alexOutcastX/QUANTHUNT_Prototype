@@ -1,0 +1,69 @@
+name: Android APK (Capacitor + Capgo)
+
+# Manual trigger — builds the TaurEye Android APK from the Capacitor project and
+# uploads it as a downloadable artifact. GitHub's ubuntu runners ship the
+# Android SDK, so no local Android tooling is needed. Optionally publishes an
+# over-the-air bundle to Capgo when a CAPGO_TOKEN secret is present.
+on:
+  workflow_dispatch:
+    inputs:
+      api_base:
+        description: 'API base URL baked into the bundle'
+        required: false
+        default: 'http://161.118.174.177'
+      capgo_upload:
+        description: 'Also upload an OTA bundle to Capgo (needs CAPGO_TOKEN secret)'
+        type: boolean
+        required: false
+        default: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      # ubuntu-latest already has the Android SDK; this just exposes ANDROID_HOME.
+      - uses: android-actions/setup-android@v3
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Export web bundle (API base baked in)
+        run: npx expo export --platform web --output-dir dist
+        env:
+          EXPO_PUBLIC_API_BASE: ${{ github.event.inputs.api_base }}
+
+      - name: Capacitor sync
+        run: npx cap sync android
+
+      - name: Build debug APK
+        run: cd android && ./gradlew assembleDebug --no-daemon
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: taureye-android-debug
+          path: mobile/android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+
+      # ── Optional OTA publish to Capgo ────────────────────────────────────────
+      # Set a CAPGO_TOKEN repo secret and tick capgo_upload. First run also needs
+      # the app registered once: `npx @capgo/cli app add com.taureye.app`.
+      - name: Publish OTA bundle to Capgo
+        if: ${{ github.event.inputs.capgo_upload == 'true' && env.CAPGO_TOKEN != '' }}
+        env:
+          CAPGO_TOKEN: ${{ secrets.CAPGO_TOKEN }}
+        run: npx @capgo/cli@latest bundle upload -a "$CAPGO_TOKEN" -c production --path dist

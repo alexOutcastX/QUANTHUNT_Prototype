@@ -10,9 +10,26 @@
 // default to same-origin (relative URLs). Native builds hit the VM directly.
 import { Platform } from 'react-native';
 
+// Inside the Capacitor Android shell the bundle runs as react-native-web, so
+// Platform.OS === 'web', but the page origin is capacitor://localhost — a
+// same-origin (relative) API base would never reach the VM. Capacitor injects
+// window.Capacitor into the WebView, so detect the native shell explicitly and
+// hit the VM by absolute URL. Plain http works because the Android manifest
+// allows cleartext (see capacitor.config.ts); switch to an https domain via
+// EXPO_PUBLIC_API_BASE once the backend has TLS.
+const VM_BASE = 'http://161.118.174.177';
+const inCapacitor = (() => {
+  try {
+    const cap = (globalThis as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor;
+    return !!cap?.isNativePlatform?.();
+  } catch {
+    return false;
+  }
+})();
+
 export const API_BASE =
   process.env.EXPO_PUBLIC_API_BASE ??
-  (Platform.OS === 'web' ? '' : 'http://161.118.174.177');
+  (inCapacitor ? VM_BASE : Platform.OS === 'web' ? '' : VM_BASE);
 
 async function getJson<T>(path: string, timeoutMs = 25000): Promise<T> {
   const ctrl = new AbortController();

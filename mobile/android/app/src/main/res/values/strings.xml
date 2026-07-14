@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">TaurEye</string>
+    <string name="title_activity_main">TaurEye</string>
+    <string name="package_name">com.taureye.app</string>
+    <string name="custom_url_scheme">com.taureye.app</string>
+</resources>
