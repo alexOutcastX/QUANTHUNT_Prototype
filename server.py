@@ -1050,6 +1050,15 @@ _MB_CACHE: dict = {}   # symbol -> (epoch, payload); refreshed every 6h
 _MB_TTL = 6 * 3600
 
 
+@app.route("/momentum/screen")
+def momentum_screen_route():
+    """Full NSE+BSE momentum radar (background job; see momentum_screen.py).
+    ?refresh=1 forces a re-run even when the cached result is still fresh."""
+    import momentum_screen as moms
+    moms.ensure_started(get_universe, force=request.args.get("refresh") == "1")
+    return jsonify(moms.snapshot())
+
+
 @app.route("/multibagger/screen")
 def multibagger_screen():
     """Full-universe analyser-score screen (background job; see mb_screen.py).
