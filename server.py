@@ -517,25 +517,81 @@ def version():
     return jsonify({"version": _app_version(), "commit": os.environ.get("GIT_COMMIT", "")})
 
 
+_LTP_CACHE: dict = {}      # sym -> (fetched_at, entry) — short-lived quote cache
+_LTP_TTL = 60
+
+
+def _yf_batch(symbols):
+    """One batched Yahoo download for many NSE symbols → {sym: entry}.
+
+    A single network operation covers a whole graph's quote list in a couple of
+    seconds, where per-symbol NSE+YF lookups (each slow to fail when NSE
+    throttles the VM) used to blow the frontend's timeout.
+    """
+    out = {}
+    if not symbols:
+        return out
+    try:
+        yf = yf_session()
+        data = yf.download([s + ".NS" for s in symbols], period="2d",
+                           group_by="ticker", threads=True, progress=False,
+                           auto_adjust=False)
+        for s in symbols:
+            try:
+                df = data[s + ".NS"] if len(symbols) > 1 else data
+                df = df.dropna(subset=["Close"])
+                if df.empty:
+                    continue
+                row = df.iloc[-1]
+                prev = df.iloc[-2] if len(df) >= 2 else row
+                close, pc = float(row["Close"]), float(prev["Close"]) or float(row["Close"])
+                out[s] = {"price": round(close, 2), "prevClose": round(pc, 2),
+                          "chg": round((close - pc) / pc * 100, 2) if pc else 0,
+                          "absChg": round(close - pc, 2),
+                          "open": float(row.get("Open", close)),
+                          "high": float(row.get("High", close)),
+                          "low": float(row.get("Low", close)),
+                          "volume": int(row.get("Volume", 0) or 0),
+                          "source": "YF"}
+            except Exception:
+                continue
+    except Exception as e:
+        log.debug("YF batch failed: %s", e)
+    return out
+
+
 @app.route("/ltp")
 def ltp():
     raw = request.args.get("symbols", "").strip().upper()
     if not raw:
         return jsonify({"error": "No symbols"}), 400
-    symbols = [s.strip() for s in raw.split(",") if s.strip()]
+    symbols = [s.strip() for s in raw.split(",") if s.strip()][:100]
     out = {}
+    now = time.time()
 
     # Skip symbols that aren't NSE-listed without touching the network — graph
     # nodes include foreign names (MICROSOFT, ARAMCO, …) that would otherwise
     # each burn a slow NSE+YF failure and time the whole batch out. Soft check:
     # only applied once the universe cache is warm.
     known = {u["symbol"] for u in (_universe_cache or [])}
+    pending = []
+    for sym in symbols:
+        if known and sym not in known and sym not in SYMBOL_ALIASES:
+            out[sym] = {"error": "not NSE-listed", "source": "skip"}
+        elif sym in _LTP_CACHE and now - _LTP_CACHE[sym][0] < _LTP_TTL:
+            out[sym] = _LTP_CACHE[sym][1]
+        else:
+            pending.append(sym)
+
+    # 1) One batched Yahoo call covers most of the list quickly. Aliased
+    #    symbols (e.g. TATAMOTORS → TMPV/TMCV) need the full resolver instead.
+    batchable = [s for s in pending if s not in SYMBOL_ALIASES]
+    for s, entry in _yf_batch(batchable).items():
+        _LTP_CACHE[s] = (now, entry)
+        out[s] = entry
 
     def _resolve(sym):
         res = {}
-        if known and sym not in known and sym not in SYMBOL_ALIASES:
-            res[sym] = {"error": "not NSE-listed", "source": "skip"}
-            return res
         resolved = SYMBOL_ALIASES.get(sym)
         if resolved and resolved != [sym]:
             for cur in resolved:
@@ -551,12 +607,16 @@ def ltp():
         _fetch_one(sym, res)
         return res
 
-    # Fetch concurrently — sequential NSE+YF lookups made big graphs (15+
-    # symbols) exceed the frontend timeout, so no prices rendered at all.
-    from concurrent.futures import ThreadPoolExecutor
-    with ThreadPoolExecutor(max_workers=8) as pool:
-        for res in pool.map(_resolve, symbols[:100]):
-            out.update(res)
+    # 2) NSE → YF per-symbol only for aliases and batch misses, concurrently.
+    rest = [s for s in pending if s not in out]
+    if rest:
+        from concurrent.futures import ThreadPoolExecutor
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            for res in pool.map(_resolve, rest):
+                for s, entry in res.items():
+                    if entry and entry.get("price"):
+                        _LTP_CACHE[s] = (now, entry)
+                    out[s] = entry
 
     return jsonify(out)
 

@@ -21,13 +21,14 @@ import { theme } from '../theme';
 // inside the frame; state persists to localStorage across frame rebuilds.
 function graphHtml(data: GraphResp, quotes: LtpResp, centre: string, openIdx: string | null, autoWin: boolean, aiOn: boolean): string {
   return `<!DOCTYPE html><html><head>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
 <style>
   html,body{height:100%;margin:0;background:${theme.bg};font-family:ui-monospace,Menlo,Consolas,monospace;overflow:hidden}
   #wrap{display:flex;height:100%}
   #gfx{flex:1;position:relative;overflow:hidden;display:flex}
   #gwrap{flex:1;position:relative;overflow:hidden;min-width:120px;min-height:120px}
-  svg{width:100%;height:100%;display:block}
+  svg{width:100%;height:100%;display:block;touch-action:none}
   #panel{width:330px;border-left:1px solid ${theme.border};overflow-y:auto;padding:16px;box-sizing:border-box}
   .aistat{font-size:11px;font-weight:700;letter-spacing:0.5px;padding:7px 10px;border-radius:6px;margin:0 0 12px;border:1px solid}
   .aistat.ok{color:${theme.green};border-color:${theme.green}55;background:${theme.green}14}
@@ -171,6 +172,7 @@ function graphHtml(data: GraphResp, quotes: LtpResp, centre: string, openIdx: st
         <button class="hlb" id="hl-invested" onclick="setHl('invested')">INVESTED</button>
         <button class="hlb on" id="hl-all" onclick="setHl('all')">ALL</button>
         <span style="width:8px"></span>
+        <button class="hlb" id="hl-layout" onclick="setLayout()" title="Switch between web and clustered grid layout">▦ GRID</button>
         <button class="hlb" id="hl-fit" onclick="fitView()" title="Fit the graph to the screen (resets zoom/pan)">⛶ FIT</button>
         <button class="hlb" id="hl-reset" onclick="resetPos()" title="Reset bubble positions">⟲ RESET</button>
         <button class="hlb" id="hl-pdf" onclick="exportPDF()" title="Export this graph to PDF">⤓ PDF</button>
@@ -234,6 +236,16 @@ function graphHtml(data: GraphResp, quotes: LtpResp, centre: string, openIdx: st
   // under the graph so everything stacks vertically.
   var MOBILE = !!(window.matchMedia && window.matchMedia('(max-width: 720px)').matches);
   if (MOBILE && (W.dock || 'float') === 'float') W.dock = 'bottom';
+
+  // Graph layout: 'web' (force-directed bubbles) or 'grid' (Bloomberg-style
+  // rectangles clustered by relationship category). Persisted per device.
+  var LAYOUT = 'web';
+  try { LAYOUT = localStorage.getItem('te_term_layout_v1') || 'web'; } catch (e) {}
+  window.setLayout = function(){
+    LAYOUT = LAYOUT === 'grid' ? 'web' : 'grid';
+    try { localStorage.setItem('te_term_layout_v1', LAYOUT); } catch (e) {}
+    render();
+  };
 
   function num(v, d){ return (v == null || !isFinite(v)) ? '—' : (+v).toFixed(d == null ? 1 : d); }
   function fmtPrice(t) {
@@ -355,6 +367,8 @@ function graphHtml(data: GraphResp, quotes: LtpResp, centre: string, openIdx: st
   function render() {
     var g = subgraph(centre);
     document.getElementById('crumb').innerHTML = 'centre: <b>' + centre + '</b> · click a node for options';
+    var lb = document.getElementById('hl-layout');
+    if (lb) lb.textContent = LAYOUT === 'grid' ? '⦿ WEB' : '▦ GRID';
     panelHtml(centre);
     if (sim) sim.stop();
     svg.selectAll('*').remove();
@@ -411,6 +425,12 @@ function graphHtml(data: GraphResp, quotes: LtpResp, centre: string, openIdx: st
       else if (e.dst === centre) groupSet[e.src] = 1;
     });
 
+    // Draw flow edges LAST so a red/green arrow isn't hidden under a gold
+    // group dash when the same pair has both relationships.
+    g.links.sort(function(a, b){
+      function pri(e){ return (edgeIsIn(e) || edgeIsOut(e)) ? 3 : e.type === 'invests' ? 2 : e.type === 'group' ? 1 : 0; }
+      return pri(a.e) - pri(b.e);
+    });
     linkSel = root.selectAll('line').data(g.links).enter().append('line')
       .attr('stroke', function(d){ return edgeColor(d.e); })
       .attr('stroke-width', function(d){ return d.e.confidence === 'high' ? 2.2 : 1.4; })
@@ -424,12 +444,15 @@ function graphHtml(data: GraphResp, quotes: LtpResp, centre: string, openIdx: st
 
     nodeSel = root.selectAll('g.n').data(g.nodes).enter().append('g').attr('class','n')
       .style('cursor','pointer')
-      .call(d3.drag()
+      .on('click', function(ev,d){ ev.stopPropagation(); showMenu(d, ev.offsetX != null ? ev.offsetX : 40, ev.offsetY != null ? ev.offsetY : 40); });
+    if (LAYOUT !== 'grid') {
+      // Free drag only in the force layout — grid positions are fixed clusters.
+      nodeSel.call(d3.drag()
         .on('start', function(ev,d){ if(!ev.active) sim.alphaTarget(0.15).restart(); d.fx=d.x; d.fy=d.y; })
         .on('drag', function(ev,d){ d.fx=ev.x; d.fy=ev.y; d.pinned=true; })
         // Keep fx/fy after release so a bubble stays exactly where it was dropped.
-        .on('end', function(ev,d){ if(!ev.active) sim.alphaTarget(0); }))
-      .on('click', function(ev,d){ ev.stopPropagation(); showMenu(d, ev.offsetX != null ? ev.offsetX : 40, ev.offsetY != null ? ev.offsetY : 40); });
+        .on('end', function(ev,d){ if(!ev.active) sim.alphaTarget(0); }));
+    }
 
     // Fit the ticker inside the bubble: shrink the font for longer symbols and
     // truncate anything that still won't fit (full name is in the side panel).
@@ -443,11 +466,32 @@ function graphHtml(data: GraphResp, quotes: LtpResp, centre: string, openIdx: st
       id = id || '';
       return id.length > max ? id.slice(0, max - 1) + '…' : id;
     }
+    function nodeStroke(d){ return d.id === centre ? '${theme.accent}' : (groupSet[d.id] ? CGROUP : (d.listed ? '${theme.border2}' : '${theme.border}')); }
+    function nodeStrokeW(d){ return d.id === centre ? 2.5 : (groupSet[d.id] ? 2.4 : 1.5); }
+    function rectW(d){ return d.id === centre ? 128 : 106; }
+    function rectH(d){ return d.id === centre ? 42 : 36; }
+    if (LAYOUT === 'grid') {
+      // Bloomberg-style rectangle tiles: ticker on top, live price inside.
+      nodeSel.append('rect')
+        .attr('x', function(d){ return -rectW(d)/2; }).attr('y', function(d){ return -rectH(d)/2; })
+        .attr('width', rectW).attr('height', rectH).attr('rx', 6)
+        .attr('fill', '${theme.surface2}')
+        .attr('stroke', nodeStroke).attr('stroke-width', nodeStrokeW);
+      nodeSel.append('text').text(function(d){ var id=d.id||''; return id.length>13 ? id.slice(0,12)+'…' : id; })
+        .attr('text-anchor','middle').attr('dy', function(d){ var q = fmtPrice(d.id); return q ? -3 : 4; })
+        .attr('fill', function(d){ return d.listed ? '${theme.text}' : '${theme.muted}'; })
+        .attr('font-size', function(d){ return d.id === centre ? 11.5 : 10; })
+        .attr('font-weight', 700).style('pointer-events','none');
+      nodeSel.append('text').text(function(d){ var q = fmtPrice(d.id); return q ? q.txt : ''; })
+        .attr('text-anchor','middle').attr('dy', 12)
+        .attr('class', function(d){ var q = fmtPrice(d.id); return q && q.up ? 'price-up' : 'price-dn'; })
+        .attr('font-size', 9).style('pointer-events','none');
+    } else {
     nodeSel.append('circle')
       .attr('r', function(d){ return d.id === centre ? 29 : 20; })
       .attr('fill', '${theme.surface2}')
-      .attr('stroke', function(d){ return d.id === centre ? '${theme.accent}' : (groupSet[d.id] ? CGROUP : (d.listed ? '${theme.border2}' : '${theme.border}')); })
-      .attr('stroke-width', function(d){ return d.id === centre ? 2.5 : (groupSet[d.id] ? 2.4 : 1.5); });
+      .attr('stroke', nodeStroke)
+      .attr('stroke-width', nodeStrokeW);
     // Company symbol inside the bubble.
     nodeSel.append('text').text(function(d){ return symText(d.id, d.id === centre); })
       .attr('text-anchor','middle').attr('dy', 4)
@@ -459,6 +503,7 @@ function graphHtml(data: GraphResp, quotes: LtpResp, centre: string, openIdx: st
       .attr('text-anchor','middle').attr('dy', function(d){ return d.id === centre ? 45 : 35; })
       .attr('class', function(d){ var q = fmtPrice(d.id); return q && q.up ? 'price-up' : 'price-dn'; })
       .attr('font-size', 10).style('pointer-events','none');
+    }
 
     // Directional layout: suppliers (INPUTS) settle on the left, customers
     // (OUTPUTS) on the right, with the pinned centre in the middle. Nodes that
@@ -476,31 +521,108 @@ function graphHtml(data: GraphResp, quotes: LtpResp, centre: string, openIdx: st
     }
     g.nodes.forEach(function(n){ n.side = sideOf(n.id); });
     var cnode = g.nodes.find(function(n){ return n.id === centre; });
-    if (cnode) { cnode.fx = Wd/2; cnode.fy = H/2; }   // pin the centre
 
-    sim = d3.forceSimulation(g.nodes)
-      .force('link', d3.forceLink(g.links).id(function(d){ return d.id; }).distance(150))
-      .force('charge', d3.forceManyBody().strength(-620))
-      .force('x', d3.forceX(function(d){ return Wd/2 + d.side * Wd * 0.30; })
-                    .strength(function(d){ return d.side === 0 ? 0.02 : 0.28; }))
-      .force('y', d3.forceY(H/2).strength(0.04))
-      .force('collide', d3.forceCollide(46))
-      .on('tick', function(){
-        // End the line just outside the target circle so the arrowhead is fully
-        // visible; also pull the start off the source circle a touch.
-        linkSel.attr('x1', function(d){ return trim(d, true).x; })
-               .attr('y1', function(d){ return trim(d, true).y; })
-               .attr('x2', function(d){ return trim(d, false).x; })
-               .attr('y2', function(d){ return trim(d, false).y; });
-        nodeSel.attr('transform', function(d){ return 'translate(' + d.x + ',' + d.y + ')'; });
-      });
+    function applyPos(){
+      // End the line just outside the target node so the arrowhead is fully
+      // visible; also pull the start off the source node a touch.
+      linkSel.attr('x1', function(d){ return trim(d, true).x; })
+             .attr('y1', function(d){ return trim(d, true).y; })
+             .attr('x2', function(d){ return trim(d, false).x; })
+             .attr('y2', function(d){ return trim(d, false).y; });
+      nodeSel.attr('transform', function(d){ return 'translate(' + d.x + ',' + d.y + ')'; });
+    }
+    // Distance from a node's centre to its outline along direction (ux,uy) —
+    // circles in web layout, rectangles in grid layout.
+    function clearance(d, ux, uy){
+      if (LAYOUT !== 'grid') return nodeR(d);
+      var hw = rectW(d)/2 + 3, hh = rectH(d)/2 + 3;
+      var sx = Math.abs(ux) < 1e-6 ? Infinity : hw / Math.abs(ux);
+      var sy = Math.abs(uy) < 1e-6 ? Infinity : hh / Math.abs(uy);
+      return Math.min(sx, sy);
+    }
     function trim(d, atSource){
       var s = d.source, t = d.target;
       var dx = t.x - s.x, dy = t.y - s.y, len = Math.sqrt(dx*dx + dy*dy) || 1;
       var ux = dx/len, uy = dy/len;
-      if (atSource){ var r = nodeR(s) + 2; return { x: s.x + ux*r, y: s.y + uy*r }; }
-      var gap = nodeR(t) + 6;   // leave room for the arrowhead outside the node
+      if (atSource){ var r = clearance(s, ux, uy) + 2; return { x: s.x + ux*r, y: s.y + uy*r }; }
+      var gap = clearance(t, ux, uy) + 6;   // leave room for the arrowhead
       return { x: t.x - ux*gap, y: t.y - uy*gap };
+    }
+
+    if (LAYOUT === 'grid') {
+      // ── Bloomberg-style clustered grid: fixed zones per relationship type —
+      // suppliers+investors stacked left, customers+holdings right, group row
+      // on top, competitors along the bottom. No physics, no drag.
+      // Resolve link endpoints to node objects (forceLink does this in web mode).
+      var byId = {};
+      g.nodes.forEach(function(n){ byId[n.id] = n; });
+      g.links.forEach(function(l){
+        if (typeof l.source === 'string') l.source = byId[l.source];
+        if (typeof l.target === 'string') l.target = byId[l.target];
+      });
+      var cats = { sup: [], inv: [], cust: [], hold: [], grp: [], comp: [] };
+      function catOf(id){
+        var f = {};
+        DATA.edges.forEach(function(e){
+          var toC = e.dst === centre && e.src === id, fromC = e.src === centre && e.dst === id;
+          if (!toC && !fromC) return;
+          if (e.type === 'supplies' || e.type === 'finances') f[toC ? 'sup' : 'cust'] = 1;
+          else if (e.type === 'invests') f[toC ? 'inv' : 'hold'] = 1;
+          else if (e.type === 'group') f.grp = 1;
+          else f.comp = 1;
+        });
+        return f.sup ? 'sup' : f.cust ? 'cust' : f.inv ? 'inv' : f.hold ? 'hold' : f.grp ? 'grp' : 'comp';
+      }
+      g.nodes.forEach(function(n){ if (n.id !== centre) cats[catOf(n.id)].push(n); });
+      var cx = Wd / 2, cy = H / 2, RW = 122, RH = 48, zlabels = [];
+      if (cnode) { cnode.x = cnode.fx = cx; cnode.y = cnode.fy = cy; }
+      function stack(sections, x0){   // labelled vertical blocks, centred on cy
+        var rows = 0;
+        sections.forEach(function(S){ if (S.items.length) rows += S.items.length + 1; });
+        if (!rows) return;
+        var y = cy - (rows - 1) * RH / 2;
+        sections.forEach(function(S){
+          if (!S.items.length) return;
+          zlabels.push({ x: x0, y: y - 8, t: S.label });
+          y += RH * 0.55;
+          S.items.forEach(function(n){ n.x = n.fx = x0; n.y = n.fy = y; y += RH; });
+          y += RH * 0.45;
+        });
+      }
+      var off = Math.max(250, Math.min(Wd * 0.36, 400));
+      stack([{ label: 'SUPPLIERS', items: cats.sup }, { label: 'INVESTORS', items: cats.inv }], cx - off);
+      stack([{ label: 'CUSTOMERS', items: cats.cust }, { label: 'HOLDINGS', items: cats.hold }], cx + off);
+      var half = 0;
+      g.nodes.forEach(function(n){ if (n.id !== centre) half = Math.max(half, Math.abs((n.y || cy) - cy)); });
+      function hrow(list, y0, label, up){   // labelled horizontal band, wraps
+        if (!list.length) return;
+        var per = Math.max(2, Math.floor((Wd + 260) / RW));
+        zlabels.push({ x: cx, y: y0 - (up ? (Math.ceil(list.length / per) - 1) * RH : 0) - 32, t: label });
+        list.forEach(function(n, i){
+          var r = Math.floor(i / per), inRow = Math.min(per, list.length - r * per);
+          n.x = n.fx = cx - (inRow - 1) * RW / 2 + (i % per) * RW;
+          n.y = n.fy = y0 + (up ? -r * RH : r * RH);
+        });
+      }
+      hrow(cats.grp,  cy - half - 120, 'GROUP', true);
+      hrow(cats.comp, cy + half + 120, 'COMPETITORS', false);
+      zlabels.forEach(function(L){
+        root.append('text').text(L.t).attr('x', L.x).attr('y', L.y)
+          .attr('text-anchor', 'middle').attr('fill', '${theme.muted}')
+          .attr('font-size', 10).attr('letter-spacing', 2);
+      });
+      applyPos();
+      setTimeout(function(){ fitAll(true); }, 60);
+    } else {
+      if (cnode) { cnode.fx = Wd/2; cnode.fy = H/2; }   // pin the centre
+      sim = d3.forceSimulation(g.nodes)
+        .force('link', d3.forceLink(g.links).id(function(d){ return d.id; }).distance(150))
+        .force('charge', d3.forceManyBody().strength(-620))
+        .force('x', d3.forceX(function(d){ return Wd/2 + d.side * Wd * 0.30; })
+                      .strength(function(d){ return d.side === 0 ? 0.02 : 0.28; }))
+        .force('y', d3.forceY(H/2).strength(0.04))
+        .force('collide', d3.forceCollide(46))
+        .on('tick', applyPos);
     }
     applyHl();
   }
@@ -518,6 +640,7 @@ function graphHtml(data: GraphResp, quotes: LtpResp, centre: string, openIdx: st
 
   // Clear all manual placements (and re-pin the centre), then re-run the layout.
   window.resetPos = function(){
+    if (LAYOUT === 'grid') { render(); return; }   // grid positions are fixed
     if (!sim || !nodeSel) return;
     var Wd = document.getElementById('gwrap').clientWidth || 800;
     var H  = document.getElementById('gwrap').clientHeight || 600;
