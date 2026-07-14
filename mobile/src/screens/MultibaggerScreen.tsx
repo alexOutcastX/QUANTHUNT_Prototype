@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Platform, ScrollView, Share, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Candle, MultibaggerReport, api } from '../api';
+import { Candle, MbScreenRow, MultibaggerReport, api } from '../api';
 import { chartHtml } from '../chartHtml';
 import HtmlView from '../components/HtmlView';
 import StockDetail from '../components/StockDetail';
@@ -133,11 +133,26 @@ function MbList({
     let cancelled = false;
     (async () => {
       try {
-        // 1) Poll the server-side full-universe screen until it has results.
+        const names = await loadNames();
+        const build = (rs: MbScreenRow[]): Row[] =>
+          rs.map((c) => ({
+            sym: c.symbol,
+            name: names[c.symbol.toUpperCase()]?.name,
+            exchange: names[c.symbol.toUpperCase()]?.exchange || 'NSE',
+            price: c.price,
+            d200: c.vs_200dma,
+            _fund: { market_cap_cr: c.market_cap_cr, roe: c.roe, debt_equity: c.debt_equity, sector: c.sector } as Row['_fund'],
+          }));
+        // 1) Poll the server-side full-universe screen. Matches stream in
+        //    LIVE while the background job runs, so render partials as they land.
         let snap = await api.mbScreen();
-        while (!cancelled && snap.status === 'running' && !snap.results.length) {
-          setNote(`Screening the whole universe server-side… ${snap.progress || ''}`);
-          await new Promise((r) => setTimeout(r, 5000));
+        while (!cancelled && snap.status === 'running') {
+          if (snap.results.length) {
+            setRows(build(snap.results));
+            setLoading(false);
+          }
+          setNote(`Screening the whole universe server-side… ${snap.progress || ''} · ${snap.results.length} so far`);
+          await new Promise((r) => setTimeout(r, 4000));
           snap = await api.mbScreen();
         }
         if (cancelled) return;
@@ -146,17 +161,9 @@ function MbList({
           setLoading(false);
           return;
         }
-        const names = await loadNames();
         const asof = snap.asof ? new Date(snap.asof * 1000).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : '';
         const meta = `universe ${snap.universe.toLocaleString('en-IN')} · ${snap.uptrend.toLocaleString('en-IN')} in uptrend${asof ? ` · as of ${asof}` : ''}${snap.refreshing ? ' · refreshing…' : ''}`;
-        const seeded: Row[] = snap.results.map((c) => ({
-          sym: c.symbol,
-          name: names[c.symbol.toUpperCase()]?.name,
-          exchange: names[c.symbol.toUpperCase()]?.exchange || 'NSE',
-          price: c.price,
-          d200: c.vs_200dma,
-          _fund: { market_cap_cr: c.market_cap_cr, roe: c.roe, debt_equity: c.debt_equity, sector: c.sector } as Row['_fund'],
-        }));
+        const seeded = build(snap.results);
         setRows(seeded);
         setLoading(false);
         setNote(meta);
