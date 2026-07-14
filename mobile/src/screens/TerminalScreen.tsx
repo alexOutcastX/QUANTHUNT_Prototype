@@ -84,6 +84,12 @@ function graphHtml(data: GraphResp, quotes: LtpResp, centre: string, openIdx: st
   .ntag{color:${theme.accent};font-weight:700}
   .wfull{position:absolute;top:8px;right:10px;z-index:5;background:${theme.surface2};border:1px solid ${theme.border2};color:${theme.muted2};font-size:10px;letter-spacing:1px;padding:4px 8px;border-radius:4px;cursor:pointer}
   .wfull:hover{color:${theme.text}}
+  /* News/Chart tabs — hidden on desktop (chart stays in the window there),
+     shown on phones where the chart becomes a tab of the news panel. */
+  #newstabs{display:none;flex:1;gap:0}
+  .ntab{padding:9px 16px;color:${theme.muted2};font-size:12px;font-weight:700;letter-spacing:1px;cursor:pointer;border-right:1px solid ${theme.border}}
+  .ntab.on{color:${theme.text};background:${theme.surface}}
+  #newschart{display:none;flex:1;overflow-y:auto}
   /* ── floating window ── */
   #win{z-index:20;background:${theme.surface};border:1px solid ${theme.border2};display:none;flex-direction:column;overflow:hidden;min-width:250px;min-height:170px}
   #win.float{position:absolute;border-radius:10px;box-shadow:0 12px 40px #000c;min-width:340px;min-height:220px}
@@ -143,7 +149,22 @@ function graphHtml(data: GraphResp, quotes: LtpResp, centre: string, openIdx: st
     #panel { order: 3; width: 100% !important; border-left: none;
              border-top: 1px solid ${theme.border}; overflow-y: visible; }
     #legend { display: none; }
-    #hl { justify-content: flex-start; }
+    #crumb { display: none; }
+    /* Toolbar is a single solid bar pinned across the top of the graph — one
+       horizontal-scrolling row instead of pills wrapping over the nodes. */
+    #hl { top: 0; left: 0; right: 0; justify-content: flex-start;
+          flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden;
+          gap: 6px; padding: 7px 8px; -webkit-overflow-scrolling: touch;
+          scrollbar-width: none; background: ${theme.surface}f2;
+          border-bottom: 1px solid ${theme.border}; }
+    #hl::-webkit-scrollbar { display: none; }
+    .hlb { flex: none; }
+    /* Chart is a tab of the news panel here — expose the tabs, drop the title. */
+    #newstabs { display: flex; }
+    #newstitle { display: none; }
+    /* Floating/dock controls are meaningless on a phone (the window is always
+       stacked under the graph) — hide the dock pins, keep ↗ open + ✕ close. */
+    #win #dk-float, #win #dk-bottom, #win #dk-right { display: none; }
     /* One finger scrolls the PAGE (never pans the graph); two-finger pinch is
        delivered to the graph's own zoom. Prevents the scroll trap. */
     svg { touch-action: pan-x pan-y; }
@@ -152,12 +173,17 @@ function graphHtml(data: GraphResp, quotes: LtpResp, centre: string, openIdx: st
 <div id="wrap">
   <div id="news">
     <div id="newshead">
+      <div id="newstabs">
+        <div class="ntab on" id="ntab-news" onclick="setNewsTab('news')">NEWS</div>
+        <div class="ntab" id="ntab-chart" onclick="setNewsTab('chart')">CHART</div>
+      </div>
       <span id="newstitle">NEWS</span>
       <div class="wbtn" id="news-upd" title="Update now" onclick="loadNews(true)">⟳</div>
       <div class="wbtn" title="Open in browser tab" onclick="openNews()">↗</div>
     </div>
     <div id="newsmeta"></div>
     <div id="newsbody"><div class="wmsg">Loading news…</div></div>
+    <div id="newschart"></div>
   </div>
   <div id="gfx">
     <div id="gwrap">
@@ -232,7 +258,7 @@ function graphHtml(data: GraphResp, quotes: LtpResp, centre: string, openIdx: st
   var histCache = {}, fundCache = {};
 
   // ── persisted workspace state (survives frame rebuilds) ──
-  var W = { open: false, tabs: [], active: null, compare: [], rect: null, dock: 'float', dockH: 300, dockW: 400, newsOn: true };
+  var W = { open: false, tabs: [], active: null, compare: [], rect: null, dock: 'float', dockH: 300, dockW: 400, newsOn: true, newsTab: 'news' };
   try { var s = localStorage.getItem('te_term_win_v1'); if (s) W = Object.assign(W, JSON.parse(s)); } catch (e) {}
   function saveW(){ try { localStorage.setItem('te_term_win_v1', JSON.stringify(W)); } catch (e) {} }
   // Phones: a floating window is unusable — dock the chart/compare window
@@ -363,6 +389,7 @@ function graphHtml(data: GraphResp, quotes: LtpResp, centre: string, openIdx: st
     var g = document.getElementById('gwrap');
     m.style.left = Math.min(x, g.clientWidth - 190) + 'px';
     m.style.top = Math.min(y, g.clientHeight - 170) + 'px';
+    m.style.zIndex = 40;
   }
   window.hideMenu = function(){ document.getElementById('menu').style.display = 'none'; };
   document.getElementById('svg').addEventListener('click', function(ev){ if (ev.target.tagName === 'svg') hideMenu(); });
@@ -921,17 +948,29 @@ function graphHtml(data: GraphResp, quotes: LtpResp, centre: string, openIdx: st
     document.getElementById('newstitle').textContent = 'NEWS · ' + centre;
     updateToggles();
   }
-  // ── toolbar toggles: news panel + chart window ──
+  // ── toolbar toggles: news panel + chart ──
+  // On phones NEWS/CHART select the two tabs of the news panel; on desktop they
+  // toggle the news panel and the floating chart window respectively.
   function updateToggles() {
     var tn = document.getElementById('tg-news'), tw = document.getElementById('tg-win');
+    if (MOBILE) {
+      if (tn) tn.className = 'hlb' + (W.newsTab !== 'chart' ? ' on' : '');
+      if (tw) tw.className = 'hlb' + (W.newsTab === 'chart' ? ' on' : '');
+      return;
+    }
     if (tn) tn.className = 'hlb' + (W.newsOn ? ' on' : '');
     if (tw) tw.className = 'hlb' + (W.open ? ' on' : '');
   }
+  function scrollNewsIntoView() {
+    try { document.getElementById('news').scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) {}
+  }
   window.toggleNews = function() {
+    if (MOBILE) { window.setNewsTab('news'); scrollNewsIntoView(); return; }
     W.newsOn = !W.newsOn; saveW(); layoutNews(); render();
     if (W.newsOn) loadNews(false);
   };
   window.toggleWin = function() {
+    if (MOBILE) { window.setNewsTab('chart'); scrollNewsIntoView(); return; }
     if (W.open) { W.open = false; }
     else if (!W.tabs.length) { window.openTab(centre); return; }
     else { W.open = true; }
@@ -1023,14 +1062,17 @@ function graphHtml(data: GraphResp, quotes: LtpResp, centre: string, openIdx: st
     head.addEventListener('pointerup', up); grip.addEventListener('pointerup', up); divd.addEventListener('pointerup', up);
   })();
 
-  // ── company tab: chart + screener.in fundamentals ──
-  function renderCompany(sym) {
-    var body = document.getElementById('winbody');
-    body.innerHTML = '<div style="position:relative"><div class="wchart" id="wc"></div>' +
+  // ── company view: chart + screener.in fundamentals ──
+  // Rendered into any container (the floating window's body on desktop, or the
+  // news panel's CHART tab on phones). active() guards async writes so a stale
+  // response can't overwrite a view the user has since switched away from.
+  function renderCompanyInto(sym, body, active) {
+    if (!body) return;
+    body.innerHTML = '<div style="position:relative"><div class="wchart"></div>' +
       '<div class="wfull" title="Open full chart in browser tab" onclick="openFullChart(\\'' + sym + '\\')">⛶ FULL CHART</div></div>' +
-      '<div id="wf"><div class="wmsg">Loading fundamentals…</div></div>';
+      '<div class="wf"><div class="wmsg">Loading fundamentals…</div></div>';
     // chart
-    var mount = document.getElementById('wc');
+    var mount = body.querySelector('.wchart'), fnode = body.querySelector('.wf');
     function drawChart(candles) {
       if (typeof LightweightCharts === 'undefined') { mount.innerHTML = '<div class="wmsg">chart lib unavailable</div>'; return; }
       mount.innerHTML = '';
@@ -1048,8 +1090,8 @@ function graphHtml(data: GraphResp, quotes: LtpResp, centre: string, openIdx: st
       mount.innerHTML = '<div class="wmsg">Loading chart…</div>';
       fetch(API + '/history?symbol=' + encodeURIComponent(sym) + '&interval=1d&period=6mo')
         .then(function(r){ return r.json(); })
-        .then(function(d){ if (W.active !== sym) return; if (d && d.candles && d.candles.length) { histCache[sym] = d.candles; drawChart(d.candles); } else mount.innerHTML = '<div class="wmsg">No chart data</div>'; })
-        .catch(function(){ if (W.active === sym) mount.innerHTML = '<div class="wmsg">Chart unavailable</div>'; });
+        .then(function(d){ if (!active()) return; if (d && d.candles && d.candles.length) { histCache[sym] = d.candles; drawChart(d.candles); } else mount.innerHTML = '<div class="wmsg">No chart data</div>'; })
+        .catch(function(){ if (active()) mount.innerHTML = '<div class="wmsg">Chart unavailable</div>'; });
     }
     // fundamentals (screener.in chain server-side)
     function drawFund(f) {
@@ -1068,14 +1110,37 @@ function graphHtml(data: GraphResp, quotes: LtpResp, centre: string, openIdx: st
       h += '</div>';
       if (f.description) h += '<div class="fdesc">' + f.description + '</div>';
       h += '<div class="cmpnote">source: ' + (f.fund_source || 'yfinance') + '</div>';
-      document.getElementById('wf').innerHTML = h;
+      fnode.innerHTML = h;
     }
     if (fundCache[sym]) drawFund(fundCache[sym]);
     else fetch(API + '/fundamentals?symbol=' + encodeURIComponent(sym))
       .then(function(r){ return r.json(); })
-      .then(function(f){ if (f && !f.error) { fundCache[sym] = f; if (W.active === sym) drawFund(f); } else if (W.active === sym) document.getElementById('wf').innerHTML = '<div class="wmsg">Fundamentals unavailable</div>'; })
-      .catch(function(){ if (W.active === sym) document.getElementById('wf').innerHTML = '<div class="wmsg">Fundamentals unavailable</div>'; });
+      .then(function(f){ if (f && !f.error) { fundCache[sym] = f; if (active()) drawFund(f); } else if (active()) fnode.innerHTML = '<div class="wmsg">Fundamentals unavailable</div>'; })
+      .catch(function(){ if (active()) fnode.innerHTML = '<div class="wmsg">Fundamentals unavailable</div>'; });
   }
+  function renderCompany(sym) {
+    renderCompanyInto(sym, document.getElementById('winbody'), function(){ return W.active === sym; });
+  }
+  // Phones: the CHART tab of the news panel shows the centre company's chart.
+  function renderNewsChart() {
+    if (!centre) return;
+    renderCompanyInto(centre, document.getElementById('newschart'),
+      function(){ return W.newsTab === 'chart'; });
+  }
+  window.setNewsTab = function(t) {
+    W.newsTab = t; saveW();
+    var isChart = t === 'chart';
+    var body = document.getElementById('newsbody'), chart = document.getElementById('newschart'), meta = document.getElementById('newsmeta'), upd = document.getElementById('news-upd');
+    if (body) body.style.display = isChart ? 'none' : '';
+    if (chart) chart.style.display = isChart ? 'block' : 'none';
+    if (meta) meta.style.display = isChart ? 'none' : '';
+    if (upd) upd.style.display = isChart ? 'none' : '';
+    var tn = document.getElementById('ntab-news'), tc = document.getElementById('ntab-chart');
+    if (tn) tn.className = 'ntab' + (isChart ? '' : ' on');
+    if (tc) tc.className = 'ntab' + (isChart ? ' on' : '');
+    updateToggles();
+    if (isChart) renderNewsChart(); else loadNews(false);
+  };
 
   // ── compare tab: table + final score ──
   var clamp = function(x){ return Math.max(0, Math.min(100, x)); };
@@ -1147,19 +1212,26 @@ function graphHtml(data: GraphResp, quotes: LtpResp, centre: string, openIdx: st
     else renderCompany(W.active);
   }
 
+  // Phones: the news panel is always visible and hosts the chart as a tab —
+  // never leave it collapsed.
+  if (MOBILE) W.newsOn = true;
   layoutNews();
   render();
   if (AUTOWIN) {
     // Minimal graph (no relationship edges): show the company's workspace so
-    // the chart/fundamentals/news are immediately useful.
-    if (W.tabs.indexOf(centre) < 0) W.tabs.push(centre);
-    W.active = centre; W.open = true; if (!W.rect) W.rect = defaultRect();
+    // the chart/fundamentals/news are immediately useful. On phones that means
+    // the news panel's CHART tab; on desktop, the floating window.
+    if (MOBILE) { W.newsTab = 'chart'; }
+    else {
+      if (W.tabs.indexOf(centre) < 0) W.tabs.push(centre);
+      W.active = centre; W.open = true; if (!W.rect) W.rect = defaultRect();
+    }
     saveW();
   }
   if (OPENIDX) openIdxTab(OPENIDX);
   layoutWin(); renderTabs(); renderBody();
-  loadNews(false);
-  setInterval(function(){ loadNews(false); }, 3600 * 1000); // hourly auto-update
+  if (MOBILE) window.setNewsTab(W.newsTab || 'news'); else loadNews(false);
+  setInterval(function(){ if (!MOBILE || W.newsTab !== 'chart') loadNews(false); }, 3600 * 1000); // hourly auto-update
 })();
 </script></body></html>`;
 }
