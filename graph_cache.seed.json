@@ -84,6 +84,14 @@
    "QIA": {
     "name": "Qatar Investment Authority",
     "listed": false
+   },
+   "ADANIPORTS": {
+    "name": "Adani Ports & SEZ Ltd",
+    "listed": true
+   },
+   "AMBUJACEM": {
+    "name": "Ambuja Cements Ltd",
+    "listed": true
    }
   },
   "edges": [
@@ -268,6 +276,34 @@
     "type": "invests",
     "note": "Qatar wealth fund invested in erstwhile Adani Transmission",
     "confidence": "low"
+   },
+   {
+    "src": "ADANIENSOL",
+    "dst": "ADANIPORTS",
+    "type": "group",
+    "note": "Fellow Adani group company",
+    "confidence": "high"
+   },
+   {
+    "src": "ADANIENSOL",
+    "dst": "ADANIGREEN",
+    "type": "group",
+    "note": "Fellow Adani group company",
+    "confidence": "high"
+   },
+   {
+    "src": "ADANIENSOL",
+    "dst": "ADANIPOWER",
+    "type": "group",
+    "note": "Fellow Adani group company",
+    "confidence": "high"
+   },
+   {
+    "src": "ADANIENSOL",
+    "dst": "AMBUJACEM",
+    "type": "group",
+    "note": "Fellow Adani group company",
+    "confidence": "high"
    }
   ]
  },
@@ -529,6 +565,41 @@
     "type": "invests",
     "note": "Held Adani Wilmar/AWL stake, largely divested",
     "confidence": "low"
+   },
+   {
+    "src": "ADANIENT",
+    "dst": "ADANIPORTS",
+    "type": "group",
+    "note": "Fellow Adani group company",
+    "confidence": "high"
+   },
+   {
+    "src": "ADANIENT",
+    "dst": "ADANIGREEN",
+    "type": "group",
+    "note": "Fellow Adani group company",
+    "confidence": "high"
+   },
+   {
+    "src": "ADANIENT",
+    "dst": "ADANIPOWER",
+    "type": "group",
+    "note": "Fellow Adani group company",
+    "confidence": "high"
+   },
+   {
+    "src": "ADANIENT",
+    "dst": "ADANIENSOL",
+    "type": "group",
+    "note": "Fellow Adani group company",
+    "confidence": "high"
+   },
+   {
+    "src": "ADANIENT",
+    "dst": "AMBUJACEM",
+    "type": "group",
+    "note": "Fellow Adani group company",
+    "confidence": "high"
    }
   ]
  },
@@ -608,6 +679,14 @@
    },
    "LICI": {
     "name": "Life Insurance Corporation of India",
+    "listed": true
+   },
+   "ADANIPORTS": {
+    "name": "Adani Ports & SEZ Ltd",
+    "listed": true
+   },
+   "AMBUJACEM": {
+    "name": "Ambuja Cements Ltd",
     "listed": true
    }
   },
@@ -758,6 +837,20 @@
     "type": "invests",
     "note": "LIC holds minority institutional stake",
     "confidence": "medium"
+   },
+   {
+    "src": "ADANIGREEN",
+    "dst": "ADANIPORTS",
+    "type": "group",
+    "note": "Fellow Adani group company",
+    "confidence": "high"
+   },
+   {
+    "src": "ADANIGREEN",
+    "dst": "AMBUJACEM",
+    "type": "group",
+    "note": "Fellow Adani group company",
+    "confidence": "high"
    }
   ]
  },
@@ -837,6 +930,14 @@
    },
    "GICRE": {
     "name": "General Insurance Corp of India",
+    "listed": true
+   },
+   "ADANIGREEN": {
+    "name": "Adani Green Energy Ltd",
+    "listed": true
+   },
+   "AMBUJACEM": {
+    "name": "Ambuja Cements Ltd",
     "listed": true
    }
   },
@@ -980,6 +1081,34 @@
     "type": "invests",
     "note": "GIC Re holds institutional equity stake",
     "confidence": "low"
+   },
+   {
+    "src": "ADANIPORTS",
+    "dst": "ADANIGREEN",
+    "type": "group",
+    "note": "Fellow Adani group company",
+    "confidence": "high"
+   },
+   {
+    "src": "ADANIPORTS",
+    "dst": "ADANIPOWER",
+    "type": "group",
+    "note": "Fellow Adani group company",
+    "confidence": "high"
+   },
+   {
+    "src": "ADANIPORTS",
+    "dst": "ADANIENSOL",
+    "type": "group",
+    "note": "Fellow Adani group company",
+    "confidence": "high"
+   },
+   {
+    "src": "ADANIPORTS",
+    "dst": "AMBUJACEM",
+    "type": "group",
+    "note": "Fellow Adani group company",
+    "confidence": "high"
    }
   ]
  },
@@ -1059,6 +1188,10 @@
    },
    "LICI": {
     "name": "Life Insurance Corporation of India",
+    "listed": true
+   },
+   "AMBUJACEM": {
+    "name": "Ambuja Cements Ltd",
     "listed": true
    }
   },
@@ -1216,6 +1349,13 @@
     "type": "invests",
     "note": "LIC holds institutional equity stake",
     "confidence": "medium"
+   },
+   {
+    "src": "ADANIPOWER",
+    "dst": "AMBUJACEM",
+    "type": "group",
+    "note": "Fellow Adani group company",
+    "confidence": "high"
    }
   ]
  },
@@ -1287,6 +1427,14 @@
    },
    "LICI": {
     "name": "Life Insurance Corporation of India",
+    "listed": true
+   },
+   "ADANIGREEN": {
+    "name": "Adani Green Energy Ltd",
+    "listed": true
+   },
+   "ADANIENSOL": {
+    "name": "Adani Energy Solutions Ltd",
     "listed": true
    }
   },
@@ -1472,6 +1620,41 @@
     "type": "invests",
     "note": "Acquired Penna Cement Industries 2024",
     "confidence": "medium"
+   },
+   {
+    "src": "AMBUJACEM",
+    "dst": "ADANIENT",
+    "type": "group",
+    "note": "Fellow Adani group company",
+    "confidence": "high"
+   },
+   {
+    "src": "AMBUJACEM",
+    "dst": "ADANIPORTS",
+    "type": "group",
+    "note": "Fellow Adani group company",
+    "confidence": "high"
+   },
+   {
+    "src": "AMBUJACEM",
+    "dst": "ADANIGREEN",
+    "type": "group",
+    "note": "Fellow Adani group company",
+    "confidence": "high"
+   },
+   {
+    "src": "AMBUJACEM",
+    "dst": "ADANIPOWER",
+    "type": "group",
+    "note": "Fellow Adani group company",
+    "confidence": "high"
+   },
+   {
+    "src": "AMBUJACEM",
+    "dst": "ADANIENSOL",
+    "type": "group",
+    "note": "Fellow Adani group company",
+    "confidence": "high"
    }
   ]
  },
@@ -1491,7 +1674,7 @@
    },
    "HDFCERGO": {
     "name": "HDFC ERGO General Insurance Co Ltd",
-    "listed": true
+    "listed": false
    },
    "SUNPHARMA": {
     "name": "Sun Pharmaceutical Industries Ltd",
@@ -1515,7 +1698,7 @@
    },
    "GLOBALHEALTH": {
     "name": "Global Health Ltd (Medanta)",
-    "listed": true
+    "listed": false
    },
    "NH": {
     "name": "Narayana Hrudayalaya Ltd",
@@ -2441,11 +2624,11 @@
    },
    "VISA": {
     "name": "Visa Inc",
-    "listed": true
+    "listed": false
    },
    "MASTERCARD": {
     "name": "Mastercard Inc",
-    "listed": true
+    "listed": false
    },
    "HDFCBANK": {
     "name": "HDFC Bank Ltd",
@@ -2865,6 +3048,13 @@
     "type": "invests",
     "note": "Holds ~46% in KTM AG via Bajaj Auto Intl Holdings",
     "confidence": "high"
+   },
+   {
+    "src": "BAJAJ-AUTO",
+    "dst": "BAJFINANCE",
+    "type": "group",
+    "note": "Fellow Bajaj group company",
+    "confidence": "high"
    }
   ]
  },
@@ -2904,7 +3094,7 @@
    },
    "ALLIANZ": {
     "name": "Allianz SE",
-    "listed": true
+    "listed": false
    },
    "GICRE": {
     "name": "General Insurance Corporation of India",
@@ -3092,6 +3282,13 @@
     "dst": "BAJAJALLIFE",
     "type": "invests",
     "note": "Holds ~74%, buying Allianz stake toward 100%",
+    "confidence": "high"
+   },
+   {
+    "src": "BAJAJFINSV",
+    "dst": "BAJAJ-AUTO",
+    "type": "group",
+    "note": "Fellow Bajaj group company",
     "confidence": "high"
    }
   ]
@@ -3324,6 +3521,13 @@
     "dst": "BAJAJHFL",
     "type": "invests",
     "note": "Holds ~88.7% of Bajaj Housing Finance",
+    "confidence": "high"
+   },
+   {
+    "src": "BAJFINANCE",
+    "dst": "BAJAJ-AUTO",
+    "type": "group",
+    "note": "Fellow Bajaj group company",
     "confidence": "high"
    }
   ]
@@ -4073,15 +4277,15 @@
    },
    "ERICSSON": {
     "name": "Telefonaktiebolaget LM Ericsson",
-    "listed": true
+    "listed": false
    },
    "NOKIA": {
     "name": "Nokia Corp",
-    "listed": true
+    "listed": false
    },
    "SAMSUNG": {
     "name": "Samsung Electronics Co",
-    "listed": true
+    "listed": false
    },
    "INDUSTOWER": {
     "name": "Indus Towers Ltd",
@@ -4300,7 +4504,7 @@
    },
    "SAMSUNG": {
     "name": "Samsung Electronics Co",
-    "listed": true
+    "listed": false
    },
    "HDFCBANK": {
     "name": "HDFC Bank Ltd",
@@ -5275,7 +5479,7 @@
    },
    "BLACKROCK": {
     "name": "BlackRock Inc",
-    "listed": true
+    "listed": false
    }
   },
   "edges": [
@@ -5697,15 +5901,15 @@
    },
    "MICROSOFT": {
     "name": "Microsoft Corp",
-    "listed": true
+    "listed": false
    },
    "GOOGLE": {
     "name": "Alphabet Inc (Google Cloud)",
-    "listed": true
+    "listed": false
    },
    "SALESFORCE": {
     "name": "Salesforce Inc",
-    "listed": true
+    "listed": false
    },
    "CIGNITI": {
     "name": "Cigniti Technologies Ltd",
@@ -6595,7 +6799,7 @@
    },
    "GOOGLE": {
     "name": "Alphabet Inc (Google)",
-    "listed": true
+    "listed": false
    },
    "KPSINGH": {
     "name": "K.P. Singh family (DLF promoters, Rajdhani/Sidhant)",
@@ -7215,7 +7419,7 @@
    },
    "VOLVO": {
     "name": "AB Volvo",
-    "listed": true
+    "listed": false
    },
    "VECV": {
     "name": "VE Commercial Vehicles Ltd (Volvo Eicher)",
@@ -7696,11 +7900,11 @@
    },
    "PHILIPS": {
     "name": "Koninklijke Philips N.V.",
-    "listed": true
+    "listed": false
    },
    "IHH": {
     "name": "IHH Healthcare Berhad",
-    "listed": true
+    "listed": false
    },
    "AGILUS": {
     "name": "Agilus Diagnostics Ltd (formerly SRL)",
@@ -7716,7 +7920,7 @@
    },
    "GLOBALHEALTH": {
     "name": "Global Health Ltd (Medanta)",
-    "listed": true
+    "listed": false
    },
    "NH": {
     "name": "Narayana Hrudayalaya Ltd",
@@ -8889,11 +9093,11 @@
    },
    "GOOGLE": {
     "name": "Alphabet Inc (Google)",
-    "listed": true
+    "listed": false
    },
    "IBM": {
     "name": "International Business Machines Corp",
-    "listed": true
+    "listed": false
    },
    "HCLINFO": {
     "name": "HCL Infosystems Ltd",
@@ -9090,11 +9294,11 @@
    },
    "VISA": {
     "name": "Visa Inc",
-    "listed": true
+    "listed": false
    },
    "MASTERCARD": {
     "name": "Mastercard Inc",
-    "listed": true
+    "listed": false
    },
    "NPCI": {
     "name": "National Payments Corporation of India",
@@ -9974,6 +10178,13 @@
     "type": "invests",
     "note": "Hindalco owns 100% of Utkal Alumina",
     "confidence": "high"
+   },
+   {
+    "src": "HINDALCO",
+    "dst": "ULTRACEMCO",
+    "type": "group",
+    "note": "Fellow Aditya Birla group company",
+    "confidence": "high"
    }
   ]
  },
@@ -10270,11 +10481,11 @@
    },
    "VISA": {
     "name": "Visa Inc",
-    "listed": true
+    "listed": false
    },
    "MASTERCARD": {
     "name": "Mastercard Inc",
-    "listed": true
+    "listed": false
    },
    "NPCI": {
     "name": "National Payments Corporation of India",
@@ -10497,7 +10708,7 @@
    },
    "PRU": {
     "name": "Prudential plc",
-    "listed": true
+    "listed": false
    },
    "ICICIAMC": {
     "name": "ICICI Prudential Asset Management Co Ltd",
@@ -10777,6 +10988,30 @@
    "LICI": {
     "name": "Life Insurance Corporation of India",
     "listed": true
+   },
+   "TCS": {
+    "name": "Tata Consultancy Services Ltd",
+    "listed": true
+   },
+   "TATAMOTORS": {
+    "name": "Tata Motors Ltd",
+    "listed": true
+   },
+   "TATASTEEL": {
+    "name": "Tata Steel Ltd",
+    "listed": true
+   },
+   "TITAN": {
+    "name": "Titan Company Ltd",
+    "listed": true
+   },
+   "TATAPOWER": {
+    "name": "Tata Power Co Ltd",
+    "listed": true
+   },
+   "TRENT": {
+    "name": "Trent Ltd",
+    "listed": true
    }
   },
   "edges": [
@@ -10904,6 +11139,55 @@
     "dst": "ORIENTHOT",
     "type": "invests",
     "note": "IHCL holds ~35% promoter stake in Oriental Hotels",
+    "confidence": "high"
+   },
+   {
+    "src": "INDHOTEL",
+    "dst": "TCS",
+    "type": "group",
+    "note": "Fellow Tata group company (Tata Sons)",
+    "confidence": "high"
+   },
+   {
+    "src": "INDHOTEL",
+    "dst": "TATAMOTORS",
+    "type": "group",
+    "note": "Fellow Tata group company (Tata Sons)",
+    "confidence": "high"
+   },
+   {
+    "src": "INDHOTEL",
+    "dst": "TATASTEEL",
+    "type": "group",
+    "note": "Fellow Tata group company (Tata Sons)",
+    "confidence": "high"
+   },
+   {
+    "src": "INDHOTEL",
+    "dst": "TITAN",
+    "type": "group",
+    "note": "Fellow Tata group company (Tata Sons)",
+    "confidence": "high"
+   },
+   {
+    "src": "INDHOTEL",
+    "dst": "TATAPOWER",
+    "type": "group",
+    "note": "Fellow Tata group company (Tata Sons)",
+    "confidence": "high"
+   },
+   {
+    "src": "INDHOTEL",
+    "dst": "TATACONSUM",
+    "type": "group",
+    "note": "Fellow Tata group company (Tata Sons)",
+    "confidence": "high"
+   },
+   {
+    "src": "INDHOTEL",
+    "dst": "TRENT",
+    "type": "group",
+    "note": "Fellow Tata group company (Tata Sons)",
     "confidence": "high"
    }
   ]
@@ -11171,11 +11455,11 @@
    },
    "GOOGLE": {
     "name": "Alphabet Inc (Google)",
-    "listed": true
+    "listed": false
    },
    "IBM": {
     "name": "International Business Machines Corp",
-    "listed": true
+    "listed": false
    },
    "EDGEVERVE": {
     "name": "EdgeVerve Systems Ltd (Finacle)",
@@ -11207,11 +11491,11 @@
    },
    "COGNIZANT": {
     "name": "Cognizant Technology Solutions",
-    "listed": true
+    "listed": false
    },
    "ACCENTURE": {
     "name": "Accenture plc",
-    "listed": true
+    "listed": false
    },
    "INFYFOUNDERS": {
     "name": "Infosys Founders (Murthy & co-founders)",
@@ -12372,7 +12656,7 @@
    },
    "GOOGLE": {
     "name": "Alphabet Inc (Google Cloud)",
-    "listed": true
+    "listed": false
    },
    "RELIANCE": {
     "name": "Reliance Industries Ltd",
@@ -12380,7 +12664,7 @@
    },
    "BLACKROCK": {
     "name": "BlackRock Inc",
-    "listed": true
+    "listed": false
    },
    "JIOFINANCELTD": {
     "name": "Jio Finance Ltd (NBFC)",
@@ -12871,7 +13155,7 @@
    },
    "VISA": {
     "name": "Visa Inc",
-    "listed": true
+    "listed": false
    },
    "RELIANCE": {
     "name": "Reliance Industries Ltd",
@@ -13317,11 +13601,11 @@
    },
    "GOOGLE": {
     "name": "Alphabet Inc (Google)",
-    "listed": true
+    "listed": false
    },
    "IBM": {
     "name": "International Business Machines Corp",
-    "listed": true
+    "listed": false
    },
    "DLF": {
     "name": "DLF Ltd",
@@ -13540,7 +13824,7 @@
    },
    "GOOGLE": {
     "name": "Alphabet Inc (Google)",
-    "listed": true
+    "listed": false
    },
    "HDFCBANK": {
     "name": "HDFC Bank Ltd",
@@ -13568,7 +13852,7 @@
    },
    "BLACKROCK": {
     "name": "BlackRock Inc",
-    "listed": true
+    "listed": false
    }
   },
   "edges": [
@@ -14451,7 +14735,7 @@
    },
    "SUZUKI": {
     "name": "Suzuki Motor Corporation",
-    "listed": true
+    "listed": false
    },
    "TOYOTA": {
     "name": "Toyota Kirloskar Motor",
@@ -14710,7 +14994,7 @@
    },
    "PHILIPS": {
     "name": "Koninklijke Philips N.V.",
-    "listed": true
+    "listed": false
    },
    "MAXLAB": {
     "name": "Max Lab (Max Healthcare diagnostics)",
@@ -14730,7 +15014,7 @@
    },
    "GLOBALHEALTH": {
     "name": "Global Health Ltd (Medanta)",
-    "listed": true
+    "listed": false
    },
    "NH": {
     "name": "Narayana Hrudayalaya Ltd",
@@ -15178,11 +15462,11 @@
    },
    "IBM": {
     "name": "International Business Machines Corp",
-    "listed": true
+    "listed": false
    },
    "GOOGLE": {
     "name": "Alphabet Inc (Google)",
-    "listed": true
+    "listed": false
    },
    "INFY": {
     "name": "Infosys Ltd",
@@ -15607,11 +15891,11 @@
    },
    "GOOGLE": {
     "name": "Alphabet Inc (Google)",
-    "listed": true
+    "listed": false
    },
    "IBM": {
     "name": "International Business Machines Corp",
-    "listed": true
+    "listed": false
    },
    "ETERNAL": {
     "name": "Eternal Ltd (Zomato)",
@@ -15822,7 +16106,7 @@
    },
    "NESTLE-SA": {
     "name": "Nestle S.A.",
-    "listed": true
+    "listed": false
    },
    "HINDUNILVR": {
     "name": "Hindustan Unilever Ltd",
@@ -16544,7 +16828,7 @@
    },
    "SLB": {
     "name": "SLB (Schlumberger)",
-    "listed": true
+    "listed": false
    },
    "GOI": {
     "name": "Government of India",
@@ -16746,19 +17030,19 @@
    },
    "IBM": {
     "name": "International Business Machines Corp",
-    "listed": true
+    "listed": false
    },
    "MICROSOFT": {
     "name": "Microsoft Corp",
-    "listed": true
+    "listed": false
    },
    "GOOGLE": {
     "name": "Alphabet Inc (Google Cloud)",
-    "listed": true
+    "listed": false
    },
    "SALESFORCE": {
     "name": "Salesforce Inc",
-    "listed": true
+    "listed": false
    },
    "MEDIAAGILITY": {
     "name": "MediaAgility (Google Cloud partner)",
@@ -18046,7 +18330,7 @@
    },
    "ARAMCO": {
     "name": "Saudi Aramco",
-    "listed": true
+    "listed": false
    },
    "BHARTIARTL": {
     "name": "Bharti Airtel Ltd",
@@ -18506,11 +18790,11 @@
    },
    "VISA": {
     "name": "Visa Inc",
-    "listed": true
+    "listed": false
    },
    "MASTERCARD": {
     "name": "Mastercard Inc",
-    "listed": true
+    "listed": false
    },
    "NPCI": {
     "name": "National Payments Corporation of India",
@@ -18679,6 +18963,13 @@
     "type": "invests",
     "note": "GIC Re holds minority institutional stake",
     "confidence": "low"
+   },
+   {
+    "src": "SBICARD",
+    "dst": "SBILIFE",
+    "type": "group",
+    "note": "Fellow SBI group company",
+    "confidence": "high"
    }
   ]
  },
@@ -19390,7 +19681,7 @@
    },
    "SIEMENSAG": {
     "name": "Siemens AG",
-    "listed": true
+    "listed": false
    },
    "SIEMENSENERGY": {
     "name": "Siemens Energy India Ltd",
@@ -19398,7 +19689,7 @@
    },
    "SAMSUNG": {
     "name": "Samsung Electronics Co",
-    "listed": true
+    "listed": false
    },
    "HDFCBANK": {
     "name": "HDFC Bank Ltd",
@@ -19917,6 +20208,30 @@
    "LICI": {
     "name": "Life Insurance Corporation of India",
     "listed": true
+   },
+   "TCS": {
+    "name": "Tata Consultancy Services Ltd",
+    "listed": true
+   },
+   "TATAMOTORS": {
+    "name": "Tata Motors Ltd",
+    "listed": true
+   },
+   "TATASTEEL": {
+    "name": "Tata Steel Ltd",
+    "listed": true
+   },
+   "TITAN": {
+    "name": "Titan Company Ltd",
+    "listed": true
+   },
+   "TATAPOWER": {
+    "name": "Tata Power Co Ltd",
+    "listed": true
+   },
+   "INDHOTEL": {
+    "name": "Indian Hotels Co Ltd (Taj)",
+    "listed": true
    }
   },
   "edges": [
@@ -20087,6 +20402,55 @@
     "type": "invests",
     "note": "50% in Tata Starbucks JV",
     "confidence": "high"
+   },
+   {
+    "src": "TATACONSUM",
+    "dst": "TCS",
+    "type": "group",
+    "note": "Fellow Tata group company (Tata Sons)",
+    "confidence": "high"
+   },
+   {
+    "src": "TATACONSUM",
+    "dst": "TATAMOTORS",
+    "type": "group",
+    "note": "Fellow Tata group company (Tata Sons)",
+    "confidence": "high"
+   },
+   {
+    "src": "TATACONSUM",
+    "dst": "TATASTEEL",
+    "type": "group",
+    "note": "Fellow Tata group company (Tata Sons)",
+    "confidence": "high"
+   },
+   {
+    "src": "TATACONSUM",
+    "dst": "TITAN",
+    "type": "group",
+    "note": "Fellow Tata group company (Tata Sons)",
+    "confidence": "high"
+   },
+   {
+    "src": "TATACONSUM",
+    "dst": "TATAPOWER",
+    "type": "group",
+    "note": "Fellow Tata group company (Tata Sons)",
+    "confidence": "high"
+   },
+   {
+    "src": "TATACONSUM",
+    "dst": "TRENT",
+    "type": "group",
+    "note": "Fellow Tata group company (Tata Sons)",
+    "confidence": "high"
+   },
+   {
+    "src": "TATACONSUM",
+    "dst": "INDHOTEL",
+    "type": "group",
+    "note": "Fellow Tata group company (Tata Sons)",
+    "confidence": "high"
    }
   ]
  },
@@ -20178,6 +20542,26 @@
    },
    "TATATECH": {
     "name": "Tata Technologies Ltd",
+    "listed": true
+   },
+   "TCS": {
+    "name": "Tata Consultancy Services Ltd",
+    "listed": true
+   },
+   "TITAN": {
+    "name": "Titan Company Ltd",
+    "listed": true
+   },
+   "TATACONSUM": {
+    "name": "Tata Consumer Products Ltd",
+    "listed": true
+   },
+   "TRENT": {
+    "name": "Trent Ltd",
+    "listed": true
+   },
+   "INDHOTEL": {
+    "name": "Indian Hotels Co Ltd (Taj)",
     "listed": true
    }
   },
@@ -20342,6 +20726,55 @@
     "type": "invests",
     "note": "Tata Motors is promoter, holds ~53% of Tata Tech",
     "confidence": "high"
+   },
+   {
+    "src": "TATAMOTORS",
+    "dst": "TCS",
+    "type": "group",
+    "note": "Fellow Tata group company (Tata Sons)",
+    "confidence": "high"
+   },
+   {
+    "src": "TATAMOTORS",
+    "dst": "TATASTEEL",
+    "type": "group",
+    "note": "Fellow Tata group company (Tata Sons)",
+    "confidence": "high"
+   },
+   {
+    "src": "TATAMOTORS",
+    "dst": "TITAN",
+    "type": "group",
+    "note": "Fellow Tata group company (Tata Sons)",
+    "confidence": "high"
+   },
+   {
+    "src": "TATAMOTORS",
+    "dst": "TATAPOWER",
+    "type": "group",
+    "note": "Fellow Tata group company (Tata Sons)",
+    "confidence": "high"
+   },
+   {
+    "src": "TATAMOTORS",
+    "dst": "TATACONSUM",
+    "type": "group",
+    "note": "Fellow Tata group company (Tata Sons)",
+    "confidence": "high"
+   },
+   {
+    "src": "TATAMOTORS",
+    "dst": "TRENT",
+    "type": "group",
+    "note": "Fellow Tata group company (Tata Sons)",
+    "confidence": "high"
+   },
+   {
+    "src": "TATAMOTORS",
+    "dst": "INDHOTEL",
+    "type": "group",
+    "note": "Fellow Tata group company (Tata Sons)",
+    "confidence": "high"
    }
   ]
  },
@@ -20417,6 +20850,30 @@
    },
    "LICI": {
     "name": "Life Insurance Corporation of India",
+    "listed": true
+   },
+   "TCS": {
+    "name": "Tata Consultancy Services Ltd",
+    "listed": true
+   },
+   "TATAMOTORS": {
+    "name": "Tata Motors Ltd",
+    "listed": true
+   },
+   "TITAN": {
+    "name": "Titan Company Ltd",
+    "listed": true
+   },
+   "TATACONSUM": {
+    "name": "Tata Consumer Products Ltd",
+    "listed": true
+   },
+   "TRENT": {
+    "name": "Trent Ltd",
+    "listed": true
+   },
+   "INDHOTEL": {
+    "name": "Indian Hotels Co Ltd (Taj)",
     "listed": true
    }
   },
@@ -20574,6 +21031,48 @@
     "type": "invests",
     "note": "Tata Power owns Tata Power Renewable Energy (clean-energy arm)",
     "confidence": "high"
+   },
+   {
+    "src": "TATAPOWER",
+    "dst": "TCS",
+    "type": "group",
+    "note": "Fellow Tata group company (Tata Sons)",
+    "confidence": "high"
+   },
+   {
+    "src": "TATAPOWER",
+    "dst": "TATAMOTORS",
+    "type": "group",
+    "note": "Fellow Tata group company (Tata Sons)",
+    "confidence": "high"
+   },
+   {
+    "src": "TATAPOWER",
+    "dst": "TITAN",
+    "type": "group",
+    "note": "Fellow Tata group company (Tata Sons)",
+    "confidence": "high"
+   },
+   {
+    "src": "TATAPOWER",
+    "dst": "TATACONSUM",
+    "type": "group",
+    "note": "Fellow Tata group company (Tata Sons)",
+    "confidence": "high"
+   },
+   {
+    "src": "TATAPOWER",
+    "dst": "TRENT",
+    "type": "group",
+    "note": "Fellow Tata group company (Tata Sons)",
+    "confidence": "high"
+   },
+   {
+    "src": "TATAPOWER",
+    "dst": "INDHOTEL",
+    "type": "group",
+    "note": "Fellow Tata group company (Tata Sons)",
+    "confidence": "high"
    }
   ]
  },
@@ -20645,6 +21144,22 @@
    },
    "GICRE": {
     "name": "General Insurance Corporation of India",
+    "listed": true
+   },
+   "TITAN": {
+    "name": "Titan Company Ltd",
+    "listed": true
+   },
+   "TATACONSUM": {
+    "name": "Tata Consumer Products Ltd",
+    "listed": true
+   },
+   "TRENT": {
+    "name": "Trent Ltd",
+    "listed": true
+   },
+   "INDHOTEL": {
+    "name": "Indian Hotels Co Ltd (Taj)",
     "listed": true
    }
   },
@@ -20823,6 +21338,55 @@
     "type": "invests",
     "note": "Wholly-owned European arm Tata Steel Netherlands",
     "confidence": "high"
+   },
+   {
+    "src": "TATASTEEL",
+    "dst": "TCS",
+    "type": "group",
+    "note": "Fellow Tata group company (Tata Sons)",
+    "confidence": "high"
+   },
+   {
+    "src": "TATASTEEL",
+    "dst": "TATAMOTORS",
+    "type": "group",
+    "note": "Fellow Tata group company (Tata Sons)",
+    "confidence": "high"
+   },
+   {
+    "src": "TATASTEEL",
+    "dst": "TITAN",
+    "type": "group",
+    "note": "Fellow Tata group company (Tata Sons)",
+    "confidence": "high"
+   },
+   {
+    "src": "TATASTEEL",
+    "dst": "TATAPOWER",
+    "type": "group",
+    "note": "Fellow Tata group company (Tata Sons)",
+    "confidence": "high"
+   },
+   {
+    "src": "TATASTEEL",
+    "dst": "TATACONSUM",
+    "type": "group",
+    "note": "Fellow Tata group company (Tata Sons)",
+    "confidence": "high"
+   },
+   {
+    "src": "TATASTEEL",
+    "dst": "TRENT",
+    "type": "group",
+    "note": "Fellow Tata group company (Tata Sons)",
+    "confidence": "high"
+   },
+   {
+    "src": "TATASTEEL",
+    "dst": "INDHOTEL",
+    "type": "group",
+    "note": "Fellow Tata group company (Tata Sons)",
+    "confidence": "high"
    }
   ]
  },
@@ -20858,11 +21422,11 @@
    },
    "ACCENTURE": {
     "name": "Accenture plc",
-    "listed": true
+    "listed": false
    },
    "COGNIZANT": {
     "name": "Cognizant Technology Solutions",
-    "listed": true
+    "listed": false
    },
    "TATAMOTORS": {
     "name": "Tata Motors Ltd",
@@ -20890,15 +21454,15 @@
    },
    "IBM": {
     "name": "International Business Machines Corp",
-    "listed": true
+    "listed": false
    },
    "MICROSOFT": {
     "name": "Microsoft Corp",
-    "listed": true
+    "listed": false
    },
    "GOOGLE": {
     "name": "Alphabet Inc (Google)",
-    "listed": true
+    "listed": false
    },
    "LICI": {
     "name": "Life Insurance Corporation of India",
@@ -20907,6 +21471,22 @@
    "SBIAMC": {
     "name": "SBI Funds Management Ltd (SBI Mutual Fund)",
     "listed": false
+   },
+   "TATAPOWER": {
+    "name": "Tata Power Co Ltd",
+    "listed": true
+   },
+   "TATACONSUM": {
+    "name": "Tata Consumer Products Ltd",
+    "listed": true
+   },
+   "TRENT": {
+    "name": "Trent Ltd",
+    "listed": true
+   },
+   "INDHOTEL": {
+    "name": "Indian Hotels Co Ltd (Taj)",
+    "listed": true
    }
   },
   "edges": [
@@ -21070,6 +21650,55 @@
     "type": "invests",
     "note": "SBI Mutual Fund schemes hold stake",
     "confidence": "low"
+   },
+   {
+    "src": "TCS",
+    "dst": "TATAMOTORS",
+    "type": "group",
+    "note": "Fellow Tata group company (Tata Sons)",
+    "confidence": "high"
+   },
+   {
+    "src": "TCS",
+    "dst": "TATASTEEL",
+    "type": "group",
+    "note": "Fellow Tata group company (Tata Sons)",
+    "confidence": "high"
+   },
+   {
+    "src": "TCS",
+    "dst": "TITAN",
+    "type": "group",
+    "note": "Fellow Tata group company (Tata Sons)",
+    "confidence": "high"
+   },
+   {
+    "src": "TCS",
+    "dst": "TATAPOWER",
+    "type": "group",
+    "note": "Fellow Tata group company (Tata Sons)",
+    "confidence": "high"
+   },
+   {
+    "src": "TCS",
+    "dst": "TATACONSUM",
+    "type": "group",
+    "note": "Fellow Tata group company (Tata Sons)",
+    "confidence": "high"
+   },
+   {
+    "src": "TCS",
+    "dst": "TRENT",
+    "type": "group",
+    "note": "Fellow Tata group company (Tata Sons)",
+    "confidence": "high"
+   },
+   {
+    "src": "TCS",
+    "dst": "INDHOTEL",
+    "type": "group",
+    "note": "Fellow Tata group company (Tata Sons)",
+    "confidence": "high"
    }
   ]
  },
@@ -21299,6 +21928,13 @@
     "type": "invests",
     "note": "GIC Re among institutional holders",
     "confidence": "low"
+   },
+   {
+    "src": "TECHM",
+    "dst": "M&M",
+    "type": "group",
+    "note": "Fellow Mahindra group company",
+    "confidence": "high"
    }
   ]
  },
@@ -21366,6 +22002,34 @@
    },
    "LICI": {
     "name": "Life Insurance Corporation of India",
+    "listed": true
+   },
+   "TCS": {
+    "name": "Tata Consultancy Services Ltd",
+    "listed": true
+   },
+   "TATAMOTORS": {
+    "name": "Tata Motors Ltd",
+    "listed": true
+   },
+   "TATASTEEL": {
+    "name": "Tata Steel Ltd",
+    "listed": true
+   },
+   "TATAPOWER": {
+    "name": "Tata Power Co Ltd",
+    "listed": true
+   },
+   "TATACONSUM": {
+    "name": "Tata Consumer Products Ltd",
+    "listed": true
+   },
+   "TRENT": {
+    "name": "Trent Ltd",
+    "listed": true
+   },
+   "INDHOTEL": {
+    "name": "Indian Hotels Co Ltd (Taj)",
     "listed": true
    }
   },
@@ -21508,6 +22172,55 @@
     "dst": "CARATLANE",
     "type": "invests",
     "note": "Holds ~99.9% of CaratLane",
+    "confidence": "high"
+   },
+   {
+    "src": "TITAN",
+    "dst": "TCS",
+    "type": "group",
+    "note": "Fellow Tata group company (Tata Sons)",
+    "confidence": "high"
+   },
+   {
+    "src": "TITAN",
+    "dst": "TATAMOTORS",
+    "type": "group",
+    "note": "Fellow Tata group company (Tata Sons)",
+    "confidence": "high"
+   },
+   {
+    "src": "TITAN",
+    "dst": "TATASTEEL",
+    "type": "group",
+    "note": "Fellow Tata group company (Tata Sons)",
+    "confidence": "high"
+   },
+   {
+    "src": "TITAN",
+    "dst": "TATAPOWER",
+    "type": "group",
+    "note": "Fellow Tata group company (Tata Sons)",
+    "confidence": "high"
+   },
+   {
+    "src": "TITAN",
+    "dst": "TATACONSUM",
+    "type": "group",
+    "note": "Fellow Tata group company (Tata Sons)",
+    "confidence": "high"
+   },
+   {
+    "src": "TITAN",
+    "dst": "TRENT",
+    "type": "group",
+    "note": "Fellow Tata group company (Tata Sons)",
+    "confidence": "high"
+   },
+   {
+    "src": "TITAN",
+    "dst": "INDHOTEL",
+    "type": "group",
+    "note": "Fellow Tata group company (Tata Sons)",
     "confidence": "high"
    }
   ]
@@ -21813,6 +22526,22 @@
    "LICI": {
     "name": "Life Insurance Corporation of India",
     "listed": true
+   },
+   "TCS": {
+    "name": "Tata Consultancy Services Ltd",
+    "listed": true
+   },
+   "TATAMOTORS": {
+    "name": "Tata Motors Ltd",
+    "listed": true
+   },
+   "TATASTEEL": {
+    "name": "Tata Steel Ltd",
+    "listed": true
+   },
+   "TATAPOWER": {
+    "name": "Tata Power Co Ltd",
+    "listed": true
    }
   },
   "edges": [
@@ -21969,6 +22698,34 @@
     "type": "invests",
     "note": "Trent holds equity in Booker India (wholesale cash-and-carry)",
     "confidence": "medium"
+   },
+   {
+    "src": "TRENT",
+    "dst": "TCS",
+    "type": "group",
+    "note": "Fellow Tata group company (Tata Sons)",
+    "confidence": "high"
+   },
+   {
+    "src": "TRENT",
+    "dst": "TATAMOTORS",
+    "type": "group",
+    "note": "Fellow Tata group company (Tata Sons)",
+    "confidence": "high"
+   },
+   {
+    "src": "TRENT",
+    "dst": "TATASTEEL",
+    "type": "group",
+    "note": "Fellow Tata group company (Tata Sons)",
+    "confidence": "high"
+   },
+   {
+    "src": "TRENT",
+    "dst": "TATAPOWER",
+    "type": "group",
+    "note": "Fellow Tata group company (Tata Sons)",
+    "confidence": "high"
    }
   ]
  },
@@ -22407,6 +23164,13 @@
     "type": "invests",
     "note": "UltraTech acquired ~55% of India Cements in 2024",
     "confidence": "high"
+   },
+   {
+    "src": "ULTRACEMCO",
+    "dst": "HINDALCO",
+    "type": "group",
+    "note": "Fellow Aditya Birla group company",
+    "confidence": "high"
    }
   ]
  },
@@ -22446,7 +23210,7 @@
    },
    "DIAGEO": {
     "name": "Diageo PLC",
-    "listed": true
+    "listed": false
    },
    "PERNOD": {
     "name": "Pernod Ricard India Pvt Ltd",
@@ -23096,11 +23860,11 @@
    },
    "GOOGLE": {
     "name": "Alphabet Inc (Google)",
-    "listed": true
+    "listed": false
    },
    "IBM": {
     "name": "International Business Machines Corp",
-    "listed": true
+    "listed": false
    },
    "WIPROENT": {
     "name": "Wipro Enterprises Pvt Ltd",
@@ -23132,11 +23896,11 @@
    },
    "ACCENTURE": {
     "name": "Accenture plc",
-    "listed": true
+    "listed": false
    },
    "COGNIZANT": {
     "name": "Cognizant Technology Solutions",
-    "listed": true
+    "listed": false
    },
    "PREMJI": {
     "name": "Azim Premji & family (Premji Invest/Hasham)",
@@ -23148,7 +23912,7 @@
    },
    "BLACKROCK": {
     "name": "BlackRock Inc",
-    "listed": true
+    "listed": false
    }
   },
   "edges": [
