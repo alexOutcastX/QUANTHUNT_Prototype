@@ -1052,9 +1052,10 @@ _MB_TTL = 6 * 3600
 
 @app.route("/multibagger/screen")
 def multibagger_screen():
-    """Full-universe analyser-score screen (background job; see mb_screen.py)."""
+    """Full-universe analyser-score screen (background job; see mb_screen.py).
+    ?refresh=1 forces a re-run even when the cached result is still fresh."""
     import mb_screen as mbs
-    mbs.ensure_started(get_universe)
+    mbs.ensure_started(get_universe, force=request.args.get("refresh") == "1")
     return jsonify(mbs.snapshot())
 
 
