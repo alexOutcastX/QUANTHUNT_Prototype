@@ -108,10 +108,31 @@ export default function MomentumScreen() {
     };
   }, [tick]);
 
-  const shown = useMemo(
-    () => hits.filter((h) => setupFilter === 'all' || h.setup === setupFilter),
-    [hits, setupFilter],
-  );
+  // Tap-to-sort columns (default: score, best first). Numeric columns sort
+  // desc first; text columns (symbol/name/exch/setup) asc first.
+  const [sortCol, setSortCol] = useState<keyof MomentumHit>('score');
+  const [sortDir, setSortDir] = useState<1 | -1>(-1);
+  const onSort = (col: keyof MomentumHit) => {
+    if (col === sortCol) setSortDir((d) => (d === 1 ? -1 : 1));
+    else {
+      setSortCol(col);
+      setSortDir(col === 'symbol' || col === 'name' || col === 'exchange' || col === 'setup' ? 1 : -1);
+    }
+  };
+  const shown = useMemo(() => {
+    const filtered = hits.filter((h) => setupFilter === 'all' || h.setup === setupFilter);
+    return [...filtered].sort((a, b) => {
+      const va = a[sortCol];
+      const vb = b[sortCol];
+      if (typeof va === 'string' || typeof vb === 'string') {
+        return String(va ?? '').localeCompare(String(vb ?? '')) * sortDir;
+      }
+      const na = typeof va === 'number' && isFinite(va) ? va : -Infinity;
+      const nb = typeof vb === 'number' && isFinite(vb) ? vb : -Infinity;
+      return (na - nb) * sortDir;
+    });
+  }, [hits, setupFilter, sortCol, sortDir]);
+  const arrow = (col: keyof MomentumHit) => (sortCol === col ? (sortDir === 1 ? ' ↑' : ' ↓') : '');
   const counts = useMemo(() => {
     const c: Record<string, number> = { breakout: 0, fired: 0, pullback: 0 };
     hits.forEach((h) => c[h.setup]++);
@@ -175,18 +196,42 @@ export default function MomentumScreen() {
 
         {shown.length ? (
           <View style={styles.headerRow}>
-            <Text style={[styles.th, { width: 96 }]}>SYMBOL</Text>
-            <Text style={[styles.th, { flex: 3, minWidth: 170 }]}>NAME</Text>
-            <Text style={[styles.th, { width: 46 }]}>EXCH</Text>
-            <Text style={[styles.th, { width: 150 }]}>SETUP</Text>
-            <Text style={[styles.thR, { width: 56 }]}>SCORE</Text>
-            <Text style={[styles.thR, { width: 56 }]}>PROB</Text>
-            <Text style={[styles.thR, { width: 96 }]}>LTP</Text>
-            <Text style={[styles.thR, { width: 70 }]}>% CHG</Text>
-            <Text style={[styles.thR, { width: 48 }]}>RSI</Text>
-            <Text style={[styles.thR, { width: 60 }]}>RVOL</Text>
-            <Text style={[styles.thR, { width: 80 }]}>VS 200DMA</Text>
-            <Text style={[styles.thR, { width: 70 }]}>52W HI</Text>
+            <TouchableOpacity style={{ width: 96 }} onPress={() => onSort('symbol')} activeOpacity={0.7}>
+              <Text style={styles.th}>SYMBOL{arrow('symbol')}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={{ flex: 3, minWidth: 170 }} onPress={() => onSort('name')} activeOpacity={0.7}>
+              <Text style={styles.th}>NAME{arrow('name')}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={{ width: 46 }} onPress={() => onSort('exchange')} activeOpacity={0.7}>
+              <Text style={styles.th}>EXCH{arrow('exchange')}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={{ width: 150 }} onPress={() => onSort('setup')} activeOpacity={0.7}>
+              <Text style={styles.th}>SETUP{arrow('setup')}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={{ width: 56 }} onPress={() => onSort('score')} activeOpacity={0.7}>
+              <Text style={styles.thR}>SCORE{arrow('score')}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={{ width: 56 }} onPress={() => onSort('probability')} activeOpacity={0.7}>
+              <Text style={styles.thR}>PROB{arrow('probability')}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={{ width: 96 }} onPress={() => onSort('price')} activeOpacity={0.7}>
+              <Text style={styles.thR}>LTP{arrow('price')}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={{ width: 70 }} onPress={() => onSort('chg')} activeOpacity={0.7}>
+              <Text style={styles.thR}>% CHG{arrow('chg')}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={{ width: 48 }} onPress={() => onSort('rsi')} activeOpacity={0.7}>
+              <Text style={styles.thR}>RSI{arrow('rsi')}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={{ width: 60 }} onPress={() => onSort('relvol')} activeOpacity={0.7}>
+              <Text style={styles.thR}>RVOL{arrow('relvol')}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={{ width: 80 }} onPress={() => onSort('d200')} activeOpacity={0.7}>
+              <Text style={styles.thR}>VS 200DMA{arrow('d200')}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={{ width: 70 }} onPress={() => onSort('pct_from_high')} activeOpacity={0.7}>
+              <Text style={styles.thR}>52W HI{arrow('pct_from_high')}</Text>
+            </TouchableOpacity>
             <Text style={[styles.th, { width: 110, textAlign: 'center' }]}>ACTIONS</Text>
           </View>
         ) : null}
