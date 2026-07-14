@@ -87,12 +87,21 @@ def fetch_metrics(symbol: str, with_history: bool = True):
         "pct_from_high_pct":   round((price / hi52 - 1) * 100, 1) if price and hi52 else None,
         "price_cagr_3y_pct":   cagr3,
     }
+    # Quote extras for list views (same info call — zero extra cost).
+    prev = info.get("previousClose") or info.get("regularMarketPreviousClose")
+    vol = info.get("volume") or info.get("regularMarketVolume")
+    avgvol = info.get("averageVolume")
+    d50avg = info.get("fiftyDayAverage")
     ident = {
         "symbol":   symbol.upper().strip(),
         "name":     info.get("longName") or info.get("shortName") or symbol.upper(),
         "sector":   info.get("sector"),
         "industry": info.get("industry"),
         "price":    price,
+        "chg":      round((price / prev - 1) * 100, 2) if price and prev else None,
+        "volume":   vol,
+        "relvol":   round(vol / avgvol, 2) if vol and avgvol else None,
+        "vs_50dma": round((price / d50avg - 1) * 100, 1) if price and d50avg else None,
         "about":    (info.get("longBusinessSummary") or "")[:500],
     }
     return metrics, ident
