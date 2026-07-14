@@ -38,5 +38,6 @@ yarn-error.*
 
 # generated native folders
 /ios
-/android
+# /android is committed — it's the Capacitor native project (its own
+# android/.gitignore excludes build outputs like *.apk, .gradle, build/).
 tests/build/
