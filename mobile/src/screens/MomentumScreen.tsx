@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { MomentumHit, api } from '../api';
 import StockDetail from '../components/StockDetail';
+import { useResponsive } from '../responsive';
 import { Row } from '../screener';
 import { addSymbol, loadWatchlist, normSymbol, removeSymbol } from '../watchlist';
 import { EmptyState, Loading, ScreenTitle } from '../ui';
@@ -25,6 +26,37 @@ const SETUP_FILTERS: { key: 'all' | SetupKind; label: string }[] = [
 const setupColor = (s: SetupKind) =>
   s === 'fired' ? theme.green : s === 'breakout' ? GOLD : theme.accent;
 
+// Desktop table columns (fixed widths → header + rows share one width so they
+// stay aligned inside the horizontal scroll). `text` = left aligned.
+type ColKey = keyof MomentumHit;
+type ColDef = { key: ColKey; label: string; w: number; text?: boolean };
+const COLS: ColDef[] = [
+  { key: 'symbol', label: 'SYMBOL', w: 92, text: true },
+  { key: 'name', label: 'NAME', w: 190, text: true },
+  { key: 'exchange', label: 'EXCH', w: 46, text: true },
+  { key: 'setup', label: 'SETUP', w: 150, text: true },
+  { key: 'score', label: 'SCORE', w: 56 },
+  { key: 'probability', label: 'PROB', w: 54 },
+  { key: 'price', label: 'LTP', w: 94 },
+  { key: 'chg', label: '% CHG', w: 70 },
+  { key: 'rsi', label: 'RSI', w: 46 },
+  { key: 'relvol', label: 'RVOL', w: 58 },
+  { key: 'd200', label: 'VS 200DMA', w: 82 },
+  { key: 'pct_from_high', label: '52W HI', w: 68 },
+];
+const ACTIONS_W = 96;
+const TABLE_W = COLS.reduce((a, c) => a + c.w, 0) + ACTIONS_W;
+
+// Mobile sort options (headers are gone on the card layout).
+const MOBILE_SORTS: { key: ColKey; label: string }[] = [
+  { key: 'score', label: 'Score' },
+  { key: 'probability', label: 'Prob' },
+  { key: 'chg', label: '% Chg' },
+  { key: 'relvol', label: 'RVol' },
+  { key: 'rsi', label: 'RSI' },
+  { key: 'price', label: 'LTP' },
+];
+
 const pct = (v: number | null | undefined, d = 1) =>
   v == null || !isFinite(v) ? '—' : (v >= 0 ? '+' : '') + v.toFixed(d) + '%';
 const fmtIN = (v: number | null | undefined) =>
@@ -35,6 +67,26 @@ const fmtAsof = (epoch: number) =>
   new Date(epoch * 1000).toLocaleString('en-IN', {
     day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit',
   });
+
+// The expandable technical read — shared by the desktop table and mobile cards.
+function ReadBox({ h, c, width }: { h: MomentumHit; c: string; width?: number }) {
+  return (
+    <View style={[styles.readBox, width ? { width } : { width: '100%' }]}>
+      <View style={styles.probTrack}>
+        <View style={[styles.probFill, { width: `${h.probability}%`, backgroundColor: c }]} />
+      </View>
+      <Text style={styles.readMeta}>
+        Technical score {h.score}/100 · indicative follow-through probability {h.probability}%
+      </Text>
+      {h.signals.map((s) => (
+        <Text key={s} style={styles.sigTxt}>▲ <Text style={styles.sigBody}>{s}</Text></Text>
+      ))}
+      {h.cautions.map((s) => (
+        <Text key={s} style={styles.cauTxt}>▼ <Text style={styles.sigBody}>{s}</Text></Text>
+      ))}
+    </View>
+  );
+}
 
 // Session caches — switching tabs doesn't refetch.
 let momCache: MomentumHit[] | null = null;
@@ -51,6 +103,7 @@ export default function MomentumScreen() {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [detail, setDetail] = useState<Row | null>(null);
   const [watch, setWatch] = useState<string[]>([]);
+  const { isDesktop } = useResponsive();
 
   useEffect(() => {
     loadWatchlist().then(setWatch);
@@ -194,102 +247,122 @@ export default function MomentumScreen() {
           />
         ) : null}
 
-        {shown.length ? (
-          <View style={styles.headerRow}>
-            <TouchableOpacity style={{ width: 96 }} onPress={() => onSort('symbol')} activeOpacity={0.7}>
-              <Text style={styles.th}>SYMBOL{arrow('symbol')}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={{ flex: 3, minWidth: 170 }} onPress={() => onSort('name')} activeOpacity={0.7}>
-              <Text style={styles.th}>NAME{arrow('name')}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={{ width: 46 }} onPress={() => onSort('exchange')} activeOpacity={0.7}>
-              <Text style={styles.th}>EXCH{arrow('exchange')}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={{ width: 150 }} onPress={() => onSort('setup')} activeOpacity={0.7}>
-              <Text style={styles.th}>SETUP{arrow('setup')}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={{ width: 56 }} onPress={() => onSort('score')} activeOpacity={0.7}>
-              <Text style={styles.thR}>SCORE{arrow('score')}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={{ width: 56 }} onPress={() => onSort('probability')} activeOpacity={0.7}>
-              <Text style={styles.thR}>PROB{arrow('probability')}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={{ width: 96 }} onPress={() => onSort('price')} activeOpacity={0.7}>
-              <Text style={styles.thR}>LTP{arrow('price')}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={{ width: 70 }} onPress={() => onSort('chg')} activeOpacity={0.7}>
-              <Text style={styles.thR}>% CHG{arrow('chg')}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={{ width: 48 }} onPress={() => onSort('rsi')} activeOpacity={0.7}>
-              <Text style={styles.thR}>RSI{arrow('rsi')}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={{ width: 60 }} onPress={() => onSort('relvol')} activeOpacity={0.7}>
-              <Text style={styles.thR}>RVOL{arrow('relvol')}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={{ width: 80 }} onPress={() => onSort('d200')} activeOpacity={0.7}>
-              <Text style={styles.thR}>VS 200DMA{arrow('d200')}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={{ width: 70 }} onPress={() => onSort('pct_from_high')} activeOpacity={0.7}>
-              <Text style={styles.thR}>52W HI{arrow('pct_from_high')}</Text>
-            </TouchableOpacity>
-            <Text style={[styles.th, { width: 110, textAlign: 'center' }]}>ACTIONS</Text>
+        {shown.length && !isDesktop ? (
+          <View style={styles.mSortRow}>
+            <Text style={styles.mSortLabel}>SORT</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.mSortInner}>
+              {MOBILE_SORTS.map((s) => {
+                const on = sortCol === s.key;
+                return (
+                  <TouchableOpacity
+                    key={s.key}
+                    style={[styles.mSortChip, on && styles.mSortChipOn]}
+                    onPress={() => onSort(s.key)}
+                    activeOpacity={0.75}
+                  >
+                    <Text style={[styles.mSortTxt, on && styles.mSortTxtOn]}>
+                      {s.label}{on ? (sortDir === 1 ? ' ↑' : ' ↓') : ''}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
           </View>
         ) : null}
 
-        {shown.map((h) => {
-          const open = expanded === h.symbol;
-          const c = setupColor(h.setup);
-          return (
-            <View key={h.symbol}>
-              <TouchableOpacity
-                style={styles.dataRow}
-                onPress={() => setExpanded(open ? null : h.symbol)}
-                activeOpacity={0.8}
-              >
-                <Text style={[styles.sym, { width: 96 }]}>{h.symbol}</Text>
-                <Text style={[styles.name, { flex: 3, minWidth: 170 }]} numberOfLines={1}>{h.name || '—'}</Text>
-                <Text style={[styles.exch, { width: 46 }]}>{h.exchange}</Text>
-                <View style={{ width: 150 }}>
-                  <Text style={[styles.setupBadge, { color: c, borderColor: c }]}>{SETUP_LABEL[h.setup]}</Text>
-                </View>
-                <Text style={[styles.cellR, { width: 56, color: c, fontWeight: '700' }]}>{h.score}</Text>
-                <Text style={[styles.cellR, { width: 56 }]}>{h.probability}%</Text>
-                <Text style={[styles.cellR, { width: 96, fontWeight: '700' }]}>{fmtIN(h.price)}</Text>
-                <Text style={[styles.cellR, { width: 70, color: (h.chg ?? 0) >= 0 ? theme.green : theme.red }]}>{pct(h.chg, 2)}</Text>
-                <Text style={[styles.cellR, { width: 48 }]}>{h.rsi != null ? h.rsi.toFixed(0) : '—'}</Text>
-                <Text style={[styles.cellR, { width: 60 }]}>{h.relvol != null ? h.relvol.toFixed(2) + 'x' : '—'}</Text>
-                <Text style={[styles.cellR, { width: 80, color: (h.d200 ?? 0) >= 0 ? theme.green : theme.red }]}>{pct(h.d200)}</Text>
-                <Text style={[styles.cellR, { width: 70, color: theme.red }]}>{pct(h.pct_from_high)}</Text>
-                <View style={styles.actions}>
-                  <TouchableOpacity style={styles.aBtn} onPress={() => openChart(h)} activeOpacity={0.75}>
-                    <Text style={styles.aTxt}>Chart</Text>
+        {shown.length && isDesktop ? (
+          <ScrollView horizontal showsHorizontalScrollIndicator contentContainerStyle={{ minWidth: '100%' }}>
+            <View style={{ minWidth: TABLE_W }}>
+              <View style={styles.headerRow}>
+                {COLS.map((col) => (
+                  <TouchableOpacity key={col.key} style={{ width: col.w }} onPress={() => onSort(col.key)} activeOpacity={0.7}>
+                    <Text style={col.text ? styles.th : styles.thR}>{col.label}{arrow(col.key)}</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity style={styles.aBtn} onPress={() => toggleWatch(h.symbol)} activeOpacity={0.75}>
-                    <Text style={[styles.aTxt, isWatched(h.symbol) && { color: theme.green }]}>
-                      {isWatched(h.symbol) ? '★' : '☆'}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              </TouchableOpacity>
-              {open ? (
-                <View style={styles.readBox}>
-                  <View style={styles.probTrack}>
-                    <View style={[styles.probFill, { width: `${h.probability}%`, backgroundColor: c }]} />
+                ))}
+                <Text style={[styles.th, { width: ACTIONS_W, textAlign: 'center' }]}>ACTIONS</Text>
+              </View>
+              {shown.map((h) => {
+                const open = expanded === h.symbol;
+                const c = setupColor(h.setup);
+                return (
+                  <View key={h.symbol}>
+                    <TouchableOpacity style={styles.dataRow} onPress={() => setExpanded(open ? null : h.symbol)} activeOpacity={0.8}>
+                      <Text style={[styles.sym, { width: 92 }]} numberOfLines={1}>{h.symbol}</Text>
+                      <Text style={[styles.name, { width: 190 }]} numberOfLines={1}>{h.name || '—'}</Text>
+                      <Text style={[styles.exch, { width: 46 }]}>{h.exchange}</Text>
+                      <View style={{ width: 150 }}>
+                        <Text style={[styles.setupBadge, { color: c, borderColor: c }]}>{SETUP_LABEL[h.setup]}</Text>
+                      </View>
+                      <Text style={[styles.cellR, { width: 56, color: c, fontWeight: '700' }]}>{h.score}</Text>
+                      <Text style={[styles.cellR, { width: 54 }]}>{h.probability}%</Text>
+                      <Text style={[styles.cellR, { width: 94, fontWeight: '700' }]}>{fmtIN(h.price)}</Text>
+                      <Text style={[styles.cellR, { width: 70, color: (h.chg ?? 0) >= 0 ? theme.green : theme.red }]}>{pct(h.chg, 2)}</Text>
+                      <Text style={[styles.cellR, { width: 46 }]}>{h.rsi != null ? h.rsi.toFixed(0) : '—'}</Text>
+                      <Text style={[styles.cellR, { width: 58 }]}>{h.relvol != null ? h.relvol.toFixed(2) + 'x' : '—'}</Text>
+                      <Text style={[styles.cellR, { width: 82, color: (h.d200 ?? 0) >= 0 ? theme.green : theme.red }]}>{pct(h.d200)}</Text>
+                      <Text style={[styles.cellR, { width: 68, color: theme.red }]}>{pct(h.pct_from_high)}</Text>
+                      <View style={[styles.actions, { width: ACTIONS_W }]}>
+                        <TouchableOpacity style={styles.aBtn} onPress={() => openChart(h)} activeOpacity={0.75}>
+                          <Text style={styles.aTxt}>Chart</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity style={styles.aBtn} onPress={() => toggleWatch(h.symbol)} activeOpacity={0.75}>
+                          <Text style={[styles.aTxt, isWatched(h.symbol) && { color: theme.green }]}>{isWatched(h.symbol) ? '★' : '☆'}</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </TouchableOpacity>
+                    {open ? <ReadBox h={h} c={c} width={TABLE_W} /> : null}
                   </View>
-                  <Text style={styles.readMeta}>
-                    Technical score {h.score}/100 · indicative follow-through probability {h.probability}%
-                  </Text>
-                  {h.signals.map((s) => (
-                    <Text key={s} style={styles.sigTxt}>▲ <Text style={styles.sigBody}>{s}</Text></Text>
-                  ))}
-                  {h.cautions.map((s) => (
-                    <Text key={s} style={styles.cauTxt}>▼ <Text style={styles.sigBody}>{s}</Text></Text>
-                  ))}
-                </View>
-              ) : null}
+                );
+              })}
             </View>
-          );
-        })}
+          </ScrollView>
+        ) : null}
+
+        {shown.length && !isDesktop
+          ? shown.map((h) => {
+              const open = expanded === h.symbol;
+              const c = setupColor(h.setup);
+              return (
+                <View key={h.symbol}>
+                  <TouchableOpacity style={styles.card} onPress={() => setExpanded(open ? null : h.symbol)} activeOpacity={0.8}>
+                    <View style={styles.cardTop}>
+                      <View style={{ flex: 1 }}>
+                        <View style={styles.cardSymRow}>
+                          <Text style={styles.cardSym}>{h.symbol}</Text>
+                          <Text style={styles.cardExch}>{h.exchange}</Text>
+                          <Text style={[styles.setupBadge, { color: c, borderColor: c }]}>{SETUP_LABEL[h.setup]}</Text>
+                        </View>
+                        <Text style={styles.cardName} numberOfLines={1}>{h.name || '—'}</Text>
+                      </View>
+                      <View style={styles.cardScoreBox}>
+                        <Text style={[styles.cardScore, { color: c }]}>{h.score}</Text>
+                        <Text style={styles.cardProb}>{h.probability}% prob</Text>
+                      </View>
+                    </View>
+                    <View style={styles.cardStats}>
+                      <Text style={styles.cardStat}>₹{fmtIN(h.price)}</Text>
+                      <Text style={[styles.cardStat, { color: (h.chg ?? 0) >= 0 ? theme.green : theme.red }]}>{pct(h.chg, 2)}</Text>
+                      <Text style={styles.cardStat}>RSI {h.rsi != null ? h.rsi.toFixed(0) : '—'}</Text>
+                      <Text style={styles.cardStat}>{h.relvol != null ? h.relvol.toFixed(2) + 'x' : '—'}</Text>
+                      <Text style={[styles.cardStat, { color: (h.d200 ?? 0) >= 0 ? theme.green : theme.red }]}>200DMA {pct(h.d200)}</Text>
+                    </View>
+                    <View style={styles.cardActions}>
+                      <TouchableOpacity style={styles.aBtn} onPress={() => openChart(h)} activeOpacity={0.75}>
+                        <Text style={styles.aTxt}>Chart</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity style={styles.aBtn} onPress={() => toggleWatch(h.symbol)} activeOpacity={0.75}>
+                        <Text style={[styles.aTxt, isWatched(h.symbol) && { color: theme.green }]}>
+                          {isWatched(h.symbol) ? '★ Watching' : '☆ Watch'}
+                        </Text>
+                      </TouchableOpacity>
+                      <Text style={styles.cardHint}>{open ? 'tap to collapse' : 'tap for read'}</Text>
+                    </View>
+                  </TouchableOpacity>
+                  {open ? <ReadBox h={h} c={c} /> : null}
+                </View>
+              );
+            })
+          : null}
 
         {shown.length ? (
           <Text style={styles.method}>
@@ -352,6 +425,42 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.sp.xs,
     minHeight: 34,
   },
+  // mobile sort chips
+  mSortRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: theme.sp.md, paddingBottom: theme.sp.sm, gap: theme.sp.sm },
+  mSortLabel: { color: theme.muted, fontSize: theme.fs.xs, fontWeight: '700', letterSpacing: 1 },
+  mSortInner: { gap: theme.sp.sm, alignItems: 'center' },
+  mSortChip: {
+    backgroundColor: theme.surface2,
+    borderColor: theme.border,
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+  },
+  mSortChipOn: { backgroundColor: theme.accent, borderColor: theme.accent },
+  mSortTxt: { color: theme.muted2, fontSize: theme.fs.sm },
+  mSortTxtOn: { color: theme.onAccent, fontWeight: '700' },
+  // mobile card
+  card: {
+    backgroundColor: theme.surface,
+    borderBottomColor: theme.border,
+    borderBottomWidth: 1,
+    paddingHorizontal: theme.sp.lg,
+    paddingVertical: theme.sp.md,
+    gap: theme.sp.sm,
+  },
+  cardTop: { flexDirection: 'row', alignItems: 'flex-start', gap: theme.sp.md },
+  cardSymRow: { flexDirection: 'row', alignItems: 'center', gap: theme.sp.sm, flexWrap: 'wrap' },
+  cardSym: { color: theme.accent, fontFamily: theme.mono, fontWeight: '700', fontSize: theme.fs.md },
+  cardExch: { color: theme.muted, fontSize: theme.fs.xs + 1, fontFamily: theme.mono },
+  cardName: { color: theme.muted2, fontSize: theme.fs.sm, marginTop: 2 },
+  cardScoreBox: { alignItems: 'flex-end' },
+  cardScore: { fontFamily: theme.mono, fontWeight: '800', fontSize: theme.fs.xl },
+  cardProb: { color: theme.muted, fontSize: theme.fs.xs + 1 },
+  cardStats: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.sp.md },
+  cardStat: { color: theme.text, fontFamily: theme.mono, fontSize: theme.fs.sm },
+  cardActions: { flexDirection: 'row', alignItems: 'center', gap: theme.sp.sm },
+  cardHint: { color: theme.muted, fontSize: theme.fs.xs + 1, marginLeft: 'auto' },
   sym: { color: theme.accent, fontFamily: theme.mono, fontWeight: '700', fontSize: theme.fs.sm + 1, paddingHorizontal: theme.sp.xs },
   name: { color: theme.muted2, fontSize: theme.fs.sm, paddingHorizontal: theme.sp.xs },
   exch: { color: theme.muted, fontSize: theme.fs.xs + 1, fontFamily: theme.mono, paddingHorizontal: theme.sp.xs },
