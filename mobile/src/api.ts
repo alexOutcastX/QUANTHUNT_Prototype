@@ -362,14 +362,18 @@ export type MultibaggerReport = {
   error?: string;
 };
 
-// Full-universe fixed multibagger screen (from /multibagger/screen).
+// Full-universe analyser-score screen (from /multibagger/screen).
 export type MbScreenRow = {
   symbol: string;
-  price: number;
-  vs_200dma: number;
-  market_cap_cr: number;
-  roe: number;
-  debt_equity: number;
+  score: number;
+  tier: string;
+  probability_pct: number;
+  coverage_pct: number;
+  price: number | null;
+  vs_200dma: number | null;
+  market_cap_cr: number | null;
+  roe: number | null;
+  debt_equity: number | null;
   sector?: string | null;
 };
 export type MbScreenResp = {
@@ -378,7 +382,6 @@ export type MbScreenResp = {
   progress?: string;
   asof: number;
   universe: number;
-  uptrend: number;
   matches: number;
   results: MbScreenRow[];
   criteria: Record<string, unknown>;
