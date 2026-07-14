@@ -370,7 +370,12 @@ export type MbScreenRow = {
   probability_pct: number;
   coverage_pct: number;
   price: number | null;
+  chg?: number | null;
+  volume?: number | null;
+  relvol?: number | null;
+  vs_50dma?: number | null;
   vs_200dma: number | null;
+  pct_from_high?: number | null;
   market_cap_cr: number | null;
   roe: number | null;
   debt_equity: number | null;

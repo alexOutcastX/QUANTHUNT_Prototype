@@ -166,7 +166,12 @@ function MbList({
             name: names[c.symbol.toUpperCase()]?.name,
             exchange: names[c.symbol.toUpperCase()]?.exchange || 'NSE',
             price: c.price,
+            chg: c.chg,
+            volume: c.volume,
+            relvol: c.relvol,
+            d50: c.vs_50dma,
             d200: c.vs_200dma,
+            pct_from_high: c.pct_from_high,
             mbScore: c.score,
             _fund: { market_cap_cr: c.market_cap_cr, roe: c.roe, debt_equity: c.debt_equity, sector: c.sector } as Row['_fund'],
           }));
@@ -196,19 +201,39 @@ function MbList({
         setAsof(snap.asof);
         mbAsofCache = snap.asof;
         if (!seeded.length) return;
-        // 2) Enrich just the matches with live technicals + full fundamentals.
+        // 2) Enrich the matches with the scan's technicals (mainly RSI — the
+        //    screen already seeded quotes) + fuller fundamentals. Null-safe
+        //    merges: a slow/empty scan value must never blank a seeded one.
+        const defined = (into: Record<string, unknown>, from: Record<string, unknown>) => {
+          Object.entries(from).forEach(([k, v]) => {
+            if (v != null) into[k] = v;
+          });
+          return into;
+        };
         const syms = seeded.map((r) => r.sym);
         await api.scan(syms, {
           onBatch: (data, done) => {
             if (cancelled) return;
-            setRows((prev) => prev.map((r) => (data[r.sym] ? { ...r, ...data[r.sym], d200: r.d200 ?? data[r.sym].d200, _fund: r._fund } : r)));
-            setNote(`${meta} · quotes ${Math.min(done, syms.length)}/${syms.length}`);
+            setRows((prev) =>
+              prev.map((r) =>
+                data[r.sym]
+                  ? ({ ...defined({ ...r }, data[r.sym] as Record<string, unknown>), _fund: r._fund } as Row)
+                  : r,
+              ),
+            );
+            setNote(`${meta} · technicals ${Math.min(done, syms.length)}/${syms.length}`);
           },
         });
         try {
           const res = await api.fundamentalsBulk(syms);
           if (!cancelled && res.data) {
-            setRows((prev) => prev.map((r) => (res.data[r.sym] !== undefined ? { ...r, _fund: { ...(r._fund as object), ...(res.data[r.sym] as object) } as Row['_fund'] } : r)));
+            setRows((prev) =>
+              prev.map((r) =>
+                res.data[r.sym]
+                  ? ({ ...r, _fund: defined({ ...(r._fund as object) }, res.data[r.sym] as Record<string, unknown>) as Row['_fund'] } as Row)
+                  : r,
+              ),
+            );
           }
         } catch {
           /* seeded fundamentals already carry mcap/roe/de */
