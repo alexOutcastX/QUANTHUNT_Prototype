@@ -6,7 +6,7 @@ import { chartHtml } from '../chartHtml';
 import HtmlView from '../components/HtmlView';
 import StockDetail from '../components/StockDetail';
 import SymbolInput from '../components/SymbolInput';
-import { ActiveFilters, Row, applyFilters } from '../screener';
+import { Row } from '../screener';
 import { ACTIONS_W, COLS, DEFAULT_HIDDEN, cellFlex, loadNames } from './ScreenerScreen';
 import { TrackDir, TrackEntry, addTrack, loadTrack, removeTrack } from '../tracklist';
 import { addSymbol, loadWatchlist, normSymbol, removeSymbol } from '../watchlist';
@@ -16,22 +16,16 @@ import { theme } from '../theme';
 const GOLD = '#f5c518';
 const BT_PREFILL_KEY = 'taureye.backtest.prefill';
 
-// The fixed multibagger screen — non-editable by design. Small/mid base,
-// quality returns, low leverage, price in an uptrend; the analyser then does
+// The fixed multibagger screen — non-editable by design, and run SERVER-SIDE
+// over the whole listed NSE universe (see mb_screen.py): small/mid base,
+// quality returns, low leverage, price in an uptrend. The analyser then does
 // the deep read on ownership/growth/valuation per stock.
-const FIXED_FILTERS: ActiveFilters = {
-  market_cap_cr: { max: 20000 },
-  roe: { min: 15 },
-  debt_equity: { max: 0.6 },
-  d200: { min: 0 },
-};
 const FIXED_CHIPS = [
   'Mkt cap < ₹20,000 cr',
   'ROE > 15%',
   'D/E < 0.6',
   'Above 200-DMA',
 ];
-const SCREEN_INDICES = ['NIFTY MIDCAP 100', 'NIFTY SMALLCAP 100'];
 
 const tierColor = (score: number) =>
   score >= 75 ? theme.green : score >= 60 ? theme.accent : score >= 45 ? GOLD : theme.red;
@@ -108,9 +102,11 @@ async function exportReport(r: MultibaggerReport): Promise<void> {
 }
 
 // ── Fixed-filter multibagger screener (list only) ────────────────────────────
-// Candidates: mid + small cap indices, scanned and fundamentals-enriched, then
-// passed through FIXED_FILTERS. Loaded once per app session (module cache).
+// The match list comes from the server's full-universe background screen
+// (/multibagger/screen); the browser then enriches only the matches with live
+// technicals + fundamentals so the table shows the full Screener columns.
 let mbRowsCache: Row[] | null = null;
+let mbNoteCache = '';
 
 function MbList({
   onAnalyse,
@@ -122,7 +118,7 @@ function MbList({
   toast: (msg: string) => void;
 }) {
   const [rows, setRows] = useState<Row[]>(mbRowsCache || []);
-  const [note, setNote] = useState('');
+  const [note, setNote] = useState(mbNoteCache);
   const [loading, setLoading] = useState(!mbRowsCache);
   const [track, setTrack] = useState<TrackEntry[]>([]);
   const [watch, setWatch] = useState<string[]>([]);
@@ -137,69 +133,62 @@ function MbList({
     let cancelled = false;
     (async () => {
       try {
-        const [names, ...idx] = await Promise.all([
-          loadNames(),
-          ...SCREEN_INDICES.map((n) => api.indexConstituents(n).catch(() => ({ data: [] }))),
-        ]);
-        const seen = new Set<string>();
-        const seeded: Row[] = [];
-        idx.forEach((r) =>
-          (r.data || []).forEach((c) => {
-            if (!c.symbol || seen.has(c.symbol)) return;
-            seen.add(c.symbol);
-            seeded.push({
-              sym: c.symbol,
-              name: names[c.symbol.toUpperCase()]?.name,
-              exchange: names[c.symbol.toUpperCase()]?.exchange || 'NSE',
-              price: c.price, prevClose: c.prevClose, chg: c.chg, absChg: c.absChg, volume: c.volume,
-            });
-          }),
-        );
+        // 1) Poll the server-side full-universe screen until it has results.
+        let snap = await api.mbScreen();
+        while (!cancelled && snap.status === 'running' && !snap.results.length) {
+          setNote(`Screening the whole universe server-side… ${snap.progress || ''}`);
+          await new Promise((r) => setTimeout(r, 5000));
+          snap = await api.mbScreen();
+        }
         if (cancelled) return;
-        if (!seeded.length) {
-          setNote('No candidates returned.');
+        if (snap.status === 'error' && !snap.results.length) {
+          setNote(snap.error || 'Screen failed — retry shortly.');
           setLoading(false);
           return;
         }
+        const names = await loadNames();
+        const asof = snap.asof ? new Date(snap.asof * 1000).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : '';
+        const meta = `universe ${snap.universe.toLocaleString('en-IN')} · ${snap.uptrend.toLocaleString('en-IN')} in uptrend${asof ? ` · as of ${asof}` : ''}${snap.refreshing ? ' · refreshing…' : ''}`;
+        const seeded: Row[] = snap.results.map((c) => ({
+          sym: c.symbol,
+          name: names[c.symbol.toUpperCase()]?.name,
+          exchange: names[c.symbol.toUpperCase()]?.exchange || 'NSE',
+          price: c.price,
+          d200: c.vs_200dma,
+          _fund: { market_cap_cr: c.market_cap_cr, roe: c.roe, debt_equity: c.debt_equity, sector: c.sector } as Row['_fund'],
+        }));
         setRows(seeded);
         setLoading(false);
+        setNote(meta);
+        if (!seeded.length) return;
+        // 2) Enrich just the matches with live technicals + full fundamentals.
         const syms = seeded.map((r) => r.sym);
-        setNote(`${syms.length} mid & small caps · scanning…`);
         await api.scan(syms, {
           onBatch: (data, done) => {
             if (cancelled) return;
-            setRows((prev) => prev.map((r) => (data[r.sym] ? { ...r, ...data[r.sym], price: r.price ?? data[r.sym].price, chg: r.chg ?? data[r.sym].chg, volume: r.volume ?? data[r.sym].volume } : r)));
-            setNote(`${syms.length} mid & small caps · technicals ${Math.min(done, syms.length)}/${syms.length}`);
+            setRows((prev) => prev.map((r) => (data[r.sym] ? { ...r, ...data[r.sym], d200: r.d200 ?? data[r.sym].d200, _fund: r._fund } : r)));
+            setNote(`${meta} · quotes ${Math.min(done, syms.length)}/${syms.length}`);
           },
         });
-        // Fundamentals (bounded poll — the filters need mcap/ROE/D-E).
-        let target = syms;
-        const settled = new Set<string>();
-        for (let round = 0; round < 20 && target.length && !cancelled; round++) {
-          try {
-            const res = await api.fundamentalsBulk(target);
-            if (cancelled) return;
-            const data = res.data || {};
-            Object.keys(data).forEach((s) => settled.add(s));
-            setRows((prev) => prev.map((r) => (data[r.sym] !== undefined ? { ...r, _fund: data[r.sym] as Row['_fund'] } : r)));
-            const pending = new Set(res.pending || []);
-            target = target.filter((s) => !settled.has(s) && pending.has(s));
-          } catch {
-            break;
+        try {
+          const res = await api.fundamentalsBulk(syms);
+          if (!cancelled && res.data) {
+            setRows((prev) => prev.map((r) => (res.data[r.sym] !== undefined ? { ...r, _fund: { ...(r._fund as object), ...(res.data[r.sym] as object) } as Row['_fund'] } : r)));
           }
-          if (target.length) await new Promise((r) => setTimeout(r, 3000));
+        } catch {
+          /* seeded fundamentals already carry mcap/roe/de */
         }
         if (!cancelled) {
+          setNote(meta);
           setRows((prev) => {
-            const done = prev.map((r) => (r._fund === undefined ? { ...r, _fund: null } : r));
-            mbRowsCache = done;
-            return done;
+            mbRowsCache = prev;
+            return prev;
           });
-          setNote(`${syms.length} mid & small caps screened`);
+          mbNoteCache = meta;
         }
       } catch (e) {
         if (!cancelled) {
-          setNote(e instanceof Error ? e.message : 'Failed to load candidates');
+          setNote(e instanceof Error ? e.message : 'Failed to load the screen');
           setLoading(false);
         }
       }
@@ -211,16 +200,8 @@ function MbList({
 
   const visibleCols = useMemo(() => COLS.filter((c) => !DEFAULT_HIDDEN.includes(c.key)), []);
   const tableW = useMemo(() => visibleCols.reduce((a, c) => a + c.w, 0) + ACTIONS_W, [visibleCols]);
-  const matches = useMemo(() => {
-    const f = applyFilters(rows, FIXED_FILTERS);
-    return [...f].sort((a, b) => {
-      const ma = (a._fund as { market_cap_cr?: number } | null)?.market_cap_cr ?? Infinity;
-      const mb = (b._fund as { market_cap_cr?: number } | null)?.market_cap_cr ?? Infinity;
-      return ma - mb; // smallest base first — the most multibagger headroom
-    });
-  }, [rows]);
-
-  const warming = rows.some((r) => r._fund === undefined);
+  const matches = rows; // the server already applied the fixed screen (sorted smallest mcap first)
+  const warming = false;
 
   const trackDirOf = (sym: string): TrackDir | null => track.find((t) => t.sym === sym)?.dir ?? null;
   const onTrack = async (r: Row, dir: TrackDir) => {

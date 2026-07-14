@@ -1050,6 +1050,14 @@ _MB_CACHE: dict = {}   # symbol -> (epoch, payload); refreshed every 6h
 _MB_TTL = 6 * 3600
 
 
+@app.route("/multibagger/screen")
+def multibagger_screen():
+    """Full-universe fixed multibagger screen (background job; see mb_screen.py)."""
+    import mb_screen as mbs
+    mbs.ensure_started(get_universe, _fund)
+    return jsonify(mbs.snapshot())
+
+
 @app.route("/multibagger")
 def multibagger_report():
     """One-click multibagger-potential report (see multibagger.py for the model)."""

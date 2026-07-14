@@ -58,7 +58,7 @@ jobs:
             APP=/opt/quanthunt
             if [ -d "$APP" ]; then
               rsync -a --delete --exclude venv --exclude .env \
-                --exclude fund_cache.json --exclude __pycache__ \
+                --exclude fund_cache.json --exclude mb_screen.json --exclude __pycache__ \
                 "$APP"/ "$APP".prev/ 2>/dev/null || true
             fi'
 
@@ -73,7 +73,7 @@ jobs:
           rsync -az --delete \
             --exclude venv --exclude .git --exclude node_modules \
             --exclude '__pycache__' --exclude '.env' \
-            --exclude 'fund_cache.json' --exclude 'index_cache.json' \
+            --exclude 'fund_cache.json' --exclude 'index_cache.json' --exclude 'mb_screen.json' \
             --exclude 'graph_cache.json' --exclude 'broker_token.json' --exclude 'quanthunt.db*' \
             -e "ssh -i ~/.ssh/id_deploy" ./ "$U@$H:$APP/"
           # Install any new deps, then restart gunicorn and reload nginx.

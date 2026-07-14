@@ -31,3 +31,4 @@ quanthunt.db-shm
 
 # Local throwaway static server used only for headless UI verification
 fake_server.py
+mb_screen.json
