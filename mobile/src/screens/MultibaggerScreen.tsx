@@ -15,6 +15,12 @@ import { theme } from '../theme';
 
 const GOLD = '#f5c518';
 const BT_PREFILL_KEY = 'taureye.backtest.prefill';
+const RECENT_KEY = 'taureye.mb.recent.v1';
+
+// Analysed-report cache: re-opening a recently searched symbol is instant
+// instead of refetching (the server caches 6h; this covers the round trip).
+const REPORT_TTL = 30 * 60 * 1000;
+const reportCache = new Map<string, { report: MultibaggerReport; candles: Candle[]; ts: number }>();
 
 // The screen is simply "analyser score ≥ 60" computed SERVER-SIDE over the
 // whole listed NSE universe (see mb_screen.py); a data-coverage floor keeps
@@ -108,6 +114,12 @@ async function exportReport(r: MultibaggerReport): Promise<void> {
 // technicals + fundamentals so the table shows the full Screener columns.
 let mbRowsCache: Row[] | null = null;
 let mbNoteCache = '';
+let mbAsofCache = 0;
+
+const fmtAsof = (epoch: number) =>
+  new Date(epoch * 1000).toLocaleString('en-IN', {
+    day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit',
+  });
 
 function MbList({
   onAnalyse,
@@ -121,6 +133,8 @@ function MbList({
   const [rows, setRows] = useState<Row[]>(mbRowsCache || []);
   const [note, setNote] = useState(mbNoteCache);
   const [loading, setLoading] = useState(!mbRowsCache);
+  const [asof, setAsof] = useState(mbAsofCache);
+  const [tick, setTick] = useState(0);
   const [track, setTrack] = useState<TrackEntry[]>([]);
   const [watch, setWatch] = useState<string[]>([]);
 
@@ -129,8 +143,19 @@ function MbList({
     loadWatchlist().then(setWatch);
   }, []);
 
+  // ⟳ Update list — drop caches and force a fresh server-side screen run.
+  const forceRefresh = () => {
+    if (loading) return;
+    mbRowsCache = null;
+    mbNoteCache = '';
+    setRows([]);
+    setLoading(true);
+    setNote('Restarting the universe screen…');
+    setTick((t) => t + 1);
+  };
+
   useEffect(() => {
-    if (mbRowsCache) return;
+    if (mbRowsCache && tick === 0) return;
     let cancelled = false;
     (async () => {
       try {
@@ -147,7 +172,7 @@ function MbList({
           }));
         // 1) Poll the server-side full-universe screen. Matches stream in
         //    LIVE while the background job runs, so render partials as they land.
-        let snap = await api.mbScreen();
+        let snap = await api.mbScreen(tick > 0);
         while (!cancelled && snap.status === 'running') {
           if (snap.results.length) {
             setRows(build(snap.results));
@@ -163,12 +188,13 @@ function MbList({
           setLoading(false);
           return;
         }
-        const asof = snap.asof ? new Date(snap.asof * 1000).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : '';
-        const meta = `universe ${snap.universe.toLocaleString('en-IN')} analysed${asof ? ` · as of ${asof}` : ''}${snap.refreshing ? ' · refreshing…' : ''}`;
+        const meta = `universe ${snap.universe.toLocaleString('en-IN')} analysed${snap.refreshing ? ' · refreshing…' : ''}`;
         const seeded = build(snap.results);
         setRows(seeded);
         setLoading(false);
         setNote(meta);
+        setAsof(snap.asof);
+        mbAsofCache = snap.asof;
         if (!seeded.length) return;
         // 2) Enrich just the matches with live technicals + full fundamentals.
         const syms = seeded.map((r) => r.sym);
@@ -205,7 +231,7 @@ function MbList({
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [tick]);
 
   // The analyser score gets its own column, right after Exch.
   const scoreCol: Col = useMemo(
@@ -260,11 +286,22 @@ function MbList({
             <Text style={styles.fixedChipTxt}>{c}</Text>
           </View>
         ))}
+        <TouchableOpacity
+          style={[styles.updBtn, loading && { opacity: 0.5 }]}
+          onPress={forceRefresh}
+          disabled={loading}
+          activeOpacity={0.75}
+        >
+          <Text style={styles.updTxt}>⟳ Update list</Text>
+        </TouchableOpacity>
         <Text style={styles.fixedNote} numberOfLines={1}>
           {matches.length} match{matches.length === 1 ? '' : 'es'}
           {warming ? ' · loading fundamentals…' : ''} · {note} · tap a symbol to analyse
         </Text>
       </View>
+      {asof ? (
+        <Text style={styles.lastUpd}>Stocks last updated {fmtAsof(asof)}</Text>
+      ) : null}
 
       {loading ? <Loading label="Loading mid & small cap candidates…" /> : null}
 
@@ -346,6 +383,7 @@ export default function MultibaggerScreen() {
   const [report, setReport] = useState<MultibaggerReport | null>(null);
   const [candles, setCandles] = useState<Candle[]>([]);
   const [detail, setDetail] = useState<Row | null>(null);
+  const [recent, setRecent] = useState<string[]>([]);
   const [flash, setFlash] = useState('');
   const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const toast = useCallback((msg: string) => {
@@ -354,26 +392,61 @@ export default function MultibaggerScreen() {
     flashTimer.current = setTimeout(() => setFlash(''), 2000);
   }, []);
 
+  // Recent searches persist across sessions; tapping one re-opens instantly
+  // from the report cache.
+  useEffect(() => {
+    AsyncStorage.getItem(RECENT_KEY)
+      .then((v) => {
+        const p = v ? JSON.parse(v) : null;
+        if (Array.isArray(p)) setRecent(p.filter((s) => typeof s === 'string'));
+      })
+      .catch(() => {});
+  }, []);
+  const pushRecent = (sym: string) => {
+    setRecent((prev) => {
+      const next = [sym, ...prev.filter((s) => s !== sym)].slice(0, 8);
+      AsyncStorage.setItem(RECENT_KEY, JSON.stringify(next)).catch(() => {});
+      return next;
+    });
+  };
+
   const analyse = (symOverride?: string) => {
     const sym = (symOverride ?? symbol).trim().toUpperCase().replace(/^[A-Z]+:/, '');
     if (!sym || busy) return;
     setView('analyse');
     setSymbol(sym);
-    setBusy(true);
     setError('');
+    pushRecent(sym);
+    // Served from the searched-symbols cache when fresh — no refetch.
+    const hit = reportCache.get(sym);
+    if (hit && Date.now() - hit.ts < REPORT_TTL) {
+      setReport(hit.report);
+      setCandles(hit.candles);
+      setBusy(false);
+      return;
+    }
+    setBusy(true);
     setReport(null);
     setCandles([]);
     api
       .multibagger(sym)
       .then((r) => {
-        if (r && !r.error) setReport(r);
-        else setError(r?.error || 'No data available for ' + sym);
+        if (r && !r.error) {
+          setReport(r);
+          const entry = reportCache.get(sym);
+          reportCache.set(sym, { report: r, candles: entry?.candles || [], ts: Date.now() });
+        } else setError(r?.error || 'No data available for ' + sym);
       })
       .catch((e) => setError(e instanceof Error ? e.message : 'Analysis failed'))
       .finally(() => setBusy(false));
     api
       .history(sym, '6mo', '1d')
-      .then((h) => setCandles(Array.isArray(h.candles) ? h.candles : []))
+      .then((h) => {
+        const cs = Array.isArray(h.candles) ? h.candles : [];
+        setCandles(cs);
+        const entry = reportCache.get(sym);
+        if (entry) entry.candles = cs;
+      })
       .catch(() => setCandles([]));
   };
 
@@ -438,6 +511,17 @@ export default function MultibaggerScreen() {
             />
             <Btn label={busy ? 'Analysing…' : '⚡ Analyse'} onPress={() => analyse()} disabled={busy || !symbol.trim()} />
           </View>
+
+          {recent.length ? (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.recentRow} contentContainerStyle={styles.recentInner}>
+              <Text style={styles.recentLabel}>RECENT</Text>
+              {recent.map((s) => (
+                <TouchableOpacity key={s} style={styles.recentChip} onPress={() => analyse(s)} activeOpacity={0.75}>
+                  <Text style={styles.recentTxt}>{s}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          ) : null}
 
           <ScrollView contentContainerStyle={styles.body}>
             {busy ? <Loading label={`Reading ${symbol.toUpperCase()} fundamentals, ownership and trend…`} /> : null}
@@ -662,6 +746,28 @@ const styles = StyleSheet.create({
   },
   fixedChipTxt: { color: GOLD, fontSize: theme.fs.sm },
   fixedNote: { color: theme.muted, fontSize: theme.fs.sm, flexShrink: 1 },
+  updBtn: {
+    backgroundColor: theme.surface2,
+    borderColor: theme.border2,
+    borderWidth: 1,
+    borderRadius: theme.radius.sm + 2,
+    paddingHorizontal: theme.sp.md,
+    paddingVertical: 5,
+  },
+  updTxt: { color: theme.text, fontSize: theme.fs.sm, fontWeight: '700' },
+  lastUpd: { color: theme.muted, fontSize: theme.fs.xs + 1, paddingHorizontal: theme.sp.lg, paddingBottom: theme.sp.sm },
+  recentRow: { flexGrow: 0, marginBottom: theme.sp.sm },
+  recentInner: { paddingHorizontal: theme.sp.lg, gap: theme.sp.sm, alignItems: 'center' },
+  recentLabel: { color: theme.muted, fontSize: theme.fs.xs + 1, fontWeight: '700', letterSpacing: 1 },
+  recentChip: {
+    backgroundColor: theme.surface2,
+    borderColor: theme.border,
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: theme.sp.md,
+    paddingVertical: 4,
+  },
+  recentTxt: { color: theme.muted2, fontSize: theme.fs.sm, fontFamily: theme.mono, fontWeight: '700' },
   // table (mirrors the Screener)
   headerRow: {
     flexDirection: 'row',
