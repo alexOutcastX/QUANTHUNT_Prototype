@@ -14,6 +14,7 @@ import HolidaysScreen from './HolidaysScreen';
 import IndicesScreen from './IndicesScreen';
 import CorporateScreen from './CorporateScreen';
 import DerivativesScreen from './DerivativesScreen';
+import MomentumScreen from './MomentumScreen';
 import MultibaggerScreen from './MultibaggerScreen';
 import RiskScreen from './RiskScreen';
 import EntityGraphScreen from './EntityGraphScreen';
@@ -55,6 +56,7 @@ export function AnalysisHome() {
       tabs={[
         { key: 'inst', label: 'Institutional', render: () => <AnalysisScreen /> },
         { key: 'mb', label: 'Multibagger', render: () => <MultibaggerScreen /> },
+        { key: 'momentum', label: 'Momentum', render: () => <MomentumScreen /> },
         { key: 'deriv', label: 'Derivatives', render: () => <DerivativesScreen /> },
         { key: 'risk', label: 'Risk', render: () => <RiskScreen /> },
         { key: 'bt', label: 'Backtest', render: () => <BacktestScreen /> },
