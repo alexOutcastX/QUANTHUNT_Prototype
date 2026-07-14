@@ -1052,9 +1052,9 @@ _MB_TTL = 6 * 3600
 
 @app.route("/multibagger/screen")
 def multibagger_screen():
-    """Full-universe fixed multibagger screen (background job; see mb_screen.py)."""
+    """Full-universe analyser-score screen (background job; see mb_screen.py)."""
     import mb_screen as mbs
-    mbs.ensure_started(get_universe, _fund)
+    mbs.ensure_started(get_universe)
     return jsonify(mbs.snapshot())
 
 
@@ -1068,63 +1068,13 @@ def multibagger_report():
     if cached and time.time() - cached[0] < _MB_TTL:
         return jsonify(cached[1])
     try:
-        import yfinance as yf
         import multibagger as mb
-        ticker = yf.Ticker(f"{sym}.NS")
-        info = ticker.info or {}
-        if not info.get("longName") and not info.get("shortName") and not info.get("regularMarketPrice"):
-            return jsonify({"error": f"no data for {sym}"}), 404
-
-        def cr(v):
-            return round(v / 1e7, 2) if v else None
-
-        def pctf(v):  # yfinance fraction -> percent
-            return round(v * 100, 2) if v is not None else None
-
-        price = info.get("currentPrice") or info.get("regularMarketPrice")
-        dma200 = info.get("twoHundredDayAverage")
-        hi52 = info.get("fiftyTwoWeekHigh")
-
-        # 3y price CAGR from monthly closes (best-effort).
-        cagr3 = None
         try:
-            hist = ticker.history(period="3y", interval="1mo", auto_adjust=True)
-            closes = hist["Close"].dropna()
-            if len(closes) >= 24 and closes.iloc[0] > 0:
-                years = (len(closes) - 1) / 12.0
-                cagr3 = round(((float(closes.iloc[-1]) / float(closes.iloc[0])) ** (1 / years) - 1) * 100, 1)
-        except Exception:
-            pass
-
-        de = info.get("debtToEquity")   # yfinance reports percent (e.g. 45.3)
-        metrics = {
-            "mcap_cr":             cr(info.get("marketCap")),
-            "revenue_growth_pct":  pctf(info.get("revenueGrowth")),
-            "earnings_growth_pct": pctf(info.get("earningsGrowth")),
-            "roe_pct":             pctf(info.get("returnOnEquity")),
-            "op_margin_pct":       pctf(info.get("operatingMargins")),
-            "profit_margin_pct":   pctf(info.get("profitMargins")),
-            "debt_equity":         round(de / 100, 2) if de is not None else None,
-            "current_ratio":       info.get("currentRatio"),
-            "fcf_cr":              cr(info.get("freeCashflow")),
-            "insider_pct":         pctf(info.get("heldPercentInsiders")),
-            "institution_pct":     pctf(info.get("heldPercentInstitutions")),
-            "pe":                  info.get("trailingPE"),
-            "pb":                  info.get("priceToBook"),
-            "peg":                 info.get("trailingPegRatio") or info.get("pegRatio"),
-            "vs_200dma_pct":       round((price / dma200 - 1) * 100, 1) if price and dma200 else None,
-            "pct_from_high_pct":   round((price / hi52 - 1) * 100, 1) if price and hi52 else None,
-            "price_cagr_3y_pct":   cagr3,
-        }
+            metrics, ident = mb.fetch_metrics(sym)
+        except ValueError:
+            return jsonify({"error": f"no data for {sym}"}), 404
         payload = mb.score(metrics)
-        payload.update({
-            "symbol":   sym,
-            "name":     info.get("longName") or info.get("shortName") or sym,
-            "sector":   info.get("sector"),
-            "industry": info.get("industry"),
-            "price":    price,
-            "about":    (info.get("longBusinessSummary") or "")[:500],
-        })
+        payload.update(ident)
         _MB_CACHE[sym] = (time.time(), payload)
         return jsonify(payload)
     except Exception as e:

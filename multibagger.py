@@ -30,6 +30,74 @@ PILLARS = [
 ]
 
 
+def fetch_metrics(symbol: str, with_history: bool = True):
+    """Fetch the raw scoring metrics for a symbol from yfinance (lazy import,
+    so this module stays importable in stdlib-only CI).
+
+    Returns (metrics, ident): `metrics` feeds score(); `ident` carries
+    name/sector/industry/price/about. with_history=False skips the extra
+    price-history request (3y CAGR) — used by the mass screen where one HTTP
+    call per symbol is the budget. Raises ValueError when Yahoo has no data.
+    """
+    import yfinance as yf
+
+    t = yf.Ticker(f"{symbol.upper().strip()}.NS")
+    info = t.info or {}
+    if not info.get("longName") and not info.get("shortName") and not info.get("regularMarketPrice"):
+        raise ValueError(f"no data for {symbol}")
+
+    def cr(v):
+        return round(v / 1e7, 2) if v else None
+
+    def pctf(v):
+        return round(v * 100, 2) if v is not None else None
+
+    price = info.get("currentPrice") or info.get("regularMarketPrice")
+    dma200 = info.get("twoHundredDayAverage")
+    hi52 = info.get("fiftyTwoWeekHigh")
+
+    cagr3 = None
+    if with_history:
+        try:
+            hist = t.history(period="3y", interval="1mo", auto_adjust=True)
+            closes = hist["Close"].dropna()
+            if len(closes) >= 24 and closes.iloc[0] > 0:
+                years = (len(closes) - 1) / 12.0
+                cagr3 = round(((float(closes.iloc[-1]) / float(closes.iloc[0])) ** (1 / years) - 1) * 100, 1)
+        except Exception:
+            pass
+
+    de = info.get("debtToEquity")   # yfinance reports percent (e.g. 45.3)
+    metrics = {
+        "mcap_cr":             cr(info.get("marketCap")),
+        "revenue_growth_pct":  pctf(info.get("revenueGrowth")),
+        "earnings_growth_pct": pctf(info.get("earningsGrowth")),
+        "roe_pct":             pctf(info.get("returnOnEquity")),
+        "op_margin_pct":       pctf(info.get("operatingMargins")),
+        "profit_margin_pct":   pctf(info.get("profitMargins")),
+        "debt_equity":         round(de / 100, 2) if de is not None else None,
+        "current_ratio":       info.get("currentRatio"),
+        "fcf_cr":              cr(info.get("freeCashflow")),
+        "insider_pct":         pctf(info.get("heldPercentInsiders")),
+        "institution_pct":     pctf(info.get("heldPercentInstitutions")),
+        "pe":                  info.get("trailingPE"),
+        "pb":                  info.get("priceToBook"),
+        "peg":                 info.get("trailingPegRatio") or info.get("pegRatio"),
+        "vs_200dma_pct":       round((price / dma200 - 1) * 100, 1) if price and dma200 else None,
+        "pct_from_high_pct":   round((price / hi52 - 1) * 100, 1) if price and hi52 else None,
+        "price_cagr_3y_pct":   cagr3,
+    }
+    ident = {
+        "symbol":   symbol.upper().strip(),
+        "name":     info.get("longName") or info.get("shortName") or symbol.upper(),
+        "sector":   info.get("sector"),
+        "industry": info.get("industry"),
+        "price":    price,
+        "about":    (info.get("longBusinessSummary") or "")[:500],
+    }
+    return metrics, ident
+
+
 def _band(value, bands, default=None):
     """First score whose threshold the value passes; None-safe."""
     if value is None:
