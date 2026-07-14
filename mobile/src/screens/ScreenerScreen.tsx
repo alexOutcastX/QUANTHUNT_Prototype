@@ -105,26 +105,9 @@ const COLS: Col[] = [
       </Text>
     ),
   },
-  {
-    key: 's1', label: 'Support', w: 66,
-    render: (r) => (
-      <View>
-        <Text style={styles.zone}>{n1(r.s1)}</Text>
-        <Text style={styles.zoneDim}>{n1(r.s2)}</Text>
-        <Text style={styles.zoneDim}>{n1(r.s3)}</Text>
-      </View>
-    ),
-  },
-  {
-    key: 'r1', label: 'Resist', w: 66,
-    render: (r) => (
-      <View>
-        <Text style={styles.zone}>{n1(r.r1)}</Text>
-        <Text style={styles.zoneDim}>{n1(r.r2)}</Text>
-        <Text style={styles.zoneDim}>{n1(r.r3)}</Text>
-      </View>
-    ),
-  },
+  // Nearest zone only — the full S1-S3 / R1-R3 ladder lives in the Report modal.
+  { key: 's1', label: 'Support', w: 62, render: (r) => <Text style={styles.cell}>{n1(r.s1)}</Text> },
+  { key: 'r1', label: 'Resist', w: 62, render: (r) => <Text style={styles.cell}>{n1(r.r1)}</Text> },
   // Fundamentals (bulk-cached server-side; stream in shortly after load)
   { key: 'market_cap_cr', label: 'MCap(cr)', w: 66, render: (r) => <Text style={styles.cell}>{fmtMcap((r._fund as { market_cap_cr?: number } | null)?.market_cap_cr)}</Text> },
   { key: 'pe', label: 'P/E', w: 52, render: (r) => <Text style={styles.cell}>{fnum2(r, 'pe')}</Text> },
@@ -135,13 +118,18 @@ const COLS: Col[] = [
   { key: 'dividend_yield', label: 'Div%', w: 48, render: (r) => <Text style={styles.cell}>{fnum2(r, 'dividend_yield')}</Text> },
   { key: 'signal', label: 'Signal', w: 64, render: (r) => { const s = calcSignal(r); return <Text style={[styles.cell, styles.sig, { color: sigColor(s) }]}>{s.toUpperCase()}</Text>; } },
 ];
-const ACTIONS_W = 328; // per-row action cell (B / S / Chart / ★ / Report)
+const ACTIONS_W = 252; // per-row action cell (B / S / Chart / ★ / Report)
 const COL_META = COLS.map((c) => ({ key: c.key, label: c.label }));
+
+// Compact default: niche columns start hidden (re-enable via ▤ Columns). The
+// v2 key intentionally ignores v1 prefs so the leaner default reaches everyone.
+const DEFAULT_HIDDEN = ['willr', 'bollb', 'beta', 'pb', 'roce', 'debt_equity', 'dividend_yield'];
 
 const FILTERS_KEY = 'taureye.screener.filters.v1';
 const INDEX_KEY = 'taureye.screener.index.v1';
-const COLS_KEY = 'taureye.screener.cols.v1';
+const COLS_KEY = 'taureye.screener.cols.v2';
 const PAGE_KEY = 'taureye.screener.pagesize.v1';
+const FOPEN_KEY = 'taureye.screener.filtersopen.v1';
 
 const PAGE_SIZES: (number | 'all')[] = [25, 50, 100, 'all'];
 type PageSize = number | 'all';
@@ -164,12 +152,13 @@ export default function ScreenerScreen() {
   const [active, setActive] = useState<ActiveFilters>({});
   const [sortCol, setSortCol] = useState('signal');
   const [sortDir, setSortDir] = useState<1 | -1>(-1);
-  // Inline filter panel: `filtersOpen` collapses/expands it (open by default);
-  // `shown` is the ordered list of filter-key rows displayed (derived from
-  // `active` on load and unioned as `active` grows); `extVersion` remounts the
-  // uncontrolled range inputs on non-typing changes so their defaultValues
-  // refresh without dropping focus mid-type.
-  const [filtersOpen, setFiltersOpen] = useState(true);
+  // Inline filter panel: `filtersOpen` collapses/expands it (collapsed by
+  // default to keep the chrome light — the choice persists); `shown` is the
+  // ordered list of filter-key rows displayed (derived from `active` on load
+  // and unioned as `active` grows); `extVersion` remounts the uncontrolled
+  // range inputs on non-typing changes so their defaultValues refresh without
+  // dropping focus mid-type.
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [shown, setShown] = useState<string[]>([]);
   const [extVersion, setExtVersion] = useState(0);
   const bumpExt = useCallback(() => setExtVersion((v) => v + 1), []);
@@ -179,7 +168,7 @@ export default function ScreenerScreen() {
   const [restored, setRestored] = useState(false);
   // Column show/hide + order prefs.
   const [colOrder, setColOrder] = useState<string[]>(COLS.map((c) => c.key));
-  const [colHidden, setColHidden] = useState<string[]>([]);
+  const [colHidden, setColHidden] = useState<string[]>(DEFAULT_HIDDEN);
   const [colMenu, setColMenu] = useState(false);
   const [prefsRestored, setPrefsRestored] = useState(false);
   // Saved screens + watchlist + pagination.
@@ -230,9 +219,10 @@ export default function ScreenerScreen() {
   useEffect(() => {
     (async () => {
       try {
-        const [rawCols, rawPage] = await Promise.all([
+        const [rawCols, rawPage, rawOpen] = await Promise.all([
           AsyncStorage.getItem(COLS_KEY),
           AsyncStorage.getItem(PAGE_KEY),
+          AsyncStorage.getItem(FOPEN_KEY),
         ]);
         if (rawCols) {
           const p = JSON.parse(rawCols);
@@ -243,6 +233,7 @@ export default function ScreenerScreen() {
           const v = JSON.parse(rawPage);
           if (v === 'all' || (typeof v === 'number' && [25, 50, 100].includes(v))) setPageSize(v);
         }
+        if (rawOpen === '1') setFiltersOpen(true);
       } catch {
         /* defaults */
       } finally {
@@ -260,6 +251,11 @@ export default function ScreenerScreen() {
     if (!prefsRestored) return;
     AsyncStorage.setItem(PAGE_KEY, JSON.stringify(pageSize)).catch(() => {});
   }, [pageSize, prefsRestored]);
+
+  useEffect(() => {
+    if (!prefsRestored) return;
+    AsyncStorage.setItem(FOPEN_KEY, filtersOpen ? '1' : '0').catch(() => {});
+  }, [filtersOpen, prefsRestored]);
 
   useEffect(() => {
     loadSavedScreens().then(setSaved);
@@ -639,22 +635,6 @@ export default function ScreenerScreen() {
             </TouchableOpacity>
           ))}
         </ScrollView>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.presetRow}>
-          <Text style={styles.presetLabel}>Scans</Text>
-          {PRESETS.map((p) => {
-            const on = presetActive(active, p);
-            return (
-              <TouchableOpacity
-                key={p.id}
-                style={[styles.presetChip, on && styles.presetChipOn]}
-                onPress={() => setActive(togglePreset(active, p))}
-                activeOpacity={0.75}
-              >
-                <Text style={[styles.presetTxt, on && styles.presetTxtOn]}>{on ? '✓ ' : ''}{p.name}</Text>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
       </View>
 
       {filtersOpen ? (
@@ -669,16 +649,36 @@ export default function ScreenerScreen() {
       ) : null}
 
       <View style={styles.statsRow}>
-        <Stat v={stats.total} l="Matches" c={theme.text} />
-        <Stat v={stats.buy} l="Bullish" c={theme.green} />
-        <Stat v={stats.sell} l="Bearish" c={theme.red} />
-        <Stat v={stats.neutral} l="Neutral" c={theme.muted2} />
+        <Text style={styles.statsTxt} numberOfLines={1}>
+          <Text style={styles.statsN}>{stats.total}</Text> matches{'   '}
+          <Text style={{ color: theme.green }}>{stats.buy}▲</Text>{'  '}
+          <Text style={{ color: theme.red }}>{stats.sell}▼</Text>{'  '}
+          <Text style={{ color: theme.muted2 }}>{stats.neutral}—</Text>
+        </Text>
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
           style={styles.actionsScroll}
           contentContainerStyle={styles.actionsScrollInner}
         >
+          <TouchableOpacity
+            style={[styles.filterBtn, filtersOpen && styles.filterBtnOn]}
+            onPress={() => setFiltersOpen((v) => !v)}
+            activeOpacity={0.75}
+          >
+            <Text style={[styles.filterTxt, filtersOpen && styles.filterTxtOn]}>
+              ⚙ Scans & Filters{activeCount ? ` (${activeCount})` : ''} {filtersOpen ? '▾' : '▸'}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.filterBtn} onPress={() => setColMenu(true)} activeOpacity={0.75}>
+            <Text style={styles.filterTxt}>▤ Columns</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.filterBtn} onPress={() => setSavedModal(true)} activeOpacity={0.75}>
+            <Text style={styles.filterTxt}>💾 Save{saved.length ? ` (${saved.length})` : ''}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.filterBtn} onPress={onShare} activeOpacity={0.75}>
+            <Text style={styles.filterTxt}>↗ Share</Text>
+          </TouchableOpacity>
           <TouchableOpacity
             style={styles.filterBtn}
             onPress={() => exportCsv(sorted, indexName).catch(() => {})}
@@ -700,32 +700,8 @@ export default function ScreenerScreen() {
           >
             <Text style={styles.filterTxt}>⇩ PDF</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.filterBtn} onPress={() => setSavedModal(true)} activeOpacity={0.75}>
-            <Text style={styles.filterTxt}>💾 Save{saved.length ? ` (${saved.length})` : ''}</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.filterBtn} onPress={onShare} activeOpacity={0.75}>
-            <Text style={styles.filterTxt}>↗ Share</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.filterBtn} onPress={() => setColMenu(true)} activeOpacity={0.75}>
-            <Text style={styles.filterTxt}>▤ Columns</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.filterBtn, filtersOpen && styles.filterBtnOn]}
-            onPress={() => setFiltersOpen((v) => !v)}
-            activeOpacity={0.75}
-          >
-            <Text style={[styles.filterTxt, filtersOpen && styles.filterTxtOn]}>
-              ⚙ Filters{activeCount ? ` (${activeCount})` : ''} {filtersOpen ? '▾' : '▸'}
-            </Text>
-          </TouchableOpacity>
         </ScrollView>
       </View>
-
-      <Text style={styles.note}>
-        {note}
-        {fundBusy ? ' · loading fundamentals…' : ''}
-        {error ? ` · ${error}` : ''}
-      </Text>
 
       <View style={styles.pageBar}>
         <View style={styles.pageSizes}>
@@ -743,6 +719,11 @@ export default function ScreenerScreen() {
             </TouchableOpacity>
           ))}
         </View>
+        <Text style={styles.note} numberOfLines={1}>
+          {note}
+          {fundBusy ? ' · loading fundamentals…' : ''}
+          {error ? ` · ${error}` : ''}
+        </Text>
         <View style={styles.pageNav}>
           <TouchableOpacity
             style={[styles.pageBtn, page <= 0 && styles.pageBtnOff]}
@@ -816,7 +797,7 @@ export default function ScreenerScreen() {
         }}
         onReset={() => {
           setColOrder(COLS.map((c) => c.key));
-          setColHidden([]);
+          setColHidden(DEFAULT_HIDDEN);
           setColMenu(false);
         }}
       />
@@ -837,15 +818,6 @@ export default function ScreenerScreen() {
           <Text style={styles.toastTxt}>{flash}</Text>
         </View>
       ) : null}
-    </View>
-  );
-}
-
-function Stat({ v, l, c }: { v: number; l: string; c: string }) {
-  return (
-    <View style={styles.stat}>
-      <Text style={[styles.statV, { color: c }]}>{v}</Text>
-      <Text style={styles.statL}>{l}</Text>
     </View>
   );
 }
@@ -1026,6 +998,22 @@ function FilterPanel({
   return (
     <View style={styles.panel}>
       <ScrollView style={styles.panelScroll} keyboardShouldPersistTaps="handled" nestedScrollEnabled>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.presetRow}>
+          <Text style={styles.presetLabel}>Scans</Text>
+          {PRESETS.map((p) => {
+            const on = presetActive(active, p);
+            return (
+              <TouchableOpacity
+                key={p.id}
+                style={[styles.presetChip, on && styles.presetChipOn]}
+                onPress={() => setActive(togglePreset(active, p))}
+                activeOpacity={0.75}
+              >
+                <Text style={[styles.presetTxt, on && styles.presetTxtOn]}>{on ? '✓ ' : ''}{p.name}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
         <View style={styles.nlBox}>
           <View style={styles.nlRow}>
             <TextInput
@@ -1310,7 +1298,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.bg },
   center: { flex: 1, backgroundColor: theme.bg },
   topBar: { borderBottomColor: theme.border, borderBottomWidth: 1 },
-  idxChips: { paddingHorizontal: theme.sp.md, paddingVertical: theme.sp.md, gap: theme.sp.sm },
+  idxChips: { paddingHorizontal: theme.sp.md, paddingVertical: theme.sp.sm, gap: theme.sp.sm },
   idxChip: {
     backgroundColor: theme.surface2,
     borderColor: theme.border,
@@ -1322,7 +1310,7 @@ const styles = StyleSheet.create({
   idxChipOn: { backgroundColor: theme.accent, borderColor: theme.accent },
   idxTxt: { color: theme.muted2, fontSize: theme.fs.sm },
   idxTxtOn: { color: theme.onAccent, fontWeight: '700' },
-  presetRow: { paddingHorizontal: theme.sp.md, paddingBottom: theme.sp.md, gap: theme.sp.sm, alignItems: 'center' },
+  presetRow: { paddingHorizontal: theme.sp.lg, paddingTop: theme.sp.md, gap: theme.sp.sm, alignItems: 'center' },
   presetLabel: {
     color: theme.muted,
     fontSize: theme.fs.xs + 1,
@@ -1342,7 +1330,7 @@ const styles = StyleSheet.create({
   presetChipOn: { backgroundColor: theme.accent, borderColor: theme.accent },
   presetTxt: { color: theme.muted2, fontSize: theme.fs.sm },
   presetTxtOn: { color: theme.onAccent, fontWeight: '700' },
-  nlBox: { paddingHorizontal: theme.sp.lg, paddingTop: theme.sp.lg },
+  nlBox: { paddingHorizontal: theme.sp.lg, paddingTop: theme.sp.md },
   nlLabel: { color: theme.muted2, fontSize: theme.fs.sm, marginBottom: theme.sp.sm },
   nlRow: { flexDirection: 'row', gap: theme.sp.sm },
   nlInput: {
@@ -1364,12 +1352,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: theme.sp.md,
-    paddingVertical: theme.sp.md,
-    gap: theme.sp.sm,
+    paddingVertical: theme.sp.sm,
+    gap: theme.sp.md,
   },
-  stat: { alignItems: 'center', minWidth: 48 },
-  statV: { fontSize: theme.fs.lg, fontWeight: '700', fontFamily: theme.mono },
-  statL: { color: theme.muted, fontSize: theme.fs.xs + 1, letterSpacing: 0.5, textTransform: 'uppercase', marginTop: 1 },
+  statsTxt: { color: theme.muted, fontSize: theme.fs.sm, fontFamily: theme.mono, flexShrink: 1 },
+  statsN: { color: theme.text, fontWeight: '700' },
   filterBtn: {
     backgroundColor: theme.surface2,
     borderColor: theme.border2,
@@ -1381,13 +1368,13 @@ const styles = StyleSheet.create({
   filterTxt: { color: theme.text, fontSize: theme.fs.sm + 1, fontWeight: '600' },
   filterBtnOn: { backgroundColor: theme.accent, borderColor: theme.accent },
   filterTxtOn: { color: theme.onAccent, fontWeight: '700' },
-  note: { color: theme.muted, fontSize: theme.fs.sm, paddingHorizontal: theme.sp.md, paddingBottom: theme.sp.sm },
+  note: { color: theme.muted, fontSize: theme.fs.sm, flex: 1, paddingHorizontal: theme.sp.sm, textAlign: 'center' },
   headerRow: {
     flexDirection: 'row',
     borderBottomColor: theme.border2,
     borderBottomWidth: 1,
     backgroundColor: theme.surface2,
-    paddingVertical: theme.sp.md,
+    paddingVertical: theme.sp.sm,
   },
   th: { justifyContent: 'center', paddingHorizontal: theme.sp.xs },
   thTxt: {
@@ -1402,22 +1389,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderBottomColor: theme.border,
     borderBottomWidth: 1,
-    paddingVertical: theme.sp.md,
-    minHeight: 44,
+    paddingVertical: 3,
+    minHeight: 32,
   },
   td: { justifyContent: 'center', paddingHorizontal: theme.sp.xs },
   cell: { color: theme.text, fontFamily: theme.mono, fontSize: theme.fs.sm },
-  zone: { color: theme.text, fontFamily: theme.mono, fontSize: theme.fs.xs, textAlign: 'right' },
-  zoneDim: { color: theme.muted2, fontFamily: theme.mono, fontSize: theme.fs.xs, textAlign: 'right' },
   symTxt: { color: theme.accent, fontFamily: theme.mono, fontWeight: '700', fontSize: theme.fs.sm + 1 },
   sig: { fontWeight: '700', fontSize: theme.fs.sm, letterSpacing: 0.4 },
   tBtn: {
     borderColor: theme.border2,
     borderWidth: 1,
     borderRadius: theme.radius.sm,
-    paddingHorizontal: theme.sp.md,
-    paddingVertical: 6,
-    minWidth: 40,
+    paddingHorizontal: theme.sp.sm,
+    paddingVertical: 3,
+    minWidth: 30,
     alignItems: 'center',
   },
   tBuyOn: { backgroundColor: theme.green, borderColor: theme.green },
@@ -1438,11 +1423,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: theme.radius.sm,
     paddingHorizontal: theme.sp.sm,
-    paddingVertical: 6,
+    paddingVertical: 3,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  aBtnTxt: { color: theme.muted2, fontSize: theme.fs.sm, fontWeight: '700' },
+  aBtnTxt: { color: theme.muted2, fontSize: theme.fs.xs + 1, fontWeight: '700' },
   starOn: { color: theme.green },
   actionsScroll: { marginLeft: 'auto', flexGrow: 0 },
   actionsScrollInner: { gap: theme.sp.sm, alignItems: 'center' },
