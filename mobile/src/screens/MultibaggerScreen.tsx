@@ -6,7 +6,7 @@ import { chartHtml } from '../chartHtml';
 import HtmlView from '../components/HtmlView';
 import StockDetail from '../components/StockDetail';
 import SymbolInput from '../components/SymbolInput';
-import { Row } from '../screener';
+import { Row, sortRows } from '../screener';
 import { ACTIONS_W, COLS, Col, DEFAULT_HIDDEN, cellFlex, loadNames } from './ScreenerScreen';
 import { TrackDir, TrackEntry, addTrack, loadTrack, removeTrack } from '../tracklist';
 import { addSymbol, loadWatchlist, normSymbol, removeSymbol } from '../watchlist';
@@ -257,7 +257,25 @@ function MbList({
     return [...base.slice(0, at || 3), scoreCol, ...base.slice(at || 3)];
   }, [scoreCol]);
   const tableW = useMemo(() => visibleCols.reduce((a, c) => a + c.w, 0) + ACTIONS_W, [visibleCols]);
-  const matches = rows; // the server already applied the score screen (best score first)
+
+  // Column sorting (tap a header) — defaults to analyser score, best first.
+  const [sortCol, setSortCol] = useState('mb_score');
+  const [sortDir, setSortDir] = useState<1 | -1>(-1);
+  const onSort = (col: string) => {
+    if (col === sortCol) setSortDir((d) => (d === 1 ? -1 : 1));
+    else {
+      setSortCol(col);
+      setSortDir(col === 'sym' || col === 'name' || col === 'exchange' ? 1 : -1);
+    }
+  };
+  const matches = useMemo(() => {
+    if (sortCol === 'mb_score') {
+      return [...rows].sort(
+        (a, b) => (((a as MbRow).mbScore ?? -1) - ((b as MbRow).mbScore ?? -1)) * sortDir,
+      );
+    }
+    return sortRows(rows, sortCol, sortDir);
+  }, [rows, sortCol, sortDir]);
   const warming = false;
 
   const trackDirOf = (sym: string): TrackDir | null => track.find((t) => t.sym === sym)?.dir ?? null;
@@ -310,9 +328,17 @@ function MbList({
           <View style={{ minWidth: tableW, flexGrow: 1 }}>
             <View style={styles.headerRow}>
               {visibleCols.map((c) => (
-                <View key={c.key} style={[styles.th, cellFlex(c), { alignItems: c.align === 'left' ? 'flex-start' : 'flex-end' }]}>
-                  <Text style={styles.thTxt}>{c.label}</Text>
-                </View>
+                <TouchableOpacity
+                  key={c.key}
+                  style={[styles.th, cellFlex(c), { alignItems: c.align === 'left' ? 'flex-start' : 'flex-end' }]}
+                  onPress={() => onSort(c.key)}
+                  activeOpacity={0.75}
+                >
+                  <Text style={styles.thTxt}>
+                    {c.label}
+                    {sortCol === c.key ? (sortDir === 1 ? ' ↑' : ' ↓') : ''}
+                  </Text>
+                </TouchableOpacity>
               ))}
               <View style={styles.actionsCell}>
                 <Text style={styles.thTxt}>Actions</Text>
