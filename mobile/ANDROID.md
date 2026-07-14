@@ -37,15 +37,26 @@ also publish an OTA bundle.
 ## Push updates over the air (Capgo)
 
 Install the phone app once from an APK above (Capgo only updates an already
-installed native app). Then:
+installed native app), then set it up once:
 
 ```bash
 cd mobile
 npm i -g @capgo/cli
 npx @capgo/cli login <YOUR_CAPGO_TOKEN>
 npx @capgo/cli app add com.taureye.app        # one time
-npm run cap:build                             # rebuild dist with your changes
-npx @capgo/cli bundle upload -c production --path dist
+```
+
+**Automated (recommended).** Add a `CAPGO_TOKEN` repository secret. From then on,
+**every push to `production` that touches `mobile/**` auto-publishes an OTA
+bundle to the `production` channel** (the `ota` job in
+`.github/workflows/android.yml`), alongside the web deploy — so installed phones
+update themselves. Until the secret is set the job succeeds as a no-op.
+
+**Manual** (one-off push without shipping):
+
+```bash
+cd mobile && npm run cap:build
+npx @capgo/cli bundle upload -c production -b <version> --path dist
 ```
 
 The app checks Capgo on launch/resume and applies the new bundle
