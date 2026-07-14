@@ -144,6 +144,9 @@ function graphHtml(data: GraphResp, quotes: LtpResp, centre: string, openIdx: st
              border-top: 1px solid ${theme.border}; overflow-y: visible; }
     #legend { display: none; }
     #hl { justify-content: flex-start; }
+    /* One finger scrolls the PAGE (never pans the graph); two-finger pinch is
+       delivered to the graph's own zoom. Prevents the scroll trap. */
+    svg { touch-action: pan-x pan-y; }
   }
 </style></head><body>
 <div id="wrap">
@@ -374,7 +377,32 @@ function graphHtml(data: GraphResp, quotes: LtpResp, centre: string, openIdx: st
     svg.selectAll('*').remove();
     var Wd = document.getElementById('gwrap').clientWidth, H = document.getElementById('gwrap').clientHeight;
     var root = svg.append('g');
-    var zoomB = d3.zoom().scaleExtent([0.35, 2.5]).on('zoom', function(ev){ root.attr('transform', ev.transform); });
+    // Centre of the graph's bounding box in layout coordinates.
+    function bounds(){
+      var xs = g.nodes.map(function(n){ return n.x || 0; }), ys = g.nodes.map(function(n){ return n.y || 0; });
+      return { cx: (Math.min.apply(null, xs) + Math.max.apply(null, xs)) / 2,
+               cy: (Math.min.apply(null, ys) + Math.max.apply(null, ys)) / 2 };
+    }
+    var zoomB = d3.zoom().scaleExtent([0.35, 2.5])
+      // Phones: pinch-to-zoom only. A single finger must scroll the PAGE, not
+      // pan the graph — one-finger panning trapped users inside the graph view.
+      .filter(function(ev){
+        if (!MOBILE) return !ev.ctrlKey && !ev.button;
+        if (ev.type === 'wheel') return true;
+        var t = ev.touches;
+        return !!(t && t.length >= 2);
+      })
+      .on('zoom', function(ev){
+        if (MOBILE) {
+          // Graph stays pinned to the viewport centre — pinch changes scale only.
+          var k = ev.transform.k, b = bounds();
+          var Wn = document.getElementById('gwrap').clientWidth || Wd;
+          var Hn = document.getElementById('gwrap').clientHeight || H;
+          root.attr('transform', 'translate(' + (Wn/2 - k*b.cx) + ',' + (Hn/2 - k*b.cy) + ') scale(' + k + ')');
+        } else {
+          root.attr('transform', ev.transform);
+        }
+      });
     svg.call(zoomB);
     // Zoom out to fit once forces settle, so no node ends up off-canvas when
     // the news panel / docked window shrink the graph area. Zoom-out only on
@@ -445,8 +473,9 @@ function graphHtml(data: GraphResp, quotes: LtpResp, centre: string, openIdx: st
     nodeSel = root.selectAll('g.n').data(g.nodes).enter().append('g').attr('class','n')
       .style('cursor','pointer')
       .on('click', function(ev,d){ ev.stopPropagation(); showMenu(d, ev.offsetX != null ? ev.offsetX : 40, ev.offsetY != null ? ev.offsetY : 40); });
-    if (LAYOUT !== 'grid') {
-      // Free drag only in the force layout — grid positions are fixed clusters.
+    if (LAYOUT !== 'grid' && !MOBILE) {
+      // Free drag only in the force layout on desktop — on phones a finger on
+      // a bubble must scroll the page, and grid positions are fixed clusters.
       nodeSel.call(d3.drag()
         .on('start', function(ev,d){ if(!ev.active) sim.alphaTarget(0.15).restart(); d.fx=d.x; d.fy=d.y; })
         .on('drag', function(ev,d){ d.fx=ev.x; d.fy=ev.y; d.pinned=true; })
