@@ -130,6 +130,20 @@ function graphHtml(data: GraphResp, quotes: LtpResp, centre: string, openIdx: st
   .isym:hover{text-decoration:underline}
   .iact span{cursor:pointer;color:${theme.muted2};padding:0 4px}
   .iact span:hover{color:${theme.text}}
+  /* ── phone layout: stack graph → chart window → news → details, and let the
+     page scroll. The toolbar (with ⛶ FIT) stays overlaid on the graph. ── */
+  @media (max-width: 720px) {
+    html, body { overflow: auto; }
+    #wrap { flex-direction: column; height: auto; min-height: 100%; }
+    #gfx { order: 1; flex: none; display: flex; }
+    #gwrap { height: 58vh; min-height: 300px; flex: none; }
+    #news { order: 2; width: 100% !important; max-height: 45vh;
+            border-right: none; border-top: 1px solid ${theme.border}; }
+    #panel { order: 3; width: 100% !important; border-left: none;
+             border-top: 1px solid ${theme.border}; overflow-y: visible; }
+    #legend { display: none; }
+    #hl { justify-content: flex-start; }
+  }
 </style></head><body>
 <div id="wrap">
   <div id="news">
@@ -157,6 +171,7 @@ function graphHtml(data: GraphResp, quotes: LtpResp, centre: string, openIdx: st
         <button class="hlb" id="hl-invested" onclick="setHl('invested')">INVESTED</button>
         <button class="hlb on" id="hl-all" onclick="setHl('all')">ALL</button>
         <span style="width:8px"></span>
+        <button class="hlb" id="hl-fit" onclick="fitView()" title="Fit the graph to the screen (resets zoom/pan)">⛶ FIT</button>
         <button class="hlb" id="hl-reset" onclick="resetPos()" title="Reset bubble positions">⟲ RESET</button>
         <button class="hlb" id="hl-pdf" onclick="exportPDF()" title="Export this graph to PDF">⤓ PDF</button>
       </div>
@@ -215,6 +230,10 @@ function graphHtml(data: GraphResp, quotes: LtpResp, centre: string, openIdx: st
   var W = { open: false, tabs: [], active: null, compare: [], rect: null, dock: 'float', dockH: 300, dockW: 400, newsOn: true };
   try { var s = localStorage.getItem('te_term_win_v1'); if (s) W = Object.assign(W, JSON.parse(s)); } catch (e) {}
   function saveW(){ try { localStorage.setItem('te_term_win_v1', JSON.stringify(W)); } catch (e) {} }
+  // Phones: a floating window is unusable — dock the chart/compare window
+  // under the graph so everything stacks vertically.
+  var MOBILE = !!(window.matchMedia && window.matchMedia('(max-width: 720px)').matches);
+  if (MOBILE && (W.dock || 'float') === 'float') W.dock = 'bottom';
 
   function num(v, d){ return (v == null || !isFinite(v)) ? '—' : (+v).toFixed(d == null ? 1 : d); }
   function fmtPrice(t) {
@@ -344,21 +363,29 @@ function graphHtml(data: GraphResp, quotes: LtpResp, centre: string, openIdx: st
     var zoomB = d3.zoom().scaleExtent([0.35, 2.5]).on('zoom', function(ev){ root.attr('transform', ev.transform); });
     svg.call(zoomB);
     // Zoom out to fit once forces settle, so no node ends up off-canvas when
-    // the news panel / docked window shrink the graph area. Zoom-out only.
+    // the news panel / docked window shrink the graph area. Zoom-out only on
+    // the automatic pass; force=true (the ⛶ FIT button) always applies, which
+    // also rescues a pinch-zoomed view on mobile.
     var fitted = false;
-    function fitAll() {
-      if (fitted || !g.nodes.length) return;
+    function fitAll(force) {
+      if ((fitted && !force) || !g.nodes.length) return;
       fitted = true;
       var xs = g.nodes.map(function(n){ return n.x; }), ys = g.nodes.map(function(n){ return n.y; });
       var minX = Math.min.apply(null, xs) - 70, maxX = Math.max.apply(null, xs) + 70;
       var minY = Math.min.apply(null, ys) - 60, maxY = Math.max.apply(null, ys) + 70;
-      var k = Math.min(1, 0.95 * Math.min(Wd / (maxX - minX), H / (maxY - minY)));
-      if (!isFinite(k) || k <= 0 || k >= 1) return;
-      k = Math.max(0.35, k);
-      var t = d3.zoomIdentity.translate(Wd / 2 - k * (minX + maxX) / 2, H / 2 - k * (minY + maxY) / 2).scale(k);
+      var Wn = document.getElementById('gwrap').clientWidth || Wd;
+      var Hn = document.getElementById('gwrap').clientHeight || H;
+      var k = Math.min(1, 0.95 * Math.min(Wn / (maxX - minX), Hn / (maxY - minY)));
+      if (!isFinite(k) || k <= 0) return;
+      if (!force && k >= 1) return;
+      k = Math.max(0.35, Math.min(1, k));
+      var t = d3.zoomIdentity.translate(Wn / 2 - k * (minX + maxX) / 2, Hn / 2 - k * (minY + maxY) / 2).scale(k);
       svg.transition().duration(250).call(zoomB.transform, t);
     }
     setTimeout(fitAll, 900);
+    // Always-available reset of pan/zoom (toolbar stays on screen while the
+    // SVG itself is zoomed, so this is the escape hatch on touch devices).
+    window.fitView = function(){ fitAll(true); };
     var defs = svg.append('defs');
     // Arrowheads match the flow direction: green in, red out, grey otherwise.
     // Fixed px size (userSpaceOnUse) with the tip at the line end — the line is

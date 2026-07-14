@@ -525,25 +525,38 @@ def ltp():
     symbols = [s.strip() for s in raw.split(",") if s.strip()]
     out = {}
 
-    for sym in symbols[:100]:
-        # Resolve alias — expand one old symbol to one or more current ones
+    # Skip symbols that aren't NSE-listed without touching the network — graph
+    # nodes include foreign names (MICROSOFT, ARAMCO, …) that would otherwise
+    # each burn a slow NSE+YF failure and time the whole batch out. Soft check:
+    # only applied once the universe cache is warm.
+    known = {u["symbol"] for u in (_universe_cache or [])}
+
+    def _resolve(sym):
+        res = {}
+        if known and sym not in known and sym not in SYMBOL_ALIASES:
+            res[sym] = {"error": "not NSE-listed", "source": "skip"}
+            return res
         resolved = SYMBOL_ALIASES.get(sym)
         if resolved and resolved != [sym]:
             for cur in resolved:
                 if cur == sym:
                     continue
-                # Fetch the actual symbol recursively (one level)
                 sub = {}
-                _fetch_one(cur, sub)
+                _fetch_one(cur, sub)   # fetch the actual symbol (one level)
                 entry = sub.get(cur)
                 if entry and entry.get("price"):
                     entry["alias_of"] = sym
-                    out[sym] = entry
-                    break
-            if sym in out:
-                continue
+                    res[sym] = entry
+                    return res
+        _fetch_one(sym, res)
+        return res
 
-        _fetch_one(sym, out)
+    # Fetch concurrently — sequential NSE+YF lookups made big graphs (15+
+    # symbols) exceed the frontend timeout, so no prices rendered at all.
+    from concurrent.futures import ThreadPoolExecutor
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        for res in pool.map(_resolve, symbols[:100]):
+            out.update(res)
 
     return jsonify(out)
 
