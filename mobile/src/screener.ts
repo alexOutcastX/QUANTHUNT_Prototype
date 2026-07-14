@@ -237,3 +237,91 @@ export function sortRows(rows: Row[], col: string, dir: 1 | -1): Row[] {
     return (va - vb) * dir;
   });
 }
+
+// ── Expression filters (TaurEye-style rows with AND/OR chaining) ─────────────
+// Each row is `<metric> <op> <value(s)>`; rows combine LEFT-TO-RIGHT with the
+// row's own AND/OR join (no parentheses — same semantics as the TaurEye site).
+export type ExprOp = 'gt' | 'lt' | 'between' | 'eq' | 'is' | 'has';
+export type ExprRow = {
+  id: string; // stable React key
+  key: string; // DEF_BY_KEY key
+  op: ExprOp;
+  v1?: string; // raw text so typing "1." never fights the input
+  v2?: string; // upper bound for `between`
+  join: 'and' | 'or'; // how this row combines with everything before it
+  src?: string; // 'preset:<id>' | 'nl' | undefined (manual row)
+};
+
+let exprSeq = 0;
+export const exprId = () => 'x' + Date.now().toString(36) + '-' + exprSeq++;
+
+export const defaultOpFor = (key: string): ExprOp => {
+  const def = DEF_BY_KEY[key];
+  return def?.type === 'toggle' ? 'is' : def?.type === 'select' ? 'has' : 'gt';
+};
+
+// Convert legacy keyed filters (presets, NL builder, old saved screens and
+// share links) into expression rows (AND-joined).
+export function filtersToExpr(f: ActiveFilters, src?: string): ExprRow[] {
+  const out: ExprRow[] = [];
+  for (const [key, val] of Object.entries(f || {})) {
+    const def = DEF_BY_KEY[key];
+    if (!def || val == null) continue;
+    if (def.type === 'toggle') {
+      if (val === true) out.push({ id: exprId(), key, op: 'is', join: 'and', src });
+    } else if (def.type === 'select') {
+      if (val) out.push({ id: exprId(), key, op: 'has', v1: String(val), join: 'and', src });
+    } else {
+      const r = val as RangeVal;
+      if (r.min != null && r.max != null) {
+        out.push({ id: exprId(), key, op: 'between', v1: String(r.min), v2: String(r.max), join: 'and', src });
+      } else if (r.min != null) {
+        out.push({ id: exprId(), key, op: 'gt', v1: String(r.min), join: 'and', src });
+      } else if (r.max != null) {
+        out.push({ id: exprId(), key, op: 'lt', v1: String(r.max), join: 'and', src });
+      }
+    }
+  }
+  return out;
+}
+
+// One row's truth value; null = row incomplete (neutral, skipped in the fold).
+function evalExprRow(row: Row, e: ExprRow): boolean | null {
+  const def = DEF_BY_KEY[e.key];
+  if (!def) return null;
+  const v = def.get(row);
+  if (def.type === 'toggle') return v === true;
+  if (def.type === 'select') {
+    if (!e.v1) return null;
+    if (v == null || v === '') return false;
+    return String(v).toLowerCase().includes(String(e.v1).toLowerCase());
+  }
+  const n1 = e.v1 != null && e.v1 !== '' ? parseFloat(e.v1) : NaN;
+  const n2 = e.v2 != null && e.v2 !== '' ? parseFloat(e.v2) : NaN;
+  if (e.op === 'between') {
+    if (!isFinite(n1) && !isFinite(n2)) return null;
+    if (v == null || typeof v !== 'number') return false;
+    if (isFinite(n1) && v < n1) return false;
+    if (isFinite(n2) && v > n2) return false;
+    return true;
+  }
+  if (!isFinite(n1)) return null;
+  if (v == null || typeof v !== 'number') return false;
+  if (e.op === 'gt') return v > n1;
+  if (e.op === 'lt') return v < n1;
+  return v === n1; // eq
+}
+
+export function applyExpr(rows: Row[], expr: ExprRow[]): Row[] {
+  const active = (expr || []).filter((e) => DEF_BY_KEY[e.key]);
+  if (!active.length) return rows;
+  return rows.filter((row) => {
+    let acc: boolean | null = null;
+    for (const e of active) {
+      const c = evalExprRow(row, e);
+      if (c == null) continue; // incomplete row — doesn't constrain
+      acc = acc == null ? c : e.join === 'or' ? acc || c : acc && c;
+    }
+    return acc == null ? true : acc;
+  });
+}

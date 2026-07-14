@@ -5,7 +5,6 @@ import {
   RefreshControl,
   ScrollView,
   StyleSheet,
-  Switch,
   Text,
   TextInput,
   TouchableOpacity,
@@ -16,17 +15,20 @@ import { api } from '../api';
 import StockDetail from '../components/StockDetail';
 import { exportCsv, exportExcel, exportPdf } from '../csv';
 import { parseNL } from '../nlScreen';
-import { PRESETS, presetActive, togglePreset } from '../presets';
+import { PRESETS, Preset } from '../presets';
 import {
-  ActiveFilters,
   DEF_BY_KEY,
+  ExprOp,
+  ExprRow,
   FILTER_DEFS,
-  RangeVal,
   Row,
   Signal,
   TE_GROUPS,
-  applyFilters,
+  applyExpr,
   calcSignal,
+  defaultOpFor,
+  exprId,
+  filtersToExpr,
   sortRows,
 } from '../screener';
 import {
@@ -150,7 +152,8 @@ export const cellFlex = (c: Col) => ({
 export const DEFAULT_HIDDEN = ['d20', 'd200', 'willr', 'bollb', 'beta', 'sqzMom', 's1', 'r1',
   'pe', 'pb', 'roe', 'roce', 'debt_equity', 'dividend_yield'];
 
-const FILTERS_KEY = 'taureye.screener.filters.v1';
+const FILTERS_KEY = 'taureye.screener.filters.v1'; // legacy keyed filters (migrated)
+const EXPR_KEY = 'taureye.screener.expr.v1';
 const INDEX_KEY = 'taureye.screener.index.v1';
 const COLS_KEY = 'taureye.screener.cols.v3';
 const PAGE_KEY = 'taureye.screener.pagesize.v1';
@@ -196,16 +199,11 @@ export default function ScreenerScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState<string>('');
-  const [active, setActive] = useState<ActiveFilters>({});
+  // Expression filter rows (TaurEye-style `<metric> <op> <value>` chained
+  // with AND/OR). Presets and the NL builder append rows into the same list.
+  const [expr, setExpr] = useState<ExprRow[]>([]);
   const [sortCol, setSortCol] = useState('signal');
   const [sortDir, setSortDir] = useState<1 | -1>(-1);
-  // Inline screen builder: `shown` is the ordered list of filter-key rows
-  // displayed (derived from `active` on load and unioned as `active` grows);
-  // `extVersion` remounts the uncontrolled range inputs on non-typing changes
-  // so their defaultValues refresh without dropping focus mid-type.
-  const [shown, setShown] = useState<string[]>([]);
-  const [extVersion, setExtVersion] = useState(0);
-  const bumpExt = useCallback(() => setExtVersion((v) => v + 1), []);
   const [track, setTrack] = useState<TrackEntry[]>([]);
   const [fundBusy, setFundBusy] = useState(false);
   const [detail, setDetail] = useState<Row | null>(null);
@@ -230,24 +228,32 @@ export default function ScreenerScreen() {
   }, []);
 
   // Restore persisted filters + index once, before saving anything back. A
-  // shared `#screen=` link (web) takes precedence over persisted state.
+  // shared `#screen=` link (web) takes precedence over persisted state. Old
+  // saved states/links carry legacy keyed filters — converted to expr rows.
   useEffect(() => {
     (async () => {
       try {
         const shared = readSharedScreen();
         if (shared) {
           if (INDICES.includes(shared.indexName)) setIndexName(shared.indexName);
-          setActive(shared.active);
+          setExpr(shared.expr?.length ? shared.expr : filtersToExpr(shared.active));
           setSortCol(shared.sortCol);
           setSortDir(shared.sortDir);
         } else {
-          const [f, idx] = await Promise.all([
+          const [x, f, idx] = await Promise.all([
+            AsyncStorage.getItem(EXPR_KEY),
             AsyncStorage.getItem(FILTERS_KEY),
             AsyncStorage.getItem(INDEX_KEY),
           ]);
-          if (f) {
+          if (x) {
+            const parsed = JSON.parse(x);
+            if (Array.isArray(parsed)) {
+              setExpr(parsed.filter((e) => e && typeof e.key === 'string' && typeof e.id === 'string'));
+            }
+          } else if (f) {
+            // One-time migration from the pre-expression keyed filters.
             const parsed = JSON.parse(f);
-            if (parsed && typeof parsed === 'object') setActive(parsed);
+            if (parsed && typeof parsed === 'object') setExpr(filtersToExpr(parsed));
           }
           if (idx && INDICES.includes(idx)) setIndexName(idx);
         }
@@ -301,19 +307,8 @@ export default function ScreenerScreen() {
 
   useEffect(() => {
     if (!restored) return;
-    AsyncStorage.setItem(FILTERS_KEY, JSON.stringify(active)).catch(() => {});
-  }, [active, restored]);
-
-  // Union any keys present in `active` (from restore, presets, NL, shared links,
-  // or applied saved screens) into `shown` so they render as filter rows. Never
-  // removes rows here — emptying a filter keeps its row visible for editing;
-  // explicit removal handles deletion from both `active` and `shown`.
-  useEffect(() => {
-    setShown((prev) => {
-      const add = Object.keys(active).filter((k) => !prev.includes(k));
-      return add.length ? [...prev, ...add] : prev;
-    });
-  }, [active]);
+    AsyncStorage.setItem(EXPR_KEY, JSON.stringify(expr)).catch(() => {});
+  }, [expr, restored]);
 
   useEffect(() => {
     if (!restored) return;
@@ -460,14 +455,14 @@ export default function ScreenerScreen() {
       cancelled = true;
       fundPolling.current = false;
     };
-  }, [active, rows]);
+  }, [rows]);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
     load(indexName);
   }, [indexName, load]);
 
-  const filtered = useMemo(() => applyFilters(rows, active), [rows, active]);
+  const filtered = useMemo(() => applyExpr(rows, expr), [rows, expr]);
   const sorted = useMemo(() => sortRows(filtered, sortCol, sortDir), [filtered, sortCol, sortDir]);
 
   // Visible/ordered columns from prefs (Symbol always first, hidden dropped).
@@ -497,7 +492,7 @@ export default function ScreenerScreen() {
   const pageCount = pageSize === 'all' ? 1 : Math.max(1, Math.ceil(sorted.length / pageSize));
   useEffect(() => {
     setPage(0);
-  }, [indexName, active, sortCol, sortDir, pageSize]);
+  }, [indexName, expr, sortCol, sortDir, pageSize]);
   useEffect(() => {
     if (page > pageCount - 1) setPage(0);
   }, [page, pageCount]);
@@ -560,7 +555,7 @@ export default function ScreenerScreen() {
   // 6-month chart) as the fallback.
   const onChart = (r: Row) => setDetail(r);
 
-  const curState = (): ScreenState => ({ indexName, active, sortCol, sortDir });
+  const curState = (): ScreenState => ({ indexName, active: {}, expr, sortCol, sortDir });
 
   const onShare = async () => {
     const enc = encodeScreen(curState());
@@ -595,7 +590,7 @@ export default function ScreenerScreen() {
   };
   const applySaved = (s: SavedScreen) => {
     if (INDICES.includes(s.indexName)) setIndexName(s.indexName);
-    setActive(s.active);
+    setExpr(s.expr?.length ? s.expr : filtersToExpr(s.active));
     setSortCol(s.sortCol);
     setSortDir(s.sortDir);
     setSavedModal(false);
@@ -685,12 +680,8 @@ export default function ScreenerScreen() {
         }
       >
       <FilterPanel
-        active={active}
-        setActive={setActive}
-        shown={shown}
-        setShown={setShown}
-        extVersion={extVersion}
-        bumpExt={bumpExt}
+        expr={expr}
+        setExpr={setExpr}
         savedCount={saved.length}
         onShare={onShare}
         onSaveScreen={() => setSavedModal(true)}
@@ -847,179 +838,115 @@ export default function ScreenerScreen() {
 // Lives in the page flow (not a modal) and edits `active` LIVE — every change
 // reflects immediately, exactly like presets. `shown` is the ordered list of
 // filter-key rows; emptying a value keeps its row, the × button removes it.
+// ── Expression filter panel (TaurEye-style rows with AND/OR) ─────────────────
+// Dropdown select for the expression rows (RN-web has no native <select>).
+type SelItem = { v?: string; label: string; header?: boolean };
+
+function Sel({
+  label,
+  items,
+  onPick,
+  open,
+  onToggle,
+  width,
+}: {
+  label: string;
+  items: SelItem[];
+  onPick: (v: string) => void;
+  open: boolean;
+  onToggle: () => void;
+  width: number;
+}) {
+  return (
+    <View style={[styles.selWrap, { width }, open && { zIndex: 400 }]}>
+      <TouchableOpacity style={styles.selBtn} onPress={onToggle} activeOpacity={0.75}>
+        <Text style={styles.selTxt} numberOfLines={1}>{label}</Text>
+        <Text style={styles.selCaret}>▾</Text>
+      </TouchableOpacity>
+      {open ? (
+        <View style={styles.selMenu}>
+          <ScrollView style={{ maxHeight: 280 }} keyboardShouldPersistTaps="handled" nestedScrollEnabled>
+            {items.map((it, i) =>
+              it.header ? (
+                <Text key={'h' + it.label + i} style={styles.selHeader}>{it.label}</Text>
+              ) : (
+                <TouchableOpacity
+                  key={(it.v || '') + i}
+                  style={styles.selItem}
+                  onPress={() => onPick(it.v || '')}
+                  activeOpacity={0.75}
+                >
+                  <Text style={styles.selItemTxt}>{it.label}</Text>
+                </TouchableOpacity>
+              ),
+            )}
+          </ScrollView>
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+const FIELD_ITEMS: SelItem[] = TE_GROUPS.flatMap((g) => {
+  const defs = FILTER_DEFS.filter((d) => d.group === g);
+  return defs.length
+    ? [{ label: g, header: true } as SelItem,
+       ...defs.map((d) => ({ v: d.key, label: d.label + (d.fund ? ' ·f' : '') }))]
+    : [];
+});
+const OP_ITEMS: SelItem[] = [
+  { v: 'gt', label: '>' },
+  { v: 'lt', label: '<' },
+  { v: 'between', label: 'between' },
+  { v: 'eq', label: '=' },
+];
+const OP_LABEL: Record<string, string> = { gt: '>', lt: '<', between: 'between', eq: '=', is: 'is true', has: 'is' };
+const PRESET_GROUPS = ['Trend', 'Momentum', 'Breakouts', 'Volume', 'Fundamentals'] as const;
+
 function FilterPanel({
-  active,
-  setActive,
-  shown,
-  setShown,
-  extVersion,
-  bumpExt,
+  expr,
+  setExpr,
   savedCount,
   onShare,
   onSaveScreen,
 }: {
-  active: ActiveFilters;
-  setActive: React.Dispatch<React.SetStateAction<ActiveFilters>>;
-  shown: string[];
-  setShown: React.Dispatch<React.SetStateAction<string[]>>;
-  extVersion: number;
-  bumpExt: () => void;
+  expr: ExprRow[];
+  setExpr: React.Dispatch<React.SetStateAction<ExprRow[]>>;
   savedCount: number;
   onShare: () => void;
   onSaveScreen: () => void;
 }) {
   const [nlText, setNlText] = useState('');
-  const [picker, setPicker] = useState(false);
   const [presetsOpen, setPresetsOpen] = useState(false);
+  const [openSel, setOpenSel] = useState(''); // '<rowId>:f' | '<rowId>:o' | '<rowId>:v'
+  const toggleSel = (id: string) => setOpenSel((cur) => (cur === id ? '' : id));
 
   // Live plain-English preview — what the parser understood so far.
   const nlParsed = useMemo(() => (nlText.trim() ? parseNL(nlText) : null), [nlText]);
   const applyNl = () => {
     if (!nlParsed?.matchedAny) return;
-    setActive((a) => ({ ...a, ...nlParsed.filters })); // union effect adds keys to `shown`
+    setExpr((prev) => [...prev, ...filtersToExpr(nlParsed.filters, 'nl')]);
     setNlText('');
-    bumpExt();
   };
 
-  // Live edits — range writes on every keystroke (no bump: keep focus); an
-  // emptied range deletes the key from `active` but keeps its row in `shown`.
-  const setRange = (key: string, part: 'min' | 'max', text: string) => {
-    setActive((a) => {
-      const cur = (a[key] as RangeVal) || {};
-      const num = text.trim() === '' ? undefined : parseFloat(text);
-      const nextVal: RangeVal = { ...cur, [part]: isFinite(num as number) ? num : undefined };
-      const next = { ...a };
-      if (nextVal.min == null && nextVal.max == null) delete next[key];
-      else next[key] = nextVal;
-      return next;
-    });
-  };
-  const setToggle = (key: string, on: boolean) =>
-    setActive((a) => {
-      const next = { ...a };
-      if (on) next[key] = true;
-      else delete next[key];
-      return next;
-    });
-  const setSelect = (key: string, val: string) =>
-    setActive((a) => {
-      const next = { ...a };
-      if (val) next[key] = val;
-      else delete next[key];
-      return next;
-    });
-
-  // Remove a row entirely — drop the key from both `active` and `shown`.
-  const removeRow = (key: string) => {
-    setActive((a) => {
-      if (a[key] === undefined) return a;
-      const next = { ...a };
-      delete next[key];
-      return next;
-    });
-    setShown((prev) => prev.filter((k) => k !== key));
-    bumpExt();
-  };
-
-  // Append a picked filter as an empty, ready-to-edit row (value stays unset so
-  // it doesn't yet constrain the universe).
-  const addFilter = (key: string) => {
-    setShown((prev) => (prev.includes(key) ? prev : [...prev, key]));
-    bumpExt();
-    setPicker(false);
-  };
-
+  const patch = (id: string, p: Partial<ExprRow>) =>
+    setExpr((prev) => prev.map((e) => (e.id === id ? { ...e, ...p } : e)));
+  const removeRow = (id: string) => setExpr((prev) => prev.filter((e) => e.id !== id));
+  const addRow = () =>
+    setExpr((prev) => [...prev, { id: exprId(), key: 'price', op: 'gt', v1: '', join: 'and' }]);
   const clearAll = () => {
-    setActive({}); // filters only; index lives in separate state and is untouched
-    setShown([]);
-    bumpExt();
-    setPicker(false);
+    setExpr([]);
+    setOpenSel('');
   };
 
-  const renderRow = (key: string) => {
-    const def = DEF_BY_KEY[key];
-    if (!def) return null;
-    const removeBtn = (
-      <TouchableOpacity
-        style={styles.removeBtn}
-        onPress={() => removeRow(def.key)}
-        hitSlop={8}
-        activeOpacity={0.75}
-      >
-        <Text style={styles.removeTxt}>×</Text>
-      </TouchableOpacity>
-    );
-    if (def.type === 'toggle') {
-      return (
-        <View key={def.key} style={styles.fRow}>
-          <Text style={styles.fLabel}>{def.label}{def.fund ? ' ·f' : ''}</Text>
-          <View style={styles.rowRight}>
-            <Switch
-              value={active[def.key] === true}
-              onValueChange={(v) => setToggle(def.key, v)}
-              trackColor={{ true: theme.accent, false: theme.border2 }}
-              thumbColor={theme.text}
-            />
-            {removeBtn}
-          </View>
-        </View>
-      );
-    }
-    if (def.type === 'select') {
-      const val = (active[def.key] as string) || '';
-      return (
-        <View key={def.key} style={styles.fCol}>
-          <View style={styles.selHead}>
-            <Text style={styles.fLabel}>{def.label}{def.fund ? ' ·f' : ''}</Text>
-            {removeBtn}
-          </View>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 6 }}>
-            {['', ...(def.options || [])].map((opt) => (
-              <TouchableOpacity
-                key={opt || 'any'}
-                style={[styles.optChip, val === opt && styles.optChipOn]}
-                onPress={() => setSelect(def.key, opt)}
-                activeOpacity={0.75}
-              >
-                <Text style={[styles.optTxt, val === opt && styles.optTxtOn]}>{opt || 'Any'}</Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
-      );
-    }
-    const rv = (active[def.key] as RangeVal) || {};
-    return (
-      <View key={def.key} style={styles.fRow}>
-        <Text style={styles.fLabel}>
-          {def.label}
-          {def.unit ? ` (${def.unit})` : ''}
-          {def.fund ? ' ·f' : ''}
-        </Text>
-        <View style={styles.rowRight}>
-          <View style={styles.rangeInputs}>
-            <TextInput
-              key={`${def.key}-min-${extVersion}`}
-              style={styles.rInput}
-              placeholder="min"
-              placeholderTextColor={theme.muted}
-              keyboardType="numeric"
-              defaultValue={rv.min != null ? String(rv.min) : ''}
-              onChangeText={(t) => setRange(def.key, 'min', t)}
-            />
-            <TextInput
-              key={`${def.key}-max-${extVersion}`}
-              style={styles.rInput}
-              placeholder="max"
-              placeholderTextColor={theme.muted}
-              keyboardType="numeric"
-              defaultValue={rv.max != null ? String(rv.max) : ''}
-              onChangeText={(t) => setRange(def.key, 'max', t)}
-            />
-          </View>
-          {removeBtn}
-        </View>
-      </View>
+  // Presets append their conditions as tagged rows; toggling off removes them.
+  const presetOn = (p: Preset) => expr.some((e) => e.src === 'preset:' + p.id);
+  const togglePresetExpr = (p: Preset) => {
+    const tag = 'preset:' + p.id;
+    setExpr((prev) =>
+      prev.some((e) => e.src === tag)
+        ? prev.filter((e) => e.src !== tag)
+        : [...prev, ...filtersToExpr(p.filters, tag)],
     );
   };
 
@@ -1065,14 +992,10 @@ function FilterPanel({
               Preset scans {presetsOpen ? '▾' : '▸'}
             </Text>
           </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.addFilterBtn, picker && styles.addFilterBtnOn]}
-            onPress={() => setPicker((v) => !v)}
-            activeOpacity={0.75}
-          >
-            <Text style={[styles.addFilterTxt, picker && { color: theme.onAccent }]}>+ Add filter {picker ? '▾' : '▸'}</Text>
+          <TouchableOpacity style={styles.addFilterBtn} onPress={addRow} activeOpacity={0.75}>
+            <Text style={styles.addFilterTxt}>+ Add filter</Text>
           </TouchableOpacity>
-          {shown.length ? (
+          {expr.length ? (
             <TouchableOpacity onPress={clearAll} activeOpacity={0.75}>
               <Text style={styles.clearAll}>Clear all</Text>
             </TouchableOpacity>
@@ -1086,60 +1009,152 @@ function FilterPanel({
             </TouchableOpacity>
           </View>
         </View>
-        {picker ? (
-          <View style={styles.pickerDrop}>
+        {presetsOpen ? (
+          <View style={[styles.pickerDrop, { width: 480 }]}>
             <ScrollView style={styles.pickerScroll} keyboardShouldPersistTaps="handled" nestedScrollEnabled>
-              {TE_GROUPS.map((g) => {
-                const defs = FILTER_DEFS.filter((d) => d.group === g && !shown.includes(d.key));
-                if (!defs.length) return null;
+              {PRESET_GROUPS.map((g) => {
+                const ps = PRESETS.filter((p) => p.group === g);
+                if (!ps.length) return null;
                 return (
                   <View key={g} style={styles.group}>
                     <Text style={styles.groupTitle}>{g}</Text>
-                    <View style={styles.pickWrap}>
-                      {defs.map((d) => (
+                    {ps.map((p) => {
+                      const on = presetOn(p);
+                      return (
                         <TouchableOpacity
-                          key={d.key}
-                          style={styles.pickChip}
-                          onPress={() => addFilter(d.key)}
+                          key={p.id}
+                          style={styles.presetItem}
+                          onPress={() => togglePresetExpr(p)}
                           activeOpacity={0.75}
                         >
-                          <Text style={styles.pickTxt}>{d.label}{d.fund ? ' ·f' : ''}</Text>
+                          <Text style={[styles.presetMark, on && { color: theme.green }]}>
+                            {on ? '✓' : '○'}
+                          </Text>
+                          <View style={{ flex: 1 }}>
+                            <Text style={styles.presetName}>{p.name}</Text>
+                            <Text style={styles.presetDesc} numberOfLines={1}>{p.desc}</Text>
+                          </View>
                         </TouchableOpacity>
-                      ))}
-                    </View>
+                      );
+                    })}
                   </View>
                 );
               })}
-              <Text style={styles.fundNote}>·f = fundamental filter; applying one fetches company financials (may take a moment).</Text>
+              <Text style={styles.fundNote}>Presets add their conditions as filter rows below — edit or remove them like any row.</Text>
             </ScrollView>
           </View>
         ) : null}
       </View>
 
-      {presetsOpen ? (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.presetRow}>
-          {PRESETS.map((p) => {
-            const on = presetActive(active, p);
-            return (
-              <TouchableOpacity
-                key={p.id}
-                style={[styles.presetChip, on && styles.presetChipOn]}
-                onPress={() => setActive(togglePreset(active, p))}
-                activeOpacity={0.75}
-              >
-                <Text style={[styles.presetTxt, on && styles.presetTxtOn]}>{on ? '✓ ' : ''}{p.name}</Text>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
-      ) : null}
-
       <View style={styles.panelBody}>
-        {shown.length === 0 ? (
+        {expr.length === 0 ? (
           <Text style={styles.emptyFilters}>No filters — showing the full universe.</Text>
         ) : (
-          shown.map(renderRow)
+          expr.map((e, i) => {
+            const def = DEF_BY_KEY[e.key];
+            const isRange = def?.type === 'range';
+            const isSelect = def?.type === 'select';
+            const rowOpen = openSel.startsWith(e.id + ':');
+            return (
+              <View key={e.id} style={[styles.exprRow, rowOpen && { zIndex: 300 }]}>
+                {i > 0 ? (
+                  <View style={styles.joinWrap}>
+                    {(['and', 'or'] as const).map((j) => (
+                      <TouchableOpacity
+                        key={j}
+                        style={[styles.joinBtn, e.join === j && styles.joinOn]}
+                        onPress={() => patch(e.id, { join: j })}
+                        activeOpacity={0.75}
+                      >
+                        <Text style={[styles.joinTxt, e.join === j && styles.joinTxtOn]}>{j.toUpperCase()}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                ) : (
+                  <View style={styles.joinSpacer} />
+                )}
+                <Sel
+                  label={def ? def.label + (def.fund ? ' ·f' : '') : 'Choose metric'}
+                  items={FIELD_ITEMS}
+                  open={openSel === e.id + ':f'}
+                  onToggle={() => toggleSel(e.id + ':f')}
+                  onPick={(k) => {
+                    patch(e.id, { key: k, op: defaultOpFor(k), v1: '', v2: '' });
+                    setOpenSel('');
+                  }}
+                  width={235}
+                />
+                {isRange ? (
+                  <Sel
+                    label={OP_LABEL[e.op] || '>'}
+                    items={OP_ITEMS}
+                    open={openSel === e.id + ':o'}
+                    onToggle={() => toggleSel(e.id + ':o')}
+                    onPick={(op) => {
+                      patch(e.id, { op: op as ExprOp });
+                      setOpenSel('');
+                    }}
+                    width={108}
+                  />
+                ) : (
+                  <Text style={styles.opFixed}>{OP_LABEL[e.op]}</Text>
+                )}
+                {isRange ? (
+                  <>
+                    <TextInput
+                      style={styles.exprInput}
+                      value={e.v1 ?? ''}
+                      onChangeText={(t) => patch(e.id, { v1: t })}
+                      placeholder="0"
+                      placeholderTextColor={theme.muted}
+                      keyboardType="numeric"
+                    />
+                    {e.op === 'between' ? (
+                      <>
+                        <Text style={styles.betweenDash}>—</Text>
+                        <TextInput
+                          style={styles.exprInput}
+                          value={e.v2 ?? ''}
+                          onChangeText={(t) => patch(e.id, { v2: t })}
+                          placeholder="∞"
+                          placeholderTextColor={theme.muted}
+                          keyboardType="numeric"
+                        />
+                      </>
+                    ) : null}
+                    {def?.unit ? <Text style={styles.unitTxt}>{def.unit}</Text> : null}
+                  </>
+                ) : null}
+                {isSelect ? (
+                  <Sel
+                    label={e.v1 || 'Any'}
+                    items={(def?.options || []).map((o) => ({ v: o, label: o }))}
+                    open={openSel === e.id + ':v'}
+                    onToggle={() => toggleSel(e.id + ':v')}
+                    onPick={(v) => {
+                      patch(e.id, { v1: v });
+                      setOpenSel('');
+                    }}
+                    width={200}
+                  />
+                ) : null}
+                <TouchableOpacity
+                  style={styles.removeBtn}
+                  onPress={() => removeRow(e.id)}
+                  hitSlop={8}
+                  activeOpacity={0.75}
+                >
+                  <Text style={styles.removeTxt}>×</Text>
+                </TouchableOpacity>
+              </View>
+            );
+          })
         )}
+        {expr.length ? (
+          <Text style={styles.exprHint}>
+            Rows combine left to right with each row's AND/OR · ·f = fundamental (fetches company financials)
+          </Text>
+        ) : null}
       </View>
     </View>
   );
@@ -1322,7 +1337,7 @@ function SavedScreensModal({
                 <TouchableOpacity style={{ flex: 1 }} onPress={() => onApply(s)} activeOpacity={0.75}>
                   <Text style={styles.savedName}>{s.name}</Text>
                   <Text style={styles.savedMeta}>
-                    {s.indexName} · {Object.keys(s.active).length} filter{Object.keys(s.active).length === 1 ? '' : 's'} · sort {s.sortCol} {s.sortDir === 1 ? '↑' : '↓'}
+                    {s.indexName} · {(s.expr?.length ?? Object.keys(s.active).length)} filter{(s.expr?.length ?? Object.keys(s.active).length) === 1 ? '' : 's'} · sort {s.sortCol} {s.sortDir === 1 ? '↑' : '↓'}
                   </Text>
                 </TouchableOpacity>
                 <TouchableOpacity onPress={() => onDelete(s.name)} hitSlop={10} activeOpacity={0.75}>
@@ -1720,6 +1735,104 @@ const styles = StyleSheet.create({
   addFilterBtnOn: { backgroundColor: theme.accent, borderColor: theme.accent },
   addFilterTxt: { color: theme.text, fontSize: theme.fs.sm + 1, fontWeight: '700' },
   pickerScroll: { maxHeight: 358 },
+  // preset dropdown entries
+  presetItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.sp.md,
+    paddingVertical: theme.sp.sm,
+    borderBottomColor: theme.border,
+    borderBottomWidth: 1,
+  },
+  presetMark: { color: theme.muted, fontFamily: theme.mono, fontSize: theme.fs.md, width: 16, textAlign: 'center' },
+  presetName: { color: theme.text, fontSize: theme.fs.sm + 1, fontWeight: '600' },
+  presetDesc: { color: theme.muted, fontSize: theme.fs.xs + 1, marginTop: 1 },
+  // expression rows
+  exprRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.sp.sm,
+    paddingVertical: 5,
+  },
+  joinWrap: { flexDirection: 'row', gap: 2, width: 92 },
+  joinSpacer: { width: 92 },
+  joinBtn: {
+    borderColor: theme.border2,
+    borderWidth: 1,
+    borderRadius: theme.radius.sm,
+    paddingHorizontal: theme.sp.sm + 1,
+    paddingVertical: 4,
+  },
+  joinOn: { backgroundColor: theme.accent, borderColor: theme.accent },
+  joinTxt: { color: theme.muted2, fontSize: theme.fs.xs + 1, fontWeight: '800', letterSpacing: 0.5 },
+  joinTxtOn: { color: theme.onAccent },
+  opFixed: { color: theme.muted2, fontSize: theme.fs.sm, width: 108, textAlign: 'center' },
+  exprInput: {
+    backgroundColor: theme.surface2,
+    borderColor: theme.border2,
+    borderWidth: 1,
+    borderRadius: theme.radius.sm,
+    color: theme.text,
+    paddingHorizontal: theme.sp.sm,
+    paddingVertical: 7,
+    width: 110,
+    fontFamily: theme.mono,
+    fontSize: theme.fs.sm,
+  },
+  betweenDash: { color: theme.muted, fontSize: theme.fs.md },
+  unitTxt: { color: theme.muted, fontSize: theme.fs.sm, fontFamily: theme.mono },
+  exprHint: { color: theme.muted, fontSize: theme.fs.xs + 1, paddingTop: theme.sp.sm },
+  // dropdown select
+  selWrap: { position: 'relative' },
+  selBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: theme.sp.sm,
+    backgroundColor: theme.surface2,
+    borderColor: theme.border2,
+    borderWidth: 1,
+    borderRadius: theme.radius.sm,
+    paddingHorizontal: theme.sp.md,
+    paddingVertical: 7,
+  },
+  selTxt: { color: theme.text, fontSize: theme.fs.sm, flexShrink: 1 },
+  selCaret: { color: theme.muted, fontSize: theme.fs.xs + 1 },
+  selMenu: {
+    position: 'absolute',
+    top: '100%',
+    left: 0,
+    marginTop: 3,
+    minWidth: '100%',
+    backgroundColor: theme.surface3,
+    borderColor: theme.border2,
+    borderWidth: 1,
+    borderRadius: theme.radius.sm + 2,
+    overflow: 'hidden',
+    zIndex: 500,
+    elevation: 16,
+    shadowColor: '#000',
+    shadowOpacity: 0.5,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 6 },
+  },
+  selHeader: {
+    color: theme.muted,
+    fontSize: theme.fs.xs,
+    fontWeight: '700',
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+    paddingHorizontal: theme.sp.md,
+    paddingTop: theme.sp.sm + 2,
+    paddingBottom: 3,
+  },
+  selItem: {
+    paddingHorizontal: theme.sp.md,
+    paddingVertical: 7,
+    borderBottomColor: theme.border,
+    borderBottomWidth: 1,
+  },
+  selItemTxt: { color: theme.text, fontSize: theme.fs.sm },
   pickWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.sp.sm },
   pickChip: {
     backgroundColor: theme.surface,

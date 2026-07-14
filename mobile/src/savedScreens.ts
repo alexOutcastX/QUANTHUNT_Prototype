@@ -3,14 +3,15 @@
 // so a scan can be re-opened later. Also provides compact encode/decode helpers
 // used by the web "Share" feature (base64 of the same state shape).
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { ActiveFilters } from './screener';
+import { ActiveFilters, ExprRow } from './screener';
 
 const KEY = 'taureye.screener.saved.v1';
 const CAP = 50;
 
 export type ScreenState = {
   indexName: string;
-  active: ActiveFilters;
+  active: ActiveFilters; // legacy keyed filters (old saves/links)
+  expr?: ExprRow[]; // expression rows (current builder)
   sortCol: string;
   sortDir: 1 | -1;
 };
@@ -25,9 +26,12 @@ function coerceState(o: Record<string, unknown> | null | undefined): ScreenState
   const indexName = typeof o.indexName === 'string' ? o.indexName : '';
   if (!indexName) return null;
   const active = (o.active && typeof o.active === 'object' ? o.active : {}) as ActiveFilters;
+  const expr = Array.isArray(o.expr)
+    ? (o.expr as ExprRow[]).filter((e) => e && typeof e.key === 'string' && typeof e.id === 'string')
+    : undefined;
   const sortCol = typeof o.sortCol === 'string' ? o.sortCol : 'signal';
   const sortDir = o.sortDir === 1 ? 1 : -1;
-  return { indexName, active, sortCol, sortDir };
+  return { indexName, active, expr, sortCol, sortDir };
 }
 
 export async function loadSavedScreens(): Promise<SavedScreen[]> {
