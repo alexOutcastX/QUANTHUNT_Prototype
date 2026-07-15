@@ -1054,6 +1054,80 @@ def patterns():
         return jsonify({"error": str(e)}), 502
 
 
+def _load_ohlc(sym, period, interval="1d"):
+    """Resilient OHLC fetch (yfinance .NS → .BO, then tvDatafeed) for the
+    chart-pattern scanner. Returns a chronological list of {t,o,h,l,c,v}."""
+    import yfinance as yf
+    df = None
+    for suffix in (".NS", ".BO"):
+        ysym = sym if sym.startswith("^") else f"{sym}{suffix}"
+        ticker = yf.Ticker(ysym)
+        for attempt in range(2):
+            try:
+                df = ticker.history(period=period, interval=interval, auto_adjust=True)
+            except Exception:
+                df = None
+            if df is not None and not df.empty:
+                break
+            time.sleep(1.2 ** attempt)
+        if df is not None and not df.empty:
+            break
+        if sym.startswith("^"):
+            break
+    if (df is None or df.empty):
+        df = _fetch_tv_data(sym, interval, period)
+    if df is None or df.empty:
+        return []
+    df.index = pd.to_datetime(df.index)
+    out = []
+    for ts, row in df.iterrows():
+        try:
+            out.append({
+                "t": int(ts.timestamp()),
+                "o": float(row["Open"]), "h": float(row["High"]),
+                "l": float(row["Low"]), "c": float(row["Close"]),
+                "v": int(row["Volume"]) if not math.isnan(row["Volume"]) else 0,
+            })
+        except Exception:
+            continue
+    return out
+
+
+@app.route("/chart-patterns")
+def chart_patterns():
+    """Scan a symbol's price history for classic chart patterns (double tops,
+    head-and-shoulders, triangles, wedges, flags, cup-and-handle, …) and report
+    each with its span, confidence, continuation probability and measured move."""
+    from patterns import detect_patterns as _detect_chart
+
+    sym = request.args.get("symbol", "").strip().upper().replace(":", "")
+    period = request.args.get("period", "2y")
+    interval = request.args.get("interval", "1d")
+    if not sym:
+        return jsonify({"error": "symbol required"}), 400
+    if period not in ("6mo", "1y", "2y", "5y", "max"):
+        period = "2y"
+    if interval not in ("1d", "1wk"):
+        interval = "1d"
+    try:
+        candles = _load_ohlc(sym, period, interval)
+        if not candles:
+            return jsonify({"error": f"No price history for {sym}", "symbol": sym,
+                            "patterns": [], "candles": []}), 404
+        result = _detect_chart(candles)
+        result["symbol"] = sym
+        result["period"] = period
+        result["interval"] = interval
+        # Ship a trimmed candle series so the client can chart it without a
+        # second round trip.
+        result["candles"] = [{"t": c["t"], "o": c["o"], "h": c["h"],
+                              "l": c["l"], "c": c["c"]} for c in candles]
+        return jsonify(result)
+    except Exception as e:
+        log.error("Chart-patterns error for %s: %s", sym, e)
+        return jsonify({"error": str(e), "symbol": sym, "patterns": []}), 503
+
+
 _MB_CACHE: dict = {}   # symbol -> (epoch, payload); refreshed every 6h
 _MB_TTL = 6 * 3600
 
