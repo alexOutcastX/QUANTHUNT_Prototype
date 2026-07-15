@@ -6,6 +6,7 @@ import { chartHtml } from '../chartHtml';
 import HtmlView from '../components/HtmlView';
 import SymbolInput from '../components/SymbolInput';
 import { Btn, Card, EmptyState, Loading, ScreenTitle, SectionTitle } from '../ui';
+import { useResponsive } from '../responsive';
 import { theme } from '../theme';
 
 const RECENT_KEY = 'taureye.patterns.recent.v1';
@@ -77,6 +78,62 @@ function PatternRow({ p, top }: { p: ChartPattern; top?: boolean }) {
   );
 }
 
+// The dedicated "Current Pattern" detail box — bias, dates, probability, the
+// continuation odds and the measured % move. Fills the space beside the table
+// on desktop, stacks above it on mobile.
+function CurrentCard({ p }: { p: ChartPattern }) {
+  const c = biasColor(p.bias);
+  const Stat = ({ label, value, color }: { label: string; value: string; color?: string }) => (
+    <View style={styles.cStat}>
+      <Text style={styles.cStatLabel}>{label}</Text>
+      <Text style={[styles.cStatVal, color ? { color } : null]}>{value}</Text>
+    </View>
+  );
+  return (
+    <Card style={StyleSheet.flatten([styles.curCard, { borderColor: c }])}>
+      <View style={styles.curHead}>
+        <Text style={styles.curKicker}>CURRENT PATTERN</Text>
+        <View style={[styles.statePill, { backgroundColor: p.active ? c : theme.surface3 }]}>
+          <Text style={[styles.stateTxt, { color: p.active ? theme.bg : theme.muted2 }]}>
+            {p.active ? 'IN PLAY' : 'LATEST'}
+          </Text>
+        </View>
+      </View>
+      <Text style={styles.curTitle}>{p.label}</Text>
+      <View style={styles.curTags}>
+        <View style={[styles.biasChip, { borderColor: c, marginHorizontal: 0 }]}>
+          <Text style={[styles.biasTxt, { color: c }]}>{p.bias.toUpperCase()}</Text>
+        </View>
+        <Text style={styles.curCat}>{p.category} · {p.status}</Text>
+      </View>
+
+      <View style={styles.probBlock}>
+        <View style={styles.probLine}>
+          <Text style={styles.cStatLabel}>Probability</Text>
+          <Text style={styles.probPct}>{p.confidence}%</Text>
+        </View>
+        <Bar pct={p.confidence} color={theme.accent} />
+      </View>
+      <View style={styles.probBlock}>
+        <View style={styles.probLine}>
+          <Text style={styles.cStatLabel}>Continuation</Text>
+          <Text style={[styles.probPct, { color: c }]}>{p.continuation}%</Text>
+        </View>
+        <Bar pct={p.continuation} color={c} />
+      </View>
+
+      <View style={styles.cGrid}>
+        <Stat label="Bias" value={p.bias[0].toUpperCase() + p.bias.slice(1)} color={c} />
+        <Stat label="% move" value={signPct(p.expansion_pct)} color={p.expansion_pct >= 0 ? theme.green : theme.red} />
+        <Stat label="Started" value={fmtDate(p.start_ts)} />
+        <Stat label="Ended" value={p.active ? 'active' : fmtDate(p.end_ts)} />
+        {p.target ? <Stat label="Target" value={`₹${p.target.toLocaleString('en-IN')}`} /> : null}
+        {p.level ? <Stat label="Key level" value={`₹${p.level.toLocaleString('en-IN')}`} /> : null}
+      </View>
+    </Card>
+  );
+}
+
 export default function PatternScreen() {
   const [symbol, setSymbol] = useState('');
   const [period, setPeriod] = useState('2y');
@@ -85,6 +142,7 @@ export default function PatternScreen() {
   const [data, setData] = useState<ChartPatternsResp | null>(null);
   const [recent, setRecent] = useState<string[]>([]);
   const lastQuery = useRef<{ sym: string; period: string } | null>(null);
+  const { isDesktop } = useResponsive();
 
   useEffect(() => {
     AsyncStorage.getItem(RECENT_KEY)
@@ -194,72 +252,53 @@ export default function PatternScreen() {
               </Card>
             ) : null}
 
-            {cur ? (
-              <Card style={StyleSheet.flatten([styles.curCard, { borderColor: biasColor(cur.bias) }])}>
-                <View style={styles.curHead}>
-                  <Text style={styles.curKicker}>CURRENT PATTERN</Text>
-                  <View style={[styles.biasChip, { borderColor: biasColor(cur.bias) }]}>
-                    <Text style={[styles.biasTxt, { color: biasColor(cur.bias) }]}>{cur.bias.toUpperCase()}</Text>
-                  </View>
+            {/* On desktop the table and the Current Pattern card sit side by
+                side (the card fills the space that was blank); on mobile the
+                card stacks above the table. */}
+            <View style={isDesktop ? styles.split : undefined}>
+              {!isDesktop && cur ? (
+                <View style={{ marginBottom: theme.sp.md }}>
+                  <CurrentCard p={cur} />
                 </View>
-                <Text style={styles.curTitle}>{cur.label}</Text>
-                <Text style={styles.curSub}>
-                  {cur.category} · {cur.status} · started {fmtDate(cur.start_ts)}
-                </Text>
-                <View style={styles.curStats}>
-                  <View style={styles.curStat}>
-                    <Text style={styles.curStatLabel}>Probability</Text>
-                    <Text style={styles.curStatVal}>{cur.confidence}%</Text>
-                  </View>
-                  <View style={styles.curStat}>
-                    <Text style={styles.curStatLabel}>Continuation</Text>
-                    <Text style={[styles.curStatVal, { color: biasColor(cur.bias) }]}>{cur.continuation}%</Text>
-                  </View>
-                  <View style={styles.curStat}>
-                    <Text style={styles.curStatLabel}>Expansion</Text>
-                    <Text style={[styles.curStatVal, { color: cur.expansion_pct >= 0 ? theme.green : theme.red }]}>
-                      {signPct(cur.expansion_pct)}
-                    </Text>
-                  </View>
-                  {cur.target ? (
-                    <View style={styles.curStat}>
-                      <Text style={styles.curStatLabel}>Target</Text>
-                      <Text style={styles.curStatVal}>₹{cur.target.toLocaleString('en-IN')}</Text>
+              ) : null}
+              <View style={isDesktop ? styles.splitMain : undefined}>
+                <SectionTitle>
+                  {data.count} pattern{data.count === 1 ? '' : 's'} found{data.bars ? ` · ${data.bars} bars` : ''}
+                </SectionTitle>
+
+                {data.patterns.length ? (
+                  <ScrollView horizontal showsHorizontalScrollIndicator contentContainerStyle={{ minWidth: '100%' }}>
+                    <View style={{ minWidth: TABLE_W }}>
+                      <View style={styles.headerRow}>
+                        {COLS.map((c) => (
+                          <Text
+                            key={c.key}
+                            style={[styles.th, { width: c.w, textAlign: c.align === 'left' ? 'left' : 'right' }]}
+                          >
+                            {c.label}
+                          </Text>
+                        ))}
+                      </View>
+                      {data.patterns.map((p, i) => (
+                        <PatternRow key={`${p.type}-${p.start_ts}-${i}`} p={p} top={i === 0} />
+                      ))}
                     </View>
-                  ) : null}
-                </View>
-              </Card>
-            ) : null}
+                  </ScrollView>
+                ) : (
+                  <EmptyState
+                    icon="◇"
+                    title="No clear chart patterns"
+                    hint={data.note || 'The recogniser found no textbook formations in this window. Try a longer period.'}
+                  />
+                )}
+              </View>
 
-            <SectionTitle>
-              {data.count} pattern{data.count === 1 ? '' : 's'} found{data.bars ? ` · ${data.bars} bars` : ''}
-            </SectionTitle>
-
-            {data.patterns.length ? (
-              <ScrollView horizontal showsHorizontalScrollIndicator contentContainerStyle={{ minWidth: '100%' }}>
-                <View style={{ minWidth: TABLE_W }}>
-                  <View style={styles.headerRow}>
-                    {COLS.map((c) => (
-                      <Text
-                        key={c.key}
-                        style={[styles.th, { width: c.w, textAlign: c.align === 'left' ? 'left' : 'right' }]}
-                      >
-                        {c.label}
-                      </Text>
-                    ))}
-                  </View>
-                  {data.patterns.map((p, i) => (
-                    <PatternRow key={`${p.type}-${p.start_ts}-${i}`} p={p} top={i === 0} />
-                  ))}
+              {isDesktop && cur ? (
+                <View style={styles.splitSide}>
+                  <CurrentCard p={cur} />
                 </View>
-              </ScrollView>
-            ) : (
-              <EmptyState
-                icon="◇"
-                title="No clear chart patterns"
-                hint={data.note || 'The recogniser found no textbook formations in this window. Try a longer period.'}
-              />
-            )}
+              ) : null}
+            </View>
 
             <Text style={styles.method}>
               Patterns are detected geometrically from swing pivots and trend-line fits. “Probability” is how
@@ -314,16 +353,26 @@ const styles = StyleSheet.create({
   body: { paddingHorizontal: theme.sp.lg, paddingBottom: theme.sp.xl, gap: theme.sp.md },
   chartCard: { height: 240, padding: 0, overflow: 'hidden', marginTop: theme.sp.sm },
   chart: { flex: 1 },
-  // current-pattern banner
-  curCard: { borderWidth: 1, gap: 4 },
+  // desktop two-column split (table | current-pattern card)
+  split: { flexDirection: 'row', gap: theme.sp.lg, alignItems: 'flex-start' },
+  splitMain: { flex: 1, minWidth: 0 },
+  splitSide: { width: 360 },
+  // current-pattern detail card
+  curCard: { borderWidth: 1, gap: theme.sp.sm },
   curHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   curKicker: { color: theme.muted, fontSize: theme.fs.xs + 1, fontWeight: '700', letterSpacing: 1 },
-  curTitle: { color: theme.text, fontSize: theme.fs.lg, fontWeight: '800' },
-  curSub: { color: theme.muted, fontSize: theme.fs.sm },
-  curStats: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.sp.lg, marginTop: theme.sp.sm },
-  curStat: { gap: 2 },
-  curStatLabel: { color: theme.muted, fontSize: theme.fs.xs + 1 },
-  curStatVal: { color: theme.text, fontSize: theme.fs.lg, fontWeight: '800', fontFamily: theme.mono },
+  curTitle: { color: theme.text, fontSize: theme.fs.xl, fontWeight: '800' },
+  curTags: { flexDirection: 'row', alignItems: 'center', gap: theme.sp.sm },
+  curCat: { color: theme.muted, fontSize: theme.fs.sm },
+  statePill: { borderRadius: 999, paddingHorizontal: 8, paddingVertical: 2 },
+  stateTxt: { fontSize: 9, fontWeight: '800', letterSpacing: 0.5, fontFamily: theme.mono },
+  probBlock: { gap: 4 },
+  probLine: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  probPct: { color: theme.text, fontSize: theme.fs.md, fontWeight: '800', fontFamily: theme.mono },
+  cGrid: { flexDirection: 'row', flexWrap: 'wrap', rowGap: theme.sp.md, marginTop: 2 },
+  cStat: { width: '50%', gap: 2 },
+  cStatLabel: { color: theme.muted, fontSize: theme.fs.xs + 1 },
+  cStatVal: { color: theme.text, fontSize: theme.fs.md, fontWeight: '700', fontFamily: theme.mono },
   // table
   headerRow: {
     flexDirection: 'row',
