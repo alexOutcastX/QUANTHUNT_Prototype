@@ -14,6 +14,11 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Quote, api } from '../api';
 import { exportCsvRows, exportExcelRows } from '../csv';
+import StockDetail from '../components/StockDetail';
+import { Row } from '../screener';
+import { navigate } from '../navIntent';
+import { EntryMap, dropEntry, loadEntries, saveEntries, syncTrackList, withEntry } from '../watchentry';
+import { loadTrack, removeTrack } from '../tracklist';
 import { theme } from '../theme';
 import { Btn, EmptyState, Loading, ScreenTitle, StatTile } from '../ui';
 import {
@@ -27,6 +32,11 @@ import {
   renameWatchlist,
   setActiveWatchlist,
 } from '../watchlist';
+
+// Per-symbol entry data (add price + time), read by the Entry / Since-add
+// column renderers. Kept module-scoped and refreshed on each render so the
+// static COLS definitions can reach it.
+let curEntries: EntryMap = {};
 
 // ── formatting ────────────────────────────────────────────────────────────────
 const money = (v?: number | null) =>
@@ -78,6 +88,36 @@ const COLS: WCol[] = [
     text: (_s, q) => numText(q?.absChg),
   },
   {
+    key: 'entry', label: 'Entry', w: 96, align: 'right',
+    render: (sym) => {
+      const e = curEntries[sym];
+      return (
+        <View style={{ alignItems: 'flex-end' }}>
+          <Text style={styles.cell}>{e?.price != null ? money(e.price) : '—'}</Text>
+          {e?.dir ? (
+            <Text style={[styles.dirTag, { color: e.dir === 'buy' ? theme.green : theme.red }]}>
+              {e.dir.toUpperCase()}
+            </Text>
+          ) : null}
+        </View>
+      );
+    },
+    text: (sym) => numText(curEntries[sym]?.price),
+  },
+  {
+    key: 'sinceAdd', label: 'Since add', w: 92, align: 'right',
+    render: (sym, q) => {
+      const e = curEntries[sym];
+      const mv = e?.price != null && e.price > 0 && q?.price != null ? ((q.price - e.price) / e.price) * 100 : null;
+      return <Text style={[styles.cell, { color: colorOf(mv) }]}>{pct(mv)}</Text>;
+    },
+    text: (sym, q) => {
+      const e = curEntries[sym];
+      const mv = e?.price != null && e.price > 0 && q?.price != null ? ((q.price - e.price) / e.price) * 100 : null;
+      return numText(mv);
+    },
+  },
+  {
     key: 'prevClose', label: 'Prev', w: 90, align: 'right',
     render: (_s, q) => <Text style={styles.cell}>{num(q?.prevClose)}</Text>,
     text: (_s, q) => numText(q?.prevClose),
@@ -104,7 +144,7 @@ const COLS: WCol[] = [
   },
 ];
 const COL_META = COLS.map((c) => ({ key: c.key, label: c.label }));
-const ACTIONS_W = 56; // per-row remove button
+const ACTIONS_W = 150; // per-row Chart / Analyse / remove buttons
 const COLS_KEY = 'taureye.watchlist.cols.v1';
 
 export default function WatchlistScreen() {
@@ -122,6 +162,10 @@ export default function WatchlistScreen() {
   // List-management modals.
   const [nameModal, setNameModal] = useState<'create' | 'rename' | null>(null);
   const [confirmDel, setConfirmDel] = useState(false);
+  // Per-symbol entry data (add price + since-add move, folded in from Track List).
+  const [entries, setEntries] = useState<EntryMap>({});
+  const [detail, setDetail] = useState<Row | null>(null);
+  curEntries = entries; // expose to the static column renderers
 
   const lists = store?.lists ?? [];
   const active = useMemo<Watchlist | undefined>(
@@ -144,12 +188,14 @@ export default function WatchlistScreen() {
     }
   }, []);
 
-  // Load the store + column prefs once.
+  // Load the store + column prefs + entry data once. On first run, fold any
+  // legacy Track List calls into the active list + entry map.
   useEffect(() => {
     (async () => {
-      const [s, rawCols] = await Promise.all([
+      const [s0, rawCols, ent0] = await Promise.all([
         getWatchlistStore(),
         AsyncStorage.getItem(COLS_KEY),
+        loadEntries(),
       ]);
       if (rawCols) {
         try {
@@ -160,11 +206,41 @@ export default function WatchlistScreen() {
           /* defaults */
         }
       }
+      let s = s0;
+      let ent = ent0;
+      const synced = await syncTrackList(ent0);
+      if (synced) {
+        ent = synced.map;
+        for (const sym of synced.symbols) {
+          s = await addSymbolToWatchlist(s.activeId, sym);
+        }
+        await saveEntries(ent);
+      }
+      setEntries(ent);
       setPrefsRestored(true);
       setStore(s);
       setLoading(false);
     })();
   }, []);
+
+  // Once quotes arrive, stamp an entry price for any symbol that lacks one, so
+  // "since add" is measured from when the symbol first appeared in the list.
+  useEffect(() => {
+    if (!symbols.length) return;
+    let changed = false;
+    let next = entries;
+    for (const sym of symbols) {
+      const p = quotes[sym]?.price;
+      if (!entries[sym] && p != null) {
+        next = withEntry(next, sym, p, Date.now());
+        changed = true;
+      }
+    }
+    if (changed) {
+      setEntries(next);
+      saveEntries(next).catch(() => {});
+    }
+  }, [quotes, symbols, entries]);
 
   useEffect(() => {
     if (!prefsRestored) return;
@@ -198,9 +274,23 @@ export default function WatchlistScreen() {
     async (sym: string) => {
       if (!active) return;
       setStore(await removeSymbolFromWatchlist(active.id, sym));
+      setEntries((prev) => {
+        const next = dropEntry(prev, sym);
+        saveEntries(next).catch(() => {});
+        return next;
+      });
+      // Also drop any Track List call so it doesn't re-appear on next load.
+      loadTrack().then((t) => removeTrack(t, sym)).catch(() => {});
     },
     [active],
   );
+
+  const onChart = useCallback((sym: string, q?: Quote) => {
+    setDetail({ sym, price: q?.price ?? null, chg: q?.chg ?? null } as Row);
+  }, []);
+  const onAnalyse = useCallback((sym: string) => {
+    navigate('analysis', { sub: 'mb', symbol: sym });
+  }, []);
 
   const onSelectList = useCallback(async (id: string) => {
     setStore(await setActiveWatchlist(id));
@@ -287,6 +377,12 @@ export default function WatchlistScreen() {
           </View>
         ))}
         <View style={styles.actionsCell}>
+          <TouchableOpacity onPress={() => onChart(item, q)} style={styles.rowBtn} activeOpacity={0.75}>
+            <Text style={styles.rowBtnTxt}>Chart</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => onAnalyse(item)} style={styles.rowBtn} activeOpacity={0.75}>
+            <Text style={[styles.rowBtnTxt, { color: theme.accent }]}>Analyse</Text>
+          </TouchableOpacity>
           <TouchableOpacity onPress={() => onRemove(item)} style={styles.del} hitSlop={8} activeOpacity={0.75}>
             <Text style={styles.delText}>✕</Text>
           </TouchableOpacity>
@@ -473,6 +569,8 @@ export default function WatchlistScreen() {
         onCancel={() => setConfirmDel(false)}
         onConfirm={onDelete}
       />
+
+      {detail ? <StockDetail row={detail} onClose={() => setDetail(null)} /> : null}
     </View>
   );
 }
@@ -770,9 +868,18 @@ const styles = StyleSheet.create({
   td: { justifyContent: 'center', paddingHorizontal: theme.sp.xs },
   cell: { color: theme.text, fontFamily: theme.mono, fontSize: theme.fs.sm },
   symTxt: { color: theme.text, fontFamily: theme.mono, fontWeight: '700', fontSize: theme.fs.md },
-  actionsCell: { width: ACTIONS_W, alignItems: 'center', justifyContent: 'center' },
+  actionsCell: { width: ACTIONS_W, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 5, paddingLeft: theme.sp.md, paddingRight: theme.sp.sm },
+  rowBtn: {
+    borderColor: theme.border2,
+    borderWidth: 1,
+    borderRadius: theme.radius.sm,
+    paddingHorizontal: theme.sp.sm,
+    paddingVertical: 3,
+  },
+  rowBtnTxt: { color: theme.muted2, fontSize: theme.fs.xs + 1, fontWeight: '700' },
   del: { padding: theme.sp.xs },
   delText: { color: theme.muted, fontSize: theme.fs.md + 1 },
+  dirTag: { fontSize: 8, fontWeight: '800', fontFamily: theme.mono, letterSpacing: 0.5, marginTop: 1 },
   // shared modal chrome
   backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)' },
   drawer: {

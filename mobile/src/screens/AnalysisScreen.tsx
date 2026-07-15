@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   ScrollView,
@@ -11,6 +11,7 @@ import {
 import { api } from '../api';
 import { Assessment, assess } from '../analysis';
 import SymbolInput from '../components/SymbolInput';
+import { takeSymbol } from '../navIntent';
 import { theme } from '../theme';
 import { Card, Loading, ScreenTitle, SectionTitle, StatTile } from '../ui';
 
@@ -77,6 +78,17 @@ export default function AnalysisScreen() {
       setBusy(false);
     }
   };
+
+  // Auto-analyse a symbol handed off from another screen (e.g. "Analyse as
+  // Institutional" on the Pattern Recogniser).
+  useEffect(() => {
+    const s = takeSymbol('inst');
+    if (s) {
+      setSym(s);
+      run(s);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
