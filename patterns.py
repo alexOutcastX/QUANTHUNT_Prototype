@@ -462,15 +462,17 @@ def detect_patterns(candles, max_results=40):
         if not dup:
             kept.append(d)
 
-    # Recency-sorted; the "current" pattern is the most recent whose span
-    # reaches the last few bars (still active / just resolved).
+    # Recency-sorted; the "current" pattern is simply the most recent detection
+    # (the one whose formation reaches closest to today), so the UI always has a
+    # current read to show. `active` flags whether it still touches the last few
+    # bars (genuinely in play) vs. merely being the latest completed one.
     kept.sort(key=lambda d: d["end_index"], reverse=True)
     last = n - 1
-    current = None
-    for d in kept:
-        if last - d["end_index"] <= max(3, k):
-            current = d
-            break
+    current = kept[0] if kept else None
+    if current is not None:
+        current["active"] = (last - current["end_index"]) <= max(3, k)
+        bars_ago = last - current["end_index"]
+        current["bars_since_end"] = bars_ago
     for d in kept:
         d["current"] = current is not None and d is current
         d.pop("start_index", None)
