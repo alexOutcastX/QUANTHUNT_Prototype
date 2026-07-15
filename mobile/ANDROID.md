@@ -5,7 +5,7 @@ The Android app is a **Capacitor** shell that loads the same Expo web bundle
 delivers over-the-air bundle updates so you can push UI changes without a Play
 Store round-trip.
 
-- App id: `com.taureye.app` · webDir: `dist` · API base resolves to the VM
+- App id: `com.taureye.terminal.app` · webDir: `dist` · API base resolves to the VM
   automatically inside the app (runtime Capacitor detection in `src/api.ts`;
   cleartext HTTP is enabled in the manifest until the backend has TLS).
 
@@ -43,7 +43,7 @@ installed native app), then set it up once:
 cd mobile
 npm i -g @capgo/cli
 npx @capgo/cli login <YOUR_CAPGO_TOKEN>
-npx @capgo/cli app add com.taureye.app        # one time
+npx @capgo/cli app add com.taureye.terminal.app        # one time
 ```
 
 **Automated (recommended).** Add a `CAPGO_TOKEN` repository secret. From then on,

@@ -10,7 +10,8 @@ import type { CapacitorConfig } from '@capacitor/cli';
 // would never reach the VM) — see `npm run cap:sync`:
 //   EXPO_PUBLIC_API_BASE=http://161.118.174.177 npx expo export -p web -o dist
 const config: CapacitorConfig = {
-  appId: 'com.taureye.app',
+  // App ID matches the Capgo app (TETerminal) so OTA bundles route to it.
+  appId: 'com.taureye.terminal.app',
   appName: 'TaurEye',
   webDir: 'dist',
   android: {

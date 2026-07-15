@@ -4,7 +4,7 @@ android {
     namespace = "com.taureye.app"
     compileSdk = rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "com.taureye.app"
+        applicationId "com.taureye.terminal.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
