@@ -441,6 +441,8 @@ export type ChartPattern = {
   level?: number | null;   // neckline / breakout level
   status: string;          // 'forming' | 'confirmed'
   current?: boolean;
+  active?: boolean;        // still touching the most recent bars
+  bars_since_end?: number;
 };
 export type ChartPatternsResp = {
   symbol: string;
