@@ -7,6 +7,7 @@ import HtmlView from '../components/HtmlView';
 import StockDetail from '../components/StockDetail';
 import SymbolInput from '../components/SymbolInput';
 import { Row, sortRows } from '../screener';
+import { capBand } from '../marketcap';
 import { ACTIONS_W, COLS, Col, DEFAULT_HIDDEN, cellFlex, loadNames } from './ScreenerScreen';
 import { TrackDir, TrackEntry, addTrack, loadTrack, removeTrack } from '../tracklist';
 import { addSymbol, loadWatchlist, normSymbol, removeSymbol } from '../watchlist';
@@ -276,11 +277,30 @@ function MbList({
     }),
     [],
   );
+  // Market-cap band tag (LARGE / MID / SMALL / MICRO) — its own column.
+  const capCol: Col = useMemo(
+    () => ({
+      key: 'cap_band',
+      label: 'Cap',
+      w: 66,
+      flex: 0,
+      render: (r) => {
+        const b = capBand((r as MbRow)._fund?.market_cap_cr);
+        if (!b) return <Text style={{ color: theme.muted, fontFamily: theme.mono, fontSize: theme.fs.sm }}>—</Text>;
+        return (
+          <View style={{ borderColor: b.color, borderWidth: 1, borderRadius: 4, paddingHorizontal: 5, paddingVertical: 1 }}>
+            <Text style={{ color: b.color, fontFamily: theme.mono, fontSize: 9, fontWeight: '700', letterSpacing: 0.5 }}>{b.short}</Text>
+          </View>
+        );
+      },
+    }),
+    [],
+  );
   const visibleCols = useMemo(() => {
     const base = COLS.filter((c) => !DEFAULT_HIDDEN.includes(c.key));
     const at = base.findIndex((c) => c.key === 'exchange') + 1;
-    return [...base.slice(0, at || 3), scoreCol, ...base.slice(at || 3)];
-  }, [scoreCol]);
+    return [...base.slice(0, at || 3), scoreCol, capCol, ...base.slice(at || 3)];
+  }, [scoreCol, capCol]);
   const tableW = useMemo(() => visibleCols.reduce((a, c) => a + c.w, 0) + ACTIONS_W, [visibleCols]);
 
   // Column sorting (tap a header) — defaults to analyser score, best first.
@@ -293,14 +313,22 @@ function MbList({
       setSortDir(col === 'sym' || col === 'name' || col === 'exchange' ? 1 : -1);
     }
   };
+  // Sector search: distinct sectors present in the results; '' = all.
+  const [sector, setSector] = useState('');
+  const sectors = useMemo(() => {
+    const s = new Set<string>();
+    rows.forEach((r) => { const v = (r as MbRow)._fund?.sector; if (v) s.add(String(v)); });
+    return Array.from(s).sort();
+  }, [rows]);
   const matches = useMemo(() => {
+    const filtered = sector ? rows.filter((r) => (r as MbRow)._fund?.sector === sector) : rows;
     if (sortCol === 'mb_score') {
-      return [...rows].sort(
+      return [...filtered].sort(
         (a, b) => (((a as MbRow).mbScore ?? -1) - ((b as MbRow).mbScore ?? -1)) * sortDir,
       );
     }
-    return sortRows(rows, sortCol, sortDir);
-  }, [rows, sortCol, sortDir]);
+    return sortRows(filtered, sortCol, sortDir);
+  }, [rows, sector, sortCol, sortDir]);
   const warming = false;
 
   const trackDirOf = (sym: string): TrackDir | null => track.find((t) => t.sym === sym)?.dir ?? null;
@@ -344,6 +372,32 @@ function MbList({
       </View>
       {asof ? (
         <Text style={styles.lastUpd}>Stocks last updated {fmtAsof(asof)}</Text>
+      ) : null}
+
+      {!loading && sectors.length ? (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.secRow}
+        >
+          <TouchableOpacity
+            style={[styles.secChip, sector === '' && styles.secChipOn]}
+            onPress={() => setSector('')}
+            activeOpacity={0.75}
+          >
+            <Text style={[styles.secChipTxt, sector === '' && styles.secChipTxtOn]}>All sectors</Text>
+          </TouchableOpacity>
+          {sectors.map((s) => (
+            <TouchableOpacity
+              key={s}
+              style={[styles.secChip, sector === s && styles.secChipOn]}
+              onPress={() => setSector((cur) => (cur === s ? '' : s))}
+              activeOpacity={0.75}
+            >
+              <Text style={[styles.secChipTxt, sector === s && styles.secChipTxtOn]}>{s}</Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
       ) : null}
 
       {loading ? <Loading label="Loading mid & small cap candidates…" /> : null}
@@ -797,6 +851,18 @@ const styles = StyleSheet.create({
   },
   fixedChipTxt: { color: GOLD, fontSize: theme.fs.sm },
   fixedNote: { color: theme.muted, fontSize: theme.fs.sm, flexShrink: 1 },
+  secRow: { gap: 6, paddingHorizontal: 12, paddingBottom: 8, alignItems: 'center' },
+  secChip: {
+    borderColor: theme.border2,
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 11,
+    paddingVertical: 4,
+    backgroundColor: theme.surface2,
+  },
+  secChipOn: { backgroundColor: theme.accent, borderColor: theme.accent },
+  secChipTxt: { color: theme.muted2, fontFamily: theme.mono, fontSize: theme.fs.sm },
+  secChipTxtOn: { color: theme.bg, fontWeight: '700' },
   updBtn: {
     backgroundColor: theme.surface2,
     borderColor: theme.border2,
