@@ -8,6 +8,7 @@ import StockDetail from '../components/StockDetail';
 import SymbolInput from '../components/SymbolInput';
 import { Row, sortRows } from '../screener';
 import { capBand } from '../marketcap';
+import { takeSymbol } from '../navIntent';
 import { ACTIONS_W, COLS, Col, DEFAULT_HIDDEN, cellFlex, loadNames } from './ScreenerScreen';
 import { TrackDir, TrackEntry, addTrack, loadTrack, removeTrack } from '../tracklist';
 import { addSymbol, loadWatchlist, normSymbol, removeSymbol } from '../watchlist';
@@ -554,6 +555,14 @@ export default function MultibaggerScreen() {
       })
       .catch(() => setCandles([]));
   };
+
+  // Auto-analyse a symbol handed off from another screen (e.g. the Pattern
+  // Recogniser or Watchlist "Analyse" button).
+  useEffect(() => {
+    const s = takeSymbol('mb');
+    if (s) analyse(s);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const openChart = () => {
     if (!report) return;

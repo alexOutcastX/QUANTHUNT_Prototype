@@ -1,0 +1,49 @@
+// Tiny global navigation-intent store. The app has no router — Shell holds the
+// active top-level page and each SubTabs group holds its own active sub-tab in
+// local state. This lets a deep screen (e.g. a "Analyse this stock" button)
+// request a jump to another page/sub-tab and hand off a symbol, without
+// threading callbacks through every layer.
+//
+// Flow: navigate('analysis', { sub: 'mb', symbol: 'RELIANCE' })
+//   → Shell switches the top-level page to 'analysis'
+//   → the Analysis SubTabs group switches its active sub-tab to 'mb'
+//   → MultibaggerScreen consumes the pending symbol on mount and analyses it.
+
+export type NavIntent = { page: string; sub?: string; symbol?: string };
+
+let pending: NavIntent | null = null;
+const listeners = new Set<() => void>();
+
+export function navigate(page: string, opts: { sub?: string; symbol?: string } = {}): void {
+  pending = { page, sub: opts.sub, symbol: opts.symbol };
+  listeners.forEach((l) => {
+    try {
+      l();
+    } catch {
+      /* a bad listener must not break navigation */
+    }
+  });
+}
+
+export function subscribeNav(l: () => void): () => void {
+  listeners.add(l);
+  return () => {
+    listeners.delete(l);
+  };
+}
+
+// Non-consuming peek — Shell / SubTabs read the target page/sub to select it.
+export function peekNav(): NavIntent | null {
+  return pending;
+}
+
+// Consume the pending symbol for a given sub-tab (one-shot). The target screen
+// calls this on mount; the tab selection stays until a new intent replaces it.
+export function takeSymbol(sub: string): string | undefined {
+  if (pending && pending.sub === sub && pending.symbol) {
+    const s = pending.symbol;
+    pending = { ...pending, symbol: undefined };
+    return s;
+  }
+  return undefined;
+}

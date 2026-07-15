@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { peekNav, subscribeNav } from '../navIntent';
 import { theme } from '../theme';
 import AnalysisScreen from './AnalysisScreen';
 import BacktestScreen from './BacktestScreen';
@@ -7,7 +8,6 @@ import CalculatorScreen from './CalculatorScreen';
 import ChartScreen from './ChartScreen';
 import PortfolioScreen from './PortfolioScreen';
 import TradingViewScreen from './TradingViewScreen';
-import TrackListScreen from './TrackListScreen';
 import WatchlistScreen from './WatchlistScreen';
 import UniverseScreen from './UniverseScreen';
 import HolidaysScreen from './HolidaysScreen';
@@ -29,7 +29,23 @@ type SubTab = { key: string; label: string; render: () => React.ReactElement };
 // bottom tab. Only the active sub-screen is mounted (each manages its own
 // state / data fetches).
 function SubTabs({ tabs }: { tabs: SubTab[] }) {
-  const [active, setActive] = useState(tabs[0].key);
+  const has = (k?: string) => !!k && tabs.some((t) => t.key === k);
+  // If we arrived here via a cross-screen navigation targeting one of our
+  // sub-tabs, open on that tab instead of the first.
+  const [active, setActive] = useState(() => {
+    const p = peekNav();
+    return has(p?.sub) ? (p!.sub as string) : tabs[0].key;
+  });
+  // …and react to later nav intents while this group stays mounted.
+  useEffect(
+    () =>
+      subscribeNav(() => {
+        const p = peekNav();
+        if (has(p?.sub)) setActive(p!.sub as string);
+      }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
   const cur = tabs.find((t) => t.key === active) || tabs[0];
   return (
     <View style={styles.host}>
@@ -72,9 +88,8 @@ export function ListsHome() {
   return (
     <SubTabs
       tabs={[
-        { key: 'track', label: 'Track List', render: () => <TrackListScreen /> },
-        { key: 'portfolio', label: 'Portfolio', render: () => <PortfolioScreen /> },
         { key: 'watchlist', label: 'Watchlist', render: () => <WatchlistScreen /> },
+        { key: 'portfolio', label: 'Portfolio', render: () => <PortfolioScreen /> },
         { key: 'alerts', label: 'Alerts', render: () => <AlertsScreen /> },
       ]}
     />
@@ -114,9 +129,8 @@ const MORE_ITEMS: { key: string; label: string; hint: string; render: () => Reac
   { key: 'heatmap', label: 'Heatmap', hint: 'Sector & index day-change map · drill into constituents', render: () => <HeatmapScreen /> },
   { key: 'universe', label: 'Universe', hint: 'Index constituents · mcap segments · heatmap', render: () => <UniverseScreen /> },
   { key: 'charts', label: 'Charts', hint: 'Native charts + TradingView', render: () => <ChartsHome /> },
-  { key: 'track', label: 'Track List', hint: 'Your tracked BUY / SELL calls', render: () => <TrackListScreen /> },
   { key: 'portfolio', label: 'Portfolio', hint: 'Holdings with live P&L · broker sync', render: () => <PortfolioScreen /> },
-  { key: 'watchlist', label: 'Watchlist', hint: 'Saved symbols with live quotes', render: () => <WatchlistScreen /> },
+  { key: 'watchlist', label: 'Watchlist', hint: 'Symbols with entry price + since-add move · live quotes', render: () => <WatchlistScreen /> },
   { key: 'calc', label: 'Calculator', hint: 'Position size · SIP · CAGR', render: () => <CalculatorScreen /> },
   { key: 'corporate', label: 'Corporate', hint: 'Filings, actions, shareholding, bulk/block deals', render: () => <CorporateScreen /> },
   { key: 'derivatives', label: 'Derivatives', hint: 'F&O option chain · PCR · max-pain · payoff builder', render: () => <DerivativesScreen /> },

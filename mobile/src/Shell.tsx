@@ -13,12 +13,12 @@ import PortfolioScreen from './screens/PortfolioScreen';
 import ScreenerScreen from './screens/ScreenerScreen';
 import TerminalScreen from './screens/TerminalScreen';
 import TradingViewScreen from './screens/TradingViewScreen';
-import TrackListScreen from './screens/TrackListScreen';
 import WatchlistScreen from './screens/WatchlistScreen';
 import HolidaysScreen from './screens/HolidaysScreen';
 import IndicesScreen from './screens/IndicesScreen';
 import HeatmapScreen from './screens/HeatmapScreen';
 import TickerStrip from './components/TickerStrip';
+import { peekNav, subscribeNav } from './navIntent';
 import { theme } from './theme';
 
 type Screen = () => React.ReactElement;
@@ -78,6 +78,15 @@ function DesktopShell({ version }: { version: string }) {
   const [active, setActive] = useState('dashboard');
   const nav = (k: string) => setActive(SCREEN_BY_KEY[k] ? k : 'dashboard');
   const cur = SCREEN_BY_KEY[active] || SCREEN_BY_KEY.dashboard;
+  // Honor cross-screen navigation requests (e.g. "Analyse this stock").
+  useEffect(
+    () =>
+      subscribeNav(() => {
+        const p = peekNav();
+        if (p && SCREEN_BY_KEY[p.page]) setActive(p.page);
+      }),
+    [],
+  );
   return (
     <View style={styles.desktop}>
       <View style={styles.brandBar}>
@@ -123,6 +132,16 @@ function MobileShell({ version }: { version: string }) {
   const [active, setActive] = useState('dashboard');
   const nav = (k: string) => setActive(TABS.some((t) => t.k === k) ? k : 'more');
   const tab = TABS.find((t) => t.k === active) || TABS[0];
+  // A cross-screen jump targets a top-level tab when it maps to one (Analysis
+  // is a bottom tab), otherwise it falls through to the More menu.
+  useEffect(
+    () =>
+      subscribeNav(() => {
+        const p = peekNav();
+        if (p) setActive(TABS.some((t) => t.k === p.page) ? p.page : 'more');
+      }),
+    [],
+  );
   return (
     <View style={styles.mobile}>
       <View style={[styles.header, { paddingTop: insets.top + 8 }]}>

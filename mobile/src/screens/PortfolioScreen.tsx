@@ -184,6 +184,19 @@ export default function PortfolioScreen() {
     refreshAuth();
   }, [refreshAuth]);
 
+  // A symbol handed off from another screen ("＋ Portfolio") pre-fills the
+  // add form — the user still supplies quantity and buy price.
+  useEffect(() => {
+    AsyncStorage.getItem('taureye.portfolio.prefill')
+      .then((v) => {
+        if (v) {
+          setSym(v);
+          AsyncStorage.removeItem('taureye.portfolio.prefill').catch(() => {});
+        }
+      })
+      .catch(() => {});
+  }, []);
+
   // Load column prefs once.
   useEffect(() => {
     (async () => {

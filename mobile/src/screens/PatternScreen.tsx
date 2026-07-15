@@ -4,10 +4,16 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Candle, ChartPattern, ChartPatternsResp, api } from '../api';
 import { chartHtml } from '../chartHtml';
 import HtmlView from '../components/HtmlView';
+import StockDetail from '../components/StockDetail';
 import SymbolInput from '../components/SymbolInput';
+import { Row } from '../screener';
+import { navigate } from '../navIntent';
+import { addSymbol, loadWatchlist, normSymbol } from '../watchlist';
 import { Btn, Card, EmptyState, Loading, ScreenTitle, SectionTitle } from '../ui';
 import { useResponsive } from '../responsive';
 import { theme } from '../theme';
+
+const PORTFOLIO_PREFILL_KEY = 'taureye.portfolio.prefill';
 
 const RECENT_KEY = 'taureye.patterns.recent.v1';
 const PERIODS: { key: string; label: string }[] = [
@@ -81,7 +87,16 @@ function PatternRow({ p, top }: { p: ChartPattern; top?: boolean }) {
 // The dedicated "Current Pattern" detail box — bias, dates, probability, the
 // continuation odds and the measured % move. Fills the space beside the table
 // on desktop, stacks above it on mobile.
-function CurrentCard({ p }: { p: ChartPattern }) {
+type CardActions = {
+  onChart: () => void;
+  onMultibagger: () => void;
+  onInstitutional: () => void;
+  onWatch: () => void;
+  onPortfolio: () => void;
+  watched: boolean;
+};
+
+function CurrentCard({ p, actions }: { p: ChartPattern; actions: CardActions }) {
   const c = biasColor(p.bias);
   const Stat = ({ label, value, color }: { label: string; value: string; color?: string }) => (
     <View style={styles.cStat}>
@@ -130,6 +145,26 @@ function CurrentCard({ p }: { p: ChartPattern }) {
         {p.target ? <Stat label="Target" value={`₹${p.target.toLocaleString('en-IN')}`} /> : null}
         {p.level ? <Stat label="Key level" value={`₹${p.level.toLocaleString('en-IN')}`} /> : null}
       </View>
+
+      <View style={styles.actionsRow}>
+        <TouchableOpacity style={styles.actBtn} onPress={actions.onChart} activeOpacity={0.75}>
+          <Text style={styles.actTxt}>▤ Chart</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.actBtn} onPress={actions.onMultibagger} activeOpacity={0.75}>
+          <Text style={[styles.actTxt, { color: theme.accent }]}>⚡ Multibagger</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.actBtn} onPress={actions.onInstitutional} activeOpacity={0.75}>
+          <Text style={styles.actTxt}>◪ Institutional</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.actBtn} onPress={actions.onWatch} activeOpacity={0.75}>
+          <Text style={[styles.actTxt, actions.watched && { color: theme.green }]}>
+            {actions.watched ? '★ Watching' : '☆ Watchlist'}
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.actBtn} onPress={actions.onPortfolio} activeOpacity={0.75}>
+          <Text style={styles.actTxt}>＋ Portfolio</Text>
+        </TouchableOpacity>
+      </View>
     </Card>
   );
 }
@@ -141,8 +176,22 @@ export default function PatternScreen() {
   const [error, setError] = useState('');
   const [data, setData] = useState<ChartPatternsResp | null>(null);
   const [recent, setRecent] = useState<string[]>([]);
+  const [detail, setDetail] = useState<Row | null>(null);
+  const [watch, setWatch] = useState<string[]>([]);
+  const [flash, setFlash] = useState('');
+  const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastQuery = useRef<{ sym: string; period: string } | null>(null);
   const { isDesktop } = useResponsive();
+
+  const toast = useCallback((m: string) => {
+    setFlash(m);
+    if (flashTimer.current) clearTimeout(flashTimer.current);
+    flashTimer.current = setTimeout(() => setFlash(''), 2200);
+  }, []);
+
+  useEffect(() => {
+    loadWatchlist().then(setWatch).catch(() => {});
+  }, []);
 
   useEffect(() => {
     AsyncStorage.getItem(RECENT_KEY)
@@ -186,6 +235,24 @@ export default function PatternScreen() {
   }));
 
   const cur = data?.current || null;
+  const activeSym = (data?.symbol || symbol).trim().toUpperCase();
+
+  const actions: CardActions = {
+    watched: watch.includes(normSymbol(activeSym)),
+    onChart: () => activeSym && setDetail({ sym: activeSym } as Row),
+    onMultibagger: () => activeSym && navigate('analysis', { sub: 'mb', symbol: activeSym }),
+    onInstitutional: () => activeSym && navigate('analysis', { sub: 'inst', symbol: activeSym }),
+    onWatch: async () => {
+      if (!activeSym) return;
+      setWatch(await addSymbol(watch, activeSym));
+      toast(`${activeSym} added to watchlist`);
+    },
+    onPortfolio: async () => {
+      if (!activeSym) return;
+      await AsyncStorage.setItem(PORTFOLIO_PREFILL_KEY, activeSym).catch(() => {});
+      toast(`${activeSym} queued — open Lists ▸ Portfolio`);
+    },
+  };
 
   return (
     <View style={styles.container}>
@@ -258,7 +325,7 @@ export default function PatternScreen() {
             <View style={isDesktop ? styles.split : undefined}>
               {!isDesktop && cur ? (
                 <View style={{ marginBottom: theme.sp.md }}>
-                  <CurrentCard p={cur} />
+                  <CurrentCard p={cur} actions={actions} />
                 </View>
               ) : null}
               <View style={isDesktop ? styles.splitMain : undefined}>
@@ -295,7 +362,7 @@ export default function PatternScreen() {
 
               {isDesktop && cur ? (
                 <View style={styles.splitSide}>
-                  <CurrentCard p={cur} />
+                  <CurrentCard p={cur} actions={actions} />
                 </View>
               ) : null}
             </View>
@@ -309,6 +376,13 @@ export default function PatternScreen() {
           </>
         ) : null}
       </ScrollView>
+
+      {detail ? <StockDetail row={detail} onClose={() => setDetail(null)} /> : null}
+      {flash ? (
+        <View style={styles.toast} pointerEvents="none">
+          <Text style={styles.toastTxt}>{flash}</Text>
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -373,6 +447,29 @@ const styles = StyleSheet.create({
   cStat: { width: '50%', gap: 2 },
   cStatLabel: { color: theme.muted, fontSize: theme.fs.xs + 1 },
   cStatVal: { color: theme.text, fontSize: theme.fs.md, fontWeight: '700', fontFamily: theme.mono },
+  // action buttons on the card
+  actionsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.sp.sm, marginTop: theme.sp.sm, borderTopColor: theme.border, borderTopWidth: 1, paddingTop: theme.sp.md },
+  actBtn: {
+    backgroundColor: theme.surface2,
+    borderColor: theme.border2,
+    borderWidth: 1,
+    borderRadius: theme.radius.sm + 2,
+    paddingHorizontal: theme.sp.md,
+    paddingVertical: theme.sp.sm,
+  },
+  actTxt: { color: theme.text, fontSize: theme.fs.sm, fontWeight: '700' },
+  toast: {
+    position: 'absolute',
+    bottom: theme.sp.xl,
+    alignSelf: 'center',
+    backgroundColor: theme.surface3,
+    borderColor: theme.border2,
+    borderWidth: 1,
+    borderRadius: theme.radius.md,
+    paddingHorizontal: theme.sp.lg,
+    paddingVertical: theme.sp.sm + 2,
+  },
+  toastTxt: { color: theme.text, fontSize: theme.fs.sm + 1, fontWeight: '600' },
   // table
   headerRow: {
     flexDirection: 'row',
