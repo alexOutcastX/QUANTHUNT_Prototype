@@ -83,7 +83,7 @@ jobs:
         run: |
           if [ -z "$CAPGO_TOKEN" ]; then
             echo "No CAPGO_TOKEN secret set — skipping OTA publish."
-            echo "Add the secret and register once (npx @capgo/cli app add com.taureye.app) to enable."
+            echo "Add the secret and register once (npx @capgo/cli app add com.taureye.terminal.app) to enable."
             exit 0
           fi
           VER="$(node -p "require('./app.json').expo.version.split('.').slice(0,2).join('.')").${{ github.run_number }}"
