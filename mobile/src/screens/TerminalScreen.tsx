@@ -143,7 +143,7 @@ function graphHtml(data: GraphResp, quotes: LtpResp, centre: string, openIdx: st
     html, body { overflow: auto; }
     #wrap { flex-direction: column; height: auto; min-height: 100%; }
     #gfx { order: 1; flex: none; display: flex; }
-    #gwrap { height: 58vh; min-height: 300px; flex: none; }
+    #gwrap { height: 58vh; min-height: 300px; flex: none; width: 100%; }
     #news { order: 2; width: 100% !important; max-height: 45vh;
             border-right: none; border-top: 1px solid ${theme.border}; }
     #panel { order: 3; width: 100% !important; border-left: none;
