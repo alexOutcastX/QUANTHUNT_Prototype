@@ -356,8 +356,10 @@ function graphHtml(data: GraphResp, quotes: LtpResp, centre: string, openIdx: st
     var E = DATA.edges;
     var hasEdges = E.some(function(e){ return e.src === c || e.dst === c; });
     if (!hasEdges) {
-      h += '<div class="en" style="border:1px solid ${theme.border};border-radius:6px;padding:9px 10px;margin-top:8px">' +
-'No relationship map for this company yet. Its live chart, fundamentals and news are in the window and news panel — open the CHART toggle or click the node. Set an AI key on the server for full relationship graphs.' + '</div>';
+      var noMapMsg = AION
+        ? 'No relationship map could be generated for this thinly-covered company. Its live chart, fundamentals and news are in the CHART tab and news panel.'
+        : 'No relationship map for this company yet. Its live chart, fundamentals and news are in the CHART tab and news panel. Add an AI key (⚙ AI KEY) to generate one.';
+      h += '<div class="en" style="border:1px solid ${theme.border};border-radius:6px;padding:9px 10px;margin-top:8px">' + noMapMsg + '</div>';
     }
     h += block('Suppliers', E.filter(function(e){ return e.dst === c && e.type === 'supplies'; }), function(e){ return e.src; });
     h += block('Customers / demand', E.filter(function(e){ return e.src === c && e.type === 'supplies'; }), function(e){ return e.dst; });

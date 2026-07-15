@@ -1330,8 +1330,17 @@ def relationship_graph():
             return jsonify({"error": "rate-limited", "ai": True,
                             "detail": "Graph-generation limit reached — retry in %d min."
                                       % max(1, retry // 60)}), 429
+    # Ground the AI with the company's real identity so lesser-known names still
+    # map to their actual relationships (name — industry — sector).
+    ctx = ""
     try:
-        g = _ai.get_graph(sym, user_key, user_provider, user_model)
+        f = _fund.get_one(sym) or {}
+        bits = [str(f[k]) for k in ("name", "industry", "sector") if f.get(k)]
+        ctx = " · ".join(dict.fromkeys(bits))  # dedupe, keep order
+    except Exception:
+        pass
+    try:
+        g = _ai.get_graph(sym, user_key, user_provider, user_model, context=ctx)
     except ValueError as e:
         # The provider answered but the graph was unparseable or too sparse (common
         # for thinly-covered small-caps). The key is fine — don't cry wolf about it;
