@@ -1088,16 +1088,24 @@ def multibagger_report():
     try:
         import multibagger as mb
         try:
-            metrics, ident = mb.fetch_metrics(sym)
+            # A user-initiated single-stock lookup: retry through transient Yahoo
+            # rate-limits before giving up (the mass screen fails fast instead).
+            metrics, ident = mb.fetch_metrics(sym, retries=2)
         except ValueError:
-            return jsonify({"error": f"no data for {sym}"}), 404
+            return jsonify({"error": f"No market data for {sym} — it may be newly "
+                                     "listed or delisted, or the data source is "
+                                     "briefly unavailable. Try again shortly."}), 404
         payload = mb.score(metrics)
         payload.update(ident)
         _MB_CACHE[sym] = (time.time(), payload)
         return jsonify(payload)
     except Exception as e:
+        # Upstream (yfinance/Yahoo) hiccup, not a bug in our model — report it as
+        # a retryable 503 with a friendly message, never a scary 502.
         log.error("Multibagger error for %s: %s", sym, e)
-        return jsonify({"error": str(e)}), 502
+        return jsonify({"error": f"Couldn't analyse {sym} right now — the market "
+                                 "data source may be rate-limiting. Try again in a "
+                                 "moment."}), 503
 
 
 @app.route("/fundamentals")

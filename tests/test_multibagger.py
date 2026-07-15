@@ -97,3 +97,80 @@ class MultibaggerScoreTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ResolveResilienceTest(unittest.TestCase):
+    """fetch_metrics/_resolve must tolerate a flaky Yahoo: retry, fall back to
+    BSE, and raise a clean ValueError (→ 404) rather than propagating an
+    exception (which the route turned into a 502)."""
+
+    def setUp(self):
+        import sys
+        self._saved = sys.modules.get("yfinance")
+
+    def tearDown(self):
+        import sys
+        if self._saved is not None:
+            sys.modules["yfinance"] = self._saved
+        else:
+            sys.modules.pop("yfinance", None)
+
+    @staticmethod
+    def _install(behavior):
+        import sys, types
+
+        class _FakeTicker:
+            def __init__(self, symbol):
+                self.symbol = symbol
+
+            @property
+            def info(self):
+                b = behavior.get(self.symbol)
+                if isinstance(b, Exception):
+                    raise b
+                return b or {}
+
+            def history(self, *a, **k):
+                class _Empty:
+                    empty = True
+                return _Empty()
+
+        mod = types.ModuleType("yfinance")
+        mod.Ticker = _FakeTicker
+        sys.modules["yfinance"] = mod
+
+    def test_nse_hit_no_fallback(self):
+        self._install({"DEEPINDS.NS": {"longName": "Deep Industries", "regularMarketPrice": 100}})
+        t, info = mb._resolve("DEEPINDS", retries=0)
+        self.assertEqual(t.symbol, "DEEPINDS.NS")
+        self.assertEqual(info["longName"], "Deep Industries")
+
+    def test_falls_back_to_bse_when_nse_raises(self):
+        self._install({
+            "DEEPINDS.NS": RuntimeError("rate limited"),
+            "DEEPINDS.BO": {"shortName": "Deep Ind", "regularMarketPrice": 100},
+        })
+        t, info = mb._resolve("DEEPINDS", retries=0)
+        self.assertEqual(t.symbol, "DEEPINDS.BO")
+        self.assertTrue(info.get("shortName"))
+
+    def test_both_exchanges_raise_yield_valueerror(self):
+        self._install({"X.NS": RuntimeError("boom"), "X.BO": RuntimeError("boom")})
+        with self.assertRaises(ValueError):
+            mb.fetch_metrics("X", with_history=False, retries=0)
+
+    def test_empty_info_yields_valueerror(self):
+        self._install({"X.NS": {}, "X.BO": {}})
+        with self.assertRaises(ValueError):
+            mb.fetch_metrics("X", with_history=False, retries=0)
+
+    def test_metrics_built_from_resolved_info(self):
+        self._install({"GOOD.NS": {
+            "longName": "Good Co", "regularMarketPrice": 250, "marketCap": 18_000_000_000,
+            "returnOnEquity": 0.24, "sector": "Industrials",
+        }})
+        metrics, ident = mb.fetch_metrics("GOOD", with_history=False, retries=0)
+        self.assertEqual(ident["name"], "Good Co")
+        self.assertEqual(ident["price"], 250)
+        self.assertEqual(metrics["roe_pct"], 24.0)
+        self.assertIsInstance(mb.score(metrics)["score"], int)

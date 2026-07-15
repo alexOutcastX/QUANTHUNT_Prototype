@@ -30,19 +30,48 @@ PILLARS = [
 ]
 
 
-def fetch_metrics(symbol: str, with_history: bool = True):
+def _resolve(base: str, retries: int = 1):
+    """Return (ticker, info) for a bare NSE/BSE symbol, tolerating transient
+    Yahoo failures. Tries the NSE feed first, then the BSE (.BO) feed, and
+    retries the `.info` call on an exception (Yahoo rate-limits/HTTP hiccups)
+    with a short backoff. Returns ({}) info when neither exchange yields data —
+    the caller raises ValueError from that, so a flaky upstream never surfaces
+    as an unhandled 500/502. `retries` is the number of *extra* attempts per
+    exchange (0 = fail fast, used by the mass screen)."""
+    import time as _t
+    import yfinance as yf
+
+    def has(info):
+        return bool(info.get("longName") or info.get("shortName") or info.get("regularMarketPrice"))
+
+    last_t = None
+    for suffix in (".NS", ".BO"):
+        t = last_t = yf.Ticker(base + suffix)
+        info = {}
+        for attempt in range(retries + 1):
+            try:
+                info = t.info or {}
+                break  # got a response (even if sparse) — don't hammer Yahoo
+            except Exception:
+                info = {}
+                if attempt < retries:
+                    _t.sleep(0.5 * (attempt + 1))
+        if has(info):
+            return t, info
+    return last_t, {}
+
+
+def fetch_metrics(symbol: str, with_history: bool = True, retries: int = 1):
     """Fetch the raw scoring metrics for a symbol from yfinance (lazy import,
     so this module stays importable in stdlib-only CI).
 
     Returns (metrics, ident): `metrics` feeds score(); `ident` carries
     name/sector/industry/price/about. with_history=False skips the extra
     price-history request (3y CAGR) — used by the mass screen where one HTTP
-    call per symbol is the budget. Raises ValueError when Yahoo has no data.
+    call per symbol is the budget. `retries` controls upstream resilience (see
+    _resolve). Raises ValueError when neither exchange has data.
     """
-    import yfinance as yf
-
-    t = yf.Ticker(f"{symbol.upper().strip()}.NS")
-    info = t.info or {}
+    t, info = _resolve(symbol.upper().strip(), retries=retries)
     if not info.get("longName") and not info.get("shortName") and not info.get("regularMarketPrice"):
         raise ValueError(f"no data for {symbol}")
 
