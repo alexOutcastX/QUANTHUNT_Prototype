@@ -38,7 +38,12 @@ async function getJson<T>(path: string, timeoutMs = 25000): Promise<T> {
     // credentials: 'include' so the owner session cookie rides along (needed
     // for the broker endpoints, and cross-origin/native).
     const res = await fetch(API_BASE + path, { signal: ctrl.signal, credentials: 'include' });
-    if (!res.ok) throw new Error('HTTP ' + res.status);
+    if (!res.ok) {
+      // Prefer the backend's JSON `error` message over a bare status code, so
+      // "data source is rate-limiting, try again" reaches the user (not HTTP 502).
+      const body = (await res.json().catch(() => null)) as { error?: string } | null;
+      throw new Error(body?.error || 'HTTP ' + res.status);
+    }
     return (await res.json()) as T;
   } finally {
     clearTimeout(timer);
