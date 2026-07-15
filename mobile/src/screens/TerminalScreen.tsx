@@ -19,7 +19,7 @@ import { theme } from '../theme';
 // draggable, resizable, closeable multi-tab window (company chart +
 // screener.in fundamentals, and a comparison report). All interaction lives
 // inside the frame; state persists to localStorage across frame rebuilds.
-function graphHtml(data: GraphResp, quotes: LtpResp, centre: string, openIdx: string | null, autoWin: boolean, aiOn: boolean): string {
+function graphHtml(data: GraphResp, quotes: LtpResp, centre: string, openIdx: string | null, autoWin: boolean, aiOn: boolean, canBack: boolean): string {
   return `<!DOCTYPE html><html><head>
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
@@ -42,9 +42,10 @@ function graphHtml(data: GraphResp, quotes: LtpResp, centre: string, openIdx: st
   .en{color:${theme.muted2};font-size:12px;line-height:1.55;margin-top:3px}
   .conf{color:${theme.muted};font-size:10px;float:right}
   .price-up{fill:${theme.green}} .price-dn{fill:${theme.red}}
-  #legend{position:absolute;left:10px;bottom:10px;color:${theme.muted};font-size:11px;line-height:1.9;background:${theme.bg}cc;padding:6px 10px;border:1px solid ${theme.border};border-radius:6px;z-index:5}
+  #legend{position:absolute;right:10px;bottom:10px;color:${theme.muted};font-size:11px;line-height:1.9;background:${theme.bg}cc;padding:6px 10px;border:1px solid ${theme.border};border-radius:6px;z-index:5}
   .lg-line{display:inline-block;width:26px;height:0;border-top:2px solid ${theme.muted2};vertical-align:middle;margin-right:6px}
-  #crumb{position:absolute;top:12px;left:14px;color:${theme.muted};font-size:12px;z-index:5}
+  /* Anchored bottom-left so it never sits under the top toolbar bar. */
+  #crumb{position:absolute;bottom:10px;left:14px;color:${theme.muted};font-size:12px;z-index:5;background:${theme.bg}cc;padding:4px 9px;border-radius:6px;max-width:60%}
   #crumb b{color:${theme.text}}
   #hl{position:absolute;top:8px;right:10px;left:10px;z-index:5;display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end}
   .hlb{background:${theme.surface2};border:1px solid ${theme.border2};color:${theme.muted2};font-family:inherit;font-size:11px;letter-spacing:1px;padding:7px 12px;border-radius:999px;cursor:pointer}
@@ -190,6 +191,7 @@ function graphHtml(data: GraphResp, quotes: LtpResp, centre: string, openIdx: st
       <div id="crumb"></div>
       <div id="printhead">TaurEye · Relationship Map — <span id="ph-centre"></span></div>
       <div id="hl">
+        <button class="hlb" id="hl-back" onclick="goBack()" title="Back to the previous company" style="${canBack ? '' : 'display:none'}">‹ BACK</button>
         <button class="hlb" id="tg-news" onclick="toggleNews()">◧ NEWS</button>
         <button class="hlb" id="tg-win" onclick="toggleWin()">▤ CHART</button>
         <span style="width:8px"></span>
@@ -374,6 +376,8 @@ function graphHtml(data: GraphResp, quotes: LtpResp, centre: string, openIdx: st
     hideMenu();
     toApp('te:graph:' + id);
   };
+  // Step back to the previously-centred company (the host keeps the history).
+  window.goBack = function(){ hideMenu(); toApp('te:back'); };
 
   // ── node context menu ──
   function showMenu(d, x, y) {
@@ -1254,6 +1258,8 @@ export default function TerminalScreen() {
   const [quotes, setQuotes] = useState<LtpResp>({});
   // Blank until the user picks a stock — no company is centred on load.
   const [centre, setCentre] = useState('');
+  // Breadcrumb of previously-centred symbols so the graph can step back.
+  const [history, setHistory] = useState<string[]>([]);
   const [input, setInput] = useState('');
   const [err, setErr] = useState<string | null>(null);
   const [notFound, setNotFound] = useState<string | null>(null);
@@ -1343,7 +1349,8 @@ export default function TerminalScreen() {
 
   // Centre a symbol: in the loaded graph → recentre; known to the backend
   // (curated or AI with a server key) → fetch its graph; else explain.
-  const select = (raw: string) => {
+  // `fromBack` = navigating via the Back button, so don't push onto history.
+  const select = (raw: string, fromBack = false) => {
     const sym = raw.trim().toUpperCase().replace(/^NSE:/, '');
     if (!sym || !data || generating) return;
     setNotFound(null);
@@ -1356,6 +1363,8 @@ export default function TerminalScreen() {
       return;
     }
     if (sym === centre) return; // already centred here
+    // Remember where we came from so Back can return to it.
+    if (!fromBack && centre) setHistory((h) => [...h, centre]);
     // Always fetch the target's OWN full graph. Re-using the current dataset
     // (because sym happens to be a neighbour node in it) rendered a sparse
     // 1–2 edge graph instead of that company's real relationship map.
@@ -1373,14 +1382,24 @@ export default function TerminalScreen() {
 
   const go = () => select(input);
 
+  // Pop the last symbol off the breadcrumb and re-centre on it.
+  const goBack = () => {
+    if (!history.length) return;
+    const prev = history[history.length - 1];
+    setHistory((h) => h.slice(0, -1));
+    select(prev, true);
+  };
+
   const html = useMemo(
-    () => (data && centre ? graphHtml(data, quotes, centre, idxCmd?.name || null, data.source === 'minimal', aiEnabled) : ''),
-    [data, quotes, centre, idxCmd, aiEnabled],
+    () => (data && centre ? graphHtml(data, quotes, centre, idxCmd?.name || null, data.source === 'minimal', aiEnabled, history.length > 0) : ''),
+    [data, quotes, centre, idxCmd, aiEnabled, history.length],
   );
 
-  // Messages posted by the embedded workspace (index rows → open a graph).
+  // Messages posted by the embedded workspace (index rows → open a graph;
+  // the Back button → step to the previous company).
   const onFrameMessage = (msg: string) => {
-    if (msg.startsWith('te:graph:')) select(msg.slice(9));
+    if (msg === 'te:back') goBack();
+    else if (msg.startsWith('te:graph:')) select(msg.slice(9));
   };
 
   return (
