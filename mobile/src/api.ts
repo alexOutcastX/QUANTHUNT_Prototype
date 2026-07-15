@@ -426,6 +426,35 @@ export type MbScreenResp = {
   error?: string | null;
 };
 
+// Classic chart-pattern recognition (from /chart-patterns).
+export type ChartPattern = {
+  type: string;
+  label: string;
+  bias: 'bullish' | 'bearish' | 'neutral';
+  category: string;
+  start_ts: number;
+  end_ts: number;
+  confidence: number;      // how well the shape matches (0–100)
+  continuation: number;    // indicative follow-through probability (0–100)
+  expansion_pct: number;   // measured-move target, signed % of price
+  target?: number | null;
+  level?: number | null;   // neckline / breakout level
+  status: string;          // 'forming' | 'confirmed'
+  current?: boolean;
+};
+export type ChartPatternsResp = {
+  symbol: string;
+  count: number;
+  patterns: ChartPattern[];
+  current: ChartPattern | null;
+  bars?: number;
+  period?: string;
+  interval?: string;
+  candles?: { t: number; o: number; h: number; l: number; c: number }[];
+  note?: string;
+  error?: string;
+};
+
 // Full NSE+BSE momentum radar (from /momentum/screen).
 export type MomentumHit = {
   symbol: string;
@@ -568,6 +597,11 @@ export const api = {
     ),
   multibagger: (symbol: string) =>
     getJson<MultibaggerReport>('/multibagger?symbol=' + encodeURIComponent(symbol), 60000),
+  chartPatterns: (symbol: string, period = '2y') =>
+    getJson<ChartPatternsResp>(
+      `/chart-patterns?symbol=${encodeURIComponent(symbol)}&period=${encodeURIComponent(period)}`,
+      45000,
+    ),
   momentumScreen: (refresh = false) =>
     getJson<MomentumScreenResp>('/momentum/screen' + (refresh ? '?refresh=1' : ''), 30000),
   mbScreen: (refresh = false) =>
