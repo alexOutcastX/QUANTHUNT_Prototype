@@ -83,7 +83,7 @@ def _run(universe_fn):
         def check(s):
             hit = None
             try:
-                metrics, ident = mb.fetch_metrics(s, with_history=False)
+                metrics, ident = mb.fetch_metrics(s, with_history=False, retries=0)
                 r = mb.score(metrics)
                 if (r["score"] >= CRITERIA["min_score"]
                         and r["coverage_pct"] >= CRITERIA["min_coverage_pct"]):
