@@ -15,7 +15,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Quote, api } from '../api';
 import { exportCsvRows, exportExcelRows } from '../csv';
 import { theme } from '../theme';
-import { Btn, EmptyState, Loading, ScreenTitle } from '../ui';
+import { Btn, EmptyState, Loading, ScreenTitle, StatTile } from '../ui';
 import {
   Watchlist,
   WatchlistStore,
@@ -247,6 +247,22 @@ export default function WatchlistScreen() {
     [visibleCols],
   );
 
+  // Breadth summary across the active list — advancing / declining / average
+  // move — so the top of the screen carries live signal instead of blank space.
+  const summary = useMemo(() => {
+    let adv = 0, dec = 0, sum = 0, n = 0;
+    for (const s of symbols) {
+      const c = quotes[s]?.chg;
+      if (c != null && isFinite(c)) {
+        n++;
+        sum += c;
+        if (c >= 0) adv++;
+        else dec++;
+      }
+    }
+    return { adv, dec, avg: n ? sum / n : null };
+  }, [symbols, quotes]);
+
   const doExport = useCallback(
     (kind: 'csv' | 'excel') => {
       const headers = visibleCols.map((c) => c.label);
@@ -294,8 +310,15 @@ export default function WatchlistScreen() {
         sub={`${active?.name ?? 'List'} · ${symbols.length} symbol${symbols.length === 1 ? '' : 's'} · live quotes`}
       />
 
-      {/* list switcher */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.listChips}>
+      {/* list switcher — flexGrow:0 so this horizontal strip sizes to its
+          content instead of greedily filling the column (which on RN-web left
+          a large blank gap and vertically-centred the chips). */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.listScroll}
+        contentContainerStyle={styles.listChips}
+      >
         {lists.map((l) => {
           const on = l.id === active?.id;
           return (
@@ -316,6 +339,19 @@ export default function WatchlistScreen() {
       </ScrollView>
 
       <View style={styles.body}>
+        {symbols.length ? (
+          <View style={styles.summaryRow}>
+            <StatTile label="Symbols" value={String(symbols.length)} />
+            <StatTile label="Advancing" value={String(summary.adv)} color={theme.green} />
+            <StatTile label="Declining" value={String(summary.dec)} color={theme.red} />
+            <StatTile
+              label="Avg change"
+              value={pct(summary.avg)}
+              color={summary.avg != null ? (summary.avg >= 0 ? theme.green : theme.red) : undefined}
+            />
+          </View>
+        ) : null}
+
         <View style={styles.addRow}>
           <TextInput
             style={styles.input}
@@ -643,7 +679,9 @@ const styles = StyleSheet.create({
   body: { flex: 1, paddingHorizontal: theme.sp.lg },
   center: { flex: 1, backgroundColor: theme.bg, alignItems: 'center', justifyContent: 'center' },
   // list switcher
+  listScroll: { flexGrow: 0, flexShrink: 0 },
   listChips: { paddingHorizontal: theme.sp.lg, paddingBottom: theme.sp.md, gap: theme.sp.sm, alignItems: 'center' },
+  summaryRow: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.sp.sm, marginBottom: theme.sp.md },
   listChip: {
     flexDirection: 'row',
     alignItems: 'center',

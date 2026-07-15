@@ -16,7 +16,7 @@ import { BrokerStatus, api, Quote } from '../api';
 import { exportCsvRows, exportExcelRows } from '../csv';
 import { Holding, addHolding, importHoldings, loadPortfolio, removeHolding } from '../portfolio';
 import { theme } from '../theme';
-import { Btn, Card, EmptyState, Loading, SectionTitle, StatTile } from '../ui';
+import { Btn, Card, EmptyState, Loading, ScreenTitle, SectionTitle, StatTile } from '../ui';
 
 const money = (n: number) =>
   '₹' + n.toLocaleString('en-IN', { maximumFractionDigits: n >= 1000 ? 0 : 2 });
@@ -385,6 +385,14 @@ export default function PortfolioScreen() {
 
   return (
     <View style={styles.container}>
+      <ScreenTitle
+        title="Portfolio"
+        sub={
+          list.length
+            ? `${list.length} holding${list.length === 1 ? '' : 's'} · live valuation${totals.priced < list.length ? ` · ${totals.priced}/${list.length} priced` : ''}`
+            : 'Live-valued holdings · saved on this device'
+        }
+      />
       <ScrollView
         contentContainerStyle={styles.scrollBody}
         refreshControl={
@@ -744,7 +752,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: theme.sp.sm,
-    marginTop: theme.sp.lg,
+    marginTop: theme.sp.sm,
   },
   addBox: { flexDirection: 'row', gap: theme.sp.sm, marginTop: theme.sp.md, marginBottom: theme.sp.xs },
   input: {
