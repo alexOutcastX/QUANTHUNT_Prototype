@@ -12,6 +12,7 @@ import WatchlistScreen from './WatchlistScreen';
 import UniverseScreen from './UniverseScreen';
 import HolidaysScreen from './HolidaysScreen';
 import IndicesScreen from './IndicesScreen';
+import HeatmapScreen from './HeatmapScreen';
 import CorporateScreen from './CorporateScreen';
 import DerivativesScreen from './DerivativesScreen';
 import MomentumScreen from './MomentumScreen';
@@ -108,6 +109,7 @@ export function ChartsHome() {
 // "More" menu: a list of secondary tools; tapping opens one full-screen with a
 // back header. Keeps the bottom tab bar to five primary destinations.
 const MORE_ITEMS: { key: string; label: string; hint: string; render: () => React.ReactElement }[] = [
+  { key: 'heatmap', label: 'Heatmap', hint: 'Sector & index day-change map · drill into constituents', render: () => <HeatmapScreen /> },
   { key: 'universe', label: 'Universe', hint: 'Index constituents · mcap segments · heatmap', render: () => <UniverseScreen /> },
   { key: 'charts', label: 'Charts', hint: 'Native charts + TradingView', render: () => <ChartsHome /> },
   { key: 'track', label: 'Track List', hint: 'Your tracked BUY / SELL calls', render: () => <TrackListScreen /> },
