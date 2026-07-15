@@ -17,6 +17,7 @@ import TrackListScreen from './screens/TrackListScreen';
 import WatchlistScreen from './screens/WatchlistScreen';
 import HolidaysScreen from './screens/HolidaysScreen';
 import IndicesScreen from './screens/IndicesScreen';
+import HeatmapScreen from './screens/HeatmapScreen';
 import TickerStrip from './components/TickerStrip';
 import { theme } from './theme';
 
@@ -29,6 +30,7 @@ const SCREEN_BY_KEY: Record<string, (nav: (k: string) => void) => React.ReactEle
   screener: () => <ScreenerScreen />,
   terminal: () => <TerminalScreen />,
   analysis: () => <AnalysisHome />,
+  heatmap: () => <HeatmapScreen />,
   charts: () => <ChartsHome />,
   lists: () => <ListsHome />,
   tools: () => <ToolsHome />,
@@ -40,6 +42,7 @@ const PAGES: { k: string; label: string }[] = [
   { k: 'screener', label: 'Screener' },
   { k: 'terminal', label: 'Terminal' },
   { k: 'analysis', label: 'Analysis' },
+  { k: 'heatmap', label: 'Heatmap' },
   { k: 'charts', label: 'Charts' },
   { k: 'lists', label: 'Lists' },
   { k: 'tools', label: 'Tools' },
