@@ -1304,11 +1304,15 @@ def relationship_graph():
             name = f.get("name") or sym
         except Exception:
             pass
-        note = ("Relationship edges for this company need the AI graph — add an AI "
-                "key (Claude/Gemini/Grok/OpenAI) from the ⚙ AI KEY field to unlock them."
-                if reason == "no-key"
-                else "Couldn't build a relationship graph right now — showing the "
-                     "company's live data instead.")
+        if reason == "no-key":
+            note = ("Relationship edges for this company need the AI graph — add an AI "
+                    "key (Claude/Gemini/Grok/OpenAI) from the ⚙ AI KEY field to unlock them.")
+        elif reason == "gen-sparse":
+            note = ("No relationship map could be generated for this company (it's "
+                    "thinly covered) — showing its live chart, fundamentals and news.")
+        else:
+            note = ("Couldn't build a relationship graph right now — showing the "
+                    "company's live data instead.")
         return jsonify({
             "companies": {sym: {"name": name, "listed": True}},
             "edges": [], "available": [sym], "source": "minimal", "ai": ai_ok,
@@ -1328,12 +1332,19 @@ def relationship_graph():
                                       % max(1, retry // 60)}), 429
     try:
         g = _ai.get_graph(sym, user_key, user_provider, user_model)
+    except ValueError as e:
+        # The provider answered but the graph was unparseable or too sparse (common
+        # for thinly-covered small-caps). The key is fine — don't cry wolf about it;
+        # give the company workspace with an honest note.
+        logging.info("AI graph sparse/invalid for %s: %s", sym, e)
+        return _minimal("gen-sparse")
     except Exception as e:
         logging.warning("AI graph generation failed for %s: %s", sym, e)
         if user_key:
             return jsonify({"error": "ai-key-failed", "ai": True,
-                            "detail": "Couldn't generate with your API key — check it's "
-                                      "valid, has credit, and try again."}), 400
+                            "detail": "Couldn't reach your AI provider or the key was "
+                                      "rejected — check it's valid, has credit, and the "
+                                      "model is available to your account, then retry."}), 400
         return _minimal("gen-failed")  # still centre on the company with its data
     listed = sorted(k for k, v in g["companies"].items() if v.get("listed"))
     return jsonify({"companies": g["companies"], "edges": g["edges"],

@@ -26,7 +26,8 @@ CACHE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "graph_cac
 # keylessly — see _merge_seed(). Shipped with the app (not gitignored).
 SEED_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "graph_cache.seed.json")
 TTL = 30 * 86400          # regenerate monthly — relationships move slowly
-TIMEOUT = 75              # generation can take a while on big graphs
+TIMEOUT = 55              # fail fast enough that a slow/unreachable provider
+                          # surfaces an error well inside the client's wait
 EDGE_TYPES = {"supplies", "group", "competitor", "finances", "invests"}
 
 # Bring-your-own-key providers. Each user picks one and pastes their own key;
@@ -190,7 +191,7 @@ def _call_anthropic(key: str, model: str, prompt: str) -> str:
         "https://api.anthropic.com/v1/messages",
         headers={"x-api-key": key, "anthropic-version": "2023-06-01",
                  "content-type": "application/json"},
-        json={"model": model, "max_tokens": 3000,
+        json={"model": model, "max_tokens": 2000,
               "messages": [{"role": "user", "content": prompt}]},
         timeout=TIMEOUT,
     )
@@ -204,7 +205,7 @@ def _call_openai_compat(base_url: str, key: str, model: str, prompt: str) -> str
     r = requests.post(
         base_url,
         headers={"authorization": "Bearer " + key, "content-type": "application/json"},
-        json={"model": model, "max_tokens": 3000,
+        json={"model": model, "max_tokens": 2000,
               "messages": [{"role": "user", "content": prompt}]},
         timeout=TIMEOUT,
     )
@@ -276,7 +277,9 @@ def get_graph(symbol: str, api_key: str = "", provider: str = "", model: str = "
             c = _load().get(symbol)
         if c:
             return {"companies": c["companies"], "edges": c["edges"]}
-        raise RuntimeError("graph generation failed")
+        # The owner's generation didn't produce a usable graph — treat like a
+        # sparse result (caller falls back to the company workspace).
+        raise ValueError("graph generation failed")
     try:
         g = _generate(symbol, api_key, provider, model)
         with _lock:
