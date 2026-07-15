@@ -1517,7 +1517,7 @@ export default function TerminalScreen() {
           <View style={styles.center}>
             <ActivityIndicator color={theme.accent} />
             <Text style={styles.genTxt}>
-              Loading {generating}…{aiOn ? ' generating its relationship graph (first time ~15s, then cached).' : ''}
+              Loading {generating}…{aiEnabled ? ' generating its relationship graph with AI — first time can take 20–40s, then it’s cached.' : ''}
             </Text>
           </View>
         ) : !data ? (

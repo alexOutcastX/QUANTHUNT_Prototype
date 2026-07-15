@@ -250,7 +250,9 @@ export type AiCreds = { key: string; provider?: string; model?: string };
 async function fetchGraph(symbol?: string, ai?: AiCreds): Promise<GraphResp> {
   const path = '/graph' + (symbol ? '?symbol=' + encodeURIComponent(symbol) : '');
   const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), 120000);
+  // Backend caps AI generation at ~60s; give a little margin, then surface an
+  // error rather than spinning forever.
+  const timer = setTimeout(() => ctrl.abort(), 75000);
   try {
     // BYOK: forward the user's own key + chosen provider so AI graphs work on
     // any deployment. Sent per-request only; the server never stores or logs it.
@@ -260,7 +262,16 @@ async function fetchGraph(symbol?: string, ai?: AiCreds): Promise<GraphResp> {
       if (ai.provider) headers['X-AI-Provider'] = ai.provider;
       if (ai.model) headers['X-AI-Model'] = ai.model;
     }
-    const res = await fetch(API_BASE + path, { signal: ctrl.signal, headers });
+    let res: Response;
+    try {
+      res = await fetch(API_BASE + path, { signal: ctrl.signal, headers });
+    } catch (e) {
+      // AbortError = our own timeout fired; give a human message.
+      if (e instanceof DOMException && e.name === 'AbortError') {
+        throw new Error('Graph generation timed out — the AI provider was too slow. Try again.');
+      }
+      throw e;
+    }
     const body = (await res.json().catch(() => null)) as
       | (GraphResp & { detail?: string })
       | null;
