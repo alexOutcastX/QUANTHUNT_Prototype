@@ -181,7 +181,7 @@ def _validate(symbol: str, data: dict) -> dict:
         })
     if symbol not in companies:
         raise ValueError("centre company missing from AI graph")
-    if len(edges) < 3:
+    if len(edges) < 2:
         raise ValueError("AI graph too sparse (%d edges)" % len(edges))
     return {"companies": companies, "edges": edges}
 
@@ -226,7 +226,8 @@ def _call_gemini(key: str, model: str, prompt: str) -> str:
     return "".join(p.get("text", "") for p in parts)
 
 
-def _generate(symbol: str, api_key: str = "", provider: str = "", model: str = "") -> dict:
+def _generate(symbol: str, api_key: str = "", provider: str = "", model: str = "",
+              context: str = "") -> dict:
     provider = (provider or "anthropic").strip().lower()
     if provider not in PROVIDERS:
         provider = "anthropic"
@@ -238,6 +239,13 @@ def _generate(symbol: str, api_key: str = "", provider: str = "", model: str = "
         raise RuntimeError("requests library unavailable")
     model = (model or DEFAULT_MODELS[provider]).strip()
     prompt = PROMPT % (symbol, symbol)
+    # Ground the model with the company's real identity (name/industry/sector)
+    # so lesser-known small-caps still map to their actual business relationships
+    # instead of coming back empty.
+    if context:
+        prompt += ("\n\nKnown facts about %s — use these to identify its REAL "
+                   "suppliers, customers, competitors and group companies: %s"
+                   % (symbol, context[:300]))
     if provider == "gemini":
         text = _call_gemini(key, model, prompt)
     elif provider == "grok":
@@ -249,7 +257,8 @@ def _generate(symbol: str, api_key: str = "", provider: str = "", model: str = "
     return _validate(symbol, _extract_json(text))
 
 
-def get_graph(symbol: str, api_key: str = "", provider: str = "", model: str = "") -> dict:
+def get_graph(symbol: str, api_key: str = "", provider: str = "", model: str = "",
+              context: str = "") -> dict:
     """Cached AI graph for a symbol. Raises on generation/validation failure.
 
     `api_key`/`provider`/`model` let a caller bring its own key (BYOK) for any
@@ -281,7 +290,7 @@ def get_graph(symbol: str, api_key: str = "", provider: str = "", model: str = "
         # sparse result (caller falls back to the company workspace).
         raise ValueError("graph generation failed")
     try:
-        g = _generate(symbol, api_key, provider, model)
+        g = _generate(symbol, api_key, provider, model, context)
         with _lock:
             _cache[symbol] = {"ts": int(time.time()), "src": "ai", **g}
             _save()
