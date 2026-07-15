@@ -191,3 +191,54 @@ class SeedGraphTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class AiGraphGroundingTest(unittest.TestCase):
+    """Grounding context is fed to the model; a 2-edge graph is accepted; the
+    outbound call is bounded by a short timeout."""
+
+    def setUp(self):
+        import ai_graph
+        self.ai = importlib.reload(ai_graph)
+        self.ai._cache = {}
+        self.cap = {}
+
+        def fake_post(url, headers=None, json=None, timeout=None):
+            self.cap["url"] = url
+            self.cap["timeout"] = timeout
+            self.cap["prompt"] = (json or {}).get("messages", [{}])[0].get("content", "")
+            text = ('{"companies":{"HBLENGINE":{"name":"HBL","listed":true},'
+                    '"A":{"name":"A","listed":true},"B":{"name":"B","listed":true}},'
+                    '"edges":[{"src":"A","dst":"HBLENGINE","type":"supplies","confidence":"high"},'
+                    '{"src":"HBLENGINE","dst":"B","type":"supplies","confidence":"high"}]}')
+
+            class Resp:
+                def raise_for_status(self_inner):
+                    pass
+
+                def json(self_inner):
+                    return {"content": [{"type": "text", "text": text}]}
+
+            return Resp()
+
+        self.ai.requests = types.SimpleNamespace(post=fake_post)
+
+    def test_context_is_grounded_into_prompt(self):
+        self.ai.get_graph("HBLENGINE", api_key="k", provider="anthropic",
+                          context="HBL Engineering Ltd · Railway signalling · Industrials")
+        self.assertIn("HBL Engineering Ltd", self.cap["prompt"])
+        self.assertIn("HBLENGINE", self.cap["prompt"])
+
+    def test_two_edge_graph_accepted(self):
+        g = self.ai.get_graph("HBLENGINE", api_key="k", provider="anthropic")
+        self.assertEqual(len(g["edges"]), 2)
+        self.assertIn("HBLENGINE", g["companies"])
+
+    def test_generation_timeout_is_short(self):
+        self.ai.get_graph("HBLENGINE", api_key="k", provider="anthropic")
+        self.assertEqual(self.cap["timeout"], self.ai.TIMEOUT)
+        self.assertLessEqual(self.ai.TIMEOUT, 60)
+
+
+if __name__ == "__main__":
+    unittest.main()
