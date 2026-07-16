@@ -19,9 +19,25 @@ import IndicesScreen from './screens/IndicesScreen';
 import HeatmapScreen from './screens/HeatmapScreen';
 import TickerStrip from './components/TickerStrip';
 import { peekNav, subscribeNav } from './navIntent';
-import { theme } from './theme';
+import { theme, toggleThemeMode, useThemeMode } from './theme';
 
 type Screen = () => React.ReactElement;
+
+// Light/dark switch — glyph shows the mode you'll switch TO. Present in both the
+// desktop brand bar and the mobile header.
+function ThemeToggle({ style }: { style?: object }) {
+  const mode = useThemeMode();
+  return (
+    <TouchableOpacity
+      style={[styles.themeBtn, style]}
+      onPress={toggleThemeMode}
+      activeOpacity={0.75}
+      accessibilityLabel={mode === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+    >
+      <Text style={styles.themeGlyph}>{mode === 'dark' ? '☀' : '☾'}</Text>
+    </TouchableOpacity>
+  );
+}
 
 // Desktop exposes every destination flat in the sidebar (there's room);
 // mobile groups them into 5 bottom tabs (Analysis/Charts sub-toggle, More menu).
@@ -111,6 +127,7 @@ function DesktopShell({ version }: { version: string }) {
             );
           })}
         </ScrollView>
+        <ThemeToggle style={styles.themeBtnDesktop} />
         <TouchableOpacity
           style={styles.legalBtn}
           onPress={() => Linking.openURL((API_BASE || '') + '/legal.html').catch(() => {})}
@@ -146,6 +163,7 @@ function MobileShell({ version }: { version: string }) {
     <View style={styles.mobile}>
       <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
         <Brand version={version} />
+        <ThemeToggle />
       </View>
       <View style={styles.mobileBody}>{tab.render(nav)}</View>
       <View style={[styles.tabBar, { paddingBottom: insets.bottom || 6 }]}>
@@ -209,10 +227,32 @@ const styles = StyleSheet.create({
   main: { flex: 1, backgroundColor: theme.bg },
 
   mobile: { flex: 1, backgroundColor: theme.bg },
-  header: { backgroundColor: theme.surface, borderBottomColor: theme.border, borderBottomWidth: 1, paddingHorizontal: 16, paddingBottom: 12 },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: theme.surface,
+    borderBottomColor: theme.border,
+    borderBottomWidth: 1,
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+  },
   mobileBody: { flex: 1 },
   tabBar: { flexDirection: 'row', backgroundColor: theme.surface, borderTopColor: theme.border, borderTopWidth: 1, paddingTop: 6 },
   tab: { flex: 1, alignItems: 'center', gap: 2 },
   tabGlyph: { fontSize: 16, fontWeight: '700' },
   tabLabel: { fontSize: 10 },
+
+  themeBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: theme.surface2,
+    borderColor: theme.border,
+    borderWidth: 1,
+  },
+  themeBtnDesktop: { marginLeft: 'auto' },
+  themeGlyph: { color: theme.muted2, fontSize: 16, lineHeight: 20 },
 });

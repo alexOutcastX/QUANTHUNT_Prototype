@@ -13,7 +13,7 @@ import { Candle, api } from '../api';
 import { BacktestResult, CUSTOM_KEY, CustomRule, Risk, STRATEGIES, runBacktest } from '../backtest';
 import { DEFAULT_COSTS } from '../costs';
 import HtmlView from '../components/HtmlView';
-import { theme } from '../theme';
+import { getPalette, theme } from '../theme';
 import { Card, ChipBtn, EmptyState, Loading, ScreenTitle, SectionTitle, StatTile } from '../ui';
 
 const UP = '#10b981';
@@ -104,6 +104,7 @@ function RuleRow({
 }
 
 function resultHtml(candles: Candle[], result: BacktestResult): string {
+  const theme = getPalette();
   const cData = JSON.stringify(
     candles.map((c) => ({ time: c.t, open: c.o, high: c.h, low: c.l, close: c.c })),
   );
