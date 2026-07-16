@@ -3,6 +3,7 @@ import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-nati
 import { MbScreenRow, Recommendation, api } from '../api';
 import StockDetail from '../components/StockDetail';
 import { Row } from '../screener';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { navigate } from '../navIntent';
 import { addSymbol, loadWatchlist, normSymbol } from '../watchlist';
 import { LocalAlert, addLocalAlert, hasLocalAlert, loadLocalAlerts } from '../localalerts';
@@ -126,6 +127,8 @@ function RecCard({
   onAlert,
   onChart,
   onAnalyse,
+  onPattern,
+  onBacktest,
 }: {
   r: Recommendation;
   watched: boolean;
@@ -134,6 +137,8 @@ function RecCard({
   onAlert: () => void;
   onChart: () => void;
   onAnalyse: () => void;
+  onPattern: () => void;
+  onBacktest: () => void;
 }) {
   const c = actionColor(r.action);
   return (
@@ -219,6 +224,12 @@ function RecCard({
         </TouchableOpacity>
         <TouchableOpacity style={styles.aBtn} onPress={onAlert} activeOpacity={0.75}>
           <Text style={[styles.aTxt, alerted && { color: GOLD }]}>{alerted ? '🔔 Alerted' : '🔔 Alert'}</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.aBtn} onPress={onPattern} activeOpacity={0.75}>
+          <Text style={styles.aTxt}>◫ Pattern</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.aBtn} onPress={onBacktest} activeOpacity={0.75}>
+          <Text style={styles.aTxt}>⏱ Backtest</Text>
         </TouchableOpacity>
       </View>
     </Card>
@@ -345,6 +356,12 @@ export default function RecommendationsScreen() {
   }, [alerts]);
   const onChart = (r: Recommendation) => setDetail({ sym: r.symbol, price: r.price } as Row);
   const onAnalyse = (r: Recommendation) => navigate('analysis', { sub: 'mb', symbol: r.symbol });
+  const onPattern = (r: Recommendation) => navigate('analysis', { sub: 'patterns', symbol: r.symbol });
+  const onBacktest = async (r: Recommendation) => {
+    // Prefill the backtest symbol before switching tabs (Backtest reads it on mount).
+    await AsyncStorage.setItem('taureye.backtest.prefill', r.symbol).catch(() => {});
+    navigate('analysis', { sub: 'bt' });
+  };
 
   return (
     <View style={styles.container}>
@@ -396,6 +413,8 @@ export default function RecommendationsScreen() {
                 onAlert={() => onAlert(r)}
                 onChart={() => onChart(r)}
                 onAnalyse={() => onAnalyse(r)}
+                onPattern={() => onPattern(r)}
+                onBacktest={() => onBacktest(r)}
               />
             </View>
           ))}
