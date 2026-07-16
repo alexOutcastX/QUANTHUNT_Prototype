@@ -190,7 +190,10 @@ export default function Shell() {
   useEffect(() => {
     if (typeof document === 'undefined') return;
     const m = document.querySelector('meta[name="viewport"]');
-    if (m) m.setAttribute('content', 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no');
+    // viewport-fit=cover exposes the safe-area insets (env(safe-area-inset-*))
+    // so the header can pad for the status bar now that the native shell draws
+    // the WebView edge-to-edge behind a transparent status bar.
+    if (m) m.setAttribute('content', 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover');
   }, []);
   return isDesktop ? <DesktopShell version={version} /> : <MobileShell version={version} />;
 }
