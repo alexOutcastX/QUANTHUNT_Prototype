@@ -14,10 +14,14 @@ import { TrackDir, TrackEntry, addTrack, loadTrack, removeTrack } from '../track
 import { addSymbol, loadWatchlist, normSymbol, removeSymbol } from '../watchlist';
 import { Btn, Card, EmptyState, Loading, ScreenTitle, SectionTitle, StatTile } from '../ui';
 import { theme } from '../theme';
+import { getScanned, hydrateScan, isIncluded, subscribeScan, toggleInclude } from '../scanStore';
 
 const GOLD = '#f5c518';
 const BT_PREFILL_KEY = 'taureye.backtest.prefill';
 const RECENT_KEY = 'taureye.mb.recent.v1';
+// The Multibagger list carries one extra action (the "include in scan" toggle)
+// beyond the shared screener action set, so its action cell is a touch wider.
+const MB_ACTIONS_W = ACTIONS_W + 88;
 
 // Analysed-report cache: re-opening a recently searched symbol is instant
 // instead of refetching (the server caches 6h; this covers the round trip).
@@ -139,10 +143,13 @@ function MbList({
   const [tick, setTick] = useState(0);
   const [track, setTrack] = useState<TrackEntry[]>([]);
   const [watch, setWatch] = useState<string[]>([]);
+  const [, setScanTick] = useState(0); // re-render when the reco scan store changes
 
   useEffect(() => {
     loadTrack().then(setTrack);
     loadWatchlist().then(setWatch);
+    hydrateScan();
+    return subscribeScan(() => setScanTick((t) => t + 1));
   }, []);
 
   // ⟳ Update list — drop caches and force a fresh server-side screen run.
@@ -302,7 +309,7 @@ function MbList({
     const at = base.findIndex((c) => c.key === 'exchange') + 1;
     return [...base.slice(0, at || 3), scoreCol, capCol, ...base.slice(at || 3)];
   }, [scoreCol, capCol]);
-  const tableW = useMemo(() => visibleCols.reduce((a, c) => a + c.w, 0) + ACTIONS_W, [visibleCols]);
+  const tableW = useMemo(() => visibleCols.reduce((a, c) => a + c.w, 0) + MB_ACTIONS_W, [visibleCols]);
 
   // Column sorting (tap a header) — defaults to analyser score, best first.
   const [sortCol, setSortCol] = useState('mb_score');
@@ -331,6 +338,9 @@ function MbList({
     return sortRows(filtered, sortCol, sortDir);
   }, [rows, sector, sortCol, sortDir]);
   const warming = false;
+  // Which scrips the recommendation engine has already deep-analysed (so a
+  // rebuild skips them). Recomputed on every render — cheap Set membership.
+  const scannedSet = getScanned();
 
   const trackDirOf = (sym: string): TrackDir | null => track.find((t) => t.sym === sym)?.dir ?? null;
   const onTrack = async (r: Row, dir: TrackDir) => {
@@ -434,6 +444,8 @@ function MbList({
               matches.map((item) => {
                 const dir = trackDirOf(item.sym);
                 const starred = isWatched(item.sym);
+                const scanned = scannedSet.has(item.sym.toUpperCase());
+                const included = isIncluded(item.sym);
                 return (
                   <View key={item.sym} style={styles.dataRow}>
                     {visibleCols.map((c) =>
@@ -468,6 +480,28 @@ function MbList({
                       <TouchableOpacity style={styles.aBtn} onPress={() => onAnalyse(item.sym)} activeOpacity={0.75}>
                         <Text style={[styles.aBtnTxt, { color: theme.accent }]}>Analyse</Text>
                       </TouchableOpacity>
+                      {scanned ? (
+                        <TouchableOpacity
+                          style={[styles.scanBtn, included && styles.scanBtnOn]}
+                          onPress={() => {
+                            toggleInclude(item.sym);
+                            toast(
+                              isIncluded(item.sym)
+                                ? `${item.sym} will be re-scanned on next Update List`
+                                : `${item.sym} back to scanned — skipped on rebuild`,
+                            );
+                          }}
+                          activeOpacity={0.75}
+                        >
+                          <Text style={[styles.scanBtnTxt, included && styles.scanBtnTxtOn]}>
+                            {included ? '＋ Rescan' : '✓ Scanned'}
+                          </Text>
+                        </TouchableOpacity>
+                      ) : (
+                        <View style={styles.scanBtnGhost}>
+                          <Text style={styles.scanGhostTxt}>· new</Text>
+                        </View>
+                      )}
                     </View>
                   </View>
                 );
@@ -914,7 +948,7 @@ const styles = StyleSheet.create({
   },
   td: { justifyContent: 'center', paddingHorizontal: theme.sp.xs },
   actionsCell: {
-    width: ACTIONS_W,
+    width: MB_ACTIONS_W,
     flexGrow: 0,
     flexShrink: 0,
     flexDirection: 'row',
@@ -923,6 +957,20 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  scanBtn: {
+    borderColor: theme.border2,
+    borderWidth: 1,
+    borderRadius: theme.radius.sm,
+    paddingHorizontal: theme.sp.sm,
+    paddingVertical: 3,
+    minWidth: 74,
+    alignItems: 'center',
+  },
+  scanBtnOn: { backgroundColor: GOLD, borderColor: GOLD },
+  scanBtnTxt: { color: theme.green, fontSize: theme.fs.xs + 1, fontWeight: '700' },
+  scanBtnTxtOn: { color: '#111' },
+  scanBtnGhost: { minWidth: 74, alignItems: 'center', paddingVertical: 3 },
+  scanGhostTxt: { color: theme.muted, fontSize: theme.fs.xs + 1 },
   tBtn: {
     borderColor: theme.border2,
     borderWidth: 1,
