@@ -1128,6 +1128,37 @@ def chart_patterns():
         return jsonify({"error": str(e), "symbol": sym, "patterns": []}), 503
 
 
+@app.route("/recommendation")
+def recommendation():
+    """Full buy-recommendation for one symbol: blends the passed-in fundamental
+    (analyser) score with a fresh momentum + chart-pattern + structure read to
+    produce an action, confidence, trade setup (entry/stop/target),
+    support/resistance and upside. The client fans this out over the top
+    Multibagger candidates to build the recommendations list."""
+    from recommend import analyze
+
+    sym = request.args.get("symbol", "").strip().upper().replace(":", "")
+    if not sym:
+        return jsonify({"error": "symbol required"}), 400
+    name = request.args.get("name") or None
+    fund = request.args.get("fund")
+    try:
+        fund_score = float(fund) if fund not in (None, "") else None
+    except (TypeError, ValueError):
+        fund_score = None
+    try:
+        candles = _load_ohlc(sym, "2y", "1d")
+        if not candles:
+            return jsonify({"symbol": sym, "action": "SKIP",
+                            "note": f"No price history for {sym}"}), 404
+        rec = analyze(sym, candles, fund_score, name)
+        rec["symbol"] = sym
+        return jsonify(rec)
+    except Exception as e:
+        log.error("Recommendation error for %s: %s", sym, e)
+        return jsonify({"error": str(e), "symbol": sym, "action": "SKIP"}), 503
+
+
 _MB_CACHE: dict = {}   # symbol -> (epoch, payload); refreshed every 6h
 _MB_TTL = 6 * 3600
 
