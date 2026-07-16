@@ -457,6 +457,36 @@ export type ChartPatternsResp = {
   error?: string;
 };
 
+// Buy recommendation for one symbol (from /recommendation).
+export type Recommendation = {
+  symbol: string;
+  name?: string | null;
+  action: 'BUY' | 'WATCH' | 'AVOID' | 'SKIP';
+  confidence: number;
+  fundamental_score: number | null;
+  momentum_score: number;
+  pattern_score: number;
+  pattern?: string | null;
+  pattern_bias?: string | null;
+  price: number;
+  entry: number;
+  stop: number;
+  stop_pct: number;
+  target: number;
+  target2: number;
+  upside_pct: number;
+  rr: number | null;
+  support: number;
+  support2: number;
+  resistance: number;
+  rsi: number;
+  high52: number;
+  low52: number;
+  rationale: string[];
+  note?: string;
+  error?: string;
+};
+
 // Full NSE+BSE momentum radar (from /momentum/screen).
 export type MomentumHit = {
   symbol: string;
@@ -604,6 +634,13 @@ export const api = {
   chartPatterns: (symbol: string, period = '2y') =>
     getJson<ChartPatternsResp>(
       `/chart-patterns?symbol=${encodeURIComponent(symbol)}&period=${encodeURIComponent(period)}`,
+      45000,
+    ),
+  recommendation: (symbol: string, fund?: number | null, name?: string) =>
+    getJson<Recommendation>(
+      `/recommendation?symbol=${encodeURIComponent(symbol)}` +
+        (fund != null && isFinite(fund) ? `&fund=${fund}` : '') +
+        (name ? `&name=${encodeURIComponent(name)}` : ''),
       45000,
     ),
   momentumScreen: (refresh = false) =>
