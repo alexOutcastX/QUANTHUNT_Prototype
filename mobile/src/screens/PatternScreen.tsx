@@ -7,7 +7,7 @@ import HtmlView from '../components/HtmlView';
 import StockDetail from '../components/StockDetail';
 import SymbolInput from '../components/SymbolInput';
 import { Row } from '../screener';
-import { navigate } from '../navIntent';
+import { navigate, takeSymbol } from '../navIntent';
 import { addSymbol, loadWatchlist, normSymbol } from '../watchlist';
 import { Btn, Card, EmptyState, Loading, ScreenTitle, SectionTitle } from '../ui';
 import { useResponsive } from '../responsive';
@@ -229,6 +229,14 @@ export default function PatternScreen() {
       .catch((e) => setError(e instanceof Error ? e.message : 'Pattern scan failed'))
       .finally(() => setBusy(false));
   }, [symbol, period, busy]);
+
+  // Auto-scan a symbol handed off from another screen (e.g. the Recommendations
+  // "Pattern" button).
+  useEffect(() => {
+    const s = takeSymbol('patterns');
+    if (s) scan(s);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const chartCandles: Candle[] = (data?.candles || []).map((c) => ({
     t: c.t, o: c.o, h: c.h, l: c.l, c: c.c, v: 0,
