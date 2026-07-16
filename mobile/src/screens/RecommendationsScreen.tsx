@@ -9,11 +9,23 @@ import { addSymbol, loadWatchlist, normSymbol } from '../watchlist';
 import { LocalAlert, addLocalAlert, hasLocalAlert, loadLocalAlerts } from '../localalerts';
 import { loadNames } from './ScreenerScreen';
 import { useResponsive } from '../responsive';
-import { Card, EmptyState, Loading, ScreenTitle } from '../ui';
+import { Card, EmptyState, ScreenTitle } from '../ui';
 import { theme } from '../theme';
+import {
+  DEPTH_OPTIONS,
+  getCache,
+  getDepth,
+  getIncluded,
+  getScanned,
+  hasCache,
+  hydrateScan,
+  isHydrated,
+  mergeScan,
+  setDepth as storeSetDepth,
+  subscribeScan,
+} from '../scanStore';
 
 const GOLD = '#f5c518';
-const MAX_CANDIDATES = 24; // top Multibagger candidates to deep-analyse
 const CONCURRENCY = 3;
 
 const money = (v?: number | null) =>
@@ -99,9 +111,6 @@ async function exportRecommendationsPdf(recs: Recommendation[], summary: string)
   }, 300);
 }
 
-// Session cache so switching tabs doesn't re-run the (slow) fan-out.
-let recCache: Recommendation[] | null = null;
-let recNote = '';
 
 function Score({ label, value }: { label: string; value: number | null }) {
   const v = value ?? 0;
@@ -236,17 +245,31 @@ function RecCard({
   );
 }
 
+function timeAgo(ms: number | null): string {
+  if (!ms) return '';
+  const s = Math.max(0, Math.floor((Date.now() - ms) / 1000));
+  if (s < 60) return 'just now';
+  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
+  if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
+  return `${Math.floor(s / 86400)}d ago`;
+}
+
 export default function RecommendationsScreen() {
-  const [recs, setRecs] = useState<Recommendation[]>(recCache || []);
-  const [loading, setLoading] = useState(!recCache);
-  const [note, setNote] = useState(recNote);
+  const [recs, setRecs] = useState<Recommendation[]>(() => getCache()?.recs || []);
+  const [scanning, setScanning] = useState(false);
+  const [progress, setProgress] = useState<{ done: number; total: number }>({ done: 0, total: 0 });
+  const [status, setStatus] = useState('');
   const [error, setError] = useState('');
-  const [tick, setTick] = useState(0);
+  const [depth, setDepthState] = useState(getDepth());
+  const [asof, setAsof] = useState<number | null>(getCache()?.asof ?? null);
+  const [ready, setReady] = useState(isHydrated());
   const [watch, setWatch] = useState<string[]>([]);
   const [alerts, setAlerts] = useState<LocalAlert[]>([]);
   const [detail, setDetail] = useState<Row | null>(null);
   const [flash, setFlash] = useState('');
   const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cancelRef = useRef<{ cancelled: boolean } | null>(null);
+  const scanningRef = useRef(false);
   const { isDesktop } = useResponsive();
 
   const toast = (m: string) => {
@@ -260,90 +283,129 @@ export default function RecommendationsScreen() {
     loadLocalAlerts().then(setAlerts);
   }, []);
 
-  const refresh = () => {
-    if (loading) return;
-    recCache = null;
-    setRecs([]);
+  // The scan: pull Multibagger candidates → deep-analyse each (bounded
+  // concurrency) → merge into the persistent cache. A rebuild is incremental —
+  // symbols already in `scanned` are skipped unless the user toggled them in.
+  const runScan = useCallback(async () => {
+    if (scanningRef.current) return;
+    if (cancelRef.current) cancelRef.current.cancelled = true;
+    const token = { cancelled: false };
+    cancelRef.current = token;
+    scanningRef.current = true;
+    setScanning(true);
     setError('');
-    setLoading(true);
-    setNote('Re-running the screen…');
-    setTick((t) => t + 1);
-  };
-
-  useEffect(() => {
-    if (recCache && tick === 0) return;
-    let cancelled = false;
-    const isCancelled = () => cancelled;
-    (async () => {
-      try {
-        // 1) candidate pool = the Multibagger fixed screen (poll until it has rows).
-        setNote('Loading Multibagger candidates…');
-        let snap = await api.mbScreen(tick > 0);
-        let tries = 0;
-        while (!cancelled && snap.status === 'running' && !snap.results.length && tries < 15) {
-          await new Promise((r) => setTimeout(r, 3000));
-          snap = await api.mbScreen();
-          tries++;
-        }
-        if (cancelled) return;
-        const candidates = [...(snap.results || [])]
-          .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
-          .slice(0, MAX_CANDIDATES);
-        if (!candidates.length) {
-          setError(snap.error || 'No Multibagger candidates to analyse yet — try again shortly.');
-          setLoading(false);
-          return;
-        }
-        const names = await loadNames().catch(() => ({} as Record<string, { name: string; exchange: string }>));
-
-        // 2) deep-analyse each candidate (bounded concurrency); surface BUYs live.
-        const buys: Recommendation[] = [];
-        let done = 0;
-        const total = candidates.length;
-        const run = async (row: MbScreenRow) => {
-          try {
-            const rec = await api.recommendation(row.symbol, row.score, names[row.symbol.toUpperCase()]?.name);
-            if (cancelled) return;
-            if (rec && !rec.error && rec.action === 'BUY') {
-              buys.push(rec);
-              buys.sort((a, b) => b.confidence - a.confidence);
-              setRecs([...buys]);
-              setLoading(false);
-            }
-          } catch {
-            /* skip a failed candidate */
-          } finally {
-            if (!cancelled) {
-              done++;
-              setNote(`Analysing ${Math.min(done, total)}/${total} candidates · ${buys.length} buy${buys.length === 1 ? '' : 's'}`);
-            }
-          }
-        };
-        let idx = 0;
-        const worker = async () => {
-          while (idx < candidates.length && !cancelled) {
-            const my = idx++;
-            await run(candidates[my]);
-          }
-        };
-        await Promise.all(Array.from({ length: Math.min(CONCURRENCY, candidates.length) }, worker));
-        if (cancelled) return;
-        setLoading(false);
-        setNote(`${buys.length} buy recommendation${buys.length === 1 ? '' : 's'} from ${total} candidates`);
-        recCache = buys;
-        recNote = `${buys.length} buy recommendation${buys.length === 1 ? '' : 's'} from ${total} candidates`;
-      } catch (e) {
-        if (!cancelled) {
-          setError(e instanceof Error ? e.message : 'Failed to build recommendations');
-          setLoading(false);
-        }
+    setProgress({ done: 0, total: 0 });
+    setStatus('Loading Multibagger candidates…');
+    try {
+      let snap = await api.mbScreen(true);
+      let tries = 0;
+      while (!token.cancelled && snap.status === 'running' && !snap.results.length && tries < 15) {
+        await new Promise((r) => setTimeout(r, 3000));
+        snap = await api.mbScreen();
+        tries++;
       }
-    })();
+      if (token.cancelled) return;
+      const d = getDepth();
+      const candidates = [...(snap.results || [])]
+        .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
+        .slice(0, d);
+      if (!candidates.length) {
+        setError(snap.error || 'No Multibagger candidates to analyse yet — try again shortly.');
+        return;
+      }
+      // Incremental: skip already-scanned scrips unless the user re-included them.
+      const scanned = getScanned();
+      const included = getIncluded();
+      const toAnalyse = candidates.filter(
+        (c) => !scanned.has(c.symbol.toUpperCase()) || included.has(c.symbol.toUpperCase()),
+      );
+      if (!toAnalyse.length) {
+        setStatus(`All top ${candidates.length} candidates already scanned — toggle "Include in scan" on a Multibagger row to re-scan.`);
+        return;
+      }
+      const names = await loadNames().catch(() => ({} as Record<string, { name: string; exchange: string }>));
+      const analysed: Recommendation[] = [];
+      const live = new Map((getCache()?.recs || []).map((r) => [r.symbol.toUpperCase(), r] as const));
+      let done = 0;
+      const total = toAnalyse.length;
+      setProgress({ done: 0, total });
+      const run = async (row: MbScreenRow) => {
+        try {
+          const rec = await api.recommendation(row.symbol, row.score, names[row.symbol.toUpperCase()]?.name);
+          if (token.cancelled) return;
+          if (rec && !rec.error) {
+            analysed.push(rec);
+            if (rec.action === 'BUY') live.set(rec.symbol.toUpperCase(), rec);
+            else live.delete(rec.symbol.toUpperCase());
+            setRecs([...live.values()].sort((a, b) => b.confidence - a.confidence));
+          }
+        } catch {
+          /* skip a failed candidate */
+        } finally {
+          if (!token.cancelled) {
+            done++;
+            const buys = live.size;
+            setProgress({ done, total });
+            setStatus(`Analysing ${done}/${total} · ${buys} buy${buys === 1 ? '' : 's'}`);
+          }
+        }
+      };
+      let idx = 0;
+      const worker = async () => {
+        while (idx < toAnalyse.length && !token.cancelled) {
+          const my = idx++;
+          await run(toAnalyse[my]);
+        }
+      };
+      await Promise.all(Array.from({ length: Math.min(CONCURRENCY, toAnalyse.length) }, worker));
+      if (token.cancelled) return;
+      const now = Date.now();
+      await mergeScan(analysed, d, now);
+      const buys = getCache()?.recs || [];
+      setRecs(buys);
+      setAsof(now);
+      setStatus(`${buys.length} buy recommendation${buys.length === 1 ? '' : 's'} · scanned ${getScanned().size} scrips`);
+    } catch (e) {
+      if (!token.cancelled) setError(e instanceof Error ? e.message : 'Failed to build recommendations');
+    } finally {
+      if (!token.cancelled) {
+        scanningRef.current = false;
+        setScanning(false);
+      }
+    }
+  }, []);
+
+  // Hydrate the persistent cache once. Auto-scan ONLY on the very first launch
+  // after install (no cache yet); otherwise serve the cache — no re-scan on
+  // navigation or reload.
+  useEffect(() => {
+    let alive = true;
+    hydrateScan().then(() => {
+      if (!alive) return;
+      setReady(true);
+      const c = getCache();
+      setRecs(c?.recs || []);
+      setDepthState(getDepth());
+      setAsof(c?.asof ?? null);
+      if (!hasCache()) runScan();
+    });
+    const unsub = subscribeScan(() => {
+      const c = getCache();
+      setRecs(c?.recs || []);
+      setAsof(c?.asof ?? null);
+      setDepthState(getDepth());
+    });
     return () => {
-      cancelled = true;
+      alive = false;
+      unsub();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tick]);
+  }, []);
+
+  const onDepth = (n: number) => {
+    storeSetDepth(n);
+    setDepthState(n);
+  };
 
   const isWatched = (s: string) => watch.includes(normSymbol(s));
   const onWatch = useCallback(async (r: Recommendation) => {
@@ -371,34 +433,64 @@ export default function RecommendationsScreen() {
         right={
           <View style={styles.headBtns}>
             <TouchableOpacity
-              style={[styles.updBtn, (loading || !recs.length) && { opacity: 0.5 }]}
+              style={[styles.updBtn, (scanning || !recs.length) && { opacity: 0.5 }]}
               onPress={() => {
                 if (!recs.length) return;
-                exportRecommendationsPdf(recs, note || `${recs.length} buy recommendation${recs.length === 1 ? '' : 's'}`).catch(() => {});
+                exportRecommendationsPdf(recs, status || `${recs.length} buy recommendation${recs.length === 1 ? '' : 's'}`).catch(() => {});
               }}
-              disabled={loading || !recs.length}
+              disabled={scanning || !recs.length}
               activeOpacity={0.75}
             >
               <Text style={styles.updTxt}>⤓ PDF</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={[styles.updBtn, loading && { opacity: 0.5 }]} onPress={refresh} disabled={loading} activeOpacity={0.75}>
-              <Text style={styles.updTxt}>⟳ Update List</Text>
+            <TouchableOpacity style={[styles.updBtn, styles.updBtnPrimary, scanning && { opacity: 0.5 }]} onPress={runScan} disabled={scanning} activeOpacity={0.75}>
+              <Text style={[styles.updTxt, { color: theme.onAccent }]}>{scanning ? '… Scanning' : '⟳ Update List'}</Text>
             </TouchableOpacity>
           </View>
         }
       />
-      {note ? <Text style={styles.note}>{note}</Text> : null}
+
+      {/* scan-depth selector */}
+      <View style={styles.depthRow}>
+        <Text style={styles.depthLbl}>Scan depth</Text>
+        {DEPTH_OPTIONS.map((n) => (
+          <TouchableOpacity
+            key={n}
+            style={[styles.depthChip, depth === n && styles.depthChipOn]}
+            onPress={() => onDepth(n)}
+            disabled={scanning}
+            activeOpacity={0.75}
+          >
+            <Text style={[styles.depthTxt, depth === n && styles.depthTxtOn]}>{n}</Text>
+          </TouchableOpacity>
+        ))}
+        {asof && !scanning ? <Text style={styles.asof}>updated {timeAgo(asof)}</Text> : null}
+      </View>
+
+      {/* progress bar + live status while scanning */}
+      {scanning ? (
+        <View style={styles.progWrap}>
+          <View style={styles.progTrack}>
+            <View
+              style={[
+                styles.progFill,
+                { width: `${progress.total ? Math.round((progress.done / progress.total) * 100) : 6}%` },
+              ]}
+            />
+          </View>
+          <Text style={styles.progTxt}>{status || 'Preparing…'}</Text>
+        </View>
+      ) : status ? (
+        <Text style={styles.note}>{status}</Text>
+      ) : null}
 
       <ScrollView contentContainerStyle={styles.body}>
-        {loading && !recs.length ? (
-          <Loading label="Screening candidates — fundamentals, momentum & patterns…" />
-        ) : null}
-        {!loading && error ? <EmptyState icon="⚠" title="Couldn't build recommendations" hint={error} /> : null}
-        {!loading && !error && !recs.length ? (
+        {!scanning && error ? <EmptyState icon="⚠" title="Couldn't build recommendations" hint={error} /> : null}
+        {ready && !scanning && !error && !recs.length ? (
           <EmptyState
             icon="◇"
-            title="No buy setups right now"
-            hint="None of the current Multibagger candidates clear the fundamentals + momentum + pattern filters. Hit ⟳ Update List later."
+            title="No buy setups yet"
+            hint="No cached buy setups. Hit ⟳ Update List to scan the top Multibagger candidates."
           />
         ) : null}
 
@@ -443,6 +535,34 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.bg },
   note: { color: theme.muted, fontSize: theme.fs.sm, paddingHorizontal: theme.sp.lg, paddingBottom: theme.sp.sm },
   headBtns: { flexDirection: 'row', gap: theme.sp.sm },
+  depthRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.sp.sm,
+    paddingHorizontal: theme.sp.lg,
+    paddingBottom: theme.sp.sm,
+    flexWrap: 'wrap',
+  },
+  depthLbl: { color: theme.muted, fontSize: theme.fs.sm, marginRight: 2 },
+  depthChip: {
+    minWidth: 40,
+    alignItems: 'center',
+    backgroundColor: theme.surface2,
+    borderColor: theme.border2,
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: theme.sp.md,
+    paddingVertical: 5,
+  },
+  depthChipOn: { backgroundColor: theme.accent, borderColor: theme.accent },
+  depthTxt: { color: theme.muted2, fontSize: theme.fs.sm, fontWeight: '700' },
+  depthTxtOn: { color: theme.onAccent },
+  asof: { color: theme.muted, fontSize: theme.fs.xs + 1, marginLeft: 'auto' },
+  progWrap: { paddingHorizontal: theme.sp.lg, paddingBottom: theme.sp.md, gap: 6 },
+  progTrack: { height: 6, borderRadius: 999, backgroundColor: theme.surface3, overflow: 'hidden' },
+  progFill: { height: 6, borderRadius: 999, backgroundColor: theme.green },
+  progTxt: { color: theme.muted2, fontSize: theme.fs.sm },
+  updBtnPrimary: { backgroundColor: theme.accent, borderColor: theme.accent },
   updBtn: {
     backgroundColor: theme.surface2,
     borderColor: theme.border2,
