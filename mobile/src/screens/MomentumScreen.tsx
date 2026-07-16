@@ -326,7 +326,7 @@ export default function MomentumScreen() {
       {asof ? <Text style={styles.lastUpd}>Setups last updated {fmtAsof(asof)}</Text> : null}
 
       {!loading && sectors.length ? (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.secRow}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.secScroll} contentContainerStyle={styles.secRow}>
           <TouchableOpacity
             style={[styles.secChip, sector === '' && styles.secChipOn]}
             onPress={() => setSector('')}
@@ -543,6 +543,10 @@ const styles = StyleSheet.create({
   note: { color: theme.muted, fontSize: theme.fs.sm, marginLeft: theme.sp.sm },
   lastUpd: { color: theme.muted, fontSize: theme.fs.xs + 1, paddingHorizontal: theme.sp.lg, paddingBottom: theme.sp.sm },
   // sector filter chips
+  // flexGrow:0 so this horizontal filter strip sizes to its content instead of
+  // greedily filling the column (which left a large blank gap and vertically-
+  // centred the chips).
+  secScroll: { flexGrow: 0, flexShrink: 0 },
   secRow: { gap: 6, paddingHorizontal: theme.sp.md, paddingBottom: theme.sp.sm, alignItems: 'center' },
   secChip: {
     borderColor: theme.border2,
