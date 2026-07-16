@@ -18,6 +18,7 @@ import DerivativesScreen from './DerivativesScreen';
 import MomentumScreen from './MomentumScreen';
 import MultibaggerScreen from './MultibaggerScreen';
 import PatternScreen from './PatternScreen';
+import RecommendationsScreen from './RecommendationsScreen';
 import RiskScreen from './RiskScreen';
 import EntityGraphScreen from './EntityGraphScreen';
 import AlertsScreen from './AlertsScreen';
@@ -73,10 +74,10 @@ export function AnalysisHome() {
     <SubTabs
       tabs={[
         { key: 'inst', label: 'Institutional', render: () => <AnalysisScreen /> },
+        { key: 'reco', label: 'Recommendations', render: () => <RecommendationsScreen /> },
         { key: 'mb', label: 'Multibagger', render: () => <MultibaggerScreen /> },
         { key: 'patterns', label: 'Patterns', render: () => <PatternScreen /> },
         { key: 'momentum', label: 'Momentum', render: () => <MomentumScreen /> },
-        { key: 'deriv', label: 'Derivatives', render: () => <DerivativesScreen /> },
         { key: 'risk', label: 'Risk', render: () => <RiskScreen /> },
         { key: 'bt', label: 'Backtest', render: () => <BacktestScreen /> },
       ]}
@@ -101,6 +102,7 @@ export function ToolsHome() {
     <SubTabs
       tabs={[
         { key: 'universe', label: 'Universe', render: () => <UniverseScreen /> },
+        { key: 'derivatives', label: 'Derivatives', render: () => <DerivativesScreen /> },
         { key: 'corporate', label: 'Corporate', render: () => <CorporateScreen /> },
         { key: 'entities', label: 'Entities', render: () => <EntityGraphScreen /> },
         { key: 'calc', label: 'Calculator', render: () => <CalculatorScreen /> },
