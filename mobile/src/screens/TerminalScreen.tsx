@@ -13,13 +13,16 @@ import { API_BASE, GraphResp, LtpResp, api } from '../api';
 import { resolveIndex } from '../indices';
 import HtmlView from '../components/HtmlView';
 import SymbolInput from '../components/SymbolInput';
-import { theme } from '../theme';
+import { getPalette, theme, useThemeMode } from '../theme';
 
 // Self-contained Terminal workspace: d3-force relationship graph + a floating,
 // draggable, resizable, closeable multi-tab window (company chart +
 // screener.in fundamentals, and a comparison report). All interaction lives
 // inside the frame; state persists to localStorage across frame rebuilds.
 function graphHtml(data: GraphResp, quotes: LtpResp, centre: string, openIdx: string | null, autoWin: boolean, aiOn: boolean, canBack: boolean): string {
+  // Resolved hex for the active mode — this HTML runs in its own iframe/WebView
+  // document and can't read the page's CSS custom properties.
+  const theme = getPalette();
   return `<!DOCTYPE html><html><head>
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
@@ -1256,6 +1259,8 @@ const PROVIDERS: Provider[] = [
 const providerOf = (id: string) => PROVIDERS.find((p) => p.id === id) || PROVIDERS[0];
 
 export default function TerminalScreen() {
+  // Rebuild the embedded graph HTML (resolved hex) when the theme toggles.
+  const themeMode = useThemeMode();
   const [data, setData] = useState<GraphResp | null>(null);
   const [quotes, setQuotes] = useState<LtpResp>({});
   // Blank until the user picks a stock — no company is centred on load.
@@ -1394,7 +1399,7 @@ export default function TerminalScreen() {
 
   const html = useMemo(
     () => (data && centre ? graphHtml(data, quotes, centre, idxCmd?.name || null, data.source === 'minimal', aiEnabled, history.length > 0) : ''),
-    [data, quotes, centre, idxCmd, aiEnabled, history.length],
+    [data, quotes, centre, idxCmd, aiEnabled, history.length, themeMode],
   );
 
   // Messages posted by the embedded workspace (index rows → open a graph;

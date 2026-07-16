@@ -5,9 +5,14 @@
 // under the React Native tsconfig (which has no DOM lib).
 import React from 'react';
 import { View } from 'react-native';
+import { getPalette, useThemeMode } from '../theme';
 import { HtmlViewProps } from './HtmlView';
 
 export default function HtmlView({ html, style, onMessage }: HtmlViewProps) {
+  // Match the iframe backing colour to the active theme so there's no dark flash
+  // behind embedded charts/graphs in light mode.
+  useThemeMode();
+  const frameBg = getPalette().bg;
   React.useEffect(() => {
     if (!onMessage) return undefined;
     const g = globalThis as unknown as {
@@ -22,7 +27,7 @@ export default function HtmlView({ html, style, onMessage }: HtmlViewProps) {
   }, [onMessage]);
   const iframe = React.createElement('iframe', {
     srcDoc: html,
-    style: { border: 'none', width: '100%', height: '100%', background: '#08090c' },
+    style: { border: 'none', width: '100%', height: '100%', background: frameBg },
     sandbox: 'allow-scripts allow-same-origin allow-popups',
     title: 'chart',
   });

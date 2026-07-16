@@ -1,7 +1,7 @@
 // Self-contained lightweight-charts HTML for HtmlView (WebView on native,
 // iframe on web). Shared by the Chart screen and the stock-detail modal.
 import { Candle } from './api';
-import { theme } from './theme';
+import { getPalette } from './theme';
 
 // Chart candles use the web app's palette (colour is allowed for candles).
 export const UP = '#10b981';
@@ -22,6 +22,7 @@ export const DEFAULT_MA: number[] = [20, 50, 200];
 export function chartHtml(candles: Candle[], barSec: number, maSet: number[] = DEFAULT_MA): string {
   const data = JSON.stringify(candles);
   const mas = JSON.stringify(MA_CONFIG.filter((m) => maSet.includes(m.period)));
+  const theme = getPalette();
   return `<!DOCTYPE html><html><head>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
   <style>html,body,#c{height:100%;margin:0;background:${theme.bg}}
