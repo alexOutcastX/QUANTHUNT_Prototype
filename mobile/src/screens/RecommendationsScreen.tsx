@@ -22,6 +22,82 @@ const signPct = (v?: number | null, d = 1) =>
 
 const actionColor = (a: string) => (a === 'BUY' ? theme.green : a === 'WATCH' ? GOLD : theme.red);
 
+const htmlEsc = (v: unknown): string =>
+  v == null ? '' : String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+// Build a print-ready (black-on-white) buy-recommendations report and hand it to
+// the browser's print / "Save as PDF" dialog. Web only; native shares a text
+// digest instead. No extra deps — mirrors the app's other PDF exports.
+async function exportRecommendationsPdf(recs: Recommendation[], summary: string): Promise<void> {
+  const win = (globalThis as { window?: any }).window;
+  if (!win?.open) {
+    // native: share a compact text summary
+    const { Share } = await import('react-native');
+    const lines = recs.map(
+      (r) =>
+        `${r.symbol} · BUY · conf ${r.confidence} · entry ${money(r.entry)} · stop ${money(r.stop)} (${signPct(r.stop_pct)}) · target ${money(r.target)} (${signPct(r.upside_pct)}) · R:R ${r.rr != null ? r.rr.toFixed(1) + ':1' : '—'}`,
+    );
+    await Share.share({ title: 'TaurEye — Buy Recommendations', message: `TaurEye — Buy Recommendations\n${summary}\n\n${lines.join('\n')}` });
+    return;
+  }
+  const w = win.open('', '_blank');
+  if (!w) return; // popup blocked
+  const dateStr = new Date().toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
+  const card = (r: Recommendation) => {
+    const rr = r.rr != null ? `${r.rr.toFixed(1)}:1` : '—';
+    const cell = (lbl: string, val: string, color = '#111') =>
+      `<div class="cell"><div class="cl">${lbl}</div><div class="cv" style="color:${color}">${htmlEsc(val)}</div></div>`;
+    const rationale = (r.rationale || [])
+      .map((s) => `<li>${htmlEsc(s)}</li>`)
+      .join('');
+    return (
+      `<div class="rec">` +
+      `<div class="rh"><span class="sym">${htmlEsc(r.symbol)}</span>` +
+      `<span class="pill">BUY</span>` +
+      (r.name ? `<span class="nm">${htmlEsc(r.name)}</span>` : '') +
+      `<span class="conf">${r.confidence}<small>conf</small></span></div>` +
+      `<div class="scores">${cell('Fundamental', r.fundamental_score == null ? '—' : String(r.fundamental_score))}${cell('Momentum', String(r.momentum_score))}${cell('Pattern', String(r.pattern_score))}</div>` +
+      `<div class="setup">${cell('Entry', money(r.entry))}${cell('Stop', `${money(r.stop)} (${signPct(r.stop_pct)})`, '#c0392b')}${cell('Target', `${money(r.target)} (${signPct(r.upside_pct)})`, '#1e8449')}${cell('R:R', rr)}</div>` +
+      `<div class="levels">Support ${htmlEsc(money(r.support))} · Resistance ${htmlEsc(money(r.resistance))} · Next target ${htmlEsc(money(r.target2))}${r.pattern ? ` · Pattern ${htmlEsc(r.pattern)}` : ''} · RSI ${htmlEsc(String(r.rsi))}</div>` +
+      (rationale ? `<ul class="why">${rationale}</ul>` : '') +
+      `</div>`
+    );
+  };
+  const css =
+    `<style>` +
+    `*{box-sizing:border-box}body{font-family:Arial,Helvetica,sans-serif;color:#111;margin:24px;max-width:900px}` +
+    `h1{font-size:20px;margin:0 0 2px}.meta{color:#666;font-size:12px;margin:0 0 16px}` +
+    `.rec{border:1px solid #ccc;border-radius:8px;padding:12px 14px;margin-bottom:12px;page-break-inside:avoid}` +
+    `.rh{display:flex;align-items:baseline;gap:8px;margin-bottom:8px}` +
+    `.sym{font-weight:700;font-size:16px;font-family:monospace}` +
+    `.pill{background:#1e8449;color:#fff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:4px}` +
+    `.nm{color:#666;font-size:12px}.conf{margin-left:auto;font-weight:700;font-size:18px;color:#1e8449}.conf small{font-weight:400;color:#999;font-size:9px;margin-left:3px}` +
+    `.scores,.setup{display:flex;gap:8px;margin-bottom:8px}` +
+    `.cell{flex:1;border:1px solid #eee;border-radius:5px;padding:5px 8px;background:#fafafa}` +
+    `.cl{color:#888;font-size:9px;text-transform:uppercase;letter-spacing:.5px}.cv{font-weight:700;font-size:13px;font-family:monospace}` +
+    `.levels{color:#444;font-size:11px;font-family:monospace;margin-bottom:6px}` +
+    `.why{margin:0;padding-left:18px;color:#333;font-size:11px}.why li{margin:1px 0}` +
+    `.disc{color:#999;font-size:10px;margin-top:14px;border-top:1px solid #eee;padding-top:8px}` +
+    `</style>`;
+  w.document.write(
+    `<html><head><title>TaurEye — Buy Recommendations</title>${css}</head><body>` +
+      `<h1>TaurEye — Buy Recommendations</h1>` +
+      `<p class="meta">${htmlEsc(dateStr)} · ${htmlEsc(summary)}</p>` +
+      recs.map(card).join('') +
+      `<p class="disc">Confidence blends the Multibagger analyser (fundamentals), a live momentum read and the current chart pattern. Entry/stop/target come from pivot &amp; swing structure with a capped risk band. Indicative and educational only — not investment advice; always confirm and manage risk.</p>` +
+      `</body></html>`,
+  );
+  w.document.close();
+  w.focus();
+  setTimeout(() => {
+    try {
+      w.print();
+    } catch {
+      /* user can print manually */
+    }
+  }, 300);
+}
+
 // Session cache so switching tabs doesn't re-run the (slow) fan-out.
 let recCache: Recommendation[] | null = null;
 let recNote = '';
@@ -276,9 +352,22 @@ export default function RecommendationsScreen() {
         title="Recommendations"
         sub="Multibagger candidates screened through fundamentals, momentum & chart patterns into actionable buy setups"
         right={
-          <TouchableOpacity style={[styles.updBtn, loading && { opacity: 0.5 }]} onPress={refresh} disabled={loading} activeOpacity={0.75}>
-            <Text style={styles.updTxt}>⟳ Rebuild</Text>
-          </TouchableOpacity>
+          <View style={styles.headBtns}>
+            <TouchableOpacity
+              style={[styles.updBtn, (loading || !recs.length) && { opacity: 0.5 }]}
+              onPress={() => {
+                if (!recs.length) return;
+                exportRecommendationsPdf(recs, note || `${recs.length} buy recommendation${recs.length === 1 ? '' : 's'}`).catch(() => {});
+              }}
+              disabled={loading || !recs.length}
+              activeOpacity={0.75}
+            >
+              <Text style={styles.updTxt}>⤓ PDF</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.updBtn, loading && { opacity: 0.5 }]} onPress={refresh} disabled={loading} activeOpacity={0.75}>
+              <Text style={styles.updTxt}>⟳ Update List</Text>
+            </TouchableOpacity>
+          </View>
         }
       />
       {note ? <Text style={styles.note}>{note}</Text> : null}
@@ -292,7 +381,7 @@ export default function RecommendationsScreen() {
           <EmptyState
             icon="◇"
             title="No buy setups right now"
-            hint="None of the current Multibagger candidates clear the fundamentals + momentum + pattern filters. Hit ⟳ Rebuild later."
+            hint="None of the current Multibagger candidates clear the fundamentals + momentum + pattern filters. Hit ⟳ Update List later."
           />
         ) : null}
 
@@ -334,6 +423,7 @@ export default function RecommendationsScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.bg },
   note: { color: theme.muted, fontSize: theme.fs.sm, paddingHorizontal: theme.sp.lg, paddingBottom: theme.sp.sm },
+  headBtns: { flexDirection: 'row', gap: theme.sp.sm },
   updBtn: {
     backgroundColor: theme.surface2,
     borderColor: theme.border2,
