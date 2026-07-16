@@ -128,10 +128,23 @@ function Score({ label, value }: { label: string; value: number | null }) {
   );
 }
 
+function SetupCell({ label, value, sub, color, compact }: { label: string; value: string; sub?: string; color?: string; compact: boolean }) {
+  return (
+    <View style={[styles.setupCell, compact && styles.setupCellCompact]}>
+      <Text style={styles.setupLbl}>{label}</Text>
+      <Text style={[styles.setupVal, color ? { color } : null]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
+        {value}
+      </Text>
+      {sub ? <Text style={[styles.setupSub, color ? { color } : null]}>{sub}</Text> : null}
+    </View>
+  );
+}
+
 function RecCard({
   r,
   watched,
   alerted,
+  compact,
   onWatch,
   onAlert,
   onChart,
@@ -142,6 +155,7 @@ function RecCard({
   r: Recommendation;
   watched: boolean;
   alerted: boolean;
+  compact: boolean;
   onWatch: () => void;
   onAlert: () => void;
   onChart: () => void;
@@ -163,7 +177,7 @@ function RecCard({
           {r.name ? <Text style={styles.name} numberOfLines={1}>{r.name}</Text> : null}
         </View>
         <View style={styles.confBox}>
-          <Text style={[styles.confVal, { color: c }]}>{r.confidence}</Text>
+          <Text style={[styles.confVal, compact && styles.confValCompact, { color: c }]}>{r.confidence}</Text>
           <Text style={styles.confLbl}>confidence</Text>
         </View>
       </View>
@@ -174,26 +188,12 @@ function RecCard({
         <Score label="PATTERN" value={r.pattern_score} />
       </View>
 
-      {/* trade setup */}
-      <View style={styles.setup}>
-        <View style={styles.setupCell}>
-          <Text style={styles.setupLbl}>ENTRY</Text>
-          <Text style={styles.setupVal}>{money(r.entry)}</Text>
-        </View>
-        <View style={styles.setupCell}>
-          <Text style={styles.setupLbl}>STOP</Text>
-          <Text style={[styles.setupVal, { color: theme.red }]}>{money(r.stop)}</Text>
-          <Text style={[styles.setupSub, { color: theme.red }]}>{signPct(r.stop_pct)}</Text>
-        </View>
-        <View style={styles.setupCell}>
-          <Text style={styles.setupLbl}>TARGET</Text>
-          <Text style={[styles.setupVal, { color: theme.green }]}>{money(r.target)}</Text>
-          <Text style={[styles.setupSub, { color: theme.green }]}>{signPct(r.upside_pct)}</Text>
-        </View>
-        <View style={styles.setupCell}>
-          <Text style={styles.setupLbl}>R : R</Text>
-          <Text style={styles.setupVal}>{r.rr != null ? `${r.rr.toFixed(1)}:1` : '—'}</Text>
-        </View>
+      {/* trade setup — 4-across on desktop, 2×2 grid on mobile */}
+      <View style={[styles.setup, compact && styles.setupCompact]}>
+        <SetupCell label="ENTRY" value={money(r.entry)} compact={compact} />
+        <SetupCell label="STOP" value={money(r.stop)} sub={signPct(r.stop_pct)} color={theme.red} compact={compact} />
+        <SetupCell label="TARGET" value={money(r.target)} sub={signPct(r.upside_pct)} color={theme.green} compact={compact} />
+        <SetupCell label="R : R" value={r.rr != null ? `${r.rr.toFixed(1)}:1` : '—'} compact={compact} />
       </View>
 
       <View style={styles.levels}>
@@ -499,6 +499,7 @@ export default function RecommendationsScreen() {
             <View key={r.symbol} style={isDesktop ? styles.gridCell : undefined}>
               <RecCard
                 r={r}
+                compact={!isDesktop}
                 watched={isWatched(r.symbol)}
                 alerted={hasLocalAlert(alerts, r.symbol)}
                 onWatch={() => onWatch(r)}
@@ -584,6 +585,7 @@ const styles = StyleSheet.create({
   name: { color: theme.muted2, fontSize: theme.fs.sm, marginTop: 3 },
   confBox: { alignItems: 'flex-end' },
   confVal: { fontFamily: theme.mono, fontWeight: '800', fontSize: 30, lineHeight: 32 },
+  confValCompact: { fontSize: 24, lineHeight: 26 },
   confLbl: { color: theme.muted, fontSize: theme.fs.xs },
   scores: { flexDirection: 'row', gap: theme.sp.md },
   scoreCol: { flex: 1, gap: 3 },
@@ -597,7 +599,9 @@ const styles = StyleSheet.create({
     borderRadius: theme.radius.sm + 2,
     paddingVertical: theme.sp.sm,
   },
+  setupCompact: { flexWrap: 'wrap', rowGap: theme.sp.sm, paddingHorizontal: 4 },
   setupCell: { flex: 1, alignItems: 'center', gap: 1 },
+  setupCellCompact: { flexBasis: '50%', flexGrow: 0, flexShrink: 0 },
   setupLbl: { color: theme.muted, fontSize: theme.fs.xs, letterSpacing: 0.5 },
   setupVal: { color: theme.text, fontFamily: theme.mono, fontWeight: '700', fontSize: theme.fs.md },
   setupSub: { fontFamily: theme.mono, fontSize: theme.fs.xs },

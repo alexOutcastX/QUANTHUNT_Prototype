@@ -11,12 +11,25 @@ import {
   ViewStyle,
 } from 'react-native';
 import { theme } from './theme';
+import { useResponsive } from './responsive';
 
 export function Card({ children, style }: { children: React.ReactNode; style?: ViewStyle }) {
   return <View style={[s.card, style]}>{children}</View>;
 }
 
+// On desktop the action row sits inline beside the title; on a phone the title
+// (and its sub-line) would get squeezed and wrap, so the actions drop below it.
 export function ScreenTitle({ title, sub, right }: { title: string; sub?: string; right?: React.ReactNode }) {
+  const { isDesktop } = useResponsive();
+  if (!isDesktop && right) {
+    return (
+      <View style={s.titleCol}>
+        <Text style={s.title}>{title}</Text>
+        {sub ? <Text style={s.sub}>{sub}</Text> : null}
+        <View style={s.titleActions}>{right}</View>
+      </View>
+    );
+  }
   return (
     <View style={s.titleRow}>
       <View style={{ flex: 1 }}>
@@ -138,6 +151,13 @@ const s = StyleSheet.create({
     paddingBottom: theme.sp.md,
     gap: theme.sp.md,
   },
+  titleCol: {
+    paddingHorizontal: theme.sp.lg,
+    paddingTop: theme.sp.lg,
+    paddingBottom: theme.sp.md,
+    gap: theme.sp.sm,
+  },
+  titleActions: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.sp.sm, marginTop: 2 },
   title: { color: theme.text, fontSize: theme.fs.xl, fontWeight: '700', letterSpacing: 0.2 },
   sub: { color: theme.muted, fontSize: theme.fs.sm, marginTop: 3 },
   section: {
