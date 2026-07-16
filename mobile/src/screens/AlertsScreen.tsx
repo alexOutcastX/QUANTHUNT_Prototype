@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { Alert, api } from '../api';
+import { Alert, Quote, api } from '../api';
 import OwnerGate from '../components/OwnerGate';
 import SymbolInput from '../components/SymbolInput';
+import { LocalAlert, loadLocalAlerts, removeLocalAlert } from '../localalerts';
 import { Btn, Card, EmptyState, Loading, ScreenTitle, SectionTitle } from '../ui';
 import { theme } from '../theme';
 
@@ -19,11 +20,95 @@ const labelFor = (t: Alert['type']) => TYPES.find((x) => x.key === t)?.label || 
 export default function AlertsScreen() {
   return (
     <View style={styles.container}>
-      <ScreenTitle title="Alerts" sub="Server-side price / technical alerts" />
-      <OwnerGate title="Alerts">
-        <AlertsInner />
-      </OwnerGate>
+      <ScreenTitle title="Alerts" sub="Live price-target alerts (this device) + server-side technical alerts" />
+      <ScrollView contentContainerStyle={styles.body}>
+        <TargetAlerts />
+        <View style={styles.divider} />
+        <SectionTitle>Server alerts</SectionTitle>
+        <OwnerGate title="Server alerts">
+          <AlertsInner />
+        </OwnerGate>
+      </ScrollView>
     </View>
+  );
+}
+
+// ── On-device price-target alerts with a live "upside remaining" readout ──────
+// Available to every user (the server alerts below are owner-only). Polls live
+// quotes every 30s and recomputes how much upside is left to each target.
+function TargetAlerts() {
+  const [alerts, setAlerts] = useState<LocalAlert[]>([]);
+  const [quotes, setQuotes] = useState<Record<string, Quote>>({});
+
+  useEffect(() => {
+    loadLocalAlerts().then(setAlerts);
+  }, []);
+
+  const symsKey = alerts.map((a) => a.sym).join(',');
+  useEffect(() => {
+    if (!symsKey) {
+      setQuotes({});
+      return;
+    }
+    const syms = symsKey.split(',');
+    const fetch = () => api.ltp(syms).then(setQuotes).catch(() => {});
+    fetch();
+    const id = setInterval(fetch, 30000);
+    return () => clearInterval(id);
+  }, [symsKey]);
+
+  const onDelete = async (id: string) => setAlerts(await removeLocalAlert(alerts, id));
+
+  if (!alerts.length) {
+    return (
+      <>
+        <SectionTitle>Price-target alerts · live upside</SectionTitle>
+        <EmptyState
+          title="No target alerts yet"
+          hint="Tap 🔔 Alert on any Momentum stock — the remaining upside to its target updates live here."
+        />
+      </>
+    );
+  }
+
+  return (
+    <>
+      <SectionTitle>Price-target alerts · live upside</SectionTitle>
+      {alerts.map((a) => {
+        const price = quotes[a.sym]?.price ?? null;
+        const remaining = price != null && price > 0 ? ((a.target - price) / price) * 100 : null;
+        const reached = remaining != null && remaining <= 0;
+        return (
+          <Card key={a.id} style={styles.alertCard}>
+            <View style={styles.alertHead}>
+              <Text style={styles.alertSym}>{a.sym}</Text>
+              <Text style={styles.alertRule}>target ₹{a.target.toLocaleString('en-IN')}</Text>
+              <View style={{ flex: 1 }} />
+              {reached ? (
+                <Text style={styles.fired}>● TARGET HIT</Text>
+              ) : remaining != null ? (
+                <Text style={styles.upBig}>+{remaining.toFixed(1)}%</Text>
+              ) : (
+                <Text style={styles.armed}>…</Text>
+              )}
+            </View>
+            <View style={styles.tgtRow}>
+              <Text style={styles.tgtStat}>LTP {price != null ? '₹' + price.toLocaleString('en-IN') : '—'}</Text>
+              <Text style={styles.tgtStat}>entry ₹{a.entryPrice.toLocaleString('en-IN')}</Text>
+              <Text style={styles.tgtStat}>
+                upside remaining {remaining != null ? (remaining > 0 ? '+' + remaining.toFixed(1) + '%' : 'reached ✓') : '—'}
+              </Text>
+            </View>
+            <View style={styles.alertActions}>
+              <TouchableOpacity onPress={() => onDelete(a.id)} activeOpacity={0.7}>
+                <Text style={[styles.action, { color: theme.red }]}>remove</Text>
+              </TouchableOpacity>
+            </View>
+          </Card>
+        );
+      })}
+      <Text style={styles.note}>Upside remaining updates from live quotes every 30 seconds.</Text>
+    </>
   );
 }
 
@@ -69,7 +154,7 @@ function AlertsInner() {
   const unit = TYPES.find((t) => t.key === type)?.unit || '';
 
   return (
-    <ScrollView contentContainerStyle={styles.body}>
+    <View>
       <SectionTitle>New alert</SectionTitle>
       <Card>
         <SymbolInput
@@ -147,7 +232,7 @@ function AlertsInner() {
         Alerts evaluate on the server. "Check now" pulls live quotes and fires matches; a configured
         ALERT_WEBHOOK receives fired alerts (push/email need SMTP/FCM setup).
       </Text>
-    </ScrollView>
+    </View>
   );
 }
 
@@ -190,4 +275,8 @@ const styles = StyleSheet.create({
   alertActions: { flexDirection: 'row', gap: theme.sp.lg, marginTop: theme.sp.sm },
   action: { color: theme.muted2, fontSize: theme.fs.sm, fontWeight: '700' },
   note: { color: theme.muted, fontSize: theme.fs.sm, marginTop: theme.sp.lg, lineHeight: 18 },
+  divider: { height: 1, backgroundColor: theme.border, marginVertical: theme.sp.lg },
+  upBig: { color: theme.green, fontSize: theme.fs.md, fontWeight: '800', fontFamily: theme.mono },
+  tgtRow: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.sp.md, marginTop: theme.sp.sm },
+  tgtStat: { color: theme.muted2, fontSize: theme.fs.sm, fontFamily: theme.mono },
 });
