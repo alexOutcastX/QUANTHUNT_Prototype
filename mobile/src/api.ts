@@ -468,6 +468,8 @@ export type MomentumHit = {
   relvol: number | null;
   d200: number | null;
   pct_from_high: number | null;
+  target: number | null;      // nearest overhead target (52w high / pivot)
+  upside_pct: number | null;  // % upside remaining to that target
   setup: 'breakout' | 'fired' | 'pullback';
   score: number;
   probability: number;
