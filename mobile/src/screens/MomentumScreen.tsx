@@ -1,10 +1,11 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { MomentumHit, api } from '../api';
 import StockDetail from '../components/StockDetail';
 import { useResponsive } from '../responsive';
 import { Row } from '../screener';
 import { addSymbol, loadWatchlist, normSymbol, removeSymbol } from '../watchlist';
+import { LocalAlert, addLocalAlert, hasLocalAlert, loadLocalAlerts } from '../localalerts';
 import { capBand } from '../marketcap';
 import { EmptyState, Loading, ScreenTitle } from '../ui';
 import { theme } from '../theme';
@@ -52,8 +53,9 @@ const COLS: ColDef[] = [
   { key: 'relvol', label: 'RVOL', w: 58 },
   { key: 'd200', label: 'VS 200DMA', w: 82 },
   { key: 'pct_from_high', label: '52W HI', w: 68 },
+  { key: 'upside_pct', label: 'UPSIDE', w: 72 },
 ];
-const ACTIONS_W = 96;
+const ACTIONS_W = 142;
 const TABLE_W = COLS.reduce((a, c) => a + c.w, 0) + ACTIONS_W;
 
 // Mobile sort options (headers are gone on the card layout).
@@ -64,6 +66,7 @@ const MOBILE_SORTS: { key: ColKey; label: string }[] = [
   { key: 'relvol', label: 'RVol' },
   { key: 'rsi', label: 'RSI' },
   { key: 'price', label: 'LTP' },
+  { key: 'upside_pct', label: 'Upside' },
   { key: 'cap', label: 'Cap' },
   { key: 'sector', label: 'Sector' },
 ];
@@ -128,11 +131,29 @@ export default function MomentumScreen() {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [detail, setDetail] = useState<Row | null>(null);
   const [watch, setWatch] = useState<string[]>([]);
+  const [alerts, setAlerts] = useState<LocalAlert[]>([]);
+  const [flash, setFlash] = useState('');
+  const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { isDesktop } = useResponsive();
 
   useEffect(() => {
     loadWatchlist().then(setWatch);
+    loadLocalAlerts().then(setAlerts);
   }, []);
+
+  const toast = (m: string) => {
+    setFlash(m);
+    if (flashTimer.current) clearTimeout(flashTimer.current);
+    flashTimer.current = setTimeout(() => setFlash(''), 2200);
+  };
+  const isAlerted = (sym: string) => hasLocalAlert(alerts, sym);
+  const onAlert = async (h: MomentumHit) => {
+    const tgt = h.target ?? (h.price != null ? h.price * 1.1 : null);
+    if (tgt == null || h.price == null) return;
+    setAlerts(await addLocalAlert(alerts, h.symbol, tgt, h.price, h.name));
+    const up = h.upside_pct != null ? ` · ${h.upside_pct >= 0 ? '+' : ''}${h.upside_pct.toFixed(1)}% upside` : '';
+    toast(`Alert set for ${h.symbol} → ₹${tgt.toLocaleString('en-IN')}${up}`);
+  };
 
   const forceRefresh = () => {
     if (loading) return;
@@ -392,9 +413,15 @@ export default function MomentumScreen() {
                       <Text style={[styles.cellR, { width: 58 }]}>{h.relvol != null ? h.relvol.toFixed(2) + 'x' : '—'}</Text>
                       <Text style={[styles.cellR, { width: 82, color: (h.d200 ?? 0) >= 0 ? theme.green : theme.red }]}>{pct(h.d200)}</Text>
                       <Text style={[styles.cellR, { width: 68, color: theme.red }]}>{pct(h.pct_from_high)}</Text>
+                      <Text style={[styles.cellR, { width: 72, color: (h.upside_pct ?? 0) > 0 ? theme.green : theme.muted }]}>
+                        {h.upside_pct != null ? '+' + h.upside_pct.toFixed(1) + '%' : '—'}
+                      </Text>
                       <View style={[styles.actions, { width: ACTIONS_W }]}>
                         <TouchableOpacity style={styles.aBtn} onPress={() => openChart(h)} activeOpacity={0.75}>
                           <Text style={styles.aTxt}>Chart</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity style={styles.aBtn} onPress={() => onAlert(h)} activeOpacity={0.75}>
+                          <Text style={[styles.aTxt, isAlerted(h.symbol) && { color: GOLD }]}>{isAlerted(h.symbol) ? '🔔' : 'Alert'}</Text>
                         </TouchableOpacity>
                         <TouchableOpacity style={styles.aBtn} onPress={() => toggleWatch(h.symbol)} activeOpacity={0.75}>
                           <Text style={[styles.aTxt, isWatched(h.symbol) && { color: theme.green }]}>{isWatched(h.symbol) ? '★' : '☆'}</Text>
@@ -440,10 +467,20 @@ export default function MomentumScreen() {
                       <Text style={styles.cardStat}>RSI {h.rsi != null ? h.rsi.toFixed(0) : '—'}</Text>
                       <Text style={styles.cardStat}>{h.relvol != null ? h.relvol.toFixed(2) + 'x' : '—'}</Text>
                       <Text style={[styles.cardStat, { color: (h.d200 ?? 0) >= 0 ? theme.green : theme.red }]}>200DMA {pct(h.d200)}</Text>
+                      {h.upside_pct != null ? (
+                        <Text style={[styles.cardStat, { color: h.upside_pct > 0 ? theme.green : theme.muted }]}>
+                          ▲ {h.upside_pct > 0 ? '+' + h.upside_pct.toFixed(1) + '%' : 'extended'} upside
+                        </Text>
+                      ) : null}
                     </View>
                     <View style={styles.cardActions}>
                       <TouchableOpacity style={styles.aBtn} onPress={() => openChart(h)} activeOpacity={0.75}>
                         <Text style={styles.aTxt}>Chart</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity style={styles.aBtn} onPress={() => onAlert(h)} activeOpacity={0.75}>
+                        <Text style={[styles.aTxt, isAlerted(h.symbol) && { color: GOLD }]}>
+                          {isAlerted(h.symbol) ? '🔔 Alerted' : '🔔 Alert'}
+                        </Text>
                       </TouchableOpacity>
                       <TouchableOpacity style={styles.aBtn} onPress={() => toggleWatch(h.symbol)} activeOpacity={0.75}>
                         <Text style={[styles.aTxt, isWatched(h.symbol) && { color: theme.green }]}>
@@ -470,6 +507,11 @@ export default function MomentumScreen() {
       </ScrollView>
 
       {detail ? <StockDetail row={detail} onClose={() => setDetail(null)} /> : null}
+      {flash ? (
+        <View style={styles.toast} pointerEvents="none">
+          <Text style={styles.toastTxt}>{flash}</Text>
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -614,4 +656,17 @@ const styles = StyleSheet.create({
   cauTxt: { color: GOLD, fontSize: theme.fs.sm, lineHeight: 19 },
   sigBody: { color: theme.text },
   method: { color: theme.muted, fontSize: theme.fs.xs + 1, lineHeight: 16, padding: theme.sp.lg },
+  toast: {
+    position: 'absolute',
+    bottom: theme.sp.xl,
+    alignSelf: 'center',
+    backgroundColor: theme.surface3,
+    borderColor: theme.border2,
+    borderWidth: 1,
+    borderRadius: theme.radius.md,
+    paddingHorizontal: theme.sp.lg,
+    paddingVertical: theme.sp.sm + 2,
+    maxWidth: '92%',
+  },
+  toastTxt: { color: theme.text, fontSize: theme.fs.sm + 1, fontWeight: '600' },
 });

@@ -301,10 +301,27 @@ def _run(universe_fn):
                 t = _scanner._compute_row(it["symbol"], idx_ret, it["suffix"])
                 read = classify(t) if t else None
                 if read:
+                    # Upside potential remaining: room to the nearest overhead
+                    # target — the 52-week high (major resistance) for stocks
+                    # below it, else the next resistance pivot / Camarilla band
+                    # for those already breaking out. 0 when already extended
+                    # above every known level.
+                    price = t.get("price")
+                    target = None
+                    upside_pct = None
+                    if price and price > 0:
+                        cands = [x for x in (t.get("high52"), t.get("r3"), t.get("cam_h4"))
+                                 if x and x > price]
+                        if cands:
+                            target = round(max(cands), 2)
+                            upside_pct = round((target - price) / price * 100, 2)
+                        else:
+                            upside_pct = 0.0
                     hit = {"symbol": it["symbol"], "name": it["name"], "exchange": it["exchange"],
-                           "price": t.get("price"), "chg": t.get("chg"), "rsi": t.get("rsi"),
+                           "price": price, "chg": t.get("chg"), "rsi": t.get("rsi"),
                            "relvol": t.get("relvol"), "d200": t.get("d200"),
-                           "pct_from_high": t.get("pct_from_high"), **read}
+                           "pct_from_high": t.get("pct_from_high"),
+                           "target": target, "upside_pct": upside_pct, **read}
             except Exception:
                 pass
             with _lock:
