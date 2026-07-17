@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Linking, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { API_BASE, EntityGraph, EntityNode, FlowEdge, api } from '../api';
+import { API_BASE, EntityGraph, EntityNode, FlowEdge, Shareholding, api } from '../api';
 import SymbolInput from '../components/SymbolInput';
 import { Card, EmptyState, Loading, ScreenTitle, SectionTitle } from '../ui';
 import { theme } from '../theme';
@@ -17,6 +17,7 @@ const compact = (v: number | null | undefined) => {
   return s + Math.round(a);
 };
 const price = (v: number | null) => (v == null ? '—' : '₹' + v.toLocaleString('en-IN'));
+const GOLD = '#e0a92e';
 
 export default function EntityGraphScreen() {
   const [mode, setMode] = useState<Mode>('institutions');
@@ -27,6 +28,7 @@ export default function EntityGraphScreen() {
   const [symInput, setSymInput] = useState('TATASTEEL');
   const [sym, setSym] = useState('');
   const [flows, setFlows] = useState<FlowEdge[] | null | undefined>(undefined);
+  const [shp, setShp] = useState<Shareholding | null | undefined>(undefined);
 
   // Free-text filter for the institutions list (by name or id).
   const [entQuery, setEntQuery] = useState('');
@@ -62,11 +64,13 @@ export default function EntityGraphScreen() {
   );
 
   const loadSymbol = (s: string) => {
-    const v = s.trim().toUpperCase().replace(/^NSE:/, '');
+    const v = s.trim().toUpperCase().replace(/^(NSE|BSE):/, '');
     if (!v) return;
     setSym(v);
     setFlows(undefined);
+    setShp(undefined);
     api.symbolFlows(v).then((r) => setFlows(r.flows)).catch(() => setFlows(null));
+    api.corpShareholding(v).then((r) => setShp(r.latest)).catch(() => setShp(null));
   };
 
   return (
@@ -158,24 +162,70 @@ export default function EntityGraphScreen() {
             </>
           )
         ) : /* stock pivot */ !sym ? (
-          <EmptyState icon="⌕" title="Enter a symbol" hint="See every shareholder that holds/traded it, net flow, and the cited deals." />
-        ) : flows === undefined ? (
-          <Loading label={`Finding shareholders in ${sym}…`} />
-        ) : !flows || !flows.length ? (
-          <EmptyState title={`No bulk/block deals for ${sym}`} hint="Recent sessions only; grounded in NSE records." />
+          <EmptyState icon="⌕" title="Enter a symbol" hint="See the ownership split (promoter / FII / DII / public), plus who traded it and the cited deals." />
         ) : (
           <>
-            <SectionTitle>{sym} · shareholder flow</SectionTitle>
-            {flows.map((e, i) => (
-              <EdgeCard key={i} e={e} show="entity" />
-            ))}
+            {/* 1 · Ownership split — the authoritative "who holds it" answer. */}
+            <SectionTitle>{sym} · shareholding pattern</SectionTitle>
+            {shp === undefined ? (
+              <Loading label={`Loading ${sym} ownership…`} />
+            ) : !shp || (shp.promoter == null && shp.fii == null && shp.dii == null && shp.public == null) ? (
+              <Text style={styles.none}>
+                Ownership split unavailable for {sym}. The quarterly pattern is sourced from NSE
+                filings — BSE-only scrips and freshly listed names may not be covered yet.
+              </Text>
+            ) : (
+              <SharePattern s={shp} />
+            )}
+
+            {/* 2 · Recent large trades — who's been accumulating / distributing. */}
+            <SectionTitle>Recent large trades</SectionTitle>
+            {flows === undefined ? (
+              <Loading label={`Finding shareholders active in ${sym}…`} />
+            ) : !flows || !flows.length ? (
+              <Text style={styles.none}>
+                No bulk/block deals for {sym} in recent sessions — grounded in NSE records.
+              </Text>
+            ) : (
+              flows.map((e, i) => <EdgeCard key={i} e={e} show="entity" />)
+            )}
             <Text style={styles.note}>
-              Grounded in NSE bulk/block deal records — each link is cited and dated.
+              Ownership split from NSE quarterly shareholding filings; large-trade flow from NSE
+              bulk/block deal records — each link cited and dated.
             </Text>
           </>
         )}
       </ScrollView>
     </View>
+  );
+}
+
+// The quarterly ownership split — promoter / FII / DII / public as labelled bars.
+function SharePattern({ s }: { s: Shareholding }) {
+  const rows = (
+    [
+      { k: 'Promoters', v: s.promoter, c: theme.accent },
+      { k: 'FII', v: s.fii, c: theme.green },
+      { k: 'DII', v: s.dii, c: GOLD },
+      { k: 'Public', v: s.public, c: theme.muted2 },
+    ] as { k: string; v: number | null; c: string }[]
+  ).filter((r) => r.v != null) as { k: string; v: number; c: string }[];
+  return (
+    <Card style={styles.pat}>
+      {s.date ? <Text style={styles.patDate}>As of {s.date}</Text> : null}
+      {rows.map((r) => (
+        <View key={r.k} style={styles.patRow}>
+          <Text style={styles.patLbl}>{r.k}</Text>
+          <View style={styles.patTrack}>
+            <View style={[styles.patFill, { width: `${Math.max(1, Math.min(100, r.v))}%`, backgroundColor: r.c }]} />
+          </View>
+          <Text style={styles.patVal}>{r.v.toFixed(2)}%</Text>
+        </View>
+      ))}
+      {s.pledge != null && s.pledge > 0 ? (
+        <Text style={styles.patPledge}>⚠ Promoter pledge {s.pledge.toFixed(2)}%</Text>
+      ) : null}
+    </Card>
   );
 }
 
@@ -305,7 +355,15 @@ const styles = StyleSheet.create({
   entName: { color: theme.text, fontSize: theme.fs.md, fontWeight: '700' },
   entMeta: { color: theme.muted2, fontSize: theme.fs.sm, marginTop: 2 },
   chev: { color: theme.muted2, fontSize: 22, width: 24, textAlign: 'center' },
-  none: { color: theme.muted, fontSize: theme.fs.sm, paddingVertical: theme.sp.md },
+  none: { color: theme.muted, fontSize: theme.fs.sm, paddingVertical: theme.sp.md, lineHeight: 18 },
+  pat: { marginTop: theme.sp.sm, marginBottom: theme.sp.sm, gap: theme.sp.sm },
+  patDate: { color: theme.muted, fontFamily: theme.mono, fontSize: theme.fs.xs + 1, marginBottom: 2 },
+  patRow: { flexDirection: 'row', alignItems: 'center', gap: theme.sp.sm },
+  patLbl: { color: theme.muted2, fontSize: theme.fs.sm, width: 78 },
+  patTrack: { flex: 1, height: 8, borderRadius: 4, backgroundColor: theme.surface2, overflow: 'hidden' },
+  patFill: { height: 8, borderRadius: 4 },
+  patVal: { color: theme.text, fontFamily: theme.mono, fontSize: theme.fs.sm, fontWeight: '700', width: 62, textAlign: 'right' },
+  patPledge: { color: theme.red, fontSize: theme.fs.sm, fontWeight: '700', marginTop: 2 },
   edge: { marginTop: theme.sp.sm, marginBottom: theme.sp.xs },
   edgeHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   edgeTitle: { color: theme.text, fontFamily: theme.mono, fontSize: theme.fs.md, fontWeight: '700', flex: 1 },

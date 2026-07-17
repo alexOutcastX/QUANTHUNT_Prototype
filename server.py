@@ -181,6 +181,72 @@ def _load_bhavcopy():
     return [], None
 
 
+BSE_BASE = "https://www.bseindia.com"
+BSE_HEADERS = {
+    "User-Agent": HEADERS["User-Agent"],
+    "Accept": "text/csv,application/csv,*/*",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Referer": "https://www.bseindia.com/",
+}
+_BSE_SYM_OK = set("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789&.-")
+
+
+def _load_bse():
+    """BSE-listed equities from the daily cash-market bhavcopy, so BSE-only
+    scrips (e.g. CIANAGRO) that never list on the NSE are still searchable.
+
+    Best-effort: any failure returns an empty list and the universe simply
+    stays NSE-only — the BSE names are additive, never required.
+    """
+    sess = requests.Session()
+    sess.headers.update(BSE_HEADERS)
+    try:                                   # warm cookies like the NSE session
+        sess.get(BSE_BASE, timeout=8)
+    except Exception:
+        pass
+    today = datetime.date.today()
+    for delta in range(7):                 # walk back over weekends/holidays
+        d = today - datetime.timedelta(days=delta)
+        url = (BSE_BASE + "/download/BhavCopy/Equity/"
+               f"BhavCopy_BSE_CM_0_0_0_{d.strftime('%Y%m%d')}_F_0000.CSV")
+        try:
+            r = sess.get(url, timeout=20)
+            if r.status_code != 200 or not r.text or "," not in r.text[:200]:
+                continue
+            reader = csv.DictReader(io.StringIO(r.text))
+            cols = {(f or "").strip(): f for f in (reader.fieldnames or [])}
+            sym_c = cols.get("TckrSymb")
+            nam_c = cols.get("FinInstrmNm")
+            typ_c = cols.get("FinInstrmTp")
+            cls_c = cols.get("ClsPric")
+            opt_c = cols.get("OptnTp")
+            if not sym_c:
+                continue
+            out = []
+            for row in reader:
+                sym = (row.get(sym_c) or "").strip().upper()
+                if not sym or any(ch not in _BSE_SYM_OK for ch in sym):
+                    continue
+                if opt_c and (row.get(opt_c) or "").strip():
+                    continue           # skip derivatives — cash equities only
+                if typ_c:
+                    t = (row.get(typ_c) or "").strip().upper()
+                    if t and t not in ("STK", "EQ", "EQUITY", "E"):
+                        continue
+                try:
+                    price = float((row.get(cls_c) or "0").strip()) if cls_c else 0.0
+                except Exception:
+                    price = 0.0
+                name = (row.get(nam_c) or "").strip() if nam_c else ""
+                out.append({"symbol": sym, "exchange": "BSE", "price": price, "name": name})
+            log.info("BSE bhavcopy %s: %d equity scrips", d, len(out))
+            if out:
+                return out
+        except Exception as e:
+            log.warning("BSE bhavcopy %s failed: %s", d, e)
+    return []
+
+
 def _load_microcap():
     """Pull NIFTY MICROCAP 250 constituents (with company names when present)."""
     try:
@@ -238,6 +304,12 @@ def get_universe():
         micro = _load_microcap()
         seen = {item["symbol"] for item in bhav}
         for item in micro:
+            if item["symbol"] not in seen:
+                bhav.append(item)
+                seen.add(item["symbol"])
+        # BSE-exclusive scrips (never listed on NSE) so they're searchable too.
+        # NSE stays authoritative — a symbol already seen keeps its NSE entry.
+        for item in _load_bse():
             if item["symbol"] not in seen:
                 bhav.append(item)
                 seen.add(item["symbol"])
