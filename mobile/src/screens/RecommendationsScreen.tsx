@@ -9,6 +9,7 @@ import { addSymbol, loadWatchlist, normSymbol } from '../watchlist';
 import { LocalAlert, addLocalAlert, hasLocalAlert, loadLocalAlerts } from '../localalerts';
 import { loadNames } from './ScreenerScreen';
 import ShortTermScreen from './ShortTermScreen';
+import InstitutionalScreen from './InstitutionalScreen';
 import { useResponsive } from '../responsive';
 import { printHtmlDocument } from '../pdf';
 import { Card, EmptyState, ScreenTitle } from '../ui';
@@ -530,14 +531,17 @@ function LongTermRecs() {
   );
 }
 
-// The Recommendations page hosts two lists: the long-term multibagger buy setups
-// and a short-term swing tab (mid & large caps near a pullback reversal). A
-// segmented toggle switches between them; each keeps its own persistent cache.
+// The Recommendations page hosts three lists: the long-term multibagger buy
+// setups, a short-term swing tab (pullback reversals), and an Institutional tab
+// that screens by algorithmic strategy. A segmented toggle switches between
+// them; each keeps its own persistent cache.
+type RecMode = 'long' | 'short' | 'inst';
 export default function RecommendationsScreen() {
-  const [mode, setMode] = useState<'long' | 'short'>('long');
-  const TABS: { key: 'long' | 'short'; label: string }[] = [
+  const [mode, setMode] = useState<RecMode>('long');
+  const TABS: { key: RecMode; label: string }[] = [
     { key: 'long', label: 'Long term' },
     { key: 'short', label: 'Short term' },
+    { key: 'inst', label: 'Institutional' },
   ];
   return (
     <View style={styles.container}>
@@ -555,7 +559,9 @@ export default function RecommendationsScreen() {
           ))}
         </View>
       </View>
-      <View style={{ flex: 1 }}>{mode === 'short' ? <ShortTermScreen /> : <LongTermRecs />}</View>
+      <View style={{ flex: 1 }}>
+        {mode === 'short' ? <ShortTermScreen /> : mode === 'inst' ? <InstitutionalScreen /> : <LongTermRecs />}
+      </View>
     </View>
   );
 }
