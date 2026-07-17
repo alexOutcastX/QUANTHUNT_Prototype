@@ -518,6 +518,41 @@ export type SwingRec = {
   error?: string;
 };
 
+// Institutional / algorithmic strategy screen (from /institutional).
+export type StrategyHit = { key: string; label: string; score: number; note: string };
+export type InstitutionalRec = {
+  symbol: string;
+  name?: string | null;
+  action: 'BUY' | 'WATCH' | 'AVOID' | 'SKIP';
+  qualifies: boolean;
+  score: number;
+  strategies: StrategyHit[];
+  primary: string;
+  primary_key: string | null;
+  matched_count: number;
+  trend: 'up' | 'down' | 'side';
+  momentum: number;
+  rsi: number;
+  price: number;
+  entry: number;
+  stop: number;
+  stop_pct: number;
+  target: number;
+  upside_pct: number;
+  rr: number | null;
+  eta_days?: number | null;
+  eta?: string | null;
+  support: number;
+  resistance: number;
+  max_dd: number;
+  ret_3m?: number;
+  ret_6m?: number;
+  ret_12m?: number;
+  reasons: string[];
+  note?: string;
+  error?: string;
+};
+
 // Full NSE+BSE momentum radar (from /momentum/screen).
 export type MomentumHit = {
   symbol: string;
@@ -677,6 +712,11 @@ export const api = {
   swing: (symbol: string, name?: string) =>
     getJson<SwingRec>(
       `/swing?symbol=${encodeURIComponent(symbol)}` + (name ? `&name=${encodeURIComponent(name)}` : ''),
+      45000,
+    ),
+  institutional: (symbol: string, name?: string) =>
+    getJson<InstitutionalRec>(
+      `/institutional?symbol=${encodeURIComponent(symbol)}` + (name ? `&name=${encodeURIComponent(name)}` : ''),
       45000,
     ),
   momentumScreen: (refresh = false) =>

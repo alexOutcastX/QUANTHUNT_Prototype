@@ -1257,6 +1257,54 @@ def swing():
         return jsonify({"error": str(e), "symbol": sym, "action": "SKIP", "qualifies": False}), 503
 
 
+_BENCH_CACHE: dict = {}   # index-close series for the stat-arb relative-value read
+_BENCH_TTL = 3600
+
+
+def _bench_closes():
+    """1-year daily closes for NIFTY 50 (^NSEI), cached hourly. Used as the
+    market benchmark for the statistical-arbitrage relative-value strategy.
+    Returns [] on failure so the strategy simply sits out."""
+    hit = _BENCH_CACHE.get("nsei")
+    if hit and (time.time() - hit[0]) < _BENCH_TTL:
+        return hit[1]
+    closes = []
+    try:
+        df = yf.Ticker("^NSEI").history(period="1y", interval="1d", auto_adjust=True)
+        if df is not None and not df.empty:
+            closes = [float(x) for x in df["Close"].tolist() if x == x]
+    except Exception as e:
+        log.warning("Benchmark (^NSEI) fetch failed: %s", e)
+    _BENCH_CACHE["nsei"] = (time.time(), closes)
+    return closes
+
+
+@app.route("/institutional")
+def institutional():
+    """Screen one symbol against the classic algorithmic-trading strategies
+    (momentum, trend-following, breakout, mean-reversion, statistical arbitrage)
+    and return which strategy(ies) flagged it plus a trade setup. The client fans
+    this out over NIFTY 200 constituents to build the Institutional list."""
+    from institutional import analyze
+
+    sym = request.args.get("symbol", "").strip().upper().replace(":", "")
+    if not sym:
+        return jsonify({"error": "symbol required"}), 400
+    name = request.args.get("name") or None
+    try:
+        candles = _load_ohlc(sym, "2y", "1d")
+        if not candles:
+            return jsonify({"symbol": sym, "action": "SKIP", "qualifies": False,
+                            "strategies": [], "note": f"No price history for {sym}"}), 404
+        res = analyze(sym, candles, bench_closes=_bench_closes(), name=name)
+        res["symbol"] = sym
+        return jsonify(res)
+    except Exception as e:
+        log.error("Institutional error for %s: %s", sym, e)
+        return jsonify({"error": str(e), "symbol": sym, "action": "SKIP",
+                        "qualifies": False, "strategies": []}), 503
+
+
 _MB_CACHE: dict = {}   # symbol -> (epoch, payload); refreshed every 6h
 _MB_TTL = 6 * 3600
 
