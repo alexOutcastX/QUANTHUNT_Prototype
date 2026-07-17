@@ -1305,6 +1305,33 @@ def institutional():
                         "qualifies": False, "strategies": []}), 503
 
 
+@app.route("/smc")
+def smc_route():
+    """Screen one symbol against the ICT / Smart-Money-Concepts long models
+    (liquidity sweep reversal, AMD/Power-of-3, market-maker model, Algo-Candle/
+    FVG, breaker/rejection block, HVI, divergence) with a confluence score and
+    the book's structural stop/target rules. The client fans this over NIFTY 200
+    to build the HFT/ICT/SMC list. Long-biased; daily structure only."""
+    from smc import analyze
+
+    sym = request.args.get("symbol", "").strip().upper().replace(":", "")
+    if not sym:
+        return jsonify({"error": "symbol required"}), 400
+    name = request.args.get("name") or None
+    try:
+        candles = _load_ohlc(sym, "2y", "1d")
+        if not candles:
+            return jsonify({"symbol": sym, "action": "SKIP", "qualifies": False,
+                            "strategies": [], "note": f"No price history for {sym}"}), 404
+        res = analyze(sym, candles, name=name)
+        res["symbol"] = sym
+        return jsonify(res)
+    except Exception as e:
+        log.error("SMC error for %s: %s", sym, e)
+        return jsonify({"error": str(e), "symbol": sym, "action": "SKIP",
+                        "qualifies": False, "strategies": []}), 503
+
+
 _MB_CACHE: dict = {}   # symbol -> (epoch, payload); refreshed every 6h
 _MB_TTL = 6 * 3600
 
