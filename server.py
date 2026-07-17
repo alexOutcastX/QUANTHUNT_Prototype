@@ -1159,6 +1159,32 @@ def recommendation():
         return jsonify({"error": str(e), "symbol": sym, "action": "SKIP"}), 503
 
 
+@app.route("/swing")
+def swing():
+    """Short-term (swing) trade read for one symbol: detects a pullback-reversal
+    or oversold-bounce setup and returns a probability score + trade setup
+    (entry/stop/target/R:R) plus trend, momentum, upside and max drawdown. The
+    client fans this out over NIFTY 200 constituents (mid & large caps) to build
+    the short-term recommendations list."""
+    from swing import analyze
+
+    sym = request.args.get("symbol", "").strip().upper().replace(":", "")
+    if not sym:
+        return jsonify({"error": "symbol required"}), 400
+    name = request.args.get("name") or None
+    try:
+        candles = _load_ohlc(sym, "1y", "1d")
+        if not candles:
+            return jsonify({"symbol": sym, "action": "SKIP", "qualifies": False,
+                            "note": f"No price history for {sym}"}), 404
+        res = analyze(sym, candles, name)
+        res["symbol"] = sym
+        return jsonify(res)
+    except Exception as e:
+        log.error("Swing error for %s: %s", sym, e)
+        return jsonify({"error": str(e), "symbol": sym, "action": "SKIP", "qualifies": False}), 503
+
+
 _MB_CACHE: dict = {}   # symbol -> (epoch, payload); refreshed every 6h
 _MB_TTL = 6 * 3600
 

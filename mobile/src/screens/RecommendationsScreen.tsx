@@ -8,6 +8,7 @@ import { navigate } from '../navIntent';
 import { addSymbol, loadWatchlist, normSymbol } from '../watchlist';
 import { LocalAlert, addLocalAlert, hasLocalAlert, loadLocalAlerts } from '../localalerts';
 import { loadNames } from './ScreenerScreen';
+import ShortTermScreen from './ShortTermScreen';
 import { useResponsive } from '../responsive';
 import { Card, EmptyState, ScreenTitle } from '../ui';
 import { theme } from '../theme';
@@ -254,7 +255,7 @@ function timeAgo(ms: number | null): string {
   return `${Math.floor(s / 86400)}d ago`;
 }
 
-export default function RecommendationsScreen() {
+function LongTermRecs() {
   const [recs, setRecs] = useState<Recommendation[]>(() => getCache()?.recs || []);
   const [scanning, setScanning] = useState(false);
   const [progress, setProgress] = useState<{ done: number; total: number }>({ done: 0, total: 0 });
@@ -532,8 +533,44 @@ export default function RecommendationsScreen() {
   );
 }
 
+// The Recommendations page hosts two lists: the long-term multibagger buy setups
+// and a short-term swing tab (mid & large caps near a pullback reversal). A
+// segmented toggle switches between them; each keeps its own persistent cache.
+export default function RecommendationsScreen() {
+  const [mode, setMode] = useState<'long' | 'short'>('long');
+  const TABS: { key: 'long' | 'short'; label: string }[] = [
+    { key: 'long', label: 'Long term' },
+    { key: 'short', label: 'Short term' },
+  ];
+  return (
+    <View style={styles.container}>
+      <View style={styles.modeBarWrap}>
+        <View style={styles.modeBar}>
+          {TABS.map((t) => (
+            <TouchableOpacity
+              key={t.key}
+              style={[styles.modeBtn, mode === t.key && styles.modeBtnOn]}
+              onPress={() => setMode(t.key)}
+              activeOpacity={0.75}
+            >
+              <Text style={[styles.modeTxt, mode === t.key && styles.modeTxtOn]}>{t.label}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </View>
+      <View style={{ flex: 1 }}>{mode === 'short' ? <ShortTermScreen /> : <LongTermRecs />}</View>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.bg },
+  modeBarWrap: { paddingHorizontal: theme.sp.lg, paddingTop: theme.sp.md, paddingBottom: theme.sp.xs },
+  modeBar: { flexDirection: 'row', backgroundColor: theme.surface2, borderRadius: 999, padding: 3, alignSelf: 'flex-start' },
+  modeBtn: { borderRadius: 999, paddingVertical: 6, paddingHorizontal: theme.sp.lg },
+  modeBtnOn: { backgroundColor: theme.accent },
+  modeTxt: { color: theme.muted2, fontSize: theme.fs.sm, fontWeight: '700' },
+  modeTxtOn: { color: theme.onAccent },
   note: { color: theme.muted, fontSize: theme.fs.sm, paddingHorizontal: theme.sp.lg, paddingBottom: theme.sp.sm },
   headBtns: { flexDirection: 'row', gap: theme.sp.sm },
   depthRow: {
