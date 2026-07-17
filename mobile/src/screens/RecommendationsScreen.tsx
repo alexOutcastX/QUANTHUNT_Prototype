@@ -10,6 +10,7 @@ import { LocalAlert, addLocalAlert, hasLocalAlert, loadLocalAlerts } from '../lo
 import { loadNames } from './ScreenerScreen';
 import ShortTermScreen from './ShortTermScreen';
 import { useResponsive } from '../responsive';
+import { printHtmlDocument } from '../pdf';
 import { Card, EmptyState, ScreenTitle } from '../ui';
 import { theme } from '../theme';
 import {
@@ -40,12 +41,13 @@ const htmlEsc = (v: unknown): string =>
   v == null ? '' : String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
 // Build a print-ready (black-on-white) buy-recommendations report and hand it to
-// the browser's print / "Save as PDF" dialog. Web only; native shares a text
-// digest instead. No extra deps — mirrors the app's other PDF exports.
+// the platform print / "Save as PDF" dialog — which downloads a real PDF on
+// desktop AND inside the Android WebView (see printHtmlDocument). Only a true
+// native RN runtime with no DOM falls back to sharing a text digest.
 async function exportRecommendationsPdf(recs: Recommendation[], summary: string): Promise<void> {
-  const win = (globalThis as { window?: any }).window;
-  if (!win?.open) {
-    // native: share a compact text summary
+  const doc = (globalThis as { document?: any }).document;
+  if (!doc?.body) {
+    // true native RN (no DOM): share a compact text summary
     const { Share } = await import('react-native');
     const lines = recs.map(
       (r) =>
@@ -54,8 +56,6 @@ async function exportRecommendationsPdf(recs: Recommendation[], summary: string)
     await Share.share({ title: 'TaurEye — Buy Recommendations', message: `TaurEye — Buy Recommendations\n${summary}\n\n${lines.join('\n')}` });
     return;
   }
-  const w = win.open('', '_blank');
-  if (!w) return; // popup blocked
   const dateStr = new Date().toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
   const card = (r: Recommendation) => {
     const rr = r.rr != null ? `${r.rr.toFixed(1)}:1` : '—';
@@ -93,23 +93,14 @@ async function exportRecommendationsPdf(recs: Recommendation[], summary: string)
     `.why{margin:0;padding-left:18px;color:#333;font-size:11px}.why li{margin:1px 0}` +
     `.disc{color:#999;font-size:10px;margin-top:14px;border-top:1px solid #eee;padding-top:8px}` +
     `</style>`;
-  w.document.write(
+  const html =
     `<html><head><title>TaurEye — Buy Recommendations</title>${css}</head><body>` +
-      `<h1>TaurEye — Buy Recommendations</h1>` +
-      `<p class="meta">${htmlEsc(dateStr)} · ${htmlEsc(summary)}</p>` +
-      recs.map(card).join('') +
-      `<p class="disc">Confidence blends the Multibagger analyser (fundamentals), a live momentum read and the current chart pattern. Entry/stop/target come from pivot &amp; swing structure with a capped risk band. Indicative and educational only — not investment advice; always confirm and manage risk.</p>` +
-      `</body></html>`,
-  );
-  w.document.close();
-  w.focus();
-  setTimeout(() => {
-    try {
-      w.print();
-    } catch {
-      /* user can print manually */
-    }
-  }, 300);
+    `<h1>TaurEye — Buy Recommendations</h1>` +
+    `<p class="meta">${htmlEsc(dateStr)} · ${htmlEsc(summary)}</p>` +
+    recs.map(card).join('') +
+    `<p class="disc">Confidence blends the Multibagger analyser (fundamentals), a live momentum read and the current chart pattern. Entry/stop/target come from pivot &amp; swing structure with a capped risk band. Indicative and educational only — not investment advice; always confirm and manage risk.</p>` +
+    `</body></html>`;
+  printHtmlDocument(html);
 }
 
 
