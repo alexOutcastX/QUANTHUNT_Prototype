@@ -71,6 +71,24 @@ def _pct(a, b):
     return (a - b) / b * 100 if b else 0.0
 
 
+def eta_to_target(price, target, atr):
+    """Rough time-to-target estimate. A trending stock nets only a fraction of
+    its daily range (ATR) toward the target each day, so
+    days ≈ distance / (ATR * drift). Returned as trading days plus a human label
+    (days / weeks / months). None when there's no meaningful upside."""
+    if not atr or atr <= 0 or not target or target <= price:
+        return None, None
+    DRIFT = 0.35  # net directional progress per day as a fraction of the range
+    days = max(2, round((target - price) / (atr * DRIFT)))
+    if days <= 10:
+        label = f"~{days} trading days"
+    elif days <= 45:
+        label = f"~{max(1, round(days / 5))} weeks"
+    else:
+        label = f"~{max(1, round(days / 21))} months"
+    return days, label
+
+
 # ── the engine ───────────────────────────────────────────────────────────────
 def analyze(symbol, candles, fund_score=None, name=None):
     """candles: chronological [{t,o,h,l,c,v}]. fund_score: 0-100 analyser score
@@ -182,6 +200,7 @@ def analyze(symbol, candles, fund_score=None, name=None):
     rr = round(reward / risk, 2) if risk > 0 else None
     upside_pct = round(_pct(target, price), 2)
     stop_pct = round(_pct(stop, price), 2)
+    eta_days, eta = eta_to_target(price, target, atr)
 
     # ── Confidence blend + action ────────────────────────────────────────────
     if fund_score is not None:
@@ -243,6 +262,8 @@ def analyze(symbol, candles, fund_score=None, name=None):
         "target2": target2,
         "upside_pct": upside_pct,
         "rr": rr,
+        "eta_days": eta_days,
+        "eta": eta,
         "support": support,
         "support2": support2,
         "resistance": resistance,

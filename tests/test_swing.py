@@ -55,8 +55,14 @@ class SwingEngineTest(unittest.TestCase):
         r = swing.analyze("SW1", _candles(PULLBACK_REVERSAL))
         for k in ("action", "qualifies", "setup", "probability", "trend", "momentum",
                   "entry", "stop", "stop_pct", "target", "upside_pct", "rr",
-                  "support", "resistance", "rsi", "max_dd", "reasons"):
+                  "eta_days", "eta", "support", "resistance", "rsi", "max_dd", "reasons"):
             self.assertIn(k, r)
+
+    def test_eta_present_for_swing(self):
+        r = swing.analyze("SW1", _candles(PULLBACK_REVERSAL))
+        self.assertIsNotNone(r["eta_days"])
+        self.assertGreaterEqual(r["eta_days"], 2)
+        self.assertTrue(r["eta"])
 
     def test_risk_band_bounded(self):
         r = swing.analyze("SW1", _candles(PULLBACK_REVERSAL))

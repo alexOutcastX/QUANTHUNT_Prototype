@@ -49,7 +49,7 @@ async function exportRecommendationsPdf(recs: Recommendation[], summary: string)
     const { Share } = await import('react-native');
     const lines = recs.map(
       (r) =>
-        `${r.symbol} · BUY · conf ${r.confidence} · entry ${money(r.entry)} · stop ${money(r.stop)} (${signPct(r.stop_pct)}) · target ${money(r.target)} (${signPct(r.upside_pct)}) · R:R ${r.rr != null ? r.rr.toFixed(1) + ':1' : '—'}`,
+        `${r.symbol} · BUY · conf ${r.confidence} · entry ${money(r.entry)} · stop ${money(r.stop)} (${signPct(r.stop_pct)}) · target ${money(r.target)} (${signPct(r.upside_pct)}) · R:R ${r.rr != null ? r.rr.toFixed(1) + ':1' : '—'}${r.eta ? ` · ${r.eta} to target` : ''}`,
     );
     await Share.share({ title: 'TaurEye — Buy Recommendations', message: `TaurEye — Buy Recommendations\n${summary}\n\n${lines.join('\n')}` });
     return;
@@ -72,7 +72,7 @@ async function exportRecommendationsPdf(recs: Recommendation[], summary: string)
       `<span class="conf">${r.confidence}<small>conf</small></span></div>` +
       `<div class="scores">${cell('Fundamental', r.fundamental_score == null ? '—' : String(r.fundamental_score))}${cell('Momentum', String(r.momentum_score))}${cell('Pattern', String(r.pattern_score))}</div>` +
       `<div class="setup">${cell('Entry', money(r.entry))}${cell('Stop', `${money(r.stop)} (${signPct(r.stop_pct)})`, '#c0392b')}${cell('Target', `${money(r.target)} (${signPct(r.upside_pct)})`, '#1e8449')}${cell('R:R', rr)}</div>` +
-      `<div class="levels">Support ${htmlEsc(money(r.support))} · Resistance ${htmlEsc(money(r.resistance))} · Next target ${htmlEsc(money(r.target2))}${r.pattern ? ` · Pattern ${htmlEsc(r.pattern)}` : ''} · RSI ${htmlEsc(String(r.rsi))}</div>` +
+      `<div class="levels">Support ${htmlEsc(money(r.support))} · Resistance ${htmlEsc(money(r.resistance))} · Next target ${htmlEsc(money(r.target2))}${r.pattern ? ` · Pattern ${htmlEsc(r.pattern)}` : ''} · RSI ${htmlEsc(String(r.rsi))}${r.eta ? ` · ⏱ ${htmlEsc(r.eta)} to target` : ''}</div>` +
       (rationale ? `<ul class="why">${rationale}</ul>` : '') +
       `</div>`
     );
@@ -212,6 +212,12 @@ function RecCard({
           ) : null}
           <Text style={styles.levelLbl}>{r.pattern ? '   ·   ' : ''}RSI </Text>{r.rsi}
         </Text>
+        {r.eta ? (
+          <Text style={styles.eta}>
+            <Text style={styles.levelLbl}>⏱ Est. time to target </Text>
+            <Text style={{ color: theme.text }}>{r.eta}</Text>
+          </Text>
+        ) : null}
       </View>
 
       {r.rationale?.length ? (
@@ -644,6 +650,7 @@ const styles = StyleSheet.create({
   setupSub: { fontFamily: theme.mono, fontSize: theme.fs.xs },
   levels: { gap: 3 },
   levelTxt: { color: theme.text, fontFamily: theme.mono, fontSize: theme.fs.sm },
+  eta: { fontFamily: theme.mono, fontSize: theme.fs.sm, marginTop: 2 },
   levelLbl: { color: theme.muted },
   why: { gap: 3 },
   whyTxt: { color: theme.muted2, fontSize: theme.fs.sm, lineHeight: 18 },
