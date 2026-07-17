@@ -10,6 +10,7 @@ import { LocalAlert, addLocalAlert, hasLocalAlert, loadLocalAlerts } from '../lo
 import { loadNames } from './ScreenerScreen';
 import ShortTermScreen from './ShortTermScreen';
 import InstitutionalScreen from './InstitutionalScreen';
+import SmcScreen from './SmcScreen';
 import { useResponsive } from '../responsive';
 import { printHtmlDocument } from '../pdf';
 import { Card, EmptyState, ScreenTitle } from '../ui';
@@ -535,13 +536,14 @@ function LongTermRecs() {
 // setups, a short-term swing tab (pullback reversals), and an Institutional tab
 // that screens by algorithmic strategy. A segmented toggle switches between
 // them; each keeps its own persistent cache.
-type RecMode = 'long' | 'short' | 'inst';
+type RecMode = 'long' | 'short' | 'inst' | 'smc';
 export default function RecommendationsScreen() {
   const [mode, setMode] = useState<RecMode>('long');
   const TABS: { key: RecMode; label: string }[] = [
     { key: 'long', label: 'Long term' },
     { key: 'short', label: 'Short term' },
     { key: 'inst', label: 'Institutional' },
+    { key: 'smc', label: 'HFT/ICT/SMC' },
   ];
   return (
     <View style={styles.container}>
@@ -560,7 +562,7 @@ export default function RecommendationsScreen() {
         </View>
       </View>
       <View style={{ flex: 1 }}>
-        {mode === 'short' ? <ShortTermScreen /> : mode === 'inst' ? <InstitutionalScreen /> : <LongTermRecs />}
+        {mode === 'short' ? <ShortTermScreen /> : mode === 'inst' ? <InstitutionalScreen /> : mode === 'smc' ? <SmcScreen /> : <LongTermRecs />}
       </View>
     </View>
   );
@@ -569,8 +571,8 @@ export default function RecommendationsScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.bg },
   modeBarWrap: { paddingHorizontal: theme.sp.lg, paddingTop: theme.sp.md, paddingBottom: theme.sp.xs },
-  modeBar: { flexDirection: 'row', backgroundColor: theme.surface2, borderRadius: 999, padding: 3, alignSelf: 'flex-start' },
-  modeBtn: { borderRadius: 999, paddingVertical: 6, paddingHorizontal: theme.sp.lg },
+  modeBar: { flexDirection: 'row', flexWrap: 'wrap', gap: 3, backgroundColor: theme.surface2, borderRadius: theme.radius.sm + 6, padding: 3, alignSelf: 'flex-start' },
+  modeBtn: { borderRadius: 999, paddingVertical: 6, paddingHorizontal: theme.sp.md },
   modeBtnOn: { backgroundColor: theme.accent },
   modeTxt: { color: theme.muted2, fontSize: theme.fs.sm, fontWeight: '700' },
   modeTxtOn: { color: theme.onAccent },
