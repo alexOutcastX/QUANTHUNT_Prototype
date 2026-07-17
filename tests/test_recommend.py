@@ -74,6 +74,18 @@ class RecommendEngineTest(unittest.TestCase):
         self.assertGreaterEqual(r["eta_days"], 2)
         self.assertTrue(r["eta"])
 
+    def test_eta_drift_varies_with_conviction(self):
+        # ETA must not collapse to a constant: a strong, trending setup should
+        # reach the same ATR-distance target sooner than a weak, sideways one.
+        price, atr = 1000.0, 20.0
+        target = price + 3.3 * atr
+        fast, _ = recommend.eta_to_target(
+            price, target, atr, recommend.progress_drift(90, "up", True))
+        slow, _ = recommend.eta_to_target(
+            price, target, atr, recommend.progress_drift(30, "down", False))
+        self.assertLess(fast, slow)
+        self.assertGreaterEqual(fast, 2)
+
     def test_risk_band_is_bounded(self):
         # stop-loss should stay within a sane risk band (never > ~11%).
         r = recommend.analyze("A", _candles(UPTREND_PULLBACK), fund_score=70)

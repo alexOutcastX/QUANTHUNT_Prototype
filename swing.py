@@ -11,7 +11,7 @@ The mid/large-cap universe is enforced by the caller (the client fans this out
 over NIFTY 200 constituents = the top-200 by market cap). This module only
 judges the technical swing setup on the candles.
 """
-from recommend import _atr, _ema, _rsi, eta_to_target
+from recommend import _atr, _ema, _rsi, eta_to_target, progress_drift
 
 
 def _dist_pct(a, b):
@@ -109,7 +109,8 @@ def analyze(symbol, candles, name=None):
     rr = round(reward / risk, 2) if risk > 0 else None
     upside_pct = round((target - price) / price * 100, 2)
     stop_pct = round((stop - price) / price * 100, 2)
-    eta_days, eta = eta_to_target(price, target, atr)
+    eta_days, eta = eta_to_target(price, target, atr,
+                                  progress_drift(momentum, trend, turning_up))
 
     # ── probability score (0-100) ───────────────────────────────────────────
     prob = 0.0
