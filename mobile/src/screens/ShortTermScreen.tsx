@@ -196,7 +196,7 @@ export default function ShortTermScreen() {
   const [ready, setReady] = useState(isHydrated());
   const [watch, setWatch] = useState<string[]>([]);
   const [alerts, setAlerts] = useState<LocalAlert[]>([]);
-  const [sortKey, setSortKey] = useState<'prob' | 'upside' | 'rsi' | 'rr'>('prob');
+  const [sortKey, setSortKey] = useState<'prob' | 'upside' | 'rsi' | 'rr' | 'time'>('prob');
   const [open, setOpen] = useState<SwingRec | null>(null);
   const [detail, setDetail] = useState<Row | null>(null);
   const [flash, setFlash] = useState('');
@@ -320,6 +320,7 @@ export default function ShortTermScreen() {
     if (sortKey === 'upside') xs.sort((a, b) => (b.upside_pct ?? -999) - (a.upside_pct ?? -999));
     else if (sortKey === 'rsi') xs.sort((a, b) => (a.rsi ?? 999) - (b.rsi ?? 999)); // most oversold first
     else if (sortKey === 'rr') xs.sort((a, b) => (b.rr ?? -1) - (a.rr ?? -1));
+    else if (sortKey === 'time') xs.sort((a, b) => (a.eta_days ?? 1e9) - (b.eta_days ?? 1e9)); // fastest to target first
     else xs.sort((a, b) => b.probability - a.probability);
     return xs;
   }, [recs, sortKey]);
@@ -328,6 +329,7 @@ export default function ShortTermScreen() {
     { key: 'upside', label: 'Upside' },
     { key: 'rsi', label: 'RSI (oversold)' },
     { key: 'rr', label: 'R:R' },
+    { key: 'time', label: 'Time to target' },
   ];
 
   const isWatched = (s: string) => watch.includes(normSymbol(s));
