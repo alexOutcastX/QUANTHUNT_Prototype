@@ -2,6 +2,7 @@
 // native it opens the OS share sheet with the CSV text (no extra deps needed).
 import { Platform, Share } from 'react-native';
 import { Row, calcSignal } from './screener';
+import { printHtmlDocument } from './pdf';
 
 const FIELDS: { header: string; get: (r: Row) => unknown }[] = [
   { header: 'Symbol', get: (r) => r.sym },
@@ -187,31 +188,21 @@ export async function exportExcelRows(headers: string[], rows: string[][], name:
   }
 }
 
-// PDF: no jspdf dep — open a print window with a styled table and invoke the
-// browser's print/"Save as PDF" (web only). No-op / CSV share off web.
+// PDF: no jspdf dep — render a styled table and invoke the platform print /
+// "Save as PDF" dialog, which downloads a real PDF on desktop AND inside the
+// Android WebView (see printHtmlDocument). A true native RN runtime with no DOM
+// shares the CSV text instead.
 export async function exportPdf(rows: Row[], name: string): Promise<void> {
-  if (Platform.OS !== 'web') {
+  const doc = (globalThis as { document?: any }).document;
+  if (!doc?.body) {
     await Share.share({ title: `taureye-${slug(name)}.csv`, message: buildCsv(rows) });
     return;
   }
-  const win = (globalThis as { window?: any }).window;
-  const w = win?.open?.('', '_blank');
-  if (!w) return; // popup blocked
   const title = `TaurEye — ${name}`;
-  w.document.write(
+  printHtmlDocument(
     `<html><head><title>${htmlEsc(title)}</title></head><body>` +
       `<h3 style="font-family:Arial,sans-serif">${htmlEsc(title)}</h3>` +
       buildHtmlTable(rows, true) +
       '</body></html>',
   );
-  w.document.close();
-  w.focus();
-  // Let layout settle before printing.
-  setTimeout(() => {
-    try {
-      w.print();
-    } catch {
-      /* user can print manually */
-    }
-  }, 250);
 }

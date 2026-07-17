@@ -661,14 +661,14 @@ export default function MultibaggerScreen() {
           </View>
 
           {recent.length ? (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.recentRow} contentContainerStyle={styles.recentInner}>
+            <View style={styles.recentRow}>
               <Text style={styles.recentLabel}>RECENT</Text>
               {recent.map((s) => (
                 <TouchableOpacity key={s} style={styles.recentChip} onPress={() => analyse(s)} activeOpacity={0.75}>
                   <Text style={styles.recentTxt}>{s}</Text>
                 </TouchableOpacity>
               ))}
-            </ScrollView>
+            </View>
           ) : null}
 
           <ScrollView contentContainerStyle={styles.body}>
@@ -916,8 +916,18 @@ const styles = StyleSheet.create({
   },
   updTxt: { color: theme.text, fontSize: theme.fs.sm, fontWeight: '700' },
   lastUpd: { color: theme.muted, fontSize: theme.fs.xs + 1, paddingHorizontal: theme.sp.lg, paddingBottom: theme.sp.sm },
-  recentRow: { flexGrow: 0, marginBottom: theme.sp.sm },
-  recentInner: { paddingHorizontal: theme.sp.lg, gap: theme.sp.sm, alignItems: 'center' },
+  // A plain wrapping row, not a horizontal ScrollView: on react-native-web that
+  // ScrollView collapsed to a few px tall (overflow-y:hidden) and the results
+  // body painted over the chips. A flex-wrap row reserves real height, so no
+  // overlap. Recents are capped + short, so wrapping to a second line is fine.
+  recentRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: theme.sp.sm,
+    paddingHorizontal: theme.sp.lg,
+    marginBottom: theme.sp.sm,
+  },
   recentLabel: { color: theme.muted, fontSize: theme.fs.xs + 1, fontWeight: '700', letterSpacing: 1 },
   recentChip: {
     backgroundColor: theme.surface2,
