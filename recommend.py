@@ -71,15 +71,33 @@ def _pct(a, b):
     return (a - b) / b * 100 if b else 0.0
 
 
-def eta_to_target(price, target, atr):
-    """Rough time-to-target estimate. A trending stock nets only a fraction of
-    its daily range (ATR) toward the target each day, so
-    days ≈ distance / (ATR * drift). Returned as trading days plus a human label
-    (days / weeks / months). None when there's no meaningful upside."""
+def progress_drift(momentum, trend=None, turning_up=False):
+    """Net daily progress toward the target, as a fraction of the stock's daily
+    range (ATR), scaled by how convincing the setup is. A high-momentum name in
+    a live uptrend eats more of its range each day (reaches the target sooner);
+    a weak or sideways one drifts slowly. Without this scaling every ATR-based
+    target collapses to the same ETA, since the ATR cancels out of the maths."""
+    m = max(0.0, min(100.0, float(momentum if momentum is not None else 50)))
+    d = 0.24 + 0.40 * (m / 100.0)          # 0.24–0.64 on momentum alone
+    if trend == "up":
+        d *= 1.12
+    elif trend == "down":
+        d *= 0.80
+    if turning_up:
+        d *= 1.06
+    return max(0.15, min(0.85, d))
+
+
+def eta_to_target(price, target, atr, drift=0.35):
+    """Rough time-to-target estimate. A stock nets only a fraction of its daily
+    range (ATR) toward the target each day, so days ≈ distance / (ATR * drift).
+    `drift` should come from progress_drift() so stronger setups read faster;
+    the 0.35 default keeps older callers working. Returned as trading days plus
+    a human label (days / weeks / months). None when there's no upside."""
     if not atr or atr <= 0 or not target or target <= price:
         return None, None
-    DRIFT = 0.35  # net directional progress per day as a fraction of the range
-    days = max(2, round((target - price) / (atr * DRIFT)))
+    drift = max(0.12, min(0.9, drift))     # net progress per day as a fraction of range
+    days = max(2, round((target - price) / (atr * drift)))
     if days <= 10:
         label = f"~{days} trading days"
     elif days <= 45:
@@ -200,7 +218,10 @@ def analyze(symbol, candles, fund_score=None, name=None):
     rr = round(reward / risk, 2) if risk > 0 else None
     upside_pct = round(_pct(target, price), 2)
     stop_pct = round(_pct(stop, price), 2)
-    eta_days, eta = eta_to_target(price, target, atr)
+    _trend = ("up" if price > ema50 and (ema200 is None or price > ema200)
+              else "down" if price < ema50 else "side")
+    eta_days, eta = eta_to_target(price, target, atr,
+                                  progress_drift(momentum, _trend, ret20 > 0))
 
     # ── Confidence blend + action ────────────────────────────────────────────
     if fund_score is not None:
