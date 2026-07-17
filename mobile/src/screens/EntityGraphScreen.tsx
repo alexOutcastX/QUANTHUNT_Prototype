@@ -71,11 +71,11 @@ export default function EntityGraphScreen() {
 
   return (
     <View style={styles.container}>
-      <ScreenTitle title="Entity graph" sub="Institutional link analysis · grounded in NSE deals" />
+      <ScreenTitle title="Shareholders" sub="Search an investor's holdings, or who holds a stock · grounded in NSE deals" />
 
       <View style={styles.tabRow}>
-        <Tab label="Institutions" on={mode === 'institutions'} onPress={() => setMode('institutions')} />
-        <Tab label="By stock" on={mode === 'stock'} onPress={() => setMode('stock')} />
+        <Tab label="By shareholder" on={mode === 'institutions'} onPress={() => setMode('institutions')} />
+        <Tab label="By holding" on={mode === 'stock'} onPress={() => setMode('stock')} />
       </View>
 
       {mode === 'stock' ? (
@@ -86,7 +86,7 @@ export default function EntityGraphScreen() {
             onSelect={loadSymbol}
             onSubmit={() => loadSymbol(symInput)}
             inputStyle={styles.input}
-            placeholder="Symbol — who's trading it"
+            placeholder="Symbol — who holds it"
           />
         </View>
       ) : graph && graph.nodes && graph.nodes.entities.length ? (
@@ -97,7 +97,7 @@ export default function EntityGraphScreen() {
               value={entQuery}
               onChangeText={setEntQuery}
               style={styles.searchInput}
-              placeholder="Search institution…"
+              placeholder="Search shareholder / investor…"
               placeholderTextColor={theme.muted}
               autoCapitalize="characters"
               autoCorrect={false}
@@ -114,22 +114,22 @@ export default function EntityGraphScreen() {
       <ScrollView contentContainerStyle={styles.body}>
         {mode === 'institutions' ? (
           graph === undefined ? (
-            <Loading label="Building entity graph…" />
+            <Loading label="Loading shareholders…" />
           ) : !graph || !graph.nodes.entities.length ? (
             <EmptyState
-              title="No deal-flow data"
+              title="No shareholder data"
               hint="Built from NSE bulk/block deals — best from an Indian IP, and quiet sessions have few deals."
             />
           ) : (
             <>
               <Text style={styles.asof}>
                 {entQuery
-                  ? `${filteredEntities.length} of ${graph.nodes.entities.length} institutions`
-                  : `${graph.nodes.entities.length} institutions`}{' '}
+                  ? `${filteredEntities.length} of ${graph.nodes.entities.length} shareholders`
+                  : `${graph.nodes.entities.length} shareholders`}{' '}
                 · {graph.edges.length} links · {graph.asof.first || '—'} → {graph.asof.last || '—'}
               </Text>
               {entQuery && !filteredEntities.length ? (
-                <Text style={styles.none}>No institution matches “{entQuery}”.</Text>
+                <Text style={styles.none}>No shareholder matches “{entQuery}”.</Text>
               ) : null}
               {filteredEntities.map((ent) => (
                 <View key={ent.id}>
@@ -158,14 +158,14 @@ export default function EntityGraphScreen() {
             </>
           )
         ) : /* stock pivot */ !sym ? (
-          <EmptyState icon="⌕" title="Enter a symbol" hint="See every institution that traded it, net flow, and the cited deals." />
+          <EmptyState icon="⌕" title="Enter a symbol" hint="See every shareholder that holds/traded it, net flow, and the cited deals." />
         ) : flows === undefined ? (
-          <Loading label={`Finding institutions in ${sym}…`} />
+          <Loading label={`Finding shareholders in ${sym}…`} />
         ) : !flows || !flows.length ? (
           <EmptyState title={`No bulk/block deals for ${sym}`} hint="Recent sessions only; grounded in NSE records." />
         ) : (
           <>
-            <SectionTitle>{sym} · institutional flow</SectionTitle>
+            <SectionTitle>{sym} · shareholder flow</SectionTitle>
             {flows.map((e, i) => (
               <EdgeCard key={i} e={e} show="entity" />
             ))}
