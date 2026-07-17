@@ -60,7 +60,7 @@ function SwingRow({ r, onOpen }: { r: SwingRec; onOpen: () => void }) {
         </View>
         {r.name ? <Text style={styles.name} numberOfLines={1}>{r.name}</Text> : null}
         <Text style={styles.setupLine} numberOfLines={1}>
-          {r.setup} · RSI {r.rsi} · entry {money(r.entry)} · SL {money(r.stop)} · tgt {money(r.target)} ({signPct(r.upside_pct)})
+          {r.setup} · RSI {r.rsi} · entry {money(r.entry)} · SL {money(r.stop)} · tgt {money(r.target)} ({signPct(r.upside_pct)}){r.eta ? ` · ⏱ ${r.eta}` : ''}
         </Text>
       </View>
       <View style={styles.rowRight}>
@@ -141,6 +141,13 @@ function SwingDetail({
             <Cell label="SUPPORT" value={money(r.support)} />
             <Cell label="RESISTANCE" value={money(r.resistance)} />
           </View>
+
+          {r.eta ? (
+            <View style={styles.etaBar}>
+              <Text style={styles.etaLbl}>⏱ Est. time to target</Text>
+              <Text style={styles.etaVal}>{r.eta}</Text>
+            </View>
+          ) : null}
 
           {r.reasons?.length ? (
             <View style={styles.why}>
@@ -504,6 +511,18 @@ const styles = StyleSheet.create({
   cellLbl: { color: theme.muted, fontSize: theme.fs.xs, letterSpacing: 0.3 },
   cellVal: { color: theme.text, fontFamily: theme.mono, fontWeight: '700', fontSize: theme.fs.md, paddingHorizontal: 2 },
   cellSub: { fontFamily: theme.mono, fontSize: theme.fs.xs },
+  etaBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: theme.sp.md,
+    backgroundColor: theme.surface2,
+    borderRadius: theme.radius.sm,
+    paddingHorizontal: theme.sp.md,
+    paddingVertical: theme.sp.sm,
+  },
+  etaLbl: { color: theme.muted2, fontSize: theme.fs.sm },
+  etaVal: { color: theme.text, fontFamily: theme.mono, fontWeight: '700', fontSize: theme.fs.md },
   why: { gap: 3, marginTop: theme.sp.md },
   whyTxt: { color: theme.muted2, fontSize: theme.fs.sm, lineHeight: 18 },
   actions: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.sp.sm, marginTop: theme.sp.md },

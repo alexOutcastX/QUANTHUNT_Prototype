@@ -476,6 +476,8 @@ export type Recommendation = {
   target2: number;
   upside_pct: number;
   rr: number | null;
+  eta_days?: number | null;
+  eta?: string | null;
   support: number;
   support2: number;
   resistance: number;
@@ -505,6 +507,8 @@ export type SwingRec = {
   target: number;
   upside_pct: number;
   rr: number | null;
+  eta_days?: number | null;
+  eta?: string | null;
   support: number;
   resistance: number;
   rsi: number;

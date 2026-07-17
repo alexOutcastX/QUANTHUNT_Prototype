@@ -65,8 +65,14 @@ class RecommendEngineTest(unittest.TestCase):
         r = recommend.analyze("A", _candles(UPTREND_PULLBACK), fund_score=70)
         for k in ("action", "confidence", "momentum_score", "pattern_score",
                   "entry", "stop", "target", "target2", "upside_pct", "rr",
-                  "support", "resistance", "rsi", "rationale"):
+                  "eta_days", "eta", "support", "resistance", "rsi", "rationale"):
             self.assertIn(k, r)
+
+    def test_eta_present_for_buy(self):
+        r = recommend.analyze("A", _candles(UPTREND_PULLBACK), fund_score=80)
+        self.assertIsNotNone(r["eta_days"])
+        self.assertGreaterEqual(r["eta_days"], 2)
+        self.assertTrue(r["eta"])
 
     def test_risk_band_is_bounded(self):
         # stop-loss should stay within a sane risk band (never > ~11%).
