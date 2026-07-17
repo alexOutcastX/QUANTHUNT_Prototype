@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SwingRec, api } from '../api';
@@ -64,8 +64,12 @@ function SwingRow({ r, onOpen }: { r: SwingRec; onOpen: () => void }) {
         </Text>
       </View>
       <View style={styles.rowRight}>
-        <Text style={[styles.prob, { color: probColor(r.probability) }]}>{r.probability}</Text>
-        <Text style={styles.probLbl}>probability</Text>
+        <View style={styles.probBox}>
+          <Text style={[styles.prob, { color: probColor(r.probability) }]}>{r.probability}</Text>
+          <Text style={styles.probLbl}>probability</Text>
+          <Text style={styles.upsideVal}>▲ {signPct(r.upside_pct)}</Text>
+          <Text style={styles.upsideLbl}>upside</Text>
+        </View>
         <Text style={styles.chev}>›</Text>
       </View>
     </TouchableOpacity>
@@ -185,6 +189,7 @@ export default function ShortTermScreen() {
   const [ready, setReady] = useState(isHydrated());
   const [watch, setWatch] = useState<string[]>([]);
   const [alerts, setAlerts] = useState<LocalAlert[]>([]);
+  const [sortKey, setSortKey] = useState<'prob' | 'upside' | 'rsi' | 'rr'>('prob');
   const [open, setOpen] = useState<SwingRec | null>(null);
   const [detail, setDetail] = useState<Row | null>(null);
   const [flash, setFlash] = useState('');
@@ -303,6 +308,21 @@ export default function ShortTermScreen() {
     setDepthState(n);
   };
 
+  const sorted = useMemo(() => {
+    const xs = [...recs];
+    if (sortKey === 'upside') xs.sort((a, b) => (b.upside_pct ?? -999) - (a.upside_pct ?? -999));
+    else if (sortKey === 'rsi') xs.sort((a, b) => (a.rsi ?? 999) - (b.rsi ?? 999)); // most oversold first
+    else if (sortKey === 'rr') xs.sort((a, b) => (b.rr ?? -1) - (a.rr ?? -1));
+    else xs.sort((a, b) => b.probability - a.probability);
+    return xs;
+  }, [recs, sortKey]);
+  const SORTS: { key: typeof sortKey; label: string }[] = [
+    { key: 'prob', label: 'Probability' },
+    { key: 'upside', label: 'Upside' },
+    { key: 'rsi', label: 'RSI (oversold)' },
+    { key: 'rr', label: 'R:R' },
+  ];
+
   const isWatched = (s: string) => watch.includes(normSymbol(s));
   const onWatch = async (r: SwingRec) => {
     setWatch(await addSymbol(watch, r.symbol));
@@ -360,6 +380,22 @@ export default function ShortTermScreen() {
         <Text style={styles.note}>{status}</Text>
       ) : null}
 
+      {recs.length > 1 && !scanning ? (
+        <View style={styles.sortRow}>
+          <Text style={styles.depthLbl}>Sort</Text>
+          {SORTS.map((s) => (
+            <TouchableOpacity
+              key={s.key}
+              style={[styles.sortChip, sortKey === s.key && styles.sortChipOn]}
+              onPress={() => setSortKey(s.key)}
+              activeOpacity={0.75}
+            >
+              <Text style={[styles.sortTxt, sortKey === s.key && styles.sortTxtOn]}>{s.label}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      ) : null}
+
       <ScrollView contentContainerStyle={styles.body}>
         {!scanning && error ? <EmptyState icon="⚠" title="Couldn't build swing list" hint={error} /> : null}
         {ready && !scanning && !error && !recs.length ? (
@@ -371,7 +407,7 @@ export default function ShortTermScreen() {
         ) : null}
 
         <View style={isDesktop ? styles.grid2 : undefined}>
-          {recs.map((r) => (
+          {sorted.map((r) => (
             <View key={r.symbol} style={isDesktop ? styles.gridCell : undefined}>
               <Card style={{ padding: 0 }}>
                 <SwingRow r={r} onOpen={() => setOpen(r)} />
@@ -422,6 +458,11 @@ const styles = StyleSheet.create({
   depthTxt: { color: theme.muted2, fontSize: theme.fs.sm, fontWeight: '700' },
   depthTxtOn: { color: theme.onAccent },
   asof: { color: theme.muted, fontSize: theme.fs.xs + 1, marginLeft: 'auto' },
+  sortRow: { flexDirection: 'row', alignItems: 'center', gap: theme.sp.sm, paddingHorizontal: theme.sp.lg, paddingBottom: theme.sp.sm, flexWrap: 'wrap' },
+  sortChip: { backgroundColor: theme.surface2, borderColor: theme.border2, borderWidth: 1, borderRadius: 999, paddingHorizontal: theme.sp.md, paddingVertical: 4 },
+  sortChipOn: { backgroundColor: theme.surface3, borderColor: theme.accent },
+  sortTxt: { color: theme.muted2, fontSize: theme.fs.xs + 1, fontWeight: '700' },
+  sortTxtOn: { color: theme.text },
   progWrap: { paddingHorizontal: theme.sp.lg, paddingBottom: theme.sp.md, gap: 6 },
   progTrack: { height: 6, borderRadius: 999, backgroundColor: theme.surface3, overflow: 'hidden' },
   progFill: { height: 6, borderRadius: 999, backgroundColor: theme.green },
@@ -439,9 +480,12 @@ const styles = StyleSheet.create({
   trend: { fontSize: theme.fs.xs + 1, fontWeight: '700' },
   name: { color: theme.muted2, fontSize: theme.fs.sm },
   setupLine: { color: theme.muted, fontSize: theme.fs.xs + 1, fontFamily: theme.mono },
-  rowRight: { alignItems: 'flex-end', flexDirection: 'row', gap: theme.sp.sm },
-  prob: { fontFamily: theme.mono, fontWeight: '800', fontSize: 22 },
-  probLbl: { color: theme.muted, fontSize: theme.fs.xs, position: 'absolute', bottom: -2, right: 18, width: 60, textAlign: 'right' },
+  rowRight: { flexDirection: 'row', alignItems: 'center', gap: theme.sp.sm },
+  probBox: { alignItems: 'flex-end', minWidth: 78 },
+  prob: { fontFamily: theme.mono, fontWeight: '800', fontSize: 22, lineHeight: 24 },
+  probLbl: { color: theme.muted, fontSize: theme.fs.xs, marginTop: -1 },
+  upsideVal: { color: theme.green, fontFamily: theme.mono, fontWeight: '700', fontSize: theme.fs.sm, marginTop: 3 },
+  upsideLbl: { color: theme.muted, fontSize: theme.fs.xs, marginTop: -1 },
   chev: { color: theme.muted2, fontSize: 22 },
 
   // modal
