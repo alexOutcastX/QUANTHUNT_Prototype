@@ -487,6 +487,33 @@ export type Recommendation = {
   error?: string;
 };
 
+// Short-term (swing) trade read (from /swing) — mid & large caps near a
+// pullback reversal / oversold bounce.
+export type SwingRec = {
+  symbol: string;
+  name?: string | null;
+  action: 'SWING' | 'WATCH' | 'AVOID' | 'SKIP';
+  qualifies: boolean;
+  setup: string;
+  probability: number;
+  trend: 'up' | 'down' | 'side';
+  momentum: number;
+  price: number;
+  entry: number;
+  stop: number;
+  stop_pct: number;
+  target: number;
+  upside_pct: number;
+  rr: number | null;
+  support: number;
+  resistance: number;
+  rsi: number;
+  max_dd: number;
+  reasons: string[];
+  note?: string;
+  error?: string;
+};
+
 // Full NSE+BSE momentum radar (from /momentum/screen).
 export type MomentumHit = {
   symbol: string;
@@ -641,6 +668,11 @@ export const api = {
       `/recommendation?symbol=${encodeURIComponent(symbol)}` +
         (fund != null && isFinite(fund) ? `&fund=${fund}` : '') +
         (name ? `&name=${encodeURIComponent(name)}` : ''),
+      45000,
+    ),
+  swing: (symbol: string, name?: string) =>
+    getJson<SwingRec>(
+      `/swing?symbol=${encodeURIComponent(symbol)}` + (name ? `&name=${encodeURIComponent(name)}` : ''),
       45000,
     ),
   momentumScreen: (refresh = false) =>
