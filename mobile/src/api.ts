@@ -553,6 +553,43 @@ export type InstitutionalRec = {
   error?: string;
 };
 
+// ICT / Smart-Money-Concepts screen (from /smc).
+export type SmcRec = {
+  symbol: string;
+  name?: string | null;
+  action: 'LONG' | 'WATCH' | 'AVOID' | 'SKIP';
+  qualifies: boolean;
+  score: number;
+  strategies: StrategyHit[];
+  confluences: string[];
+  conf_count: number;
+  zone: 'discount' | 'premium' | 'equilibrium';
+  in_discount: boolean;
+  primary: string;
+  primary_key: string | null;
+  matched_count: number;
+  trend: 'up' | 'down' | 'side';
+  momentum: number;
+  rsi: number;
+  price: number;
+  entry: number;
+  stop: number;
+  stop_pct: number;
+  target: number;
+  target2: number;
+  upside_pct: number;
+  rr: number | null;
+  eta_days?: number | null;
+  eta?: string | null;
+  support: number;
+  resistance: number;
+  max_dd: number;
+  reasons: string[];
+  not_automated?: string[];
+  note?: string;
+  error?: string;
+};
+
 // Full NSE+BSE momentum radar (from /momentum/screen).
 export type MomentumHit = {
   symbol: string;
@@ -717,6 +754,11 @@ export const api = {
   institutional: (symbol: string, name?: string) =>
     getJson<InstitutionalRec>(
       `/institutional?symbol=${encodeURIComponent(symbol)}` + (name ? `&name=${encodeURIComponent(name)}` : ''),
+      45000,
+    ),
+  smc: (symbol: string, name?: string) =>
+    getJson<SmcRec>(
+      `/smc?symbol=${encodeURIComponent(symbol)}` + (name ? `&name=${encodeURIComponent(name)}` : ''),
       45000,
     ),
   momentumScreen: (refresh = false) =>
