@@ -8,7 +8,7 @@ import { addSymbol, loadWatchlist, normSymbol } from '../watchlist';
 import { LocalAlert, addLocalAlert, hasLocalAlert, loadLocalAlerts } from '../localalerts';
 import { loadNames } from './ScreenerScreen';
 import { useResponsive } from '../responsive';
-import { Card, Dropdown, EmptyState } from '../ui';
+import { Card, Dropdown, EmptyState, RiskBadge } from '../ui';
 import { theme } from '../theme';
 import {
   DEPTH_OPTIONS,
@@ -130,6 +130,7 @@ function InstDetail({
               </View>
               {r.name ? <Text style={styles.name}>{r.name}</Text> : null}
               <Text style={[styles.primaryTag, { color: stratColor(r.primary_key) }]}>{r.primary}</Text>
+              <RiskBadge input={{ rr: r.rr, stop_pct: r.stop_pct, max_dd: r.max_dd, score: r.score }} style={{ marginTop: 6 }} />
             </View>
             <View style={{ alignItems: 'flex-end' }}>
               <Text style={[styles.score, { color: scoreColor(r.score), fontSize: 28 }]}>{r.score}</Text>

@@ -3,7 +3,9 @@
 import React from 'react';
 import {
   ActivityIndicator,
+  Animated,
   Modal,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -14,6 +16,26 @@ import {
 } from 'react-native';
 import { theme } from './theme';
 import { useResponsive } from './responsive';
+import { RiskInput, tradeRisk } from './risk';
+
+// Compact risk pill for a trade card: coloured dot + level (+ optional score).
+export function RiskBadge({ input, showScore = true, style }: { input: RiskInput; showScore?: boolean; style?: ViewStyle }) {
+  const r = tradeRisk(input);
+  return (
+    <View style={[rs.badge, { borderColor: r.color }, style]}>
+      <View style={[rs.dot, { backgroundColor: r.color }]} />
+      <Text style={[rs.txt, { color: r.color }]}>
+        {r.level} risk{showScore ? ` · ${r.score}` : ''}
+      </Text>
+    </View>
+  );
+}
+
+const rs = StyleSheet.create({
+  badge: { flexDirection: 'row', alignItems: 'center', gap: 5, borderWidth: 1, borderRadius: 999, paddingHorizontal: 9, paddingVertical: 3, alignSelf: 'flex-start' },
+  dot: { width: 7, height: 7, borderRadius: 999 },
+  txt: { fontSize: 11, fontWeight: '800', letterSpacing: 0.2 },
+});
 
 // Compact dropdown picker — a small pill that opens a centered menu sheet. Used
 // to collapse chip rows (scan depth, sort, filters) into a single tap-target so
@@ -256,6 +278,13 @@ export function SectionTitle({ children }: { children: React.ReactNode }) {
   return <Text style={s.section}>{children}</Text>;
 }
 
+// Springy press-scale for a crisp, tactile feel on primary actions.
+function usePressScale() {
+  const scale = React.useRef(new Animated.Value(1)).current;
+  const to = (v: number) => Animated.spring(scale, { toValue: v, useNativeDriver: true, speed: 40, bounciness: 6 }).start();
+  return { scale, onPressIn: () => to(0.95), onPressOut: () => to(1) };
+}
+
 export function Btn({
   label,
   onPress,
@@ -269,15 +298,19 @@ export function Btn({
   disabled?: boolean;
   style?: ViewStyle;
 }) {
+  const p = usePressScale();
   return (
-    <TouchableOpacity
-      style={[s.btn, kind === 'ghost' && s.btnGhost, kind === 'danger' && s.btnDanger, disabled && { opacity: 0.5 }, style]}
-      onPress={onPress}
-      disabled={disabled}
-      activeOpacity={0.75}
-    >
-      <Text style={[s.btnTxt, kind === 'ghost' && s.btnGhostTxt, kind === 'danger' && s.btnDangerTxt]}>{label}</Text>
-    </TouchableOpacity>
+    <Animated.View style={{ transform: [{ scale: p.scale }] }}>
+      <Pressable
+        style={[s.btn, kind === 'ghost' && s.btnGhost, kind === 'danger' && s.btnDanger, disabled && { opacity: 0.5 }, style]}
+        onPress={onPress}
+        onPressIn={p.onPressIn}
+        onPressOut={p.onPressOut}
+        disabled={disabled}
+      >
+        <Text style={[s.btnTxt, kind === 'ghost' && s.btnGhostTxt, kind === 'danger' && s.btnDangerTxt]}>{label}</Text>
+      </Pressable>
+    </Animated.View>
   );
 }
 
