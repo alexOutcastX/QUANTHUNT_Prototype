@@ -58,15 +58,18 @@ export default function StockDetail({ row, onClose }: { row: Row; onClose: () =>
       <View style={styles.sheet}>
         <View style={styles.head}>
           <View style={{ flex: 1 }}>
-            <Text style={styles.sym}>
-              {row.sym} <Text style={[styles.sig, { color: sigColor }]}>{sig.toUpperCase()}</Text>
-            </Text>
-            <Text style={styles.price}>
-              {money(row.price)}{' '}
-              <Text style={{ color: chgColor }}>{pct(row.chg, 2)}</Text>
-            </Text>
+            <View style={styles.symRow}>
+              <Text style={styles.sym}>{row.sym}</Text>
+              <View style={[styles.sigPill, { borderColor: sigColor }]}>
+                <Text style={[styles.sigPillTxt, { color: sigColor }]}>{sig.toUpperCase()}</Text>
+              </View>
+            </View>
+            <View style={styles.priceRow}>
+              <Text style={styles.price}>{money(row.price)}</Text>
+              <Text style={[styles.chg, { color: chgColor }]}>{pct(row.chg, 2)}</Text>
+            </View>
           </View>
-          <TouchableOpacity onPress={onClose} hitSlop={12} activeOpacity={0.75}>
+          <TouchableOpacity onPress={onClose} hitSlop={12} activeOpacity={0.75} style={styles.closeBtn}>
             <Text style={styles.close}>✕</Text>
           </TouchableOpacity>
         </View>
@@ -127,9 +130,13 @@ export default function StockDetail({ row, onClose }: { row: Row; onClose: () =>
             return events.length ? (
               <>
                 <SectionTitle>Signals today</SectionTitle>
-                <Card style={styles.sectionCard}>
-                  <Text style={styles.signals}>{events.join('  ·  ')}</Text>
-                </Card>
+                <View style={styles.sigWrap}>
+                  {events.map((e, i) => (
+                    <View key={i} style={styles.sigChip}>
+                      <Text style={styles.sigChipTxt}>{e}</Text>
+                    </View>
+                  ))}
+                </View>
               </>
             ) : null;
           })()}
@@ -210,10 +217,18 @@ const styles = StyleSheet.create({
     borderBottomColor: theme.border,
     borderBottomWidth: 1,
   },
-  sym: { color: theme.text, fontFamily: theme.mono, fontSize: theme.fs.lg + 2, fontWeight: '800' },
-  sig: { fontSize: theme.fs.sm, fontFamily: theme.mono, fontWeight: '700', letterSpacing: 0.4 },
-  price: { color: theme.text, fontFamily: theme.mono, fontSize: theme.fs.md, marginTop: theme.sp.xs },
-  close: { color: theme.muted2, fontSize: theme.fs.lg + 1, padding: theme.sp.xs },
+  symRow: { flexDirection: 'row', alignItems: 'center', gap: theme.sp.sm },
+  sym: { color: theme.text, fontFamily: theme.mono, fontSize: theme.fs.xl, fontWeight: '800' },
+  sigPill: { borderWidth: 1, borderRadius: theme.radius.pill, paddingHorizontal: 9, paddingVertical: 2 },
+  sigPillTxt: { fontSize: theme.fs.xs + 1, fontFamily: theme.mono, fontWeight: '800', letterSpacing: 0.5 },
+  priceRow: { flexDirection: 'row', alignItems: 'baseline', gap: theme.sp.sm, marginTop: 5 },
+  price: { color: theme.text, fontFamily: theme.mono, fontSize: theme.fs.lg, fontWeight: '700' },
+  chg: { fontFamily: theme.mono, fontSize: theme.fs.md, fontWeight: '700' },
+  closeBtn: { width: 34, height: 34, borderRadius: theme.radius.pill, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.surface2, borderColor: theme.border, borderWidth: 1 },
+  close: { color: theme.muted2, fontSize: theme.fs.md },
+  sigWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.sp.sm, marginBottom: theme.sp.sm },
+  sigChip: { backgroundColor: theme.brandSoft, borderColor: theme.brand, borderWidth: 1, borderRadius: theme.radius.pill, paddingHorizontal: 11, paddingVertical: 4 },
+  sigChipTxt: { color: theme.brand, fontSize: theme.fs.xs + 1, fontWeight: '700' },
   body: { padding: theme.sp.lg, paddingBottom: theme.sp.xl + 16 },
   chartBox: {
     height: 260,
