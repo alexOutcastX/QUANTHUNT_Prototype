@@ -13,12 +13,10 @@
         <item name="windowActionBar">false</item>
         <item name="windowNoTitle">true</item>
         <item name="android:background">@null</item>
-        <!-- True full screen: hide the status bar at the window level (this also
-             zeroes the WebView's top safe-area inset, so the header sits flush
-             instead of leaving an empty strip). MainActivity additionally hides
-             the navigation bar via immersive mode. -->
-        <item name="android:windowFullscreen">true</item>
-        <item name="android:windowTranslucentStatus">false</item>
+        <!-- Edge-to-edge: transparent system bars so the WebView (and the app's
+             dark header/footer) draw behind them and the bars take on the app's
+             colour. MainActivity turns off decor-fits-system-windows. -->
+        <item name="android:windowDrawsSystemBarBackgrounds">true</item>
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
     </style>
@@ -26,7 +24,5 @@
 
     <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">
         <item name="android:background">@drawable/splash</item>
-        <!-- Keep the splash full screen too, so there's no bar flash on launch. -->
-        <item name="android:windowFullscreen">true</item>
     </style>
 </resources>
