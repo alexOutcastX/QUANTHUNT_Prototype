@@ -528,9 +528,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 13,
     paddingVertical: 6,
   },
-  chipOn: { backgroundColor: theme.accent, borderColor: theme.accent },
+  chipOn: { backgroundColor: theme.brandSoft, borderColor: theme.brand },
   chipTxt: { color: theme.muted2, fontSize: theme.fs.sm },
-  chipTxtOn: { color: theme.onAccent, fontWeight: '700' },
+  chipTxtOn: { color: theme.brand, fontWeight: '800' },
   updBtn: {
     backgroundColor: theme.surface2,
     borderColor: theme.border2,
@@ -556,9 +556,9 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     backgroundColor: theme.surface2,
   },
-  secChipOn: { backgroundColor: theme.accent, borderColor: theme.accent },
+  secChipOn: { backgroundColor: theme.brandSoft, borderColor: theme.brand },
   secChipTxt: { color: theme.muted2, fontFamily: theme.mono, fontSize: theme.fs.sm },
-  secChipTxtOn: { color: theme.onAccent, fontWeight: '700' },
+  secChipTxtOn: { color: theme.brand, fontWeight: '800' },
   // sector + market-cap columns
   sector: { color: theme.muted2, fontSize: theme.fs.sm, paddingHorizontal: theme.sp.xs },
   capChip: { borderWidth: 1, borderRadius: 4, paddingHorizontal: 5, paddingVertical: 1, alignSelf: 'flex-start' },
@@ -597,9 +597,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 5,
   },
-  mSortChipOn: { backgroundColor: theme.accent, borderColor: theme.accent },
+  mSortChipOn: { backgroundColor: theme.brandSoft, borderColor: theme.brand },
   mSortTxt: { color: theme.muted2, fontSize: theme.fs.sm },
-  mSortTxtOn: { color: theme.onAccent, fontWeight: '700' },
+  mSortTxtOn: { color: theme.brand, fontWeight: '800' },
   // mobile card
   card: {
     backgroundColor: theme.surface,
