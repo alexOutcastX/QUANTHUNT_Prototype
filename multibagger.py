@@ -51,11 +51,15 @@ def _resolve(base: str, retries: int = 1):
         for attempt in range(retries + 1):
             try:
                 info = t.info or {}
-                break  # got a response (even if sparse) — don't hammer Yahoo
+                if has(info):
+                    break  # got usable data
+                # Empty/sparse `.info` is usually a transient rate-limit, not a
+                # bad symbol — back off and retry rather than moving on.
+                raise ValueError("sparse info")
             except Exception:
-                info = {}
+                info = info if has(info) else {}
                 if attempt < retries:
-                    _t.sleep(0.5 * (attempt + 1))
+                    _t.sleep(min(1.0 * (2 ** attempt), 5.0))  # exp backoff, capped 5s
         if has(info):
             return t, info
     return last_t, {}

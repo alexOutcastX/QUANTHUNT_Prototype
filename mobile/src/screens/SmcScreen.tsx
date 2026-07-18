@@ -95,7 +95,7 @@ function SmcRow({ r, onOpen }: { r: SmcRec; onOpen: () => void }) {
 }
 
 function SmcDetail({
-  r, watched, alerted, onClose, onChart, onAnalyse, onWatch, onAlert,
+  r, watched, alerted, onClose, onChart, onAnalyse, onPattern, onWatch, onAlert,
 }: {
   r: SmcRec;
   watched: boolean;
@@ -103,6 +103,7 @@ function SmcDetail({
   onClose: () => void;
   onChart: () => void;
   onAnalyse: () => void;
+  onPattern: () => void;
   onWatch: () => void;
   onAlert: () => void;
 }) {
@@ -182,10 +183,10 @@ function SmcDetail({
             <Cell label="STOP (wick)" value={money(r.stop)} sub={signPct(r.stop_pct)} color={theme.red} />
             <Cell label="TP1 weak-high" value={money(r.target)} sub={signPct(r.upside_pct)} color={theme.green} />
             <Cell label="TP2 external" value={money(r.target2)} color={theme.green} />
-            <Cell label="R : R" value={r.rr != null ? `${r.rr.toFixed(1)}:1` : '—'} />
-            <Cell label="MAX DD" value={signPct(r.max_dd)} color={theme.red} />
-            <Cell label="RANGE LOW" value={money(r.support)} />
-            <Cell label="WEAK HIGH" value={money(r.resistance)} />
+            <Cell label="R : R" value={r.rr != null ? `${r.rr.toFixed(1)}:1` : '—'} sub="reward ÷ risk" />
+            <Cell label="MAX DD" value={signPct(r.max_dd)} color={theme.red} sub="worst dip risk" />
+            <Cell label="RANGE LOW" value={money(r.support)} sub="range base" />
+            <Cell label="WEAK HIGH" value={money(r.resistance)} sub="liquidity draw" />
           </View>
 
           {r.eta ? (
@@ -201,12 +202,34 @@ function SmcDetail({
             </View>
           ) : null}
 
+          {/* Plain-English glossary so the ICT/SMC jargon in the reasons is
+              readable without prior knowledge. */}
+          <Text style={styles.secTitle}>WHAT THIS MEANS</Text>
+          <View style={styles.glossary}>
+            {[
+              ['Weak high', 'A recent high with unprotected sell-stops just above it — price tends to run up and grab that liquidity. It’s the TP1 target (not a typo for “week”).'],
+              ['Liquidity sweep', 'Price briefly pushed past a prior low/high to trip stop orders, then snapped back — the “stop hunt” that kicks off the move.'],
+              ['Discount / OTE', 'Entry sits in the lower part of the dealing range (optimal-trade-entry) — buying cheap within the structure rather than chasing.'],
+              ['Fair-value gap (FVG)', 'An imbalance left by a fast candle that price tends to return to and “fill” before continuing.'],
+              ['Breaker', 'A broken level that flips role — old resistance now acting as support on the retest.'],
+              ['Stop (wick)', 'Protective stop placed beyond the sweep wick / order block, so only a true invalidation takes you out.'],
+            ].map(([t, d]) => (
+              <View key={t} style={styles.gloRow}>
+                <Text style={styles.gloTerm}>{t}</Text>
+                <Text style={styles.gloDef}>{d}</Text>
+              </View>
+            ))}
+          </View>
+
           <View style={styles.actions}>
             <TouchableOpacity style={styles.aBtn} onPress={onChart} activeOpacity={0.75}>
               <Text style={styles.aTxt}>▤ Chart</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.aBtn} onPress={onAnalyse} activeOpacity={0.75}>
               <Text style={[styles.aTxt, { color: theme.accent }]}>⚡ Analyse</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.aBtn} onPress={onPattern} activeOpacity={0.75}>
+              <Text style={[styles.aTxt, { color: theme.brand }]}>⚏ Pattern</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.aBtn} onPress={onWatch} activeOpacity={0.75}>
               <Text style={[styles.aTxt, watched && { color: theme.green }]}>{watched ? '★ Watching' : '☆ Watchlist'}</Text>
@@ -409,6 +432,10 @@ export default function SmcScreen() {
     setOpen(null);
     navigate('analysis', { sub: 'mb', symbol: r.symbol });
   };
+  const onPattern = (r: SmcRec) => {
+    setOpen(null);
+    navigate('analysis', { sub: 'patterns', symbol: r.symbol });
+  };
 
   return (
     <View style={styles.container}>
@@ -513,6 +540,7 @@ export default function SmcScreen() {
           onClose={() => setOpen(null)}
           onChart={() => onChart(open)}
           onAnalyse={() => onAnalyse(open)}
+          onPattern={() => onPattern(open)}
           onWatch={() => onWatch(open)}
           onAlert={() => onAlert(open)}
         />
@@ -615,6 +643,10 @@ const styles = StyleSheet.create({
   why: { gap: 3, marginTop: theme.sp.md },
   whyTxt: { color: theme.muted2, fontSize: theme.fs.sm, lineHeight: 18 },
   actions: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.sp.sm, marginTop: theme.sp.md },
+  glossary: { gap: theme.sp.sm, marginBottom: theme.sp.sm },
+  gloRow: { gap: 1 },
+  gloTerm: { color: theme.brand, fontSize: theme.fs.sm + 1, fontWeight: '800' },
+  gloDef: { color: theme.muted2, fontSize: theme.fs.sm, lineHeight: 18 },
   aBtn: { backgroundColor: theme.surface2, borderColor: theme.border2, borderWidth: 1, borderRadius: theme.radius.sm + 2, paddingHorizontal: theme.sp.md, paddingVertical: theme.sp.sm },
   aTxt: { color: theme.text, fontSize: theme.fs.sm, fontWeight: '700' },
   caveat: { marginTop: theme.sp.md, backgroundColor: theme.surface2, borderRadius: theme.radius.sm, padding: theme.sp.md, gap: 2 },
