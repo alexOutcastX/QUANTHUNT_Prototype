@@ -30,6 +30,11 @@ const config: CapacitorConfig = {
       autoUpdate: true,
       // Roll back automatically if a bad bundle fails to boot.
       directUpdate: false,
+      // Self-assign the device to the `production` channel — that's where the
+      // android.yml OTA job publishes every bundle. Without this the app has no
+      // channel to pull from, so autoUpdate never fetches anything. (The Capgo
+      // console must have "allow self-assign" enabled on the production channel.)
+      defaultChannel: 'production',
     },
   },
 };
