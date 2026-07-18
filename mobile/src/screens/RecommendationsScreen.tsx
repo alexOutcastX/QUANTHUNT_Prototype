@@ -190,26 +190,39 @@ function RecCard({
         <SetupCell label="R : R" value={r.rr != null ? `${r.rr.toFixed(1)}:1` : '—'} compact={compact} />
       </View>
 
-      <View style={styles.levels}>
-        <Text style={styles.levelTxt}>
-          <Text style={styles.levelLbl}>Support </Text>{money(r.support)}
-          <Text style={styles.levelLbl}>   ·   Resistance </Text>{money(r.resistance)}
-          <Text style={styles.levelLbl}>   ·   Next target </Text>{money(r.target2)}
-        </Text>
-        <Text style={styles.levelTxt}>
-          {r.pattern ? (
-            <>
-              <Text style={styles.levelLbl}>Pattern </Text>
+      <View style={styles.levelGrid}>
+        <View style={styles.levelCell}>
+          <Text style={styles.levelK}>SUPPORT</Text>
+          <Text style={styles.levelV}>{money(r.support)}</Text>
+        </View>
+        <View style={styles.levelDiv} />
+        <View style={styles.levelCell}>
+          <Text style={styles.levelK}>RESISTANCE</Text>
+          <Text style={styles.levelV}>{money(r.resistance)}</Text>
+        </View>
+        <View style={styles.levelDiv} />
+        <View style={styles.levelCell}>
+          <Text style={styles.levelK}>NEXT TGT</Text>
+          <Text style={styles.levelV}>{money(r.target2)}</Text>
+        </View>
+      </View>
+
+      <View style={styles.metaRow}>
+        {r.pattern ? (
+          <View style={styles.metaPill}>
+            <Text style={styles.metaTxt}>
+              <Text style={styles.metaK}>Pattern </Text>
               <Text style={{ color: r.pattern_bias === 'bearish' ? theme.red : theme.green }}>{r.pattern}</Text>
-            </>
-          ) : null}
-          <Text style={styles.levelLbl}>{r.pattern ? '   ·   ' : ''}RSI </Text>{r.rsi}
-        </Text>
+            </Text>
+          </View>
+        ) : null}
+        <View style={styles.metaPill}>
+          <Text style={styles.metaTxt}><Text style={styles.metaK}>RSI </Text>{r.rsi}</Text>
+        </View>
         {r.eta ? (
-          <Text style={styles.eta}>
-            <Text style={styles.levelLbl}>⏱ Est. time to target </Text>
-            <Text style={{ color: theme.text }}>{r.eta}</Text>
-          </Text>
+          <View style={styles.metaPill}>
+            <Text style={styles.metaTxt}><Text style={styles.metaK}>⏱ </Text>{r.eta} to target</Text>
+          </View>
         ) : null}
       </View>
 
@@ -636,9 +649,28 @@ const styles = StyleSheet.create({
   setupLbl: { color: theme.muted, fontSize: theme.fs.xs, letterSpacing: 0.5 },
   setupVal: { color: theme.text, fontFamily: theme.mono, fontWeight: '700', fontSize: theme.fs.md },
   setupSub: { fontFamily: theme.mono, fontSize: theme.fs.xs },
-  levels: { gap: 3 },
-  levelTxt: { color: theme.text, fontFamily: theme.mono, fontSize: theme.fs.sm },
-  eta: { fontFamily: theme.mono, fontSize: theme.fs.sm, marginTop: 2 },
+  levelGrid: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: theme.surface2,
+    borderRadius: theme.radius.sm + 2,
+    paddingVertical: theme.sp.sm + 2,
+  },
+  levelCell: { flex: 1, alignItems: 'center', gap: 3 },
+  levelK: { color: theme.muted, fontSize: theme.fs.xs, letterSpacing: 0.6 },
+  levelV: { color: theme.text, fontFamily: theme.mono, fontWeight: '700', fontSize: theme.fs.sm + 1 },
+  levelDiv: { width: 1, alignSelf: 'stretch', marginVertical: 6, backgroundColor: theme.border },
+  metaRow: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.sp.sm },
+  metaPill: {
+    backgroundColor: theme.surface2,
+    borderColor: theme.border,
+    borderWidth: 1,
+    borderRadius: theme.radius.pill,
+    paddingHorizontal: 11,
+    paddingVertical: 4,
+  },
+  metaTxt: { color: theme.text, fontFamily: theme.mono, fontSize: theme.fs.xs + 1 },
+  metaK: { color: theme.muted },
   levelLbl: { color: theme.muted },
   why: { gap: 3 },
   whyTxt: { color: theme.muted2, fontSize: theme.fs.sm, lineHeight: 18 },
