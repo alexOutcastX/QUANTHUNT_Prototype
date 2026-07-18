@@ -8,6 +8,7 @@ import { addSymbol, loadWatchlist, normSymbol, removeSymbol } from '../watchlist
 import { LocalAlert, addLocalAlert, hasLocalAlert, loadLocalAlerts } from '../localalerts';
 import { capBand } from '../marketcap';
 import { EmptyState, Loading, ScreenTitle } from '../ui';
+import { MOMENTUM_INFO } from '../tabInfo';
 import { theme } from '../theme';
 
 // Per-symbol enrichment (sector + market cap) fetched separately from the
@@ -292,7 +293,8 @@ export default function MomentumScreen() {
     <View style={styles.container}>
       <ScreenTitle
         title="Momentum radar"
-        sub="Whole NSE + BSE universe · breakout & pullback-reversal setups · technical score + follow-through probability"
+        sub="NSE + BSE breakout & pullback-reversal setups"
+        info={MOMENTUM_INFO}
       />
       <View style={styles.chipsRow}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipsInner}>

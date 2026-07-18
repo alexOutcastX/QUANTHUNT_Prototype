@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { peekNav, subscribeNav } from '../navIntent';
 import { useResponsive } from '../responsive';
 import { Segmented } from '../ui';
@@ -34,7 +35,7 @@ type SubTab = { key: string; label: string; hint?: string; render: () => React.R
 // Desktop shows a segmented pill row (there's room). Mobile can't fit 7 labels,
 // so it collapses into a hamburger dropdown: the current tab + a menu listing
 // every tab with a one-line description of what it's for.
-function SubTabs({ tabs }: { tabs: SubTab[] }) {
+function SubTabs({ tabs, persistKey }: { tabs: SubTab[]; persistKey?: string }) {
   const has = (k?: string) => !!k && tabs.some((t) => t.key === k);
   const { isDesktop } = useResponsive();
   // If we arrived here via a cross-screen navigation targeting one of our
@@ -43,6 +44,25 @@ function SubTabs({ tabs }: { tabs: SubTab[] }) {
     const p = peekNav();
     return has(p?.sub) ? (p!.sub as string) : tabs[0].key;
   });
+  const [hydrated, setHydrated] = useState(false);
+  // Restore the last sub-tab (unless a cross-nav intent targeted a specific one)
+  // so returning to the app keeps you on the same section, not the first tab.
+  useEffect(() => {
+    const p = peekNav();
+    if (has(p?.sub) || !persistKey) {
+      setHydrated(true);
+      return;
+    }
+    AsyncStorage.getItem('taureye.subnav.' + persistKey)
+      .then((v) => {
+        if (has(v || undefined)) setActive(v as string);
+      })
+      .finally(() => setHydrated(true));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  useEffect(() => {
+    if (hydrated && persistKey) AsyncStorage.setItem('taureye.subnav.' + persistKey, active).catch(() => {});
+  }, [active, hydrated, persistKey]);
   // …and react to later nav intents while this group stays mounted.
   useEffect(
     () =>
@@ -89,6 +109,7 @@ function SubTabs({ tabs }: { tabs: SubTab[] }) {
 export function AnalysisHome() {
   return (
     <SubTabs
+      persistKey="analysis"
       tabs={[
         { key: 'inst', label: 'Institutional', hint: 'Upside-probability model · Monte-Carlo + historical frequency', render: () => <AnalysisScreen /> },
         { key: 'shareholders', label: 'Shareholders', hint: "Search an investor's holdings, or who holds a stock · NSE deals", render: () => <EntityGraphScreen /> },
@@ -106,6 +127,7 @@ export function AnalysisHome() {
 export function ListsHome() {
   return (
     <SubTabs
+      persistKey="lists"
       tabs={[
         { key: 'watchlist', label: 'Watchlist', hint: 'Symbols with entry price + since-add move · live quotes', render: () => <WatchlistScreen /> },
         { key: 'portfolio', label: 'Portfolio', hint: 'Holdings with live P&L · broker sync', render: () => <PortfolioScreen /> },
@@ -118,6 +140,7 @@ export function ListsHome() {
 export function ToolsHome() {
   return (
     <SubTabs
+      persistKey="tools"
       tabs={[
         { key: 'universe', label: 'Universe', hint: 'Index constituents · mcap segments · heatmap', render: () => <UniverseScreen /> },
         { key: 'derivatives', label: 'Derivatives', hint: 'F&O option chain · PCR · max-pain · payoff builder', render: () => <DerivativesScreen /> },
@@ -135,6 +158,7 @@ export function ToolsHome() {
 export function ChartsHome() {
   return (
     <SubTabs
+      persistKey="charts"
       tabs={[
         { key: 'native', label: 'Chart', hint: 'Native candlestick chart with moving averages', render: () => <ChartScreen /> },
         { key: 'tv', label: 'TradingView', hint: 'Full TradingView charting widget', render: () => <TradingViewScreen /> },

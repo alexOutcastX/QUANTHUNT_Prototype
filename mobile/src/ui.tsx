@@ -3,6 +3,7 @@
 import React from 'react';
 import {
   ActivityIndicator,
+  Modal,
   ScrollView,
   StyleSheet,
   Text,
@@ -58,14 +59,117 @@ export function Segmented<T extends string>({
   );
 }
 
+// Structured "about this tab" content shown in the info popup. Keeps the long
+// explanatory copy out of the screen header (just an ⓘ button) and gives every
+// tab the same layout: overview → labelled sections (strategies, how to trade
+// safely, …) → a red disclaimer box at the very end.
+export type InfoSection = { heading: string; text?: string; bullets?: string[] };
+export type InfoContent = {
+  about?: string;
+  sections?: InfoSection[];
+  disclaimer?: string;
+};
+
+// The popup itself. The header (title + close button) lives OUTSIDE the
+// ScrollView so the ✕ stays pinned while the body scrolls — you can read all
+// the content and still dismiss without scrolling back to the top.
+function InfoModal({
+  open,
+  onClose,
+  title,
+  content,
+}: {
+  open: boolean;
+  onClose: () => void;
+  title: string;
+  content: InfoContent;
+}) {
+  return (
+    <Modal visible={open} transparent animationType="fade" onRequestClose={onClose}>
+      <View style={s.modalBackdrop}>
+        <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={onClose} />
+        <View style={s.modalCard}>
+          <View style={s.modalHeader}>
+            <Text style={s.modalTitle} numberOfLines={1}>{title}</Text>
+            <TouchableOpacity
+              style={s.modalClose}
+              onPress={onClose}
+              activeOpacity={0.7}
+              accessibilityLabel="Close"
+            >
+              <Text style={s.modalCloseGlyph}>×</Text>
+            </TouchableOpacity>
+          </View>
+          <ScrollView style={s.modalBody} contentContainerStyle={s.modalBodyInner}>
+            {content.about ? <Text style={s.modalPara}>{content.about}</Text> : null}
+            {(content.sections || []).map((sec, i) => (
+              <View key={i} style={s.modalSection}>
+                <Text style={s.modalHeading}>{sec.heading}</Text>
+                {sec.text ? <Text style={s.modalPara}>{sec.text}</Text> : null}
+                {(sec.bullets || []).map((b, j) => (
+                  <View key={j} style={s.modalBulletRow}>
+                    <Text style={s.modalBulletDot}>•</Text>
+                    <Text style={s.modalBulletTxt}>{b}</Text>
+                  </View>
+                ))}
+              </View>
+            ))}
+            {content.disclaimer ? (
+              <View style={s.modalDisclaimer}>
+                <Text style={s.modalDisclaimerLabel}>DISCLAIMER</Text>
+                <Text style={s.modalDisclaimerTxt}>{content.disclaimer}</Text>
+              </View>
+            ) : null}
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+function InfoButton({ title, content }: { title: string; content: InfoContent }) {
+  const [open, setOpen] = React.useState(false);
+  return (
+    <>
+      <TouchableOpacity
+        style={s.infoBtn}
+        onPress={() => setOpen(true)}
+        activeOpacity={0.7}
+        accessibilityLabel={'About ' + title}
+      >
+        <Text style={s.infoGlyph}>ⓘ</Text>
+      </TouchableOpacity>
+      <InfoModal open={open} onClose={() => setOpen(false)} title={title} content={content} />
+    </>
+  );
+}
+
 // On desktop the action row sits inline beside the title; on a phone the title
 // (and its sub-line) would get squeezed and wrap, so the actions drop below it.
-export function ScreenTitle({ title, sub, right }: { title: string; sub?: string; right?: React.ReactNode }) {
+// `info`, when given, renders an ⓘ button next to the title that opens a popup
+// with the tab's full details (so the header can stay a one-liner).
+export function ScreenTitle({
+  title,
+  sub,
+  right,
+  info,
+}: {
+  title: string;
+  sub?: string;
+  right?: React.ReactNode;
+  info?: InfoContent;
+}) {
   const { isDesktop } = useResponsive();
+  const heading = (
+    <View style={s.titleLine}>
+      <Text style={s.title}>{title}</Text>
+      {info ? <InfoButton title={title} content={info} /> : null}
+    </View>
+  );
   if (!isDesktop && right) {
     return (
       <View style={s.titleCol}>
-        <Text style={s.title}>{title}</Text>
+        {heading}
         {sub ? <Text style={s.sub}>{sub}</Text> : null}
         <View style={s.titleActions}>{right}</View>
       </View>
@@ -74,7 +178,7 @@ export function ScreenTitle({ title, sub, right }: { title: string; sub?: string
   return (
     <View style={s.titleRow}>
       <View style={{ flex: 1 }}>
-        <Text style={s.title}>{title}</Text>
+        {heading}
         {sub ? <Text style={s.sub}>{sub}</Text> : null}
       </View>
       {right}
@@ -213,8 +317,93 @@ const s = StyleSheet.create({
     gap: theme.sp.sm,
   },
   titleActions: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.sp.sm, marginTop: 2 },
+  titleLine: { flexDirection: 'row', alignItems: 'center', gap: theme.sp.sm },
   title: { color: theme.text, fontSize: theme.fs.xxl, fontWeight: '800', letterSpacing: -0.4 },
   sub: { color: theme.muted, fontSize: theme.fs.sm + 1, marginTop: 4, lineHeight: 18 },
+
+  // ⓘ button beside a screen title — subtle, brand-tinted, taps open the popup.
+  infoBtn: {
+    width: 26,
+    height: 26,
+    borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: theme.brandSoft,
+    borderColor: theme.brand,
+    borderWidth: 1,
+  },
+  infoGlyph: { color: theme.brand, fontSize: 15, fontWeight: '700', lineHeight: 18 },
+
+  // Info popup. Backdrop dims the app; card is height-capped so the body scrolls
+  // under a pinned header.
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: theme.sp.lg,
+  },
+  modalCard: {
+    width: '100%',
+    maxWidth: 560,
+    maxHeight: '86%',
+    backgroundColor: theme.surface,
+    borderColor: theme.border2,
+    borderWidth: 1,
+    borderRadius: theme.radius.lg,
+    overflow: 'hidden',
+    ...theme.shadow.card,
+  },
+  // Pinned header — sits above the ScrollView so ✕ never scrolls away.
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.sp.md,
+    paddingLeft: theme.sp.lg,
+    paddingRight: theme.sp.sm,
+    paddingVertical: theme.sp.md,
+    borderBottomColor: theme.border,
+    borderBottomWidth: 1,
+    backgroundColor: theme.surface,
+  },
+  modalTitle: { flex: 1, color: theme.text, fontSize: theme.fs.lg + 1, fontWeight: '800', letterSpacing: -0.3 },
+  modalClose: {
+    width: 34,
+    height: 34,
+    borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: theme.surface2,
+    borderColor: theme.border2,
+    borderWidth: 1,
+  },
+  modalCloseGlyph: { color: theme.muted2, fontSize: 22, lineHeight: 24, fontWeight: '600' },
+  modalBody: { flexGrow: 0 },
+  modalBodyInner: { padding: theme.sp.lg, gap: theme.sp.md },
+  modalPara: { color: theme.muted2, fontSize: theme.fs.md, lineHeight: 21 },
+  modalSection: { gap: theme.sp.xs },
+  modalHeading: {
+    color: theme.muted,
+    fontSize: theme.fs.xs + 1,
+    fontWeight: '800',
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+    marginBottom: 2,
+  },
+  modalBulletRow: { flexDirection: 'row', gap: theme.sp.sm, alignItems: 'flex-start' },
+  modalBulletDot: { color: theme.brand, fontSize: theme.fs.md, lineHeight: 21 },
+  modalBulletTxt: { flex: 1, color: theme.muted2, fontSize: theme.fs.md, lineHeight: 21 },
+  // Red disclaimer box, always last.
+  modalDisclaimer: {
+    marginTop: theme.sp.sm,
+    borderColor: theme.red,
+    borderWidth: 1,
+    borderRadius: theme.radius.md,
+    padding: theme.sp.md,
+    backgroundColor: 'rgba(221,44,88,0.08)',
+  },
+  modalDisclaimerLabel: { color: theme.red, fontSize: theme.fs.xs + 1, fontWeight: '800', letterSpacing: 1.2, marginBottom: 4 },
+  modalDisclaimerTxt: { color: theme.red, fontSize: theme.fs.sm + 1, lineHeight: 19 },
   section: {
     color: theme.muted,
     fontSize: theme.fs.xs + 1,

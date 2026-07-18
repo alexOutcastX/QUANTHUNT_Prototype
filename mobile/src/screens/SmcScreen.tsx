@@ -9,6 +9,7 @@ import { LocalAlert, addLocalAlert, hasLocalAlert, loadLocalAlerts } from '../lo
 import { loadNames } from './ScreenerScreen';
 import { useResponsive } from '../responsive';
 import { Card, EmptyState, ScreenTitle } from '../ui';
+import { SMC_INFO } from '../tabInfo';
 import { theme } from '../theme';
 import {
   DEPTH_OPTIONS,
@@ -414,7 +415,8 @@ export default function SmcScreen() {
     <View style={styles.container}>
       <ScreenTitle
         title="HFT / ICT / SMC"
-        sub="Smart-money liquidity, structure & FVG models on daily NSE structure — long-biased, confluence-scored"
+        sub="Smart-money structure, liquidity & FVG models"
+        info={SMC_INFO}
         right={
           <TouchableOpacity style={[styles.updBtn, scanning && { opacity: 0.5 }]} onPress={runScan} disabled={scanning} activeOpacity={0.75}>
             <Text style={styles.updTxt}>{scanning ? '… Scanning' : '⟳ Update List'}</Text>

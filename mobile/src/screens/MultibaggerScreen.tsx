@@ -13,6 +13,7 @@ import { ACTIONS_W, COLS, Col, DEFAULT_HIDDEN, cellFlex, loadNames } from './Scr
 import { TrackDir, TrackEntry, addTrack, loadTrack, removeTrack } from '../tracklist';
 import { addSymbol, loadWatchlist, normSymbol, removeSymbol } from '../watchlist';
 import { Btn, Card, EmptyState, Loading, ScreenTitle, SectionTitle, StatTile } from '../ui';
+import { MULTIBAGGER_INFO } from '../tabInfo';
 import { theme } from '../theme';
 import { getScanned, hydrateScan, isIncluded, subscribeScan, toggleInclude } from '../scanStore';
 
@@ -624,7 +625,8 @@ export default function MultibaggerScreen() {
     <View style={styles.container}>
       <ScreenTitle
         title="Multibagger"
-        sub="Fixed-screen candidates + one-click potential analyser · Lynch, Mayer & the 100x studies"
+        sub="Long-term compounders + potential analyser"
+        info={MULTIBAGGER_INFO}
         right={
           <View style={styles.segRow}>
             {(['screen', 'analyse'] as const).map((v) => (

@@ -169,9 +169,10 @@ function graphHtml(data: GraphResp, quotes: LtpResp, centre: string, openIdx: st
     /* Floating/dock controls are meaningless on a phone (the window is always
        stacked under the graph) — hide the dock pins, keep ↗ open + ✕ close. */
     #win #dk-float, #win #dk-bottom, #win #dk-right { display: none; }
-    /* One finger scrolls the PAGE (never pans the graph); two-finger pinch is
-       delivered to the graph's own zoom. Prevents the scroll trap. */
-    svg { touch-action: pan-x pan-y; }
+    /* The graph window is fixed, so the graph owns its touch gestures: one
+       finger pans (moves the map), two fingers pinch-zoom. No scroll trap — the
+       toolbar (FIT / RESET) and the NEWS/CHART tabs sit outside the graph. */
+    svg { touch-action: none; }
   }
 </style></head><body>
 <div id="wrap">
@@ -420,25 +421,17 @@ function graphHtml(data: GraphResp, quotes: LtpResp, centre: string, openIdx: st
                cy: (Math.min.apply(null, ys) + Math.max.apply(null, ys)) / 2 };
     }
     var zoomB = d3.zoom().scaleExtent([0.35, 2.5])
-      // Phones: pinch-to-zoom only. A single finger must scroll the PAGE, not
-      // pan the graph — one-finger panning trapped users inside the graph view.
+      // The graph window is fixed, so the graph owns its gestures everywhere:
+      // one finger / left-drag pans the map, two fingers / wheel zoom. FIT and
+      // RESET stay on the toolbar as the escape hatches. (Node-dragging is
+      // desktop-only, so a one-finger pan never fights a bubble drag on mobile.)
       .filter(function(ev){
         if (!MOBILE) return !ev.ctrlKey && !ev.button;
         if (ev.type === 'wheel') return true;
         var t = ev.touches;
-        return !!(t && t.length >= 2);
+        return !!(t && t.length >= 1);
       })
-      .on('zoom', function(ev){
-        if (MOBILE) {
-          // Graph stays pinned to the viewport centre — pinch changes scale only.
-          var k = ev.transform.k, b = bounds();
-          var Wn = document.getElementById('gwrap').clientWidth || Wd;
-          var Hn = document.getElementById('gwrap').clientHeight || H;
-          root.attr('transform', 'translate(' + (Wn/2 - k*b.cx) + ',' + (Hn/2 - k*b.cy) + ') scale(' + k + ')');
-        } else {
-          root.attr('transform', ev.transform);
-        }
-      });
+      .on('zoom', function(ev){ root.attr('transform', ev.transform); });
     svg.call(zoomB);
     // Zoom out to fit once forces settle, so no node ends up off-canvas when
     // the news panel / docked window shrink the graph area. Zoom-out only on
