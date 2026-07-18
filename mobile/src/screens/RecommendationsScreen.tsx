@@ -13,7 +13,7 @@ import InstitutionalScreen from './InstitutionalScreen';
 import SmcScreen from './SmcScreen';
 import { useResponsive } from '../responsive';
 import { printHtmlDocument } from '../pdf';
-import { Card, EmptyState, ScreenTitle } from '../ui';
+import { Card, EmptyState, ScreenTitle, Segmented } from '../ui';
 import { theme } from '../theme';
 import {
   DEPTH_OPTIONS,
@@ -548,18 +548,7 @@ export default function RecommendationsScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.modeBarWrap}>
-        <View style={styles.modeBar}>
-          {TABS.map((t) => (
-            <TouchableOpacity
-              key={t.key}
-              style={[styles.modeBtn, mode === t.key && styles.modeBtnOn]}
-              onPress={() => setMode(t.key)}
-              activeOpacity={0.75}
-            >
-              <Text style={[styles.modeTxt, mode === t.key && styles.modeTxtOn]}>{t.label}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
+        <Segmented items={TABS} value={mode} onChange={setMode} />
       </View>
       <View style={{ flex: 1 }}>
         {mode === 'short' ? <ShortTermScreen /> : mode === 'inst' ? <InstitutionalScreen /> : mode === 'smc' ? <SmcScreen /> : <LongTermRecs />}
@@ -570,7 +559,7 @@ export default function RecommendationsScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.bg },
-  modeBarWrap: { paddingHorizontal: theme.sp.lg, paddingTop: theme.sp.md, paddingBottom: theme.sp.xs },
+  modeBarWrap: { paddingTop: theme.sp.md },
   modeBar: { flexDirection: 'row', flexWrap: 'wrap', gap: 3, backgroundColor: theme.surface2, borderRadius: theme.radius.sm + 6, padding: 3, alignSelf: 'flex-start' },
   modeBtn: { borderRadius: 999, paddingVertical: 6, paddingHorizontal: theme.sp.md },
   modeBtnOn: { backgroundColor: theme.accent },
