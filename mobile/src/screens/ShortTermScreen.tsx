@@ -10,6 +10,7 @@ import { LocalAlert, addLocalAlert, hasLocalAlert, loadLocalAlerts } from '../lo
 import { loadNames } from './ScreenerScreen';
 import { useResponsive } from '../responsive';
 import { Card, EmptyState, ScreenTitle } from '../ui';
+import { SHORT_TERM_INFO } from '../tabInfo';
 import { theme } from '../theme';
 import {
   DEPTH_OPTIONS,
@@ -354,7 +355,8 @@ export default function ShortTermScreen() {
     <View style={styles.container}>
       <ScreenTitle
         title="Short-term swing"
-        sub="Mid & large caps near a pullback reversal / oversold bounce — tap a scrip for the full setup"
+        sub="Pullback-reversal & oversold-bounce setups"
+        info={SHORT_TERM_INFO}
         right={
           <TouchableOpacity style={[styles.updBtn, scanning && { opacity: 0.5 }]} onPress={runScan} disabled={scanning} activeOpacity={0.75}>
             <Text style={styles.updTxt}>{scanning ? '… Scanning' : '⟳ Update List'}</Text>

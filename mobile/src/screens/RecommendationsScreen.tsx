@@ -14,6 +14,7 @@ import SmcScreen from './SmcScreen';
 import { useResponsive } from '../responsive';
 import { printHtmlDocument } from '../pdf';
 import { Card, EmptyState, ScreenTitle, Segmented } from '../ui';
+import { RECOMMENDATIONS_INFO } from '../tabInfo';
 import { theme } from '../theme';
 import {
   DEPTH_OPTIONS,
@@ -442,7 +443,8 @@ function LongTermRecs() {
     <View style={styles.container}>
       <ScreenTitle
         title="Recommendations"
-        sub="Multibagger candidates screened through fundamentals, momentum & chart patterns into actionable buy setups"
+        sub="Fundamentals + momentum + patterns → buy setups"
+        info={RECOMMENDATIONS_INFO}
         right={
           <View style={styles.headBtns}>
             <TouchableOpacity
@@ -550,8 +552,22 @@ function LongTermRecs() {
 // that screens by algorithmic strategy. A segmented toggle switches between
 // them; each keeps its own persistent cache.
 type RecMode = 'long' | 'short' | 'inst' | 'smc';
+const REC_MODES: RecMode[] = ['long', 'short', 'inst', 'smc'];
 export default function RecommendationsScreen() {
   const [mode, setMode] = useState<RecMode>('long');
+  const [modeHydrated, setModeHydrated] = useState(false);
+  // Remember which sub-list was open so returning to the app doesn't snap back
+  // to Long term.
+  useEffect(() => {
+    AsyncStorage.getItem('taureye.reco.mode')
+      .then((v) => {
+        if (v && (REC_MODES as string[]).includes(v)) setMode(v as RecMode);
+      })
+      .finally(() => setModeHydrated(true));
+  }, []);
+  useEffect(() => {
+    if (modeHydrated) AsyncStorage.setItem('taureye.reco.mode', mode).catch(() => {});
+  }, [mode, modeHydrated]);
   const TABS: { key: RecMode; label: string }[] = [
     { key: 'long', label: 'Long term' },
     { key: 'short', label: 'Short term' },
