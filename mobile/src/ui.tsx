@@ -3,6 +3,7 @@
 import React from 'react';
 import {
   ActivityIndicator,
+  ScrollView,
   StyleSheet,
   Text,
   TextStyle,
@@ -13,8 +14,48 @@ import {
 import { theme } from './theme';
 import { useResponsive } from './responsive';
 
-export function Card({ children, style }: { children: React.ReactNode; style?: ViewStyle }) {
-  return <View style={[s.card, style]}>{children}</View>;
+export function Card({ children, style, flat }: { children: React.ReactNode; style?: ViewStyle; flat?: boolean }) {
+  return <View style={[s.card, !flat && theme.shadow.soft, style]}>{children}</View>;
+}
+
+// Horizontally-scrollable segmented control — one clean row of pills, the active
+// one carries the brand tint. Replaces the old hamburger dropdown / wrapping
+// toggle so every sub-navigation reads the same and never wraps.
+export function Segmented<T extends string>({
+  items,
+  value,
+  onChange,
+  style,
+}: {
+  items: { key: T; label: string }[];
+  value: T;
+  onChange: (k: T) => void;
+  style?: ViewStyle;
+}) {
+  return (
+    <View style={[s.segWrap, style]}>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={s.segScroll}
+        contentContainerStyle={s.segRow}
+      >
+        {items.map((it) => {
+          const on = it.key === value;
+          return (
+            <TouchableOpacity
+              key={it.key}
+              style={[s.seg, on && s.segOn]}
+              onPress={() => onChange(it.key)}
+              activeOpacity={0.8}
+            >
+              <Text style={[s.segTxt, on && s.segTxtOn]}>{it.label}</Text>
+            </TouchableOpacity>
+          );
+        })}
+      </ScrollView>
+    </View>
+  );
 }
 
 // On desktop the action row sits inline beside the title; on a phone the title
@@ -140,9 +181,23 @@ const s = StyleSheet.create({
     backgroundColor: theme.surface,
     borderColor: theme.border,
     borderWidth: 1,
-    borderRadius: theme.radius.md,
+    borderRadius: theme.radius.lg,
     padding: theme.sp.lg,
   },
+  segWrap: { paddingBottom: theme.sp.sm },
+  segScroll: { flexGrow: 0 },
+  segRow: { flexDirection: 'row', gap: theme.sp.sm, paddingHorizontal: theme.sp.lg, alignItems: 'center' },
+  seg: {
+    paddingHorizontal: 15,
+    paddingVertical: 8,
+    borderRadius: theme.radius.pill,
+    backgroundColor: theme.surface2,
+    borderColor: theme.border,
+    borderWidth: 1,
+  },
+  segOn: { backgroundColor: theme.brandSoft, borderColor: theme.brand },
+  segTxt: { color: theme.muted2, fontSize: theme.fs.sm + 1, fontWeight: '600', letterSpacing: 0.2 },
+  segTxtOn: { color: theme.brand, fontWeight: '800' },
   titleRow: {
     flexDirection: 'row',
     alignItems: 'flex-end',
@@ -158,20 +213,20 @@ const s = StyleSheet.create({
     gap: theme.sp.sm,
   },
   titleActions: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.sp.sm, marginTop: 2 },
-  title: { color: theme.text, fontSize: theme.fs.xl, fontWeight: '700', letterSpacing: 0.2 },
-  sub: { color: theme.muted, fontSize: theme.fs.sm, marginTop: 3 },
+  title: { color: theme.text, fontSize: theme.fs.xxl, fontWeight: '800', letterSpacing: -0.4 },
+  sub: { color: theme.muted, fontSize: theme.fs.sm + 1, marginTop: 4, lineHeight: 18 },
   section: {
-    color: theme.muted2,
+    color: theme.muted,
     fontSize: theme.fs.xs + 1,
-    fontWeight: '700',
-    letterSpacing: 1.2,
+    fontWeight: '800',
+    letterSpacing: 1.4,
     textTransform: 'uppercase',
     marginBottom: theme.sp.sm,
     marginTop: theme.sp.lg,
   },
   btn: {
     backgroundColor: theme.accent,
-    borderRadius: theme.radius.sm + 2,
+    borderRadius: theme.radius.md,
     paddingHorizontal: theme.sp.lg,
     paddingVertical: 11,
     alignItems: 'center',

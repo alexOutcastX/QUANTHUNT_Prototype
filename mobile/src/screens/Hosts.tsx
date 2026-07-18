@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { peekNav, subscribeNav } from '../navIntent';
 import { useResponsive } from '../responsive';
+import { Segmented } from '../ui';
 import { theme } from '../theme';
 import AnalysisScreen from './AnalysisScreen';
 import BacktestScreen from './BacktestScreen';
@@ -36,7 +37,6 @@ type SubTab = { key: string; label: string; hint?: string; render: () => React.R
 function SubTabs({ tabs }: { tabs: SubTab[] }) {
   const has = (k?: string) => !!k && tabs.some((t) => t.key === k);
   const { isDesktop } = useResponsive();
-  const [menuOpen, setMenuOpen] = useState(false);
   // If we arrived here via a cross-screen navigation targeting one of our
   // sub-tabs, open on that tab instead of the first.
   const [active, setActive] = useState(() => {
@@ -48,19 +48,12 @@ function SubTabs({ tabs }: { tabs: SubTab[] }) {
     () =>
       subscribeNav(() => {
         const p = peekNav();
-        if (has(p?.sub)) {
-          setActive(p!.sub as string);
-          setMenuOpen(false);
-        }
+        if (has(p?.sub)) setActive(p!.sub as string);
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
   );
   const cur = tabs.find((t) => t.key === active) || tabs[0];
-  const pick = (k: string) => {
-    setActive(k);
-    setMenuOpen(false);
-  };
 
   return (
     <View style={styles.host}>
@@ -80,47 +73,15 @@ function SubTabs({ tabs }: { tabs: SubTab[] }) {
           </View>
         </View>
       ) : (
-        <View style={styles.hamWrap}>
-          <TouchableOpacity style={styles.hamBtn} onPress={() => setMenuOpen((o) => !o)} activeOpacity={0.75}>
-            <Text style={styles.hamIcon}>☰</Text>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.hamLabel}>{cur.label}</Text>
-              {cur.hint ? <Text style={styles.hamHint} numberOfLines={1}>{cur.hint}</Text> : null}
-            </View>
-            <Text style={styles.hamChevron}>{menuOpen ? '▲' : '▼'}</Text>
-          </TouchableOpacity>
+        // Mobile: one clean scrollable row of pills instead of a hidden dropdown,
+        // with the active section's one-line description beneath it.
+        <View style={styles.subNav}>
+          <Segmented items={tabs.map((t) => ({ key: t.key, label: t.label }))} value={active} onChange={setActive} />
+          {cur.hint ? <Text style={styles.subNavHint} numberOfLines={1}>{cur.hint}</Text> : null}
         </View>
       )}
 
       <View style={styles.hostBody}>{cur.render()}</View>
-
-      {/* mobile dropdown overlay */}
-      {!isDesktop && menuOpen ? (
-        <>
-          <Pressable style={styles.menuScrim} onPress={() => setMenuOpen(false)} />
-          <View style={styles.menuSheet}>
-            <ScrollView bounces={false}>
-              {tabs.map((t) => {
-                const on = active === t.key;
-                return (
-                  <TouchableOpacity
-                    key={t.key}
-                    style={[styles.menuItem, on && styles.menuItemOn]}
-                    onPress={() => pick(t.key)}
-                    activeOpacity={0.75}
-                  >
-                    <View style={{ flex: 1 }}>
-                      <Text style={[styles.menuLabel2, on && styles.menuLabel2On]}>{t.label}</Text>
-                      {t.hint ? <Text style={styles.menuHint2}>{t.hint}</Text> : null}
-                    </View>
-                    {on ? <Text style={styles.menuTick}>✓</Text> : null}
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
-          </View>
-        </>
-      ) : null}
     </View>
   );
 }
@@ -243,6 +204,8 @@ export function MoreScreen() {
 const styles = StyleSheet.create({
   host: { flex: 1, backgroundColor: theme.bg },
   hostBody: { flex: 1 },
+  subNav: { paddingTop: theme.sp.md },
+  subNavHint: { color: theme.muted, fontSize: theme.fs.xs + 1, paddingHorizontal: theme.sp.lg, marginTop: 2 },
   subBarWrap: { paddingHorizontal: theme.sp.lg, paddingTop: theme.sp.md, paddingBottom: theme.sp.sm },
   subBar: {
     flexDirection: 'row',
