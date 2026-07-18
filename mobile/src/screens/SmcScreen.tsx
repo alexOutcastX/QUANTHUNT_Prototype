@@ -8,7 +8,8 @@ import { addSymbol, loadWatchlist, normSymbol } from '../watchlist';
 import { LocalAlert, addLocalAlert, hasLocalAlert, loadLocalAlerts } from '../localalerts';
 import { loadNames } from './ScreenerScreen';
 import { useResponsive } from '../responsive';
-import { Card, Dropdown, EmptyState } from '../ui';
+import { Card, Dropdown, EmptyState, RiskBadge } from '../ui';
+import { PaperTrade, addPaperTrade, hasOpenPaper, loadPaperTrades } from '../paperTrades';
 import { theme } from '../theme';
 import {
   DEPTH_OPTIONS,
@@ -95,15 +96,17 @@ function SmcRow({ r, onOpen }: { r: SmcRec; onOpen: () => void }) {
 }
 
 function SmcDetail({
-  r, watched, alerted, onClose, onChart, onAnalyse, onPattern, onWatch, onAlert,
+  r, watched, alerted, papered, onClose, onChart, onAnalyse, onPattern, onPaper, onWatch, onAlert,
 }: {
   r: SmcRec;
   watched: boolean;
   alerted: boolean;
+  papered: boolean;
   onClose: () => void;
   onChart: () => void;
   onAnalyse: () => void;
   onPattern: () => void;
+  onPaper: () => void;
   onWatch: () => void;
   onAlert: () => void;
 }) {
@@ -134,6 +137,7 @@ function SmcDetail({
               </View>
               {r.name ? <Text style={styles.name}>{r.name}</Text> : null}
               <Text style={[styles.primaryTag, { color: stratColor(r.primary_key) }]}>{r.primary}</Text>
+              <RiskBadge input={{ rr: r.rr, stop_pct: r.stop_pct, max_dd: r.max_dd, score: r.score }} style={{ marginTop: 6 }} />
             </View>
             <View style={{ alignItems: 'flex-end' }}>
               <Text style={[styles.score, { color: scoreColor(r.score), fontSize: 28 }]}>{r.score}</Text>
@@ -231,6 +235,9 @@ function SmcDetail({
             <TouchableOpacity style={styles.aBtn} onPress={onPattern} activeOpacity={0.75}>
               <Text style={[styles.aTxt, { color: theme.brand }]}>⚏ Pattern</Text>
             </TouchableOpacity>
+            <TouchableOpacity style={styles.aBtn} onPress={onPaper} activeOpacity={0.75}>
+              <Text style={[styles.aTxt, papered && { color: theme.green }]}>{papered ? '✓ Papered' : '✎ Paper trade'}</Text>
+            </TouchableOpacity>
             <TouchableOpacity style={styles.aBtn} onPress={onWatch} activeOpacity={0.75}>
               <Text style={[styles.aTxt, watched && { color: theme.green }]}>{watched ? '★ Watching' : '☆ Watchlist'}</Text>
             </TouchableOpacity>
@@ -272,6 +279,7 @@ export default function SmcScreen() {
   const [ready, setReady] = useState(isHydrated());
   const [watch, setWatch] = useState<string[]>([]);
   const [alerts, setAlerts] = useState<LocalAlert[]>([]);
+  const [paper, setPaper] = useState<PaperTrade[]>([]);
   const [sortKey, setSortKey] = useState<'score' | 'upside' | 'rr' | 'time'>('score');
   const [filter, setFilter] = useState<string>('all');
   const [open, setOpen] = useState<SmcRec | null>(null);
@@ -291,6 +299,7 @@ export default function SmcScreen() {
   useEffect(() => {
     loadWatchlist().then(setWatch);
     loadLocalAlerts().then(setAlerts);
+    loadPaperTrades().then(setPaper);
   }, []);
 
   const runScan = useCallback(async () => {
@@ -436,6 +445,20 @@ export default function SmcScreen() {
     setOpen(null);
     navigate('analysis', { sub: 'patterns', symbol: r.symbol });
   };
+  const onPaper = async (r: SmcRec) => {
+    setPaper(
+      await addPaperTrade({
+        symbol: r.symbol,
+        name: r.name || undefined,
+        side: 'long',
+        source: 'HFT/ICT/SMC',
+        entry: r.entry,
+        stop: r.stop,
+        target: r.target,
+      }),
+    );
+    toast(`Paper trade logged for ${r.symbol} → see Paper tab`);
+  };
 
   return (
     <View style={styles.container}>
@@ -502,9 +525,11 @@ export default function SmcScreen() {
           watched={isWatched(open.symbol)}
           alerted={hasLocalAlert(alerts, open.symbol)}
           onClose={() => setOpen(null)}
+          papered={hasOpenPaper(paper, open.symbol)}
           onChart={() => onChart(open)}
           onAnalyse={() => onAnalyse(open)}
           onPattern={() => onPattern(open)}
+          onPaper={() => onPaper(open)}
           onWatch={() => onWatch(open)}
           onAlert={() => onAlert(open)}
         />
