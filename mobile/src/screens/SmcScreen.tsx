@@ -446,37 +446,41 @@ export default function SmcScreen() {
       ) : null}
 
       {availModels.length && !scanning ? (
-        <View style={styles.sortRow}>
-          <Text style={styles.depthLbl}>Model</Text>
-          <TouchableOpacity style={[styles.filterChip, filter === 'all' && styles.filterChipOn]} onPress={() => setFilter('all')} activeOpacity={0.75}>
-            <Text style={[styles.sortTxt, filter === 'all' && styles.sortTxtOn]}>All</Text>
-          </TouchableOpacity>
-          {availModels.map((s) => (
-            <TouchableOpacity
-              key={s.key}
-              style={[styles.filterChip, filter === s.key && { borderColor: stratColor(s.key), backgroundColor: theme.surface3 }]}
-              onPress={() => setFilter(s.key)}
-              activeOpacity={0.75}
-            >
-              <Text style={[styles.sortTxt, filter === s.key && { color: stratColor(s.key) }]}>{s.label}</Text>
+        <View style={styles.filterBar}>
+          <Text style={styles.filterLbl}>Model</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterScroll} contentContainerStyle={styles.filterScrollRow}>
+            <TouchableOpacity style={[styles.filterChip, filter === 'all' && styles.filterChipOn]} onPress={() => setFilter('all')} activeOpacity={0.75}>
+              <Text style={[styles.sortTxt, filter === 'all' && styles.sortTxtOn]}>All</Text>
             </TouchableOpacity>
-          ))}
+            {availModels.map((s) => (
+              <TouchableOpacity
+                key={s.key}
+                style={[styles.filterChip, filter === s.key && { borderColor: stratColor(s.key), backgroundColor: theme.surface3 }]}
+                onPress={() => setFilter(s.key)}
+                activeOpacity={0.75}
+              >
+                <Text style={[styles.sortTxt, filter === s.key && { color: stratColor(s.key) }]} numberOfLines={1}>{s.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
         </View>
       ) : null}
 
       {recs.length > 1 && !scanning ? (
-        <View style={styles.sortRow}>
-          <Text style={styles.depthLbl}>Sort</Text>
-          {SORTS.map((s) => (
-            <TouchableOpacity
-              key={s.key}
-              style={[styles.sortChip, sortKey === s.key && styles.sortChipOn]}
-              onPress={() => setSortKey(s.key)}
-              activeOpacity={0.75}
-            >
-              <Text style={[styles.sortTxt, sortKey === s.key && styles.sortTxtOn]}>{s.label}</Text>
-            </TouchableOpacity>
-          ))}
+        <View style={styles.filterBar}>
+          <Text style={styles.filterLbl}>Sort</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterScroll} contentContainerStyle={styles.filterScrollRow}>
+            {SORTS.map((s) => (
+              <TouchableOpacity
+                key={s.key}
+                style={[styles.sortChip, sortKey === s.key && styles.sortChipOn]}
+                onPress={() => setSortKey(s.key)}
+                activeOpacity={0.75}
+              >
+                <Text style={[styles.sortTxt, sortKey === s.key && styles.sortTxtOn]}>{s.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
         </View>
       ) : null}
 
@@ -537,6 +541,12 @@ const styles = StyleSheet.create({
   depthTxtOn: { color: theme.onAccent },
   asof: { color: theme.muted, fontSize: theme.fs.xs + 1, marginLeft: 'auto' },
   sortRow: { flexDirection: 'row', alignItems: 'center', gap: theme.sp.sm, paddingHorizontal: theme.sp.lg, paddingBottom: theme.sp.sm, flexWrap: 'wrap' },
+  // Compact single-row filters — label pinned, chips scroll horizontally so
+  // Model + Sort take one row each (not three) and the scrips get the space.
+  filterBar: { flexDirection: 'row', alignItems: 'center', gap: theme.sp.sm, paddingLeft: theme.sp.lg, paddingBottom: theme.sp.xs },
+  filterLbl: { color: theme.muted, fontSize: theme.fs.xs + 1, fontWeight: '700', letterSpacing: 0.5, width: 44 },
+  filterScroll: { flexGrow: 0, flexShrink: 1 },
+  filterScrollRow: { flexDirection: 'row', gap: theme.sp.sm, paddingRight: theme.sp.lg, alignItems: 'center' },
   sortChip: { backgroundColor: theme.surface2, borderColor: theme.border2, borderWidth: 1, borderRadius: 999, paddingHorizontal: theme.sp.md, paddingVertical: 4 },
   sortChipOn: { backgroundColor: theme.surface3, borderColor: theme.accent },
   filterChip: { backgroundColor: theme.surface2, borderColor: theme.border2, borderWidth: 1, borderRadius: 999, paddingHorizontal: theme.sp.md, paddingVertical: 4 },
