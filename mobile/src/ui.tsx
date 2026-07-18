@@ -15,6 +15,62 @@ import {
 import { theme } from './theme';
 import { useResponsive } from './responsive';
 
+// Compact dropdown picker — a small pill that opens a centered menu sheet. Used
+// to collapse chip rows (scan depth, sort, filters) into a single tap-target so
+// the list gets the vertical space.
+export function Dropdown<T extends string | number>({
+  label,
+  value,
+  options,
+  onChange,
+  style,
+}: {
+  label?: string;
+  value: T;
+  options: { key: T; label: string }[];
+  onChange: (k: T) => void;
+  style?: ViewStyle;
+}) {
+  const [open, setOpen] = React.useState(false);
+  const cur = options.find((o) => o.key === value);
+  return (
+    <>
+      <TouchableOpacity style={[s.ddBtn, style]} onPress={() => setOpen(true)} activeOpacity={0.75}>
+        {label ? <Text style={s.ddLbl}>{label}</Text> : null}
+        <Text style={s.ddVal} numberOfLines={1}>{cur?.label ?? String(value)}</Text>
+        <Text style={s.ddCaret}>▾</Text>
+      </TouchableOpacity>
+      <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
+        <View style={s.ddBackdrop}>
+          <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={() => setOpen(false)} />
+          <View style={s.ddMenu}>
+            {label ? <Text style={s.ddMenuTitle}>{label}</Text> : null}
+            <ScrollView bounces={false} style={{ maxHeight: 320 }}>
+              {options.map((o) => {
+                const on = o.key === value;
+                return (
+                  <TouchableOpacity
+                    key={String(o.key)}
+                    style={[s.ddItem, on && s.ddItemOn]}
+                    onPress={() => {
+                      onChange(o.key);
+                      setOpen(false);
+                    }}
+                    activeOpacity={0.75}
+                  >
+                    <Text style={[s.ddItemTxt, on && s.ddItemTxtOn]}>{o.label}</Text>
+                    {on ? <Text style={s.ddCheck}>✓</Text> : null}
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+    </>
+  );
+}
+
 export function Card({ children, style, flat }: { children: React.ReactNode; style?: ViewStyle; flat?: boolean }) {
   return <View style={[s.card, !flat && theme.shadow.soft, style]}>{children}</View>;
 }
@@ -298,6 +354,55 @@ const s = StyleSheet.create({
     borderRadius: theme.radius.lg,
     padding: theme.sp.lg,
   },
+  // Dropdown picker
+  ddBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.sp.xs,
+    backgroundColor: theme.surface2,
+    borderColor: theme.border2,
+    borderWidth: 1,
+    borderRadius: theme.radius.pill,
+    paddingLeft: theme.sp.md,
+    paddingRight: theme.sp.sm + 2,
+    paddingVertical: 7,
+  },
+  ddLbl: { color: theme.muted, fontSize: theme.fs.xs + 1, fontWeight: '700', letterSpacing: 0.3 },
+  ddVal: { color: theme.text, fontSize: theme.fs.sm + 1, fontWeight: '700' },
+  ddCaret: { color: theme.muted2, fontSize: theme.fs.xs + 1 },
+  ddBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'center', padding: theme.sp.xl },
+  ddMenu: {
+    width: '100%',
+    maxWidth: 340,
+    backgroundColor: theme.surface,
+    borderColor: theme.border2,
+    borderWidth: 1,
+    borderRadius: theme.radius.lg,
+    padding: theme.sp.sm,
+    ...theme.shadow.card,
+  },
+  ddMenuTitle: {
+    color: theme.muted,
+    fontSize: theme.fs.xs + 1,
+    fontWeight: '800',
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+    paddingHorizontal: theme.sp.md,
+    paddingTop: theme.sp.sm,
+    paddingBottom: theme.sp.xs,
+  },
+  ddItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: theme.sp.md,
+    paddingVertical: theme.sp.md,
+    borderRadius: theme.radius.md,
+  },
+  ddItemOn: { backgroundColor: theme.brandSoft },
+  ddItemTxt: { color: theme.muted2, fontSize: theme.fs.md, fontWeight: '600' },
+  ddItemTxtOn: { color: theme.brand, fontWeight: '800' },
+  ddCheck: { color: theme.brand, fontSize: theme.fs.md, fontWeight: '800' },
   segWrap: { paddingBottom: theme.sp.sm },
   segBar: { flexDirection: 'row', alignItems: 'center' },
   segScroll: { flexGrow: 0, flexShrink: 1 },

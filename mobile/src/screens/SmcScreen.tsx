@@ -8,7 +8,7 @@ import { addSymbol, loadWatchlist, normSymbol } from '../watchlist';
 import { LocalAlert, addLocalAlert, hasLocalAlert, loadLocalAlerts } from '../localalerts';
 import { loadNames } from './ScreenerScreen';
 import { useResponsive } from '../responsive';
-import { Card, EmptyState } from '../ui';
+import { Card, Dropdown, EmptyState } from '../ui';
 import { theme } from '../theme';
 import {
   DEPTH_OPTIONS,
@@ -439,26 +439,29 @@ export default function SmcScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.actionRow}>
+      {/* Compact control row: depth / model / sort as dropdowns, Update beside them. */}
+      <View style={styles.controlBar}>
+        <Dropdown
+          label="Depth"
+          value={depth}
+          options={DEPTH_OPTIONS.map((n) => ({ key: n, label: String(n) }))}
+          onChange={onDepth}
+        />
+        {!scanning && availModels.length ? (
+          <Dropdown
+            label="Model"
+            value={filter as string}
+            options={[{ key: 'all', label: 'All' }, ...availModels.map((s) => ({ key: s.key as string, label: s.label }))]}
+            onChange={(k) => setFilter(k as typeof filter)}
+          />
+        ) : null}
+        {!scanning && recs.length > 1 ? (
+          <Dropdown label="Sort" value={sortKey} options={SORTS} onChange={setSortKey} />
+        ) : null}
         <TouchableOpacity style={[styles.updBtn, scanning && { opacity: 0.5 }]} onPress={runScan} disabled={scanning} activeOpacity={0.75}>
-          <Text style={styles.updTxt}>{scanning ? '… Scanning' : '⟳ Update List'}</Text>
+          <Text style={styles.updTxt}>{scanning ? '… Scanning' : '⟳ Update'}</Text>
         </TouchableOpacity>
-      </View>
-
-      <View style={styles.depthRow}>
-        <Text style={styles.depthLbl}>Scan depth</Text>
-        {DEPTH_OPTIONS.map((n) => (
-          <TouchableOpacity
-            key={n}
-            style={[styles.depthChip, depth === n && styles.depthChipOn]}
-            onPress={() => onDepth(n)}
-            disabled={scanning}
-            activeOpacity={0.75}
-          >
-            <Text style={[styles.depthTxt, depth === n && styles.depthTxtOn]}>{n}</Text>
-          </TouchableOpacity>
-        ))}
-        {asof && !scanning ? <Text style={styles.asof}>updated {timeAgo(asof)}</Text> : null}
+        {asof && !scanning ? <Text style={styles.asofInline}>updated {timeAgo(asof)}</Text> : null}
       </View>
 
       {scanning ? (
@@ -470,45 +473,6 @@ export default function SmcScreen() {
         </View>
       ) : status ? (
         <Text style={styles.note}>{status}</Text>
-      ) : null}
-
-      {availModels.length && !scanning ? (
-        <View style={styles.filterBar}>
-          <Text style={styles.filterLbl}>Model</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterScroll} contentContainerStyle={styles.filterScrollRow}>
-            <TouchableOpacity style={[styles.filterChip, filter === 'all' && styles.filterChipOn]} onPress={() => setFilter('all')} activeOpacity={0.75}>
-              <Text style={[styles.sortTxt, filter === 'all' && styles.sortTxtOn]}>All</Text>
-            </TouchableOpacity>
-            {availModels.map((s) => (
-              <TouchableOpacity
-                key={s.key}
-                style={[styles.filterChip, filter === s.key && { borderColor: stratColor(s.key), backgroundColor: theme.surface3 }]}
-                onPress={() => setFilter(s.key)}
-                activeOpacity={0.75}
-              >
-                <Text style={[styles.sortTxt, filter === s.key && { color: stratColor(s.key) }]} numberOfLines={1}>{s.label}</Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
-      ) : null}
-
-      {recs.length > 1 && !scanning ? (
-        <View style={styles.filterBar}>
-          <Text style={styles.filterLbl}>Sort</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterScroll} contentContainerStyle={styles.filterScrollRow}>
-            {SORTS.map((s) => (
-              <TouchableOpacity
-                key={s.key}
-                style={[styles.sortChip, sortKey === s.key && styles.sortChipOn]}
-                onPress={() => setSortKey(s.key)}
-                activeOpacity={0.75}
-              >
-                <Text style={[styles.sortTxt, sortKey === s.key && styles.sortTxtOn]}>{s.label}</Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
       ) : null}
 
       <ScrollView contentContainerStyle={styles.body}>
@@ -558,6 +522,8 @@ export default function SmcScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.bg },
   actionRow: { flexDirection: 'row', justifyContent: 'flex-end', paddingHorizontal: theme.sp.lg, paddingTop: theme.sp.sm, paddingBottom: theme.sp.sm },
+  controlBar: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: theme.sp.sm, paddingHorizontal: theme.sp.lg, paddingTop: theme.sp.sm, paddingBottom: theme.sp.sm },
+  asofInline: { color: theme.muted, fontSize: theme.fs.xs + 1, fontFamily: theme.mono, marginLeft: 'auto' },
   note: { color: theme.muted, fontSize: theme.fs.sm, paddingHorizontal: theme.sp.lg, paddingBottom: theme.sp.sm },
   updBtn: { backgroundColor: theme.accent, borderColor: theme.accent, borderWidth: 1, borderRadius: theme.radius.sm + 2, paddingHorizontal: theme.sp.md, paddingVertical: 6 },
   updTxt: { color: theme.onAccent, fontSize: theme.fs.sm, fontWeight: '700' },
