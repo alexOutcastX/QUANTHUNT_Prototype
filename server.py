@@ -907,6 +907,22 @@ def _fetch_tv_data(sym, interval, period):
         return None
 
 
+# Price-history cache. Serving a recent payload straight from memory means a
+# burst of chart opens (or a heavy scan) doesn't re-hammer yfinance, and —
+# crucially — if the upstream feed rate-limits, we fall back to the last-good
+# candles (flagged `stale`) instead of a broken "chart unavailable".
+_history_cache = {}          # (sym, period, interval) -> (fetched_at, payload)
+_history_lock = threading.Lock()
+
+
+def _history_ttl(interval):
+    if interval in ('1m', '5m', '15m'):
+        return 120          # intraday moves fast
+    if interval == '1h':
+        return 300
+    return 600              # daily+ changes slowly within a session
+
+
 @app.route("/history")
 def history():
     sym      = request.args.get("symbol", "").strip().upper()
@@ -914,6 +930,12 @@ def history():
     interval = request.args.get("interval", "1d")   # 1m 5m 15m 1h 1d 1wk 1mo
     if not sym:
         return jsonify({"error": "symbol required"}), 400
+    key = (sym, period, interval)
+    now = time.time()
+    with _history_lock:
+        hit = _history_cache.get(key)
+    if hit and now - hit[0] < _history_ttl(interval):
+        return jsonify(hit[1])
     try:
         import yfinance as yf
         # For intraday ≤15m yfinance caps at 60 days — prefer tvDatafeed for longer history
@@ -941,6 +963,13 @@ def history():
             df = _fetch_tv_data(sym, interval, period)
 
         if df is None or df.empty:
+            # Upstream returned nothing (often a transient rate-limit) — serve the
+            # last-good candles if we have them rather than a blank chart.
+            with _history_lock:
+                hit = _history_cache.get(key)
+            if hit:
+                stale = dict(hit[1]); stale["stale"] = True
+                return jsonify(stale)
             return jsonify({"error": f"No data for {sym}", "candles": []}), 404
 
         df.index = pd.to_datetime(df.index)
@@ -989,15 +1018,24 @@ def history():
                 "bb_lower": safe(row.get("bb_lower")),
             })
 
-        return jsonify({
+        payload = {
             "symbol":   sym,
             "period":   period,
             "interval": interval,
             "count":    len(candles),
             "candles":  candles,
-        })
+        }
+        with _history_lock:
+            _history_cache[key] = (now, payload)
+        return jsonify(payload)
     except Exception as e:
         log.error("History error for %s: %s", sym, e)
+        # Rate-limited / network blip — serve last-good candles if cached.
+        with _history_lock:
+            hit = _history_cache.get(key)
+        if hit:
+            stale = dict(hit[1]); stale["stale"] = True
+            return jsonify(stale)
         return jsonify({"error": str(e)}), 502
 
 
