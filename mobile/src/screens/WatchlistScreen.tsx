@@ -364,10 +364,10 @@ export default function WatchlistScreen() {
     [visibleCols, symbols, quotes, active],
   );
 
-  const renderRow = ({ item }: { item: string }) => {
+  const renderRow = ({ item, index }: { item: string; index: number }) => {
     const q = quotes[item];
     return (
-      <View style={styles.dataRow}>
+      <View style={[styles.dataRow, index % 2 === 1 && styles.dataRowAlt]}>
         {visibleCols.map((c) => (
           <View
             key={c.key}
@@ -791,9 +791,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 13,
     paddingVertical: 7,
   },
-  listChipOn: { backgroundColor: theme.accent, borderColor: theme.accent },
+  listChipOn: { backgroundColor: theme.brandSoft, borderColor: theme.brand },
   listTxt: { color: theme.muted2, fontSize: theme.fs.sm },
-  listTxtOn: { color: theme.onAccent, fontWeight: '700' },
+  listTxtOn: { color: theme.brand, fontWeight: '800' },
   listCount: {
     color: theme.muted,
     fontSize: theme.fs.xs,
@@ -860,11 +860,12 @@ const styles = StyleSheet.create({
   dataRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    minHeight: 44,
+    minHeight: 46,
     borderBottomColor: theme.border,
     borderBottomWidth: 1,
     paddingVertical: theme.sp.md,
   },
+  dataRowAlt: { backgroundColor: theme.surface },
   td: { justifyContent: 'center', paddingHorizontal: theme.sp.xs },
   cell: { color: theme.text, fontFamily: theme.mono, fontSize: theme.fs.sm },
   symTxt: { color: theme.text, fontFamily: theme.mono, fontWeight: '700', fontSize: theme.fs.md },
