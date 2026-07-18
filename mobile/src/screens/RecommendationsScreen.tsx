@@ -13,8 +13,8 @@ import InstitutionalScreen from './InstitutionalScreen';
 import SmcScreen from './SmcScreen';
 import { useResponsive } from '../responsive';
 import { printHtmlDocument } from '../pdf';
-import { Card, EmptyState, ScreenTitle, Segmented } from '../ui';
-import { RECOMMENDATIONS_INFO } from '../tabInfo';
+import { Card, EmptyState, Segmented } from '../ui';
+import { INSTITUTIONAL_INFO, RECOMMENDATIONS_INFO, SHORT_TERM_INFO, SMC_INFO } from '../tabInfo';
 import { theme } from '../theme';
 import {
   DEPTH_OPTIONS,
@@ -441,29 +441,22 @@ function LongTermRecs() {
 
   return (
     <View style={styles.container}>
-      <ScreenTitle
-        title="Recommendations"
-        sub="Fundamentals + momentum + patterns → buy setups"
-        info={RECOMMENDATIONS_INFO}
-        right={
-          <View style={styles.headBtns}>
-            <TouchableOpacity
-              style={[styles.updBtn, (scanning || !recs.length) && { opacity: 0.5 }]}
-              onPress={() => {
-                if (!recs.length) return;
-                exportRecommendationsPdf(recs, status || `${recs.length} buy recommendation${recs.length === 1 ? '' : 's'}`).catch(() => {});
-              }}
-              disabled={scanning || !recs.length}
-              activeOpacity={0.75}
-            >
-              <Text style={styles.updTxt}>⤓ PDF</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={[styles.updBtn, styles.updBtnPrimary, scanning && { opacity: 0.5 }]} onPress={runScan} disabled={scanning} activeOpacity={0.75}>
-              <Text style={[styles.updTxt, { color: theme.onAccent }]}>{scanning ? '… Scanning' : '⟳ Update List'}</Text>
-            </TouchableOpacity>
-          </View>
-        }
-      />
+      <View style={styles.actionRow}>
+        <TouchableOpacity
+          style={[styles.updBtn, (scanning || !recs.length) && { opacity: 0.5 }]}
+          onPress={() => {
+            if (!recs.length) return;
+            exportRecommendationsPdf(recs, status || `${recs.length} buy recommendation${recs.length === 1 ? '' : 's'}`).catch(() => {});
+          }}
+          disabled={scanning || !recs.length}
+          activeOpacity={0.75}
+        >
+          <Text style={styles.updTxt}>⤓ PDF</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={[styles.updBtn, styles.updBtnPrimary, scanning && { opacity: 0.5 }]} onPress={runScan} disabled={scanning} activeOpacity={0.75}>
+          <Text style={[styles.updTxt, { color: theme.onAccent }]}>{scanning ? '… Scanning' : '⟳ Update List'}</Text>
+        </TouchableOpacity>
+      </View>
 
       {/* scan-depth selector */}
       <View style={styles.depthRow}>
@@ -574,10 +567,18 @@ export default function RecommendationsScreen() {
     { key: 'inst', label: 'Institutional' },
     { key: 'smc', label: 'HFT/ICT/SMC' },
   ];
+  // The ⓘ beside the tabs is mode-aware: it opens the detail for whichever
+  // sub-list is active, so each sub-screen can drop its own title block.
+  const modeInfo = {
+    long: { title: 'Recommendations', info: RECOMMENDATIONS_INFO },
+    short: { title: 'Short-term swing', info: SHORT_TERM_INFO },
+    inst: { title: 'Institutional', info: INSTITUTIONAL_INFO },
+    smc: { title: 'HFT / ICT / SMC', info: SMC_INFO },
+  }[mode];
   return (
     <View style={styles.container}>
       <View style={styles.modeBarWrap}>
-        <Segmented items={TABS} value={mode} onChange={setMode} />
+        <Segmented items={TABS} value={mode} onChange={setMode} info={modeInfo.info} infoTitle={modeInfo.title} />
       </View>
       <View style={{ flex: 1 }}>
         {mode === 'short' ? <ShortTermScreen /> : mode === 'inst' ? <InstitutionalScreen /> : mode === 'smc' ? <SmcScreen /> : <LongTermRecs />}
@@ -596,6 +597,8 @@ const styles = StyleSheet.create({
   modeTxtOn: { color: theme.onAccent },
   note: { color: theme.muted, fontSize: theme.fs.sm, paddingHorizontal: theme.sp.lg, paddingBottom: theme.sp.sm },
   headBtns: { flexDirection: 'row', gap: theme.sp.sm },
+  // Compact action row (no title) — buttons sit right where the heading used to.
+  actionRow: { flexDirection: 'row', justifyContent: 'flex-end', gap: theme.sp.sm, paddingHorizontal: theme.sp.lg, paddingTop: theme.sp.sm, paddingBottom: theme.sp.sm },
   depthRow: {
     flexDirection: 'row',
     alignItems: 'center',
