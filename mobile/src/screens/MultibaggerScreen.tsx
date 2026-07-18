@@ -701,9 +701,9 @@ export default function MultibaggerScreen() {
                   </View>
 
                   <View style={styles.scoreRow}>
-                    <View style={styles.scoreBox}>
+                    <View style={[styles.scoreBox, { borderColor: tierColor(report.score) }]}>
                       <Text style={[styles.scoreBig, { color: tierColor(report.score) }]}>{report.score}</Text>
-                      <Text style={styles.scoreOf}>/ 100</Text>
+                      <Text style={styles.scoreOf}>/100</Text>
                     </View>
                     <View style={{ flex: 1, gap: 6 }}>
                       <Text style={[styles.tier, { color: tierColor(report.score) }]}>{report.tier}</Text>
@@ -1031,9 +1031,17 @@ const styles = StyleSheet.create({
   coMeta: { color: theme.muted, fontSize: theme.fs.sm, marginTop: 2 },
   coPrice: { color: theme.text, fontSize: theme.fs.lg, fontWeight: '700', fontFamily: theme.mono },
   scoreRow: { flexDirection: 'row', alignItems: 'center', gap: theme.sp.lg },
-  scoreBox: { flexDirection: 'row', alignItems: 'baseline' },
-  scoreBig: { fontSize: 54, fontWeight: '800', fontFamily: theme.mono, lineHeight: 58 },
-  scoreOf: { color: theme.muted, fontSize: theme.fs.md, marginLeft: 4 },
+  scoreBox: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    borderWidth: 1.5,
+    borderRadius: theme.radius.lg,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    backgroundColor: theme.surface2,
+  },
+  scoreBig: { fontSize: 44, fontWeight: '800', fontFamily: theme.mono, lineHeight: 48 },
+  scoreOf: { color: theme.muted, fontSize: theme.fs.sm, marginLeft: 3, fontFamily: theme.mono },
   tier: { fontSize: theme.fs.md, fontWeight: '800', letterSpacing: 1.5 },
   probTrack: { height: 10, borderRadius: 5, backgroundColor: theme.surface3, overflow: 'hidden' },
   probFill: { height: '100%', borderRadius: 5 },
