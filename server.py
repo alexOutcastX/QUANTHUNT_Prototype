@@ -1406,8 +1406,9 @@ def multibagger_report():
         import multibagger as mb
         try:
             # A user-initiated single-stock lookup: retry through transient Yahoo
-            # rate-limits before giving up (the mass screen fails fast instead).
-            metrics, ident = mb.fetch_metrics(sym, retries=2)
+            # rate-limits (exp backoff in mb._resolve) before giving up — the mass
+            # screen fails fast instead.
+            metrics, ident = mb.fetch_metrics(sym, retries=3)
         except ValueError:
             return jsonify({"error": f"No market data for {sym} — it may be newly "
                                      "listed or delisted, or the data source is "
