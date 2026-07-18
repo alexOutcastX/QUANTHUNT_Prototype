@@ -1,0 +1,141 @@
+{
+  "_note": "Curated, CITED seed for the affiliation graphs. Every entry is a public record. Stakes are approximate (they drift between quarters) and are labelled as such; verify current figures on the exchange. Political entries are electoral-bond PURCHASE totals (donor side) from the ECI/SBI disclosure of March 2024 — recipient-party matching is NOT asserted here. Expand this file with verified rows; do not add anything that isn't grounded in a public filing/disclosure.",
+  "promoters": {
+    "as_of": "FY2024 shareholding-pattern filings",
+    "source": "NSE / BSE shareholding pattern",
+    "groups": [
+      {
+        "key": "ADANI GROUP",
+        "name": "Adani Group (Gautam Adani & family)",
+        "companies": [
+          { "symbol": "ADANIENT", "company": "Adani Enterprises", "stake_pct": 74 },
+          { "symbol": "ADANIPORTS", "company": "Adani Ports & SEZ", "stake_pct": 66 },
+          { "symbol": "ADANIPOWER", "company": "Adani Power", "stake_pct": 72 },
+          { "symbol": "ADANIGREEN", "company": "Adani Green Energy", "stake_pct": null },
+          { "symbol": "ADANIENSOL", "company": "Adani Energy Solutions", "stake_pct": null },
+          { "symbol": "ATGL", "company": "Adani Total Gas", "stake_pct": null },
+          { "symbol": "AWL", "company": "Adani Wilmar", "stake_pct": null },
+          { "symbol": "AMBUJACEM", "company": "Ambuja Cements", "stake_pct": null },
+          { "symbol": "ACC", "company": "ACC", "stake_pct": null },
+          { "symbol": "NDTV", "company": "New Delhi Television", "stake_pct": null }
+        ]
+      },
+      {
+        "key": "RELIANCE AMBANI",
+        "name": "Reliance / Ambani group (Mukesh Ambani & family)",
+        "companies": [
+          { "symbol": "RELIANCE", "company": "Reliance Industries", "stake_pct": 50 },
+          { "symbol": "JIOFIN", "company": "Jio Financial Services", "stake_pct": null }
+        ]
+      },
+      {
+        "key": "TATA GROUP",
+        "name": "Tata group (Tata Sons)",
+        "companies": [
+          { "symbol": "TCS", "company": "Tata Consultancy Services", "stake_pct": 72 },
+          { "symbol": "TATAMOTORS", "company": "Tata Motors", "stake_pct": 46 },
+          { "symbol": "TATASTEEL", "company": "Tata Steel", "stake_pct": 33 },
+          { "symbol": "TATAPOWER", "company": "Tata Power", "stake_pct": null },
+          { "symbol": "TITAN", "company": "Titan Company", "stake_pct": null },
+          { "symbol": "TATACONSUM", "company": "Tata Consumer Products", "stake_pct": null },
+          { "symbol": "TRENT", "company": "Trent", "stake_pct": null },
+          { "symbol": "VOLTAS", "company": "Voltas", "stake_pct": null },
+          { "symbol": "TATACHEM", "company": "Tata Chemicals", "stake_pct": null },
+          { "symbol": "INDHOTEL", "company": "Indian Hotels", "stake_pct": null },
+          { "symbol": "TATACOMM", "company": "Tata Communications", "stake_pct": null },
+          { "symbol": "TATAELXSI", "company": "Tata Elxsi", "stake_pct": null }
+        ]
+      },
+      {
+        "key": "ADITYA BIRLA GROUP",
+        "name": "Aditya Birla group (Kumar Mangalam Birla)",
+        "companies": [
+          { "symbol": "GRASIM", "company": "Grasim Industries", "stake_pct": 43 },
+          { "symbol": "ULTRACEMCO", "company": "UltraTech Cement", "stake_pct": 60 },
+          { "symbol": "HINDALCO", "company": "Hindalco Industries", "stake_pct": null },
+          { "symbol": "ABCAPITAL", "company": "Aditya Birla Capital", "stake_pct": null },
+          { "symbol": "ABFRL", "company": "Aditya Birla Fashion & Retail", "stake_pct": null }
+        ]
+      },
+      {
+        "key": "BAJAJ GROUP",
+        "name": "Bajaj group (Bajaj family)",
+        "companies": [
+          { "symbol": "BAJFINANCE", "company": "Bajaj Finance", "stake_pct": null },
+          { "symbol": "BAJAJFINSV", "company": "Bajaj Finserv", "stake_pct": null },
+          { "symbol": "BAJAJ-AUTO", "company": "Bajaj Auto", "stake_pct": null },
+          { "symbol": "BAJAJHLDNG", "company": "Bajaj Holdings & Investment", "stake_pct": null }
+        ]
+      },
+      {
+        "key": "MAHINDRA GROUP",
+        "name": "Mahindra group (Mahindra & Mahindra)",
+        "companies": [
+          { "symbol": "M&M", "company": "Mahindra & Mahindra", "stake_pct": null },
+          { "symbol": "TECHM", "company": "Tech Mahindra", "stake_pct": null },
+          { "symbol": "MAHLIFE", "company": "Mahindra Lifespace Developers", "stake_pct": null },
+          { "symbol": "MHRIL", "company": "Mahindra Holidays & Resorts", "stake_pct": null }
+        ]
+      },
+      {
+        "key": "JSW GROUP",
+        "name": "JSW group (Sajjan Jindal)",
+        "companies": [
+          { "symbol": "JSWSTEEL", "company": "JSW Steel", "stake_pct": null },
+          { "symbol": "JSWENERGY", "company": "JSW Energy", "stake_pct": null },
+          { "symbol": "JSWINFRA", "company": "JSW Infrastructure", "stake_pct": null }
+        ]
+      },
+      {
+        "key": "VEDANTA AGARWAL",
+        "name": "Vedanta group (Anil Agarwal)",
+        "companies": [
+          { "symbol": "VEDL", "company": "Vedanta", "stake_pct": 61 },
+          { "symbol": "HINDZINC", "company": "Hindustan Zinc", "stake_pct": 65 }
+        ]
+      },
+      {
+        "key": "SUN PHARMA SHANGHVI",
+        "name": "Sun Pharma (Dilip Shanghvi & family)",
+        "companies": [
+          { "symbol": "SUNPHARMA", "company": "Sun Pharmaceutical Industries", "stake_pct": 54 }
+        ]
+      },
+      {
+        "key": "WIPRO PREMJI",
+        "name": "Wipro (Azim Premji & family)",
+        "companies": [
+          { "symbol": "WIPRO", "company": "Wipro", "stake_pct": 73 }
+        ]
+      },
+      {
+        "key": "MURUGAPPA GROUP",
+        "name": "Murugappa group",
+        "companies": [
+          { "symbol": "TUBEINVEST", "company": "Tube Investments of India", "stake_pct": null },
+          { "symbol": "CHOLAFIN", "company": "Cholamandalam Investment & Finance", "stake_pct": null },
+          { "symbol": "COROMANDEL", "company": "Coromandel International", "stake_pct": null },
+          { "symbol": "EIDPARRY", "company": "EID Parry (India)", "stake_pct": null }
+        ]
+      }
+    ]
+  },
+  "political": {
+    "as_of": "Apr 2019 → Jan 2024 (bond purchase window)",
+    "source": "ECI / SBI electoral-bond disclosure (Mar 2024)",
+    "donors": [
+      { "key": "FUTURE GAMING", "name": "Future Gaming & Hotel Services", "symbol": null, "amount_cr": 1368, "first_date": "2019-10", "last_date": "2024-01" },
+      { "key": "MEGHA ENGINEERING", "name": "Megha Engineering & Infrastructures (MEIL)", "symbol": null, "amount_cr": 966, "first_date": "2019-04", "last_date": "2024-01" },
+      { "key": "QWIK SUPPLY CHAIN", "name": "Qwik Supply Chain", "symbol": null, "amount_cr": 410, "first_date": "2021-01", "last_date": "2022-11" },
+      { "key": "VEDANTA", "name": "Vedanta", "symbol": "VEDL", "amount_cr": 400, "first_date": "2019-04", "last_date": "2023-11" },
+      { "key": "HALDIA ENERGY", "name": "Haldia Energy (RP-Sanjiv Goenka group)", "symbol": null, "amount_cr": 377, "first_date": "2019-05", "last_date": "2023-10" },
+      { "key": "BHARTI GROUP", "name": "Bharti group (Airtel & affiliates)", "symbol": "BHARTIARTL", "amount_cr": 247, "first_date": "2019-04", "last_date": "2024-01" },
+      { "key": "ESSEL MINING", "name": "Essel Mining & Industries (Aditya Birla group)", "symbol": null, "amount_cr": 224, "first_date": "2019-04", "last_date": "2023-10" },
+      { "key": "WESTERN UP POWER", "name": "Western UP Power Transmission", "symbol": null, "amount_cr": 220, "first_date": "2021-04", "last_date": "2023-11" },
+      { "key": "KEVENTER", "name": "Keventer Foodpark Infra", "symbol": null, "amount_cr": 195, "first_date": "2019-05", "last_date": "2022-11" },
+      { "key": "MADANLAL", "name": "Madanlal Ltd", "symbol": null, "amount_cr": 185, "first_date": "2019-05", "last_date": "2023-11" },
+      { "key": "DLF", "name": "DLF group", "symbol": "DLF", "amount_cr": 170, "first_date": "2019-04", "last_date": "2023-11" },
+      { "key": "TORRENT POWER", "name": "Torrent Power / Torrent group", "symbol": "TORNTPOWER", "amount_cr": 107, "first_date": "2019-04", "last_date": "2023-10" }
+    ]
+  }
+}

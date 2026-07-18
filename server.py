@@ -24,6 +24,7 @@ import corporate as _corp       # corporate actions/announcements/shareholding/d
 import derivatives as _deriv     # F&O option-chain analytics (PCR/max-pain/ATM IV) from NSE
 import risk as _risk            # portfolio risk analytics (VaR/beta/drawdown/correlation)
 import entity_graph as _egraph   # grounded institution⇄company graph from NSE deal records
+import affiliations as _affil     # seed-grounded promoter + political funding graphs
 import alerts as _alerts        # server-side price/technical alerts (store-backed)
 import apikeys as _apikeys      # public-API key issue/verify (hashed, store-backed)
 
@@ -1964,6 +1965,34 @@ def entity_graph_route():
     graph["nodes"]["entities"] = _egraph.top_entities(graph, 40)
     graph["edges"] = graph["edges"][:120]
     return jsonify(graph)
+
+
+@app.route("/promoter-graph")
+@rate_limit("corp", 60, 300)
+def promoter_graph_route():
+    """Promoter group → listed company links, from a curated, cited seed of
+    public NSE/BSE shareholding-pattern filings. ?symbol=<sym> reverses the
+    lookup (which promoter group holds a stock)."""
+    symbol = request.args.get("symbol", "").strip()
+    if symbol:
+        return jsonify({"view": "symbol", "symbol": symbol.upper(),
+                        "holders": _affil.promoter_by_symbol(symbol),
+                        "source": _affil.promoter_graph()["source"]})
+    return jsonify(_affil.promoter_graph())
+
+
+@app.route("/political-graph")
+@rate_limit("corp", 60, 300)
+def political_graph_route():
+    """Disclosed political funding via electoral bonds (donor side), from the
+    ECI/SBI March-2024 release. Amounts are bonds PURCHASED; recipient party is
+    not asserted. ?symbol=<sym> filters to a listed company where mapped."""
+    symbol = request.args.get("symbol", "").strip()
+    if symbol:
+        return jsonify({"view": "symbol", "symbol": symbol.upper(),
+                        "donors": _affil.political_by_symbol(symbol),
+                        "source": _affil.political_graph()["source"]})
+    return jsonify(_affil.political_graph())
 
 
 # ── Server-side alerts (owner-only) ──
