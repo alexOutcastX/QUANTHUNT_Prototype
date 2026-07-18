@@ -3,6 +3,7 @@ import React, { useEffect } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { capgoNotifyReady } from './src/capgo';
 import Shell from './src/Shell';
+import UpdateGate from './src/UpdateGate';
 
 // Responsive shell: a left sidebar on desktop/laptop, native bottom tabs on
 // phones and tablets (see src/Shell.tsx + src/responsive.ts).
@@ -14,7 +15,9 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <StatusBar style="light" />
-      <Shell />
+      <UpdateGate>
+        <Shell />
+      </UpdateGate>
     </SafeAreaProvider>
   );
 }
