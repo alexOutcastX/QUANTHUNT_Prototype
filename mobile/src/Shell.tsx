@@ -166,13 +166,15 @@ function MobileShell({ version }: { version: string }) {
         <ThemeToggle />
       </View>
       <View style={styles.mobileBody}>{tab.render(nav)}</View>
-      <View style={[styles.tabBar, { paddingBottom: insets.bottom || 6 }]}>
+      <View style={[styles.tabBar, { paddingBottom: insets.bottom || 8 }]}>
         {TABS.map((t) => {
           const on = active === t.k;
           return (
-            <TouchableOpacity key={t.k} style={styles.tab} onPress={() => setActive(t.k)}>
-              <Text style={[styles.tabGlyph, { color: on ? theme.accent : theme.muted }]}>{t.glyph}</Text>
-              <Text style={[styles.tabLabel, { color: on ? theme.accent : theme.muted }]}>{t.label}</Text>
+            <TouchableOpacity key={t.k} style={styles.tab} onPress={() => setActive(t.k)} activeOpacity={0.7}>
+              <View style={[styles.tabPill, on && styles.tabPillOn]}>
+                <Text style={[styles.tabGlyph, { color: on ? theme.brand : theme.muted }]}>{t.glyph}</Text>
+              </View>
+              <Text style={[styles.tabLabel, { color: on ? theme.brand : theme.muted, fontWeight: on ? '700' : '500' }]}>{t.label}</Text>
             </TouchableOpacity>
           );
         })}
@@ -241,10 +243,12 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
   },
   mobileBody: { flex: 1 },
-  tabBar: { flexDirection: 'row', backgroundColor: theme.surface, borderTopColor: theme.border, borderTopWidth: 1, paddingTop: 6 },
-  tab: { flex: 1, alignItems: 'center', gap: 2 },
-  tabGlyph: { fontSize: 16, fontWeight: '700' },
-  tabLabel: { fontSize: 10 },
+  tabBar: { flexDirection: 'row', backgroundColor: theme.surface, borderTopColor: theme.border, borderTopWidth: 1, paddingTop: 8 },
+  tab: { flex: 1, alignItems: 'center', gap: 3 },
+  tabPill: { paddingHorizontal: 16, paddingVertical: 4, borderRadius: theme.radius.pill },
+  tabPillOn: { backgroundColor: theme.brandSoft },
+  tabGlyph: { fontSize: 16, fontWeight: '700', lineHeight: 20 },
+  tabLabel: { fontSize: 10, letterSpacing: 0.2 },
 
   themeBtn: {
     width: 34,

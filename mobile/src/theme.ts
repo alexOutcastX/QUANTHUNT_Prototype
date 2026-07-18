@@ -15,44 +15,51 @@ import { Platform } from 'react-native';
 
 type ColorKey =
   | 'bg' | 'surface' | 'surface2' | 'surface3' | 'card' | 'border' | 'border2'
-  | 'text' | 'muted' | 'muted2' | 'accent' | 'onAccent' | 'green' | 'red';
+  | 'text' | 'muted' | 'muted2' | 'accent' | 'onAccent' | 'green' | 'red'
+  | 'brand' | 'brandSoft';
 type Palette = Record<ColorKey, string>;
 
-// Refined dark terminal — deeper base, cleaner elevation steps, calmer borders.
+// Refined dark terminal — deeper, cool-biased base with cleaner elevation steps.
+// `brand` is a single signature hue (iris) reserved for interactive/selected
+// state, kept distinct from the green/red that mean price up/down.
 const DARK: Palette = {
-  bg: '#090b0f',
-  surface: '#0f131a',
-  surface2: '#161c26',
-  surface3: '#1f2733',
-  card: '#0f131a',
-  border: '#212936',
-  border2: '#303c4c',
-  text: '#eef1f6',
-  muted: '#6b7789',
-  muted2: '#aeb8c6',
-  accent: '#ffffff',
-  onAccent: '#0a0f0c',
-  green: '#25cf97',
-  red: '#f5607f',
+  bg: '#080a0f',
+  surface: '#0e1219',
+  surface2: '#151b25',
+  surface3: '#1e2632',
+  card: '#0e1219',
+  border: '#1e2632',
+  border2: '#2e3947',
+  text: '#f0f3f8',
+  muted: '#6a7688',
+  muted2: '#a9b4c2',
+  accent: '#f0f3f8',
+  onAccent: '#0a0e14',
+  green: '#2bd39b',
+  red: '#f5637f',
+  brand: '#7c9cff',
+  brandSoft: '#1a2338',
 };
 
-// Light terminal — soft off-white base, white cards, ink text, deeper up/down
-// so the price colours stay legible on light surfaces.
+// Light terminal — soft cool off-white base, white cards, ink text, deeper
+// up/down so the price colours stay legible on light surfaces.
 const LIGHT: Palette = {
-  bg: '#f4f6f9',
+  bg: '#f5f7fa',
   surface: '#ffffff',
   surface2: '#eef1f6',
   surface3: '#e3e8ef',
   card: '#ffffff',
-  border: '#e4e8ef',
-  border2: '#cad3df',
-  text: '#111823',
-  muted: '#6a7686',
-  muted2: '#3f4a59',
-  accent: '#141c2b',
+  border: '#e6eaf1',
+  border2: '#cdd6e2',
+  text: '#0f1723',
+  muted: '#68748a',
+  muted2: '#3d4a5c',
+  accent: '#131b29',
   onAccent: '#ffffff',
-  green: '#0e9f6e',
-  red: '#df2f59',
+  green: '#0c9c6c',
+  red: '#dd2c58',
+  brand: '#4560d8',
+  brandSoft: '#e7ecfd',
 };
 
 const KEYS = Object.keys(DARK) as ColorKey[];
@@ -73,7 +80,12 @@ if (WEB) {
   const varBlock = (p: Palette) => KEYS.map((k) => `--c-${k}:${p[k]};`).join('');
   const css =
     `:root{${varBlock(DARK)}color-scheme:dark;}` +
-    `:root[data-theme="light"]{${varBlock(LIGHT)}color-scheme:light;}`;
+    `:root[data-theme="light"]{${varBlock(LIGHT)}color-scheme:light;}` +
+    // Crisper text rendering + a refined system sans everywhere; the mono stack
+    // (prices/symbols) is applied per-component via theme.mono.
+    `html,body,#root{-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;` +
+    `text-rendering:optimizeLegibility;font-family:-apple-system,BlinkMacSystemFont,` +
+    `"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;}`;
   const style = document.createElement('style');
   style.id = 'te-theme-vars';
   style.textContent = css;
@@ -94,12 +106,27 @@ const colors = KEYS.reduce((o, k) => {
   return o;
 }, {} as Palette);
 
+// A real monospace stack (SF Mono / Cascadia / Roboto Mono …) instead of the
+// generic 'monospace' that falls back to Courier — sharpens every price & symbol.
+const MONO = WEB
+  ? "ui-monospace, 'SF Mono', 'JetBrains Mono', 'Roboto Mono', Menlo, Consolas, monospace"
+  : 'monospace';
+
+// Soft elevation for cards & floating surfaces. On react-native-web these map to
+// box-shadow; the app always runs as RN-web (incl. inside the Capacitor shell).
+const shadow = {
+  card: { shadowColor: '#000', shadowOpacity: 0.28, shadowRadius: 18, shadowOffset: { width: 0, height: 8 } },
+  soft: { shadowColor: '#000', shadowOpacity: 0.18, shadowRadius: 9, shadowOffset: { width: 0, height: 3 } },
+  none: { shadowColor: 'transparent', shadowOpacity: 0, shadowRadius: 0, shadowOffset: { width: 0, height: 0 } },
+};
+
 export const theme = {
   ...colors,
-  mono: 'monospace' as const,
-  fs: { xs: 10, sm: 12, md: 14, lg: 16, xl: 20, h1: 26 },
-  sp: { xs: 4, sm: 8, md: 12, lg: 16, xl: 24 },
-  radius: { sm: 6, md: 10, lg: 14 },
+  mono: MONO,
+  shadow,
+  fs: { xs: 10, sm: 12, md: 14, lg: 16, xl: 20, xxl: 24, h1: 28 },
+  sp: { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32 },
+  radius: { sm: 6, md: 10, lg: 14, xl: 20, pill: 999 },
 };
 export type Theme = typeof theme;
 
