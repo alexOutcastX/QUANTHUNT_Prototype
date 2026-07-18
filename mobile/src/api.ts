@@ -680,6 +680,56 @@ export type EntityGraph = {
 export type EntityView = { view: 'entity'; entity: string; positions: FlowEdge[]; asof: { first: string; last: string }; source: string };
 export type SymbolView = { view: 'symbol'; symbol: string; flows: FlowEdge[]; asof: { first: string; last: string }; source: string };
 
+// Promoter shareholding — curated cited seed of NSE/BSE shareholding filings.
+export type PromoterEdge = {
+  holder: string;
+  holder_name: string;
+  symbol: string;
+  company_name: string;
+  stake_pct: number | null;
+  as_of: string;
+  source: string;
+  citation: string;
+};
+export type PromoterHolder = {
+  id: string;
+  name: string;
+  kind: string;
+  breadth: number;
+  symbols: string[];
+  edges: PromoterEdge[];
+};
+export type PromoterGraph = {
+  kind: 'promoter';
+  nodes: { holders: PromoterHolder[]; companies: { id: string; company_name: string; kind: string }[] };
+  edges: PromoterEdge[];
+  asof: { first: string; last: string };
+  source: string;
+  disclaimer: string;
+};
+
+// Disclosed political funding via electoral bonds (donor side), ECI/SBI 2024.
+export type PoliticalDonor = {
+  id: string;
+  name: string;
+  kind: string;
+  symbol: string | null;
+  amount_cr: number | null;
+  first_date: string;
+  last_date: string;
+  source: string;
+  citation: string;
+};
+export type PoliticalGraph = {
+  kind: 'political';
+  nodes: { donors: PoliticalDonor[] };
+  total_cr: number;
+  count: number;
+  asof: { first: string; last: string };
+  source: string;
+  disclaimer: string;
+};
+
 // Server-side alerts (owner-only).
 export type Alert = {
   id: string;
@@ -726,6 +776,8 @@ export const api = {
     getJson<EntityView>('/entity-graph?entity=' + encodeURIComponent(entity), 30000),
   symbolFlows: (symbol: string) =>
     getJson<SymbolView>('/entity-graph?symbol=' + encodeURIComponent(symbol), 30000),
+  promoterGraph: () => getJson<PromoterGraph>('/promoter-graph', 30000),
+  politicalGraph: () => getJson<PoliticalGraph>('/political-graph', 30000),
   optionChain: (symbol: string, expiry?: string) =>
     getJson<OptionChain>(
       '/derivatives/option-chain?symbol=' + encodeURIComponent(symbol) +

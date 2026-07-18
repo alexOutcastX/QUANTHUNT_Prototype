@@ -194,6 +194,32 @@ export const MOMENTUM_INFO: InfoContent = {
     SAFETY_COMMON,
 };
 
+export const SHAREHOLDERS_INFO: InfoContent = {
+  about:
+    'A grounded ownership graph. Every link is a real, cited public record — nothing is inferred by a model. Coverage is intentionally partial (only what is filed/disclosed) rather than a fabricated-complete picture.',
+  sections: [
+    {
+      heading: 'The four tabs',
+      bullets: [
+        'Institutional / HNI — funds and large clients from NSE bulk/block deal records, each edge cited & dated.',
+        'By stock — a company’s ownership split (promoter / FII / DII / public) from NSE quarterly filings, plus who traded it.',
+        'Promoters — promoter groups and every listed company they control, from shareholding-pattern filings.',
+        'Political — disclosed political funding via electoral bonds (donor side), from the ECI/SBI March-2024 release.',
+      ],
+    },
+    {
+      heading: 'What is not here',
+      bullets: [
+        'Retail shareholders — never disclosed by name anywhere; only the aggregate public % exists.',
+        'Board interlocks / related-party trees — need structured filings parsing (a follow-up).',
+        'Electoral-bond recipient parties — the matched bond-number set is a follow-up; donor totals only for now.',
+      ],
+    },
+  ],
+  disclaimer:
+    'For research and education only, not investment advice. Promoter stakes are approximate and drift between quarters — verify on the exchange. Electoral-bond entries are the value of bonds PURCHASED (donor side) per the official ECI/SBI disclosure; buying bonds was legal and inclusion implies no wrongdoing or any specific party link.',
+};
+
 export const PATTERN_INFO: InfoContent = {
   about:
     'Scans a stock’s full price history for classic chart patterns and reports each one with its start/end, a confidence score, historical continuation odds, and the measured-move target the pattern projects.',
