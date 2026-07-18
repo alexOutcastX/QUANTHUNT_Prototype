@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Linking, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { API_BASE, api } from './api';
 import { useResponsive } from './responsive';
@@ -147,8 +148,21 @@ function DesktopShell({ version }: { version: string }) {
 function MobileShell({ version }: { version: string }) {
   const insets = useSafeAreaInsets();
   const [active, setActive] = useState('dashboard');
+  const [hydrated, setHydrated] = useState(false);
   const nav = (k: string) => setActive(TABS.some((t) => t.k === k) ? k : 'more');
   const tab = TABS.find((t) => t.k === active) || TABS[0];
+  // Restore the last tab so backgrounding the app (switching to WhatsApp etc.)
+  // and returning doesn't dump you back on the Dashboard.
+  useEffect(() => {
+    AsyncStorage.getItem('taureye.nav.tab')
+      .then((v) => {
+        if (v && TABS.some((t) => t.k === v)) setActive(v);
+      })
+      .finally(() => setHydrated(true));
+  }, []);
+  useEffect(() => {
+    if (hydrated) AsyncStorage.setItem('taureye.nav.tab', active).catch(() => {});
+  }, [active, hydrated]);
   // A cross-screen jump targets a top-level tab when it maps to one (Analysis
   // is a bottom tab), otherwise it falls through to the More menu.
   useEffect(

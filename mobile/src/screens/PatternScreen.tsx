@@ -10,6 +10,7 @@ import { Row } from '../screener';
 import { navigate, takeSymbol } from '../navIntent';
 import { addSymbol, loadWatchlist, normSymbol } from '../watchlist';
 import { Btn, Card, EmptyState, Loading, ScreenTitle, SectionTitle } from '../ui';
+import { PATTERN_INFO } from '../tabInfo';
 import { useResponsive } from '../responsive';
 import { theme } from '../theme';
 
@@ -266,7 +267,8 @@ export default function PatternScreen() {
     <View style={styles.container}>
       <ScreenTitle
         title="Pattern Recogniser"
-        sub="Scans a stock's full price history for classic chart patterns — with start/end, confidence, continuation odds and the measured move"
+        sub="Classic chart patterns with measured-move targets"
+        info={PATTERN_INFO}
       />
 
       <View style={styles.inputRow}>

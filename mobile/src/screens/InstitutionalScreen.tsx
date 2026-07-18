@@ -9,6 +9,7 @@ import { LocalAlert, addLocalAlert, hasLocalAlert, loadLocalAlerts } from '../lo
 import { loadNames } from './ScreenerScreen';
 import { useResponsive } from '../responsive';
 import { Card, EmptyState, ScreenTitle } from '../ui';
+import { INSTITUTIONAL_INFO } from '../tabInfo';
 import { theme } from '../theme';
 import {
   DEPTH_OPTIONS,
@@ -393,7 +394,8 @@ export default function InstitutionalScreen() {
     <View style={styles.container}>
       <ScreenTitle
         title="Institutional"
-        sub="Mid & large caps screened by algorithmic strategy — momentum, trend, breakout, mean-reversion, stat-arb"
+        sub="Algorithmic quant-style strategy screens"
+        info={INSTITUTIONAL_INFO}
         right={
           <TouchableOpacity style={[styles.updBtn, scanning && { opacity: 0.5 }]} onPress={runScan} disabled={scanning} activeOpacity={0.75}>
             <Text style={styles.updTxt}>{scanning ? '… Scanning' : '⟳ Update List'}</Text>
