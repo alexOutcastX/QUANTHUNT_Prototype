@@ -13,7 +13,7 @@ import InstitutionalScreen from './InstitutionalScreen';
 import SmcScreen from './SmcScreen';
 import { useResponsive } from '../responsive';
 import { printHtmlDocument } from '../pdf';
-import { Card, EmptyState, Segmented } from '../ui';
+import { Card, Dropdown, EmptyState, Segmented } from '../ui';
 import { INSTITUTIONAL_INFO, RECOMMENDATIONS_INFO, SHORT_TERM_INFO, SMC_INFO } from '../tabInfo';
 import { theme } from '../theme';
 import {
@@ -441,7 +441,14 @@ function LongTermRecs() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.actionRow}>
+      {/* Compact control row: depth dropdown + PDF + Update. */}
+      <View style={styles.controlBar}>
+        <Dropdown
+          label="Depth"
+          value={depth}
+          options={DEPTH_OPTIONS.map((n) => ({ key: n, label: String(n) }))}
+          onChange={onDepth}
+        />
         <TouchableOpacity
           style={[styles.updBtn, (scanning || !recs.length) && { opacity: 0.5 }]}
           onPress={() => {
@@ -454,25 +461,9 @@ function LongTermRecs() {
           <Text style={styles.updTxt}>⤓ PDF</Text>
         </TouchableOpacity>
         <TouchableOpacity style={[styles.updBtn, styles.updBtnPrimary, scanning && { opacity: 0.5 }]} onPress={runScan} disabled={scanning} activeOpacity={0.75}>
-          <Text style={[styles.updTxt, { color: theme.onAccent }]}>{scanning ? '… Scanning' : '⟳ Update List'}</Text>
+          <Text style={[styles.updTxt, { color: theme.onAccent }]}>{scanning ? '… Scanning' : '⟳ Update'}</Text>
         </TouchableOpacity>
-      </View>
-
-      {/* scan-depth selector */}
-      <View style={styles.depthRow}>
-        <Text style={styles.depthLbl}>Scan depth</Text>
-        {DEPTH_OPTIONS.map((n) => (
-          <TouchableOpacity
-            key={n}
-            style={[styles.depthChip, depth === n && styles.depthChipOn]}
-            onPress={() => onDepth(n)}
-            disabled={scanning}
-            activeOpacity={0.75}
-          >
-            <Text style={[styles.depthTxt, depth === n && styles.depthTxtOn]}>{n}</Text>
-          </TouchableOpacity>
-        ))}
-        {asof && !scanning ? <Text style={styles.asof}>updated {timeAgo(asof)}</Text> : null}
+        {asof && !scanning ? <Text style={styles.asofInline}>updated {timeAgo(asof)}</Text> : null}
       </View>
 
       {/* progress bar + live status while scanning */}
@@ -599,6 +590,8 @@ const styles = StyleSheet.create({
   headBtns: { flexDirection: 'row', gap: theme.sp.sm },
   // Compact action row (no title) — buttons sit right where the heading used to.
   actionRow: { flexDirection: 'row', justifyContent: 'flex-end', gap: theme.sp.sm, paddingHorizontal: theme.sp.lg, paddingTop: theme.sp.sm, paddingBottom: theme.sp.sm },
+  controlBar: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: theme.sp.sm, paddingHorizontal: theme.sp.lg, paddingTop: theme.sp.sm, paddingBottom: theme.sp.sm },
+  asofInline: { color: theme.muted, fontSize: theme.fs.xs + 1, fontFamily: theme.mono, marginLeft: 'auto' },
   depthRow: {
     flexDirection: 'row',
     alignItems: 'center',
