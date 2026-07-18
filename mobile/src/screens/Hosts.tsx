@@ -1,9 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Modal, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { peekNav, subscribeNav } from '../navIntent';
 import { useResponsive } from '../responsive';
-import { Segmented } from '../ui';
 import { theme } from '../theme';
 import AnalysisScreen from './AnalysisScreen';
 import BacktestScreen from './BacktestScreen';
@@ -24,6 +23,7 @@ import PatternScreen from './PatternScreen';
 import RecommendationsScreen from './RecommendationsScreen';
 import RiskScreen from './RiskScreen';
 import EntityGraphScreen from './EntityGraphScreen';
+import PaperTradeScreen from './PaperTradeScreen';
 import AlertsScreen from './AlertsScreen';
 import DeveloperScreen from './DeveloperScreen';
 
@@ -74,6 +74,7 @@ function SubTabs({ tabs, persistKey }: { tabs: SubTab[]; persistKey?: string }) 
     [],
   );
   const cur = tabs.find((t) => t.key === active) || tabs[0];
+  const [menuOpen, setMenuOpen] = useState(false);
 
   return (
     <View style={styles.host}>
@@ -93,11 +94,41 @@ function SubTabs({ tabs, persistKey }: { tabs: SubTab[]; persistKey?: string }) 
           </View>
         </View>
       ) : (
-        // Mobile: one clean scrollable row of pills instead of a hidden dropdown,
-        // with the active section's one-line description beneath it.
-        <View style={styles.subNav}>
-          <Segmented items={tabs.map((t) => ({ key: t.key, label: t.label }))} value={active} onChange={setActive} />
-          {cur.hint ? <Text style={styles.subNavHint} numberOfLines={1}>{cur.hint}</Text> : null}
+        // Mobile: a hamburger button showing the current section; tap for a
+        // drop-down list of every section with its one-line description.
+        <View style={styles.hamWrap}>
+          <TouchableOpacity style={styles.hamBtn} onPress={() => setMenuOpen(true)} activeOpacity={0.75}>
+            <Text style={styles.hamIcon}>☰</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.hamLabel}>{cur.label}</Text>
+              {cur.hint ? <Text style={styles.hamHint} numberOfLines={1}>{cur.hint}</Text> : null}
+            </View>
+            <Text style={styles.hamChevron}>▾</Text>
+          </TouchableOpacity>
+          <Modal visible={menuOpen} transparent animationType="fade" onRequestClose={() => setMenuOpen(false)}>
+            <Pressable style={styles.menuScrim} onPress={() => setMenuOpen(false)} />
+            <View style={styles.menuSheet}>
+              <ScrollView bounces={false}>
+                {tabs.map((t) => (
+                  <TouchableOpacity
+                    key={t.key}
+                    style={[styles.menuItem, active === t.key && styles.menuItemOn]}
+                    onPress={() => {
+                      setActive(t.key);
+                      setMenuOpen(false);
+                    }}
+                    activeOpacity={0.75}
+                  >
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.menuLabel2, active === t.key && styles.menuLabel2On]}>{t.label}</Text>
+                      {t.hint ? <Text style={styles.menuHint2} numberOfLines={2}>{t.hint}</Text> : null}
+                    </View>
+                    {active === t.key ? <Text style={styles.menuTick}>✓</Text> : null}
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+          </Modal>
         </View>
       )}
 
@@ -113,6 +144,7 @@ export function AnalysisHome() {
       tabs={[
         { key: 'inst', label: 'Institutional', hint: 'Upside-probability model · Monte-Carlo + historical frequency', render: () => <AnalysisScreen /> },
         { key: 'shareholders', label: 'Shareholders', hint: "Institutions, promoters & political funding · every link cited", render: () => <EntityGraphScreen /> },
+        { key: 'paper', label: 'Paper trades', hint: 'Simulated outcomes of your logged setups · win-rate', render: () => <PaperTradeScreen /> },
         { key: 'reco', label: 'Recommendations', hint: 'Ranked buy setups from the Multibagger candidates', render: () => <RecommendationsScreen /> },
         { key: 'mb', label: 'Multibagger', hint: 'Fixed-screen candidates + one-click potential analyser', render: () => <MultibaggerScreen /> },
         { key: 'patterns', label: 'Patterns', hint: 'Classic chart-pattern scanner with confidence & targets', render: () => <PatternScreen /> },

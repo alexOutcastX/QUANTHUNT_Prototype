@@ -9,7 +9,7 @@ import { addSymbol, loadWatchlist, normSymbol } from '../watchlist';
 import { LocalAlert, addLocalAlert, hasLocalAlert, loadLocalAlerts } from '../localalerts';
 import { loadNames } from './ScreenerScreen';
 import { useResponsive } from '../responsive';
-import { Card, Dropdown, EmptyState } from '../ui';
+import { Card, Dropdown, EmptyState, RiskBadge } from '../ui';
 import { theme } from '../theme';
 import {
   DEPTH_OPTIONS,
@@ -118,6 +118,7 @@ function SwingDetail({
               </View>
               {r.name ? <Text style={styles.name}>{r.name}</Text> : null}
               <Text style={styles.setupTag}>{r.setup}</Text>
+              <RiskBadge input={{ rr: r.rr, stop_pct: r.stop_pct, max_dd: r.max_dd, score: r.probability }} style={{ marginTop: 6 }} />
             </View>
             <View style={{ alignItems: 'flex-end' }}>
               <Text style={[styles.prob, { color: probColor(r.probability), fontSize: 28 }]}>{r.probability}</Text>

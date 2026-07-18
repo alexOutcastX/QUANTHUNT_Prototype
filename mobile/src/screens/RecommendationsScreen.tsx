@@ -2,6 +2,8 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { MbScreenRow, Recommendation, api } from '../api';
 import StockDetail from '../components/StockDetail';
+import SymbolInput from '../components/SymbolInput';
+import TradeVerdict from '../components/TradeVerdict';
 import { Row } from '../screener';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { navigate } from '../navIntent';
@@ -13,7 +15,7 @@ import InstitutionalScreen from './InstitutionalScreen';
 import SmcScreen from './SmcScreen';
 import { useResponsive } from '../responsive';
 import { printHtmlDocument } from '../pdf';
-import { Card, Dropdown, EmptyState, Segmented } from '../ui';
+import { Card, Dropdown, EmptyState, RiskBadge, Segmented } from '../ui';
 import { INSTITUTIONAL_INFO, RECOMMENDATIONS_INFO, SHORT_TERM_INFO, SMC_INFO } from '../tabInfo';
 import { theme } from '../theme';
 import {
@@ -225,6 +227,7 @@ function RecCard({
             <Text style={styles.metaTxt}><Text style={styles.metaK}>⏱ </Text>{r.eta} to target</Text>
           </View>
         ) : null}
+        <RiskBadge input={{ rr: r.rr, stop_pct: r.stop_pct, score: r.confidence }} />
       </View>
 
       {r.rationale?.length ? (
@@ -566,20 +569,61 @@ export default function RecommendationsScreen() {
     inst: { title: 'Institutional', info: INSTITUTIONAL_INFO },
     smc: { title: 'HFT / ICT / SMC', info: SMC_INFO },
   }[mode];
+  const [q, setQ] = useState('');
+  const [verdictSym, setVerdictSym] = useState<string | null>(null);
+  const analyse = (s?: string) => {
+    const v = (s ?? q).trim().toUpperCase().replace(/^(NSE|BSE):/, '');
+    if (v) setVerdictSym(v);
+  };
   return (
     <View style={styles.container}>
+      <View style={styles.searchRow}>
+        <SymbolInput
+          value={q}
+          onChangeText={setQ}
+          onSelect={(s) => analyse(s)}
+          onSubmit={() => analyse()}
+          placeholder="Analyse any scrip — take or skip?"
+          inputStyle={styles.searchInput}
+          containerStyle={{ flex: 1 }}
+        />
+        <TouchableOpacity
+          style={[styles.analyseBtn, !q.trim() && { opacity: 0.5 }]}
+          onPress={() => analyse()}
+          disabled={!q.trim()}
+          activeOpacity={0.75}
+        >
+          <Text style={styles.analyseTxt}>⚡ Analyse</Text>
+        </TouchableOpacity>
+      </View>
       <View style={styles.modeBarWrap}>
         <Segmented items={TABS} value={mode} onChange={setMode} info={modeInfo.info} infoTitle={modeInfo.title} />
       </View>
       <View style={{ flex: 1 }}>
         {mode === 'short' ? <ShortTermScreen /> : mode === 'inst' ? <InstitutionalScreen /> : mode === 'smc' ? <SmcScreen /> : <LongTermRecs />}
       </View>
+      {verdictSym ? <TradeVerdict symbol={verdictSym} onClose={() => setVerdictSym(null)} /> : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.bg },
+  searchRow: { flexDirection: 'row', alignItems: 'center', gap: theme.sp.sm, paddingHorizontal: theme.sp.lg, paddingTop: theme.sp.md, zIndex: 50 },
+  searchInput: {
+    backgroundColor: theme.surface2,
+    borderColor: theme.border2,
+    borderWidth: 1,
+    borderRadius: theme.radius.sm + 2,
+    color: theme.text,
+    fontFamily: theme.mono,
+    fontSize: theme.fs.md,
+    paddingHorizontal: theme.sp.md,
+    paddingVertical: theme.sp.sm + 2,
+    letterSpacing: 1,
+  },
+  analyseBtn: { backgroundColor: theme.accent, borderRadius: theme.radius.sm + 2, paddingHorizontal: theme.sp.md, paddingVertical: 10 },
+  analyseTxt: { color: theme.onAccent, fontSize: theme.fs.sm + 1, fontWeight: '800' },
   modeBarWrap: { paddingTop: theme.sp.md },
   modeBar: { flexDirection: 'row', flexWrap: 'wrap', gap: 3, backgroundColor: theme.surface2, borderRadius: theme.radius.sm + 6, padding: 3, alignSelf: 'flex-start' },
   modeBtn: { borderRadius: 999, paddingVertical: 6, paddingHorizontal: theme.sp.md },
