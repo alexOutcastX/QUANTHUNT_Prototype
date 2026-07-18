@@ -13,7 +13,7 @@ import {
   api,
 } from '../api';
 import SymbolInput from '../components/SymbolInput';
-import { Card, EmptyState, Loading, ScreenTitle, SectionTitle, Segmented } from '../ui';
+import { Card, EmptyState, Loading, SectionTitle, Segmented } from '../ui';
 import { SHAREHOLDERS_INFO } from '../tabInfo';
 import { theme } from '../theme';
 
@@ -131,13 +131,7 @@ export default function EntityGraphScreen() {
 
   return (
     <View style={styles.container}>
-      <ScreenTitle
-        title="Shareholders"
-        sub="Institutions, promoters & political funding — every link cited"
-        info={SHAREHOLDERS_INFO}
-      />
-
-      <Segmented items={TABS} value={mode} onChange={setMode} />
+      <Segmented items={TABS} value={mode} onChange={setMode} info={SHAREHOLDERS_INFO} infoTitle="Shareholders" />
 
       {mode === 'stock' ? (
         <View style={styles.searchWrap}>

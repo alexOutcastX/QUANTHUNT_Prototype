@@ -7,7 +7,7 @@ import { Row } from '../screener';
 import { addSymbol, loadWatchlist, normSymbol, removeSymbol } from '../watchlist';
 import { LocalAlert, addLocalAlert, hasLocalAlert, loadLocalAlerts } from '../localalerts';
 import { capBand } from '../marketcap';
-import { EmptyState, Loading, ScreenTitle } from '../ui';
+import { EmptyState, InfoButton, Loading } from '../ui';
 import { MOMENTUM_INFO } from '../tabInfo';
 import { theme } from '../theme';
 
@@ -291,13 +291,9 @@ export default function MomentumScreen() {
 
   return (
     <View style={styles.container}>
-      <ScreenTitle
-        title="Momentum radar"
-        sub="NSE + BSE breakout & pullback-reversal setups"
-        info={MOMENTUM_INFO}
-      />
       <View style={styles.chipsRow}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipsInner}>
+          <InfoButton title="Momentum radar" content={MOMENTUM_INFO} style={styles.infoInline} />
           {SETUP_FILTERS.map((f) => {
             const count =
               f.key === 'all' ? counts.breakout + counts.fired + counts.pullback : counts[f.key] || 0;
@@ -520,7 +516,8 @@ export default function MomentumScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.bg },
-  chipsRow: { paddingBottom: theme.sp.xs },
+  chipsRow: { paddingBottom: theme.sp.xs, paddingTop: theme.sp.sm },
+  infoInline: { alignSelf: 'center', marginRight: theme.sp.sm },
   chipsInner: { paddingHorizontal: theme.sp.lg, gap: theme.sp.sm, alignItems: 'center' },
   chip: {
     backgroundColor: theme.surface2,

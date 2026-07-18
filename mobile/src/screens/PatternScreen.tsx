@@ -9,7 +9,7 @@ import SymbolInput from '../components/SymbolInput';
 import { Row } from '../screener';
 import { navigate, takeSymbol } from '../navIntent';
 import { addSymbol, loadWatchlist, normSymbol } from '../watchlist';
-import { Btn, Card, EmptyState, Loading, ScreenTitle, SectionTitle } from '../ui';
+import { Btn, Card, EmptyState, InfoButton, Loading, SectionTitle } from '../ui';
 import { PATTERN_INFO } from '../tabInfo';
 import { useResponsive } from '../responsive';
 import { theme } from '../theme';
@@ -265,12 +265,6 @@ export default function PatternScreen() {
 
   return (
     <View style={styles.container}>
-      <ScreenTitle
-        title="Pattern Recogniser"
-        sub="Classic chart patterns with measured-move targets"
-        info={PATTERN_INFO}
-      />
-
       <View style={styles.inputRow}>
         <SymbolInput
           value={symbol}
@@ -282,6 +276,7 @@ export default function PatternScreen() {
           containerStyle={{ flex: 1 }}
         />
         <Btn label={busy ? 'Scanning…' : '⚏ Scan'} onPress={() => scan()} disabled={busy || !symbol.trim()} />
+        <InfoButton title="Pattern Recogniser" content={PATTERN_INFO} style={styles.infoInline} />
       </View>
 
       <View style={styles.periodRow}>
@@ -399,7 +394,8 @@ export default function PatternScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.bg },
-  inputRow: { flexDirection: 'row', gap: theme.sp.sm, paddingHorizontal: theme.sp.lg, paddingBottom: theme.sp.sm, zIndex: 50 },
+  inputRow: { flexDirection: 'row', alignItems: 'center', gap: theme.sp.sm, paddingHorizontal: theme.sp.lg, paddingTop: theme.sp.sm, paddingBottom: theme.sp.sm, zIndex: 50 },
+  infoInline: { alignSelf: 'center' },
   input: {
     backgroundColor: theme.surface2,
     borderColor: theme.border2,

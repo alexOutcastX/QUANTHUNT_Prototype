@@ -9,8 +9,7 @@ import { addSymbol, loadWatchlist, normSymbol } from '../watchlist';
 import { LocalAlert, addLocalAlert, hasLocalAlert, loadLocalAlerts } from '../localalerts';
 import { loadNames } from './ScreenerScreen';
 import { useResponsive } from '../responsive';
-import { Card, EmptyState, ScreenTitle } from '../ui';
-import { SHORT_TERM_INFO } from '../tabInfo';
+import { Card, EmptyState } from '../ui';
 import { theme } from '../theme';
 import {
   DEPTH_OPTIONS,
@@ -353,16 +352,11 @@ export default function ShortTermScreen() {
 
   return (
     <View style={styles.container}>
-      <ScreenTitle
-        title="Short-term swing"
-        sub="Pullback-reversal & oversold-bounce setups"
-        info={SHORT_TERM_INFO}
-        right={
-          <TouchableOpacity style={[styles.updBtn, scanning && { opacity: 0.5 }]} onPress={runScan} disabled={scanning} activeOpacity={0.75}>
-            <Text style={styles.updTxt}>{scanning ? '… Scanning' : '⟳ Update List'}</Text>
-          </TouchableOpacity>
-        }
-      />
+      <View style={styles.actionRow}>
+        <TouchableOpacity style={[styles.updBtn, scanning && { opacity: 0.5 }]} onPress={runScan} disabled={scanning} activeOpacity={0.75}>
+          <Text style={styles.updTxt}>{scanning ? '… Scanning' : '⟳ Update List'}</Text>
+        </TouchableOpacity>
+      </View>
 
       <View style={styles.depthRow}>
         <Text style={styles.depthLbl}>Scan depth</Text>
@@ -453,6 +447,7 @@ export default function ShortTermScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.bg },
   note: { color: theme.muted, fontSize: theme.fs.sm, paddingHorizontal: theme.sp.lg, paddingBottom: theme.sp.sm },
+  actionRow: { flexDirection: 'row', justifyContent: 'flex-end', paddingHorizontal: theme.sp.lg, paddingTop: theme.sp.sm, paddingBottom: theme.sp.sm },
   updBtn: {
     backgroundColor: theme.accent,
     borderColor: theme.accent,
