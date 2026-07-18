@@ -29,28 +29,42 @@ export default function StockDetail({ row, onClose }: { row: Row; onClose: () =>
   const [fund, setFund] = useState<Fundamentals | null>(null);
   const [busy, setBusy] = useState(true);
   const [err, setErr] = useState<string | null>(null);
+  // Callers like the Recommendations / SMC lists open us with only { sym, price }
+  // — no live technicals. Detect that and pull the full scan row ourselves so the
+  // Technicals / Pivots / Signals sections aren't all "—".
+  const [live, setLive] = useState<Row | null>(null);
+  const [tries, setTries] = useState(0);
+  const needsScan = row.rsi == null && row.d50 == null;
 
   useEffect(() => {
     let alive = true;
+    setBusy(true);
+    setErr(null);
     (async () => {
-      const [hist, f] = await Promise.all([
+      const [hist, f, scan] = await Promise.all([
         api.history(row.sym, '6mo', '1d').catch(() => null),
         api.fundamentals(row.sym).catch(() => null),
+        needsScan ? api.scan([row.sym]).catch(() => null) : Promise.resolve(null),
       ]);
       if (!alive) return;
-      if (hist && Array.isArray(hist.candles)) setCandles(hist.candles);
+      if (hist && Array.isArray(hist.candles) && hist.candles.length) setCandles(hist.candles);
       else setErr('Chart data unavailable');
       if (f && !f.error) setFund(f);
+      const sr = scan?.data?.[row.sym];
+      if (sr) setLive({ ...row, ...(sr as Partial<Row>) } as Row);
       setBusy(false);
     })();
     return () => {
       alive = false;
     };
-  }, [row.sym]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [row.sym, tries]);
 
-  const sig = calcSignal(row);
+  // Prefer the freshly-scanned row (full technicals) over the sparse caller row.
+  const r = live || row;
+  const sig = calcSignal(r);
   const sigColor = sig === 'buy' ? theme.green : sig === 'sell' ? theme.red : theme.muted2;
-  const chgColor = row.chg == null ? theme.muted : row.chg >= 0 ? theme.green : theme.red;
+  const chgColor = r.chg == null ? theme.muted : r.chg >= 0 ? theme.green : theme.red;
 
   return (
     <Modal visible animationType="slide" transparent onRequestClose={onClose}>
@@ -65,8 +79,8 @@ export default function StockDetail({ row, onClose }: { row: Row; onClose: () =>
               </View>
             </View>
             <View style={styles.priceRow}>
-              <Text style={styles.price}>{money(row.price)}</Text>
-              <Text style={[styles.chg, { color: chgColor }]}>{pct(row.chg, 2)}</Text>
+              <Text style={styles.price}>{money(r.price)}</Text>
+              <Text style={[styles.chg, { color: chgColor }]}>{pct(r.chg, 2)}</Text>
             </View>
           </View>
           <TouchableOpacity onPress={onClose} hitSlop={12} activeOpacity={0.75} style={styles.closeBtn}>
@@ -85,8 +99,11 @@ export default function StockDetail({ row, onClose }: { row: Row; onClose: () =>
                 <EmptyState
                   icon="◫"
                   title={err || 'No chart data'}
-                  hint="Price history could not be fetched — close and reopen to retry."
+                  hint="Price history could not be fetched — the data feed may be busy."
                 />
+                <TouchableOpacity style={styles.retryBtn} onPress={() => setTries((t) => t + 1)} activeOpacity={0.75}>
+                  <Text style={styles.retryTxt}>⟳ Retry</Text>
+                </TouchableOpacity>
               </View>
             )}
           </View>
@@ -94,39 +111,39 @@ export default function StockDetail({ row, onClose }: { row: Row; onClose: () =>
           <SectionTitle>Technicals (live)</SectionTitle>
           <Card style={styles.sectionCard}>
             <View style={styles.grid}>
-              <Cell k="RSI (14)" v={num(row.rsi, 0)} />
-              <Cell k="MACD hist" v={num(row.macd, 2)} />
-              <Cell k="W%R" v={num(row.willr, 0)} />
-              <Cell k="Boll %B" v={num(row.bollb, 2)} />
-              <Cell k="vs 20 DMA" v={pct(row.d20)} c />
-              <Cell k="vs 50 DMA" v={pct(row.d50)} c />
-              <Cell k="vs 200 DMA" v={pct(row.d200)} c />
-              <Cell k="Rel. volume" v={row.relvol != null ? row.relvol.toFixed(1) + 'x' : '—'} />
-              <Cell k="Beta (1Y)" v={num(row.beta)} />
-              <Cell k="52w high" v={money(row.high52)} />
-              <Cell k="52w low" v={money(row.low52)} />
+              <Cell k="RSI (14)" v={num(r.rsi, 0)} />
+              <Cell k="MACD hist" v={num(r.macd, 2)} />
+              <Cell k="W%R" v={num(r.willr, 0)} />
+              <Cell k="Boll %B" v={num(r.bollb, 2)} />
+              <Cell k="vs 20 DMA" v={pct(r.d20)} c />
+              <Cell k="vs 50 DMA" v={pct(r.d50)} c />
+              <Cell k="vs 200 DMA" v={pct(r.d200)} c />
+              <Cell k="Rel. volume" v={r.relvol != null ? r.relvol.toFixed(1) + 'x' : '—'} />
+              <Cell k="Beta (1Y)" v={num(r.beta)} />
+              <Cell k="52w high" v={money(r.high52)} />
+              <Cell k="52w low" v={money(r.low52)} />
               <Cell
                 k="Squeeze"
-                v={row.sqzFire ? 'FIRED' : row.sqzOn ? 'ON' : row.sqzOn === false ? 'off' : '—'}
+                v={r.sqzFire ? 'FIRED' : r.sqzOn ? 'ON' : r.sqzOn === false ? 'off' : '—'}
               />
             </View>
           </Card>
 
           {(() => {
             const events: string[] = [];
-            if (row.golden_cross) events.push('Golden cross (50↑200)');
-            if (row.death_cross) events.push('Death cross (50↓200)');
-            if (row.cross_20_50_up) events.push('20-DMA crossed ↑ 50');
-            if (row.cross_20_50_down) events.push('20-DMA crossed ↓ 50');
-            if (row.macd_bull_cross) events.push('MACD bullish cross');
-            if (row.macd_bear_cross) events.push('MACD bearish cross');
-            if (row.gap_up) events.push('Gapped up');
-            if (row.gap_down) events.push('Gapped down');
-            if (row.new_high_52w) events.push('New 52-week high');
-            if (row.new_low_52w) events.push('New 52-week low');
-            if (row.volume_spike) events.push('Volume spike');
-            if (row.cam_break_up) events.push('Camarilla H4 breakout');
-            if (row.cam_break_down) events.push('Camarilla L4 breakdown');
+            if (r.golden_cross) events.push('Golden cross (50↑200)');
+            if (r.death_cross) events.push('Death cross (50↓200)');
+            if (r.cross_20_50_up) events.push('20-DMA crossed ↑ 50');
+            if (r.cross_20_50_down) events.push('20-DMA crossed ↓ 50');
+            if (r.macd_bull_cross) events.push('MACD bullish cross');
+            if (r.macd_bear_cross) events.push('MACD bearish cross');
+            if (r.gap_up) events.push('Gapped up');
+            if (r.gap_down) events.push('Gapped down');
+            if (r.new_high_52w) events.push('New 52-week high');
+            if (r.new_low_52w) events.push('New 52-week low');
+            if (r.volume_spike) events.push('Volume spike');
+            if (r.cam_break_up) events.push('Camarilla H4 breakout');
+            if (r.cam_break_down) events.push('Camarilla L4 breakdown');
             return events.length ? (
               <>
                 <SectionTitle>Signals today</SectionTitle>
@@ -144,10 +161,10 @@ export default function StockDetail({ row, onClose }: { row: Row; onClose: () =>
           <SectionTitle>Pivots</SectionTitle>
           <Card style={styles.sectionCard}>
             <View style={styles.grid}>
-              <Cell k="S1 / S2 / S3" v={`${num(row.s1)} / ${num(row.s2)} / ${num(row.s3)}`} wide />
-              <Cell k="R1 / R2 / R3" v={`${num(row.r1)} / ${num(row.r2)} / ${num(row.r3)}`} wide />
-              <Cell k="Camarilla H3 / H4" v={`${num(row.cam_h3)} / ${num(row.cam_h4)}`} wide />
-              <Cell k="Camarilla L3 / L4" v={`${num(row.cam_l3)} / ${num(row.cam_l4)}`} wide />
+              <Cell k="S1 / S2 / S3" v={`${num(r.s1)} / ${num(r.s2)} / ${num(r.s3)}`} wide />
+              <Cell k="R1 / R2 / R3" v={`${num(r.r1)} / ${num(r.r2)} / ${num(r.r3)}`} wide />
+              <Cell k="Camarilla H3 / H4" v={`${num(r.cam_h3)} / ${num(r.cam_h4)}`} wide />
+              <Cell k="Camarilla L3 / L4" v={`${num(r.cam_l3)} / ${num(r.cam_l4)}`} wide />
             </View>
           </Card>
 
@@ -240,6 +257,15 @@ const styles = StyleSheet.create({
   },
   web: { flex: 1, backgroundColor: theme.bg },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  retryBtn: {
+    marginTop: theme.sp.sm,
+    borderColor: theme.border2,
+    borderWidth: 1,
+    borderRadius: theme.radius.pill,
+    paddingHorizontal: theme.sp.lg,
+    paddingVertical: 7,
+  },
+  retryTxt: { color: theme.muted2, fontSize: theme.fs.sm, fontWeight: '700' },
   dim: { color: theme.muted, fontSize: theme.fs.sm, lineHeight: 18, marginBottom: theme.sp.sm },
   sectionCard: { paddingBottom: theme.sp.xs },
   grid: { flexDirection: 'row', flexWrap: 'wrap' },
