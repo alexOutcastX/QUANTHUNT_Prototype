@@ -8,8 +8,7 @@ import { addSymbol, loadWatchlist, normSymbol } from '../watchlist';
 import { LocalAlert, addLocalAlert, hasLocalAlert, loadLocalAlerts } from '../localalerts';
 import { loadNames } from './ScreenerScreen';
 import { useResponsive } from '../responsive';
-import { Card, EmptyState, ScreenTitle } from '../ui';
-import { SMC_INFO } from '../tabInfo';
+import { Card, EmptyState } from '../ui';
 import { theme } from '../theme';
 import {
   DEPTH_OPTIONS,
@@ -413,16 +412,11 @@ export default function SmcScreen() {
 
   return (
     <View style={styles.container}>
-      <ScreenTitle
-        title="HFT / ICT / SMC"
-        sub="Smart-money structure, liquidity & FVG models"
-        info={SMC_INFO}
-        right={
-          <TouchableOpacity style={[styles.updBtn, scanning && { opacity: 0.5 }]} onPress={runScan} disabled={scanning} activeOpacity={0.75}>
-            <Text style={styles.updTxt}>{scanning ? '… Scanning' : '⟳ Update List'}</Text>
-          </TouchableOpacity>
-        }
-      />
+      <View style={styles.actionRow}>
+        <TouchableOpacity style={[styles.updBtn, scanning && { opacity: 0.5 }]} onPress={runScan} disabled={scanning} activeOpacity={0.75}>
+          <Text style={styles.updTxt}>{scanning ? '… Scanning' : '⟳ Update List'}</Text>
+        </TouchableOpacity>
+      </View>
 
       <View style={styles.depthRow}>
         <Text style={styles.depthLbl}>Scan depth</Text>
@@ -531,6 +525,7 @@ export default function SmcScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.bg },
+  actionRow: { flexDirection: 'row', justifyContent: 'flex-end', paddingHorizontal: theme.sp.lg, paddingTop: theme.sp.sm, paddingBottom: theme.sp.sm },
   note: { color: theme.muted, fontSize: theme.fs.sm, paddingHorizontal: theme.sp.lg, paddingBottom: theme.sp.sm },
   updBtn: { backgroundColor: theme.accent, borderColor: theme.accent, borderWidth: 1, borderRadius: theme.radius.sm + 2, paddingHorizontal: theme.sp.md, paddingVertical: 6 },
   updTxt: { color: theme.onAccent, fontSize: theme.fs.sm, fontWeight: '700' },

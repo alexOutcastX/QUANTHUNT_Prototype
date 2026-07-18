@@ -27,34 +27,44 @@ export function Segmented<T extends string>({
   value,
   onChange,
   style,
+  info,
+  infoTitle,
 }: {
   items: { key: T; label: string }[];
   value: T;
   onChange: (k: T) => void;
   style?: ViewStyle;
+  // When given, an ⓘ button sits at the end of the row (pinned, doesn't scroll)
+  // and opens the popup — so the screen can drop its title/subtitle block and
+  // the "about this tab" detail lives right beside the tabs.
+  info?: InfoContent;
+  infoTitle?: string;
 }) {
   return (
     <View style={[s.segWrap, style]}>
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={s.segScroll}
-        contentContainerStyle={s.segRow}
-      >
-        {items.map((it) => {
-          const on = it.key === value;
-          return (
-            <TouchableOpacity
-              key={it.key}
-              style={[s.seg, on && s.segOn]}
-              onPress={() => onChange(it.key)}
-              activeOpacity={0.8}
-            >
-              <Text style={[s.segTxt, on && s.segTxtOn]}>{it.label}</Text>
-            </TouchableOpacity>
-          );
-        })}
-      </ScrollView>
+      <View style={s.segBar}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={s.segScroll}
+          contentContainerStyle={s.segRow}
+        >
+          {items.map((it) => {
+            const on = it.key === value;
+            return (
+              <TouchableOpacity
+                key={it.key}
+                style={[s.seg, on && s.segOn]}
+                onPress={() => onChange(it.key)}
+                activeOpacity={0.8}
+              >
+                <Text style={[s.segTxt, on && s.segTxtOn]}>{it.label}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+        {info ? <InfoButton title={infoTitle || ''} content={info} style={s.segInfoBtn} /> : null}
+      </View>
     </View>
   );
 }
@@ -127,12 +137,12 @@ function InfoModal({
   );
 }
 
-function InfoButton({ title, content }: { title: string; content: InfoContent }) {
+export function InfoButton({ title, content, style }: { title: string; content: InfoContent; style?: ViewStyle }) {
   const [open, setOpen] = React.useState(false);
   return (
     <>
       <TouchableOpacity
-        style={s.infoBtn}
+        style={[s.infoBtn, style]}
         onPress={() => setOpen(true)}
         activeOpacity={0.7}
         accessibilityLabel={'About ' + title}
@@ -289,8 +299,11 @@ const s = StyleSheet.create({
     padding: theme.sp.lg,
   },
   segWrap: { paddingBottom: theme.sp.sm },
-  segScroll: { flexGrow: 0 },
+  segBar: { flexDirection: 'row', alignItems: 'center' },
+  segScroll: { flexGrow: 0, flexShrink: 1 },
   segRow: { flexDirection: 'row', gap: theme.sp.sm, paddingHorizontal: theme.sp.lg, alignItems: 'center' },
+  // ⓘ pinned at the row's right edge; small gap from the last pill.
+  segInfoBtn: { marginRight: theme.sp.lg, marginLeft: theme.sp.xs },
   seg: {
     paddingHorizontal: 15,
     paddingVertical: 8,

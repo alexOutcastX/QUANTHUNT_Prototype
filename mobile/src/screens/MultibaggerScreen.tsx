@@ -12,7 +12,7 @@ import { takeSymbol } from '../navIntent';
 import { ACTIONS_W, COLS, Col, DEFAULT_HIDDEN, cellFlex, loadNames } from './ScreenerScreen';
 import { TrackDir, TrackEntry, addTrack, loadTrack, removeTrack } from '../tracklist';
 import { addSymbol, loadWatchlist, normSymbol, removeSymbol } from '../watchlist';
-import { Btn, Card, EmptyState, Loading, ScreenTitle, SectionTitle, StatTile } from '../ui';
+import { Btn, Card, EmptyState, InfoButton, Loading, SectionTitle, StatTile } from '../ui';
 import { MULTIBAGGER_INFO } from '../tabInfo';
 import { theme } from '../theme';
 import { getScanned, hydrateScan, isIncluded, subscribeScan, toggleInclude } from '../scanStore';
@@ -623,27 +623,23 @@ export default function MultibaggerScreen() {
 
   return (
     <View style={styles.container}>
-      <ScreenTitle
-        title="Multibagger"
-        sub="Long-term compounders + potential analyser"
-        info={MULTIBAGGER_INFO}
-        right={
-          <View style={styles.segRow}>
-            {(['screen', 'analyse'] as const).map((v) => (
-              <TouchableOpacity
-                key={v}
-                style={[styles.segBtn, view === v && styles.segBtnOn]}
-                onPress={() => setView(v)}
-                activeOpacity={0.75}
-              >
-                <Text style={[styles.segTxt, view === v && styles.segTxtOn]}>
-                  {v === 'screen' ? '◆ Screener' : '⚡ Analyser'}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        }
-      />
+      <View style={styles.topRow}>
+        <View style={styles.segRow}>
+          {(['screen', 'analyse'] as const).map((v) => (
+            <TouchableOpacity
+              key={v}
+              style={[styles.segBtn, view === v && styles.segBtnOn]}
+              onPress={() => setView(v)}
+              activeOpacity={0.75}
+            >
+              <Text style={[styles.segTxt, view === v && styles.segTxtOn]}>
+                {v === 'screen' ? '◆ Screener' : '⚡ Analyser'}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+        <InfoButton title="Multibagger" content={MULTIBAGGER_INFO} />
+      </View>
 
       {view === 'screen' ? (
         <MbList onAnalyse={(s) => analyse(s)} onDetail={setDetail} toast={toast} />
@@ -864,6 +860,7 @@ export default function MultibaggerScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.bg },
+  topRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: theme.sp.lg, paddingTop: theme.sp.md, paddingBottom: theme.sp.sm },
   segRow: { flexDirection: 'row', gap: theme.sp.xs },
   segBtn: {
     backgroundColor: theme.surface2,
