@@ -112,7 +112,7 @@ export function AnalysisHome() {
       persistKey="analysis"
       tabs={[
         { key: 'inst', label: 'Institutional', hint: 'Upside-probability model · Monte-Carlo + historical frequency', render: () => <AnalysisScreen /> },
-        { key: 'shareholders', label: 'Shareholders', hint: "Search an investor's holdings, or who holds a stock · NSE deals", render: () => <EntityGraphScreen /> },
+        { key: 'shareholders', label: 'Shareholders', hint: "Institutions, promoters & political funding · every link cited", render: () => <EntityGraphScreen /> },
         { key: 'reco', label: 'Recommendations', hint: 'Ranked buy setups from the Multibagger candidates', render: () => <RecommendationsScreen /> },
         { key: 'mb', label: 'Multibagger', hint: 'Fixed-screen candidates + one-click potential analyser', render: () => <MultibaggerScreen /> },
         { key: 'patterns', label: 'Patterns', hint: 'Classic chart-pattern scanner with confidence & targets', render: () => <PatternScreen /> },
@@ -145,7 +145,7 @@ export function ToolsHome() {
         { key: 'universe', label: 'Universe', hint: 'Index constituents · mcap segments · heatmap', render: () => <UniverseScreen /> },
         { key: 'derivatives', label: 'Derivatives', hint: 'F&O option chain · PCR · max-pain · payoff builder', render: () => <DerivativesScreen /> },
         { key: 'corporate', label: 'Corporate', hint: 'Filings, actions, shareholding, bulk/block deals', render: () => <CorporateScreen /> },
-        { key: 'entities', label: 'Shareholders', hint: "Search a shareholder's holdings, or who holds a stock · NSE deals", render: () => <EntityGraphScreen /> },
+        { key: 'entities', label: 'Shareholders', hint: "Institutions, promoters & political funding · every link cited", render: () => <EntityGraphScreen /> },
         { key: 'calc', label: 'Calculator', hint: 'Position size · SIP · CAGR', render: () => <CalculatorScreen /> },
         { key: 'indices', label: 'Indices', hint: 'Live index levels · day & 1Y change', render: () => <IndicesScreen /> },
         { key: 'holidays', label: 'Holidays', hint: 'NSE holiday calendar · market open/closed', render: () => <HolidaysScreen /> },
@@ -179,7 +179,7 @@ const MORE_ITEMS: { key: string; label: string; hint: string; render: () => Reac
   { key: 'corporate', label: 'Corporate', hint: 'Filings, actions, shareholding, bulk/block deals', render: () => <CorporateScreen /> },
   { key: 'derivatives', label: 'Derivatives', hint: 'F&O option chain · PCR · max-pain · payoff builder', render: () => <DerivativesScreen /> },
   { key: 'risk', label: 'Portfolio risk', hint: 'VaR · volatility · beta · drawdown · correlation', render: () => <RiskScreen /> },
-  { key: 'entities', label: 'Shareholders', hint: "Search a shareholder's holdings, or who holds a stock · NSE deals", render: () => <EntityGraphScreen /> },
+  { key: 'entities', label: 'Shareholders', hint: "Institutions, promoters & political funding · every link cited", render: () => <EntityGraphScreen /> },
   { key: 'alerts', label: 'Alerts', hint: 'Server-side price / % / RSI alerts (owner)', render: () => <AlertsScreen /> },
   { key: 'developer', label: 'Developer API', hint: 'Issue keys · public /api/v1 quote & indices (owner)', render: () => <DeveloperScreen /> },
   { key: 'indices', label: 'Indices', hint: 'Live index levels · day & 1Y change', render: () => <IndicesScreen /> },

@@ -1,11 +1,30 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Linking, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { API_BASE, EntityGraph, EntityNode, FlowEdge, Shareholding, api } from '../api';
+import {
+  API_BASE,
+  EntityGraph,
+  EntityNode,
+  FlowEdge,
+  PoliticalDonor,
+  PoliticalGraph,
+  PromoterGraph,
+  PromoterHolder,
+  Shareholding,
+  api,
+} from '../api';
 import SymbolInput from '../components/SymbolInput';
-import { Card, EmptyState, Loading, ScreenTitle, SectionTitle } from '../ui';
+import { Card, EmptyState, Loading, ScreenTitle, SectionTitle, Segmented } from '../ui';
+import { SHAREHOLDERS_INFO } from '../tabInfo';
 import { theme } from '../theme';
 
-type Mode = 'institutions' | 'stock';
+type Mode = 'institutions' | 'stock' | 'promoters' | 'political';
+
+const TABS: { key: Mode; label: string }[] = [
+  { key: 'institutions', label: 'Institutional / HNI' },
+  { key: 'stock', label: 'By stock' },
+  { key: 'promoters', label: 'Promoters' },
+  { key: 'political', label: 'Political' },
+];
 
 const compact = (v: number | null | undefined) => {
   if (v == null) return '—';
@@ -41,9 +60,46 @@ export default function EntityGraphScreen() {
     );
   }, [entities, entQuery]);
 
+  // Promoter graph (seed-grounded) — lazy-loaded on first visit to the tab.
+  const [promoterG, setPromoterG] = useState<PromoterGraph | null | undefined>(undefined);
+  const [promQuery, setPromQuery] = useState('');
+  const [openHolder, setOpenHolder] = useState<string | null>(null);
+  const promHolders = promoterG && promoterG.nodes ? promoterG.nodes.holders : [];
+  const filteredHolders = useMemo(() => {
+    const q = promQuery.trim().toUpperCase();
+    if (!q) return promHolders;
+    // Match the group name OR any company it holds (symbol / company name), so
+    // "AMBANI" finds the Reliance group and "RELIANCE" finds who holds it.
+    return promHolders.filter(
+      (h) =>
+        (h.name || '').toUpperCase().includes(q) ||
+        h.edges.some(
+          (e) => e.symbol.includes(q) || (e.company_name || '').toUpperCase().includes(q),
+        ),
+    );
+  }, [promHolders, promQuery]);
+
+  // Political funding graph (electoral bonds, donor side).
+  const [politicalG, setPoliticalG] = useState<PoliticalGraph | null | undefined>(undefined);
+  const [polQuery, setPolQuery] = useState('');
+  const polDonors = politicalG && politicalG.nodes ? politicalG.nodes.donors : [];
+  const filteredDonors = useMemo(() => {
+    const q = polQuery.trim().toUpperCase();
+    if (!q) return polDonors;
+    return polDonors.filter(
+      (d) => (d.name || '').toUpperCase().includes(q) || (d.symbol || '').includes(q),
+    );
+  }, [polDonors, polQuery]);
+
   useEffect(() => {
     if (graph === undefined) api.entityGraph().then(setGraph).catch(() => setGraph(null));
   }, [graph]);
+  useEffect(() => {
+    if (mode === 'promoters' && promoterG === undefined)
+      api.promoterGraph().then(setPromoterG).catch(() => setPromoterG(null));
+    if (mode === 'political' && politicalG === undefined)
+      api.politicalGraph().then(setPoliticalG).catch(() => setPoliticalG(null));
+  }, [mode, promoterG, politicalG]);
 
   const toggleEntity = useCallback(
     (ent: EntityNode) => {
@@ -75,12 +131,13 @@ export default function EntityGraphScreen() {
 
   return (
     <View style={styles.container}>
-      <ScreenTitle title="Shareholders" sub="Search an investor's holdings, or who holds a stock · grounded in NSE deals" />
+      <ScreenTitle
+        title="Shareholders"
+        sub="Institutions, promoters & political funding — every link cited"
+        info={SHAREHOLDERS_INFO}
+      />
 
-      <View style={styles.tabRow}>
-        <Tab label="By shareholder" on={mode === 'institutions'} onPress={() => setMode('institutions')} />
-        <Tab label="By holding" on={mode === 'stock'} onPress={() => setMode('stock')} />
-      </View>
+      <Segmented items={TABS} value={mode} onChange={setMode} />
 
       {mode === 'stock' ? (
         <View style={styles.searchWrap}>
@@ -93,26 +150,12 @@ export default function EntityGraphScreen() {
             placeholder="Symbol — who holds it"
           />
         </View>
-      ) : graph && graph.nodes && graph.nodes.entities.length ? (
-        <View style={styles.searchWrap}>
-          <View style={styles.searchBox}>
-            <Text style={styles.searchIcon}>⌕</Text>
-            <TextInput
-              value={entQuery}
-              onChangeText={setEntQuery}
-              style={styles.searchInput}
-              placeholder="Search shareholder / investor…"
-              placeholderTextColor={theme.muted}
-              autoCapitalize="characters"
-              autoCorrect={false}
-            />
-            {entQuery ? (
-              <TouchableOpacity onPress={() => setEntQuery('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                <Text style={styles.searchClear}>✕</Text>
-              </TouchableOpacity>
-            ) : null}
-          </View>
-        </View>
+      ) : mode === 'institutions' && graph && graph.nodes && graph.nodes.entities.length ? (
+        <SearchBox value={entQuery} onChange={setEntQuery} placeholder="Search shareholder / investor…" />
+      ) : mode === 'promoters' && promHolders.length ? (
+        <SearchBox value={promQuery} onChange={setPromQuery} placeholder="Promoter or company — e.g. AMBANI, TATA, RELIANCE" />
+      ) : mode === 'political' && polDonors.length ? (
+        <SearchBox value={polQuery} onChange={setPolQuery} placeholder="Search donor / company…" />
       ) : null}
 
       <ScrollView contentContainerStyle={styles.body}>
@@ -159,6 +202,55 @@ export default function EntityGraphScreen() {
                 </View>
               ))}
               <Text style={styles.note}>{graph.disclaimer}</Text>
+            </>
+          )
+        ) : mode === 'promoters' ? (
+          promoterG === undefined ? (
+            <Loading label="Loading promoter groups…" />
+          ) : !promoterG || !promHolders.length ? (
+            <EmptyState title="No promoter data" hint="The promoter dataset failed to load — pull to retry." />
+          ) : (
+            <>
+              <Text style={styles.asof}>
+                {promQuery
+                  ? `${filteredHolders.length} of ${promHolders.length} promoter groups`
+                  : `${promHolders.length} promoter groups`}{' '}
+                · {promoterG.edges.length} company links · {promoterG.asof.first || '—'}
+              </Text>
+              {promQuery && !filteredHolders.length ? (
+                <Text style={styles.none}>No promoter or company matches “{promQuery}”.</Text>
+              ) : null}
+              {filteredHolders.map((h) => (
+                <PromoterRow
+                  key={h.id}
+                  h={h}
+                  open={openHolder === h.id}
+                  onToggle={() => setOpenHolder(openHolder === h.id ? null : h.id)}
+                />
+              ))}
+              <Text style={styles.note}>{promoterG.disclaimer}</Text>
+            </>
+          )
+        ) : mode === 'political' ? (
+          politicalG === undefined ? (
+            <Loading label="Loading political funding…" />
+          ) : !politicalG || !polDonors.length ? (
+            <EmptyState title="No political data" hint="The electoral-bond dataset failed to load — pull to retry." />
+          ) : (
+            <>
+              <Text style={styles.asof}>
+                {polQuery
+                  ? `${filteredDonors.length} of ${politicalG.count} donors`
+                  : `${politicalG.count} donors · ₹${politicalG.total_cr.toLocaleString('en-IN')} Cr disclosed`}{' '}
+                · {politicalG.asof.first || '—'}
+              </Text>
+              {polQuery && !filteredDonors.length ? (
+                <Text style={styles.none}>No donor or company matches “{polQuery}”.</Text>
+              ) : null}
+              {filteredDonors.map((d) => (
+                <DonorRow key={d.id} d={d} />
+              ))}
+              <Text style={styles.note}>{politicalG.disclaimer}</Text>
             </>
           )
         ) : /* stock pivot */ !sym ? (
@@ -229,11 +321,99 @@ function SharePattern({ s }: { s: Shareholding }) {
   );
 }
 
-function Tab({ label, on, onPress }: { label: string; on: boolean; onPress: () => void }) {
+// Sticky search field shared by the Institutional / Promoter / Political tabs.
+function SearchBox({
+  value,
+  onChange,
+  placeholder,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  placeholder: string;
+}) {
   return (
-    <TouchableOpacity style={[styles.tab, on && styles.tabOn]} onPress={onPress} activeOpacity={0.75}>
-      <Text style={[styles.tabTxt, on && styles.tabTxtOn]}>{label}</Text>
-    </TouchableOpacity>
+    <View style={styles.searchWrap}>
+      <View style={styles.searchBox}>
+        <Text style={styles.searchIcon}>⌕</Text>
+        <TextInput
+          value={value}
+          onChangeText={onChange}
+          style={styles.searchInput}
+          placeholder={placeholder}
+          placeholderTextColor={theme.muted}
+          autoCapitalize="characters"
+          autoCorrect={false}
+        />
+        {value ? (
+          <TouchableOpacity onPress={() => onChange('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Text style={styles.searchClear}>✕</Text>
+          </TouchableOpacity>
+        ) : null}
+      </View>
+    </View>
+  );
+}
+
+// A promoter group — tap to reveal every listed company it controls, with the
+// (approximate) disclosed stake and the filing citation.
+function PromoterRow({ h, open, onToggle }: { h: PromoterHolder; open: boolean; onToggle: () => void }) {
+  return (
+    <View>
+      <TouchableOpacity style={styles.entRow} onPress={onToggle} activeOpacity={0.7}>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.entName}>{h.name}</Text>
+          <Text style={styles.entMeta}>
+            {h.breadth} listed compan{h.breadth === 1 ? 'y' : 'ies'}
+          </Text>
+        </View>
+        <Text style={styles.chev}>{open ? '−' : '+'}</Text>
+      </TouchableOpacity>
+      {open ? (
+        <View style={styles.promBody}>
+          {h.edges.map((e) => (
+            <TouchableOpacity
+              key={e.symbol}
+              style={styles.promEdge}
+              activeOpacity={0.7}
+              onPress={() =>
+                Linking.openURL(`${API_BASE || ''}/research.html?symbol=${encodeURIComponent(e.symbol)}`).catch(
+                  () => {},
+                )
+              }
+            >
+              <View style={{ flex: 1 }}>
+                <Text style={styles.promSym}>{e.symbol}</Text>
+                <Text style={styles.promCo}>{e.company_name}</Text>
+              </View>
+              <Text style={styles.promStake}>
+                {e.stake_pct != null ? `~${e.stake_pct}%` : '—'}
+              </Text>
+            </TouchableOpacity>
+          ))}
+          <Text style={styles.citeSrc}>Source: {h.edges[0]?.citation || 'shareholding pattern'}</Text>
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+// A disclosed electoral-bond donor — amount purchased + the disclosure window.
+function DonorRow({ d }: { d: PoliticalDonor }) {
+  return (
+    <Card style={styles.donor}>
+      <View style={styles.donorHead}>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.donorName}>{d.name}</Text>
+          <Text style={styles.donorMeta}>
+            {d.symbol ? `${d.symbol} · ` : ''}
+            {d.first_date}
+            {d.last_date && d.last_date !== d.first_date ? ` → ${d.last_date}` : ''}
+          </Text>
+        </View>
+        <Text style={styles.donorAmt}>{d.amount_cr != null ? `₹${d.amount_cr.toLocaleString('en-IN')} Cr` : '—'}</Text>
+      </View>
+      <Text style={styles.citeSrc}>Bonds purchased · {d.citation}</Text>
+    </Card>
   );
 }
 
@@ -364,6 +544,22 @@ const styles = StyleSheet.create({
   patFill: { height: 8, borderRadius: 4 },
   patVal: { color: theme.text, fontFamily: theme.mono, fontSize: theme.fs.sm, fontWeight: '700', width: 62, textAlign: 'right' },
   patPledge: { color: theme.red, fontSize: theme.fs.sm, fontWeight: '700', marginTop: 2 },
+  promBody: { paddingLeft: theme.sp.sm, paddingBottom: theme.sp.sm },
+  promEdge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: theme.sp.sm + 1,
+    borderBottomColor: theme.border,
+    borderBottomWidth: 1,
+  },
+  promSym: { color: theme.text, fontFamily: theme.mono, fontSize: theme.fs.sm + 1, fontWeight: '700', letterSpacing: 0.5 },
+  promCo: { color: theme.muted2, fontSize: theme.fs.sm, marginTop: 1 },
+  promStake: { color: theme.brand, fontFamily: theme.mono, fontSize: theme.fs.sm + 1, fontWeight: '700' },
+  donor: { marginTop: theme.sp.sm, marginBottom: theme.sp.xs },
+  donorHead: { flexDirection: 'row', alignItems: 'center' },
+  donorName: { color: theme.text, fontSize: theme.fs.md, fontWeight: '700' },
+  donorMeta: { color: theme.muted2, fontFamily: theme.mono, fontSize: theme.fs.xs + 1, marginTop: 3 },
+  donorAmt: { color: GOLD, fontFamily: theme.mono, fontSize: theme.fs.md, fontWeight: '800' },
   edge: { marginTop: theme.sp.sm, marginBottom: theme.sp.xs },
   edgeHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   edgeTitle: { color: theme.text, fontFamily: theme.mono, fontSize: theme.fs.md, fontWeight: '700', flex: 1 },
