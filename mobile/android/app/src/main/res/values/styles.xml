@@ -12,17 +12,23 @@
     <style name="AppTheme.NoActionBar" parent="Theme.AppCompat.DayNight.NoActionBar">
         <item name="windowActionBar">false</item>
         <item name="windowNoTitle">true</item>
-        <item name="android:background">@null</item>
-        <!-- Edge-to-edge: transparent system bars so the WebView (and the app's
-             dark header/footer) draw behind them and the bars take on the app's
-             colour. MainActivity turns off decor-fits-system-windows. -->
-        <item name="android:windowDrawsSystemBarBackgrounds">true</item>
-        <item name="android:statusBarColor">@android:color/transparent</item>
-        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <!-- Paint the whole window (incl. the status/navigation-bar areas) in the
+             app's surface colour so the bars blend into the app rather than
+             showing a grey system strip. On Android 15+ the bar-colour setters
+             are ignored and the transparent bars fall back to this background,
+             so setting windowBackground is what actually colours them. The WebView
+             sits within the bars (decor fits system windows), so no overlap. -->
+        <item name="android:windowBackground">@color/app_bg</item>
+        <item name="android:statusBarColor">@color/app_bg</item>
+        <item name="android:navigationBarColor">@color/app_bg</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
     </style>
 
 
     <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">
         <item name="android:background">@drawable/splash</item>
+        <item name="android:statusBarColor">@color/app_bg</item>
+        <item name="android:navigationBarColor">@color/app_bg</item>
     </style>
 </resources>

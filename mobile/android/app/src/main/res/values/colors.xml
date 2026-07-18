@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- App chrome colour (matches the RN header/tab-bar surface). Used for the
+         window background and system bars so the status/navigation bars blend
+         into the app instead of showing a grey system strip. -->
+    <color name="app_bg">#0E1219</color>
+</resources>
