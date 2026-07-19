@@ -45,17 +45,37 @@ def _all() -> list:
     return _store.kv_get(_TOKENS_KEY, []) or []
 
 
-def register(token: str, platform: str = "android") -> int:
-    """Add/refresh a device token. Returns the total registered count."""
+def register(token: str, platform: str = "android", user_id: str = None) -> int:
+    """Add/refresh a device token (optionally bound to a chat user_id so DMs can
+    target that person's devices). Returns the total registered count."""
     token = (token or "").strip()
     if not token:
         return len(tokens())
     with _lock:
         rows = [t for t in _all() if isinstance(t, dict) and t.get("token") != token]
-        rows.append({"token": token, "platform": platform, "ts": int(time.time())})
+        rows.append({"token": token, "platform": platform,
+                     "user_id": (user_id or "").strip() or None, "ts": int(time.time())})
         rows = rows[-2000:]  # bound
         _store.kv_set(_TOKENS_KEY, rows)
         return len(rows)
+
+
+def tokens_for_user(user_id: str) -> list:
+    """Device tokens bound to a given chat user_id (for DMs)."""
+    uid = (user_id or "").strip()
+    if not uid:
+        return []
+    return [t.get("token") for t in _all()
+            if isinstance(t, dict) and t.get("token") and t.get("user_id") == uid]
+
+
+def notify_dm(to_user_id: str, from_handle: str, text: str) -> dict:
+    """Push a direct message to the recipient's devices."""
+    toks = tokens_for_user(to_user_id)
+    if not toks:
+        return {"sent": 0, "reason": "recipient has no devices"}
+    return send(from_handle or "New message", (text or "")[:140],
+                {"kind": "dm", "from": from_handle or ""}, to=toks)
 
 
 def unregister(token: str) -> int:

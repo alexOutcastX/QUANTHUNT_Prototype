@@ -28,6 +28,7 @@ import affiliations as _affil     # seed-grounded promoter + political funding g
 import alerts as _alerts        # server-side price/technical alerts (store-backed)
 import apikeys as _apikeys      # public-API key issue/verify (hashed, store-backed)
 import push as _push            # FCM push delivery + device-token registry + broadcasts
+import chat as _chat            # in-app messaging: global room + channels + DMs
 
 # Support both normal run and PyInstaller frozen exe
 _BASE_DIR = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
@@ -2168,7 +2169,8 @@ def push_register():
     token = str(body.get("token", "")).strip()
     if not token:
         return jsonify({"ok": False, "reason": "token required"}), 400
-    n = _push.register(token, str(body.get("platform", "android")))
+    n = _push.register(token, str(body.get("platform", "android")),
+                       str(body.get("user_id", "")))
     return jsonify({"ok": True, "count": n, "configured": _push.configured()})
 
 
@@ -2233,6 +2235,90 @@ def start_alert_loop():
     """Start the alert evaluator once (called from __main__ and wsgi.py)."""
     if ALERT_LOOP and ALERT_LOOP.lower() not in ("0", "off", "false", "no"):
         threading.Thread(target=_alert_loop, name="alert-loop", daemon=True).start()
+
+
+# ── In-app messaging: global room + topic channels + 1:1 DMs ──
+@app.route("/chat/identity", methods=["POST"])
+@rate_limit("chat_id", 60, 300)
+def chat_identity():
+    """Create/refresh a device chat account. Blank user_id mints a new one."""
+    body = request.get_json(silent=True) or {}
+    u = _chat.upsert_user(str(body.get("user_id", "")), str(body.get("handle", "")))
+    return jsonify({"ok": True, **u})
+
+
+@app.route("/chat/users")
+def chat_users():
+    q = request.args.get("q", "")
+    exclude = request.args.get("exclude", "")
+    return jsonify({"users": _chat.find_users(q, exclude=exclude)})
+
+
+@app.route("/chat/dm", methods=["POST"])
+@rate_limit("chat_dm", 60, 300)
+def chat_dm():
+    """Resolve (or open) the 1:1 conversation between two users."""
+    body = request.get_json(silent=True) or {}
+    a = str(body.get("from", "")).strip()
+    b = str(body.get("to", "")).strip()
+    if not a or not b or a == b:
+        return jsonify({"ok": False, "reason": "from and to required"}), 400
+    return jsonify({"ok": True, "conv": _chat.dm_conv(a, b)})
+
+
+@app.route("/chat/overview")
+def chat_overview():
+    uid = request.args.get("user_id", "").strip()
+    _chat.touch(uid)
+    return jsonify(_chat.overview(uid))
+
+
+@app.route("/chat/messages")
+def chat_messages():
+    conv = request.args.get("conv", "").strip()
+    since = request.args.get("since", "0")
+    try:
+        since_id = int(since)
+    except Exception:
+        since_id = 0
+    _chat.touch(request.args.get("user_id", "").strip())
+    return jsonify({"conv": conv, "messages": _chat.messages(conv, since_id)})
+
+
+@app.route("/chat/messages", methods=["POST"])
+@rate_limit("chat_post", 40, 60)
+def chat_post():
+    body = request.get_json(silent=True) or {}
+    conv = str(body.get("conv", "")).strip()
+    uid = str(body.get("user_id", "")).strip()
+    msg = _chat.post(conv, uid, str(body.get("text", "")))
+    if not msg:
+        return jsonify({"ok": False, "reason": "empty or invalid conversation"}), 400
+    # DM → push the recipient (no-op until FCM is configured).
+    peer = _chat.dm_peer(conv, uid)
+    if peer:
+        try:
+            _push.notify_dm(peer, msg["handle"], msg["text"])
+        except Exception:
+            pass
+    return jsonify({"ok": True, "message": msg})
+
+
+@app.route("/chat/read", methods=["POST"])
+def chat_read():
+    body = request.get_json(silent=True) or {}
+    _chat.mark_read(str(body.get("user_id", "")).strip(),
+                    str(body.get("conv", "")).strip(), body.get("last_id", 0))
+    return jsonify({"ok": True})
+
+
+@app.route("/chat/messages/<int:msg_id>", methods=["DELETE"])
+def chat_delete(msg_id):
+    body = request.get_json(silent=True) or {}
+    uid = str(body.get("user_id", "")).strip()
+    is_owner = _auth.is_owner(request.cookies.get(_auth.COOKIE, ""))
+    ok = _chat.delete(msg_id, uid, is_owner=is_owner)
+    return jsonify({"ok": ok}), (200 if ok else 403)
 
 
 @app.route("/alerts", methods=["GET"])
