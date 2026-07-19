@@ -1165,22 +1165,43 @@ def patterns():
         return jsonify({"error": str(e)}), 502
 
 
+# OHLC cache for the analysis fan-out. /recommendation, /swing, /institutional,
+# /smc and /chart-patterns each pull 1–2y of daily bars per symbol on every
+# request, multiplied across the candidate list and concurrent with the
+# screener scan — the biggest single amplifier of Yahoo rate-limits. Cache the
+# parsed candles for a short window and, crucially, serve the last-good set when
+# the upstream feed fails (usually a transient rate-limit) instead of erroring.
+_ohlc_cache = {}          # (sym, period, interval) -> (fetched_at, candles)
+_ohlc_lock = threading.Lock()
+
+
+def _ohlc_ttl(interval):
+    if interval in ('1m', '5m', '15m'):
+        return 120
+    if interval == '1h':
+        return 300
+    return 600            # daily+ changes slowly within a session
+
+
 def _load_ohlc(sym, period, interval="1d"):
     """Resilient OHLC fetch (yfinance .NS → .BO, then tvDatafeed) for the
-    chart-pattern scanner. Returns a chronological list of {t,o,h,l,c,v}."""
-    import yfinance as yf
+    chart-pattern scanner. Returns a chronological list of {t,o,h,l,c,v}.
+
+    Cached with stale-on-error: routes through ydata (global limiter + 429
+    backoff) and, if every source fails, returns the last-good candles rather
+    than an empty list that would 404/503 the whole Analyse card."""
+    import ydata
+    key = (sym, period, interval)
+    now = time.time()
+    with _ohlc_lock:
+        hit = _ohlc_cache.get(key)
+    if hit and now - hit[0] < _ohlc_ttl(interval):
+        return hit[1]
+
     df = None
     for suffix in (".NS", ".BO"):
         ysym = sym if sym.startswith("^") else f"{sym}{suffix}"
-        ticker = yf.Ticker(ysym)
-        for attempt in range(2):
-            try:
-                df = ticker.history(period=period, interval=interval, auto_adjust=True)
-            except Exception:
-                df = None
-            if df is not None and not df.empty:
-                break
-            time.sleep(1.2 ** attempt)
+        df = ydata.history(ysym, period, interval)
         if df is not None and not df.empty:
             break
         if sym.startswith("^"):
@@ -1188,7 +1209,9 @@ def _load_ohlc(sym, period, interval="1d"):
     if (df is None or df.empty):
         df = _fetch_tv_data(sym, interval, period)
     if df is None or df.empty:
-        return []
+        # Upstream returned nothing (often a transient rate-limit) — serve the
+        # last-good candles if we have any rather than failing the card.
+        return hit[1] if hit else []
     df.index = pd.to_datetime(df.index)
     out = []
     for ts, row in df.iterrows():
@@ -1201,6 +1224,9 @@ def _load_ohlc(sym, period, interval="1d"):
             })
         except Exception:
             continue
+    if out:
+        with _ohlc_lock:
+            _ohlc_cache[key] = (now, out)
     return out
 
 
@@ -1304,16 +1330,19 @@ def _bench_closes():
     """1-year daily closes for NIFTY 50 (^NSEI), cached hourly. Used as the
     market benchmark for the statistical-arbitrage relative-value strategy.
     Returns [] on failure so the strategy simply sits out."""
+    import ydata
     hit = _BENCH_CACHE.get("nsei")
     if hit and (time.time() - hit[0]) < _BENCH_TTL:
         return hit[1]
     closes = []
-    try:
-        df = yf.Ticker("^NSEI").history(period="1y", interval="1d", auto_adjust=True)
-        if df is not None and not df.empty:
-            closes = [float(x) for x in df["Close"].tolist() if x == x]
-    except Exception as e:
-        log.warning("Benchmark (^NSEI) fetch failed: %s", e)
+    df = ydata.history("^NSEI", "1y", "1d")
+    if df is not None and not df.empty:
+        closes = [float(x) for x in df["Close"].tolist() if x == x]
+    if not closes:
+        # Fetch failed (previously this raised NameError — yf was never imported
+        # in this scope — and the stat-arb leg silently sat out forever). Keep
+        # the last-good benchmark instead of caching an empty list.
+        return hit[1] if hit else []
     _BENCH_CACHE["nsei"] = (time.time(), closes)
     return closes
 
@@ -1934,13 +1963,11 @@ def deriv_option_chain():
 # ── Portfolio risk ──
 def _closes(sym, period="1y"):
     """Daily closing prices for a symbol as a plain list (newest last)."""
-    try:
-        df = yf.Ticker(f"{sym}.NS").history(period=period, interval="1d", auto_adjust=True)
-        if df is None or df.empty:
-            return []
-        return [float(x) for x in df["Close"].tolist() if x == x]
-    except Exception:
+    import ydata
+    df = ydata.history(f"{sym}.NS", period, "1d")
+    if df is None or df.empty:
         return []
+    return [float(x) for x in df["Close"].tolist() if x == x]
 
 
 @app.route("/risk/portfolio", methods=["POST"])
@@ -1967,14 +1994,11 @@ def risk_portfolio():
         if c:
             hist[h["symbol"]] = c
 
-    # Benchmark: NIFTY index via ^NSEI so beta is against the market.
-    idx = None
-    try:
-        df = yf.Ticker("^NSEI").history(period="1y", interval="1d", auto_adjust=True)
-        if df is not None and not df.empty:
-            idx = [float(x) for x in df["Close"].tolist() if x == x]
-    except Exception:
-        idx = None
+    # Benchmark: NIFTY index via ^NSEI so beta is against the market. Reuse the
+    # shared, cached, rate-limit-aware benchmark loader (previously this raised
+    # NameError — yf was never imported here — so every holding came back as
+    # symbols_missing).
+    idx = _bench_closes() or None
 
     report = _risk.analyze(holdings, hist, index_prices=idx, conf=conf)
     report["symbols_priced"] = list(hist.keys())

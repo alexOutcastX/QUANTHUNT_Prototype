@@ -23,6 +23,10 @@ EODHD_KEY = (os.environ.get("EODHD_API_KEY") or "").strip()
 # FUND_SOURCE (e.g. "screener", "yfinance", "screener,yfinance", "eodhd").
 FUND_SOURCE = (os.environ.get("FUND_SOURCE") or "auto").strip().lower()
 TTL = int(os.environ.get("FUND_TTL_SEC", str(7 * 24 * 3600)))   # fundamentals move slowly → 7 days
+# A failed lookup caches an empty payload; without a shorter TTL that blank would
+# stick for the full 7 days, so a single transient provider outage permanently
+# blanks a symbol's fundamentals. Retry failed lookups much sooner instead.
+NEG_TTL = int(os.environ.get("FUND_NEG_TTL_SEC", "1800"))        # 30 min
 _DIR = os.path.dirname(os.path.abspath(__file__))
 _FILE = os.path.join(_DIR, "fund_cache.json")
 
@@ -66,7 +70,12 @@ def _save() -> None:
 
 def _fresh(sym: str) -> bool:
     e = _cache.get(sym)
-    return bool(e) and (time.time() - e["ts"] < TTL)
+    if not e:
+        return False
+    # A populated result is good for the full TTL; an empty (failed) result only
+    # for the short negative TTL, so outages self-heal instead of sticking.
+    ttl = TTL if e.get("data") else NEG_TTL
+    return (time.time() - e["ts"]) < ttl
 
 
 # ---------- normalization ----------

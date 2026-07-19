@@ -28,7 +28,11 @@ import time
 
 _CACHE = {}          # sym -> (ts, row|None)
 _CACHE_LOCK = threading.Lock()
-_TTL = 300           # 5 minutes
+_TTL = 300           # 5 minutes for a good row
+# A failed row (None) previously stuck for the full 5 minutes, so one transient
+# Yahoo blip dropped the symbol from the screener for that long. Retry failures
+# much sooner (but not every request, to avoid hammering a genuinely dead sym).
+_NEG_TTL = 45
 
 # Cached NIFTY 50 daily returns for beta (index -> (ts, pandas.Series))
 _IDX_CACHE = {"ts": 0.0, "ret": None}
@@ -56,15 +60,16 @@ def _index_returns():
     now = time.time()
     if _IDX_CACHE["ret"] is not None and (now - _IDX_CACHE["ts"]) < _IDX_TTL:
         return _IDX_CACHE["ret"]
-    try:
-        import yfinance as yf
-        df = yf.Ticker("^NSEI").history(period="1y", interval="1d", auto_adjust=True)
-        ret = df["Close"].pct_change().dropna() if df is not None and not df.empty else None
-    except Exception:
-        ret = None
-    _IDX_CACHE["ts"] = now
-    _IDX_CACHE["ret"] = ret
-    return ret
+    import ydata
+    df = ydata.history("^NSEI", "1y", "1d")
+    ret = df["Close"].pct_change().dropna() if df is not None and not df.empty else None
+    if ret is not None:
+        _IDX_CACHE["ts"] = now
+        _IDX_CACHE["ret"] = ret
+        return ret
+    # Upstream failed — keep the last-good returns rather than caching None for
+    # 15 minutes (which zeroed out beta across the whole scan).
+    return _IDX_CACHE["ret"]
 
 
 def _beta(close, idx_ret):
@@ -90,16 +95,15 @@ def _compute_row(sym, idx_ret, suffix=".NS"):
     """Compute the technical snapshot for one symbol. Returns dict or None.
     `suffix` selects the exchange feed (".NS" NSE, ".BO" BSE-only listings)."""
     try:
-        import yfinance as yf
         import ta
+        import ydata
     except Exception:
         return None
 
     yf_sym = sym if sym.startswith("^") else f"{sym}{suffix}"
-    try:
-        df = yf.Ticker(yf_sym).history(period="1y", interval="1d", auto_adjust=True)
-    except Exception:
-        return None
+    # Route through ydata so the 8-worker scan fan-out shares the global outbound
+    # Yahoo cap + rate-limit backoff with every other endpoint.
+    df = ydata.history(yf_sym, "1y", "1d")
     if df is None or df.empty or len(df) < 20:
         return None
 
@@ -291,9 +295,10 @@ def scan(symbols):
     with _CACHE_LOCK:
         for s in symbols:
             hit = _CACHE.get(s)
-            if hit and (now - hit[0]) < _TTL:
-                if hit[1] is not None:
-                    out[s] = hit[1]
+            if hit and hit[1] is not None and (now - hit[0]) < _TTL:
+                out[s] = hit[1]                       # good row within its TTL
+            elif hit and hit[1] is None and (now - hit[0]) < _NEG_TTL:
+                pass                                  # failed recently — brief cool-off, don't recompute yet
             else:
                 todo.append(s)
 
