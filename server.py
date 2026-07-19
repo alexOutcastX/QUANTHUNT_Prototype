@@ -2835,6 +2835,30 @@ def timeframes_route():
         return jsonify({"error": f"Couldn't analyse timeframes for {sym} — try again shortly."}), 503
 
 
+_SCR_CACHE = {}
+_SCR_TTL = 6 * 3600  # shareholding/balance change quarterly — cache for hours
+
+
+@app.route("/screener-financials")
+def screener_financials():
+    """On-demand screener.in scrape: real promoter/FII/DII shareholding + borrowings."""
+    sym = request.args.get("symbol", "").strip().upper().replace("NSE:", "").replace("BSE:", "")
+    if not sym:
+        return jsonify({"error": "symbol required"}), 400
+    cached = _SCR_CACHE.get(sym)
+    if cached and time.time() - cached[0] < _SCR_TTL:
+        return jsonify(cached[1])
+    try:
+        import screenerin
+        payload = screenerin.financials(sym)
+        if payload.get("ok"):
+            _SCR_CACHE[sym] = (time.time(), payload)
+        return jsonify(payload)
+    except Exception as e:
+        log.error("screener-financials error %s: %s", sym, e)
+        return jsonify({"error": f"Couldn't reach screener.in for {sym} — try again shortly.", "ok": False}), 503
+
+
 def _prefetch_universe():
     """Background prefetch so first /universe call is instant."""
     try:
