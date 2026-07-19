@@ -1110,10 +1110,9 @@ def patterns():
     if not sym:
         return jsonify({"error": "symbol required"}), 400
     try:
-        import yfinance as yf
-        ticker = yf.Ticker(f"{sym}.NS")
-        df = ticker.history(period=period, interval="1d", auto_adjust=True)
-        if df.empty:
+        import ydata
+        df = ydata.history(f"{sym}.NS", period, "1d")
+        if df is None or df.empty:
             return jsonify({"symbol": sym, "patterns": []})
 
         found = _detect_patterns(df)
@@ -1541,13 +1540,13 @@ def returns():
     if not raw:
         return jsonify({"error": "symbols required"}), 400
     symbols = [s.strip() for s in raw.split(",") if s.strip()][:50]
-    import yfinance as yf
+    import ydata
     from concurrent.futures import ThreadPoolExecutor, as_completed
 
     def _calc_one(sym):
         yf_sym = sym if sym.startswith("^") else f"{sym}.NS"
         try:
-            df = yf.Ticker(yf_sym).history(period="5y", interval="1mo", auto_adjust=True)
+            df = ydata.history(yf_sym, "5y", "1mo")
             if df is None or df.empty:
                 return sym, {}
             col = df["Close"].dropna()
@@ -1845,8 +1844,11 @@ def _fetch_index_row(key, name, yf_sym):
     always computed, while `chg`/`y1` fall back to None when there aren't
     enough closes to compute them.
     """
-    import yfinance as yf
-    df = yf.Ticker(yf_sym).history(period="1y", interval="1d")
+    import ydata
+    df = ydata.history(yf_sym, "1y", "1d", auto_adjust=False)
+    if df is None or df.empty:
+        return {"key": key, "name": name, "symbol": yf_sym,
+                "level": None, "chg": None, "y1": None}
     closes = df["Close"].dropna()
     last = float(closes.iloc[-1])
     prev = float(closes.iloc[-2]) if len(closes) >= 2 else None
@@ -2298,7 +2300,8 @@ def report():
         # ── Technical Levels (1Y daily) ────────────────────────────────────────
         tech = {}
         try:
-            hist = yf.Ticker(f"{sym}.NS").history(period="1y", interval="1d", auto_adjust=True)
+            import ydata
+            hist = ydata.history(f"{sym}.NS", "1y", "1d")
             if hist is not None and not hist.empty:
                 cl  = hist["Close"].dropna()
                 hi  = hist["High"].dropna()
