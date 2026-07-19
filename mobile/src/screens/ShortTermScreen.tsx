@@ -10,6 +10,7 @@ import { LocalAlert, addLocalAlert, hasLocalAlert, loadLocalAlerts } from '../lo
 import { loadNames } from './ScreenerScreen';
 import { useResponsive } from '../responsive';
 import { Card, Dropdown, EmptyState, RiskBadge } from '../ui';
+import { PaperTrade, addPaperTrade, hasOpenPaper, loadPaperTrades } from '../paperTrades';
 import { theme } from '../theme';
 import {
   DEPTH_OPTIONS,
@@ -81,18 +82,24 @@ function SwingDetail({
   r,
   watched,
   alerted,
+  papered,
   onClose,
   onChart,
   onAnalyse,
+  onPattern,
+  onPaper,
   onWatch,
   onAlert,
 }: {
   r: SwingRec;
   watched: boolean;
   alerted: boolean;
+  papered: boolean;
   onClose: () => void;
   onChart: () => void;
   onAnalyse: () => void;
+  onPattern: () => void;
+  onPaper: () => void;
   onWatch: () => void;
   onAlert: () => void;
 }) {
@@ -158,12 +165,37 @@ function SwingDetail({
             </View>
           ) : null}
 
+          {/* Plain-English glossary so the swing-trading terms are readable
+              without prior knowledge — matches the depth of the HFT card. */}
+          <Text style={styles.secTitle}>WHAT THIS MEANS</Text>
+          <View style={styles.glossary}>
+            {[
+              ['Pullback reversal', 'Price dipped inside an uptrend and is turning back up from support — buying the dip rather than chasing the high.'],
+              ['Oversold bounce', 'RSI fell into oversold territory (typically < 30) and momentum is curling up — a snap-back toward the mean.'],
+              ['Stop loss', 'The invalidation level: if price closes below it the setup has failed and you exit to cap the loss.'],
+              ['R : R', 'Reward-to-risk — target distance ÷ stop distance. Above ~2:1 means the potential gain outweighs the risked amount.'],
+              ['Max DD', 'The worst peak-to-trough drawdown similar setups saw — how much heat the trade may take before working.'],
+              ['Probability', 'The model’s confidence the target is reached before the stop, from trend, momentum and RSI confluence.'],
+            ].map(([t, d]) => (
+              <View key={t} style={styles.gloRow}>
+                <Text style={styles.gloTerm}>{t}</Text>
+                <Text style={styles.gloDef}>{d}</Text>
+              </View>
+            ))}
+          </View>
+
           <View style={styles.actions}>
             <TouchableOpacity style={styles.aBtn} onPress={onChart} activeOpacity={0.75}>
               <Text style={styles.aTxt}>▤ Chart</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.aBtn} onPress={onAnalyse} activeOpacity={0.75}>
               <Text style={[styles.aTxt, { color: theme.accent }]}>⚡ Analyse</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.aBtn} onPress={onPattern} activeOpacity={0.75}>
+              <Text style={[styles.aTxt, { color: theme.brand }]}>⚏ Pattern</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.aBtn} onPress={onPaper} activeOpacity={0.75}>
+              <Text style={[styles.aTxt, papered && { color: theme.green }]}>{papered ? '✓ Papered' : '✎ Paper trade'}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.aBtn} onPress={onWatch} activeOpacity={0.75}>
               <Text style={[styles.aTxt, watched && { color: theme.green }]}>{watched ? '★ Watching' : '☆ Watchlist'}</Text>
@@ -197,6 +229,7 @@ export default function ShortTermScreen() {
   const [ready, setReady] = useState(isHydrated());
   const [watch, setWatch] = useState<string[]>([]);
   const [alerts, setAlerts] = useState<LocalAlert[]>([]);
+  const [paper, setPaper] = useState<PaperTrade[]>([]);
   const [sortKey, setSortKey] = useState<'prob' | 'upside' | 'rsi' | 'rr' | 'time'>('prob');
   const [open, setOpen] = useState<SwingRec | null>(null);
   const [detail, setDetail] = useState<Row | null>(null);
@@ -215,6 +248,7 @@ export default function ShortTermScreen() {
   useEffect(() => {
     loadWatchlist().then(setWatch);
     loadLocalAlerts().then(setAlerts);
+    loadPaperTrades().then(setPaper);
   }, []);
 
   const runScan = useCallback(async () => {
@@ -350,6 +384,24 @@ export default function ShortTermScreen() {
     setOpen(null);
     navigate('analysis', { sub: 'mb', symbol: r.symbol });
   };
+  const onPattern = (r: SwingRec) => {
+    setOpen(null);
+    navigate('analysis', { sub: 'patterns', symbol: r.symbol });
+  };
+  const onPaper = async (r: SwingRec) => {
+    setPaper(
+      await addPaperTrade({
+        symbol: r.symbol,
+        name: r.name || undefined,
+        side: 'long',
+        source: 'Short-term',
+        entry: r.entry,
+        stop: r.stop,
+        target: r.target,
+      }),
+    );
+    toast(`Paper trade logged for ${r.symbol} → see Paper tab`);
+  };
 
   return (
     <View style={styles.container}>
@@ -406,9 +458,12 @@ export default function ShortTermScreen() {
           r={open}
           watched={isWatched(open.symbol)}
           alerted={hasLocalAlert(alerts, open.symbol)}
+          papered={hasOpenPaper(paper, open.symbol)}
           onClose={() => setOpen(null)}
           onChart={() => onChart(open)}
           onAnalyse={() => onAnalyse(open)}
+          onPattern={() => onPattern(open)}
+          onPaper={() => onPaper(open)}
           onWatch={() => onWatch(open)}
           onAlert={() => onAlert(open)}
         />
@@ -505,6 +560,11 @@ const styles = StyleSheet.create({
   etaVal: { color: theme.text, fontFamily: theme.mono, fontWeight: '700', fontSize: theme.fs.md },
   why: { gap: 3, marginTop: theme.sp.md },
   whyTxt: { color: theme.muted2, fontSize: theme.fs.sm, lineHeight: 18 },
+  secTitle: { color: theme.muted, fontSize: theme.fs.xs + 1, fontWeight: '800', letterSpacing: 1, marginBottom: theme.sp.sm, marginTop: theme.sp.md },
+  glossary: { gap: theme.sp.sm, marginBottom: theme.sp.sm },
+  gloRow: { gap: 1 },
+  gloTerm: { color: theme.brand, fontSize: theme.fs.sm + 1, fontWeight: '800' },
+  gloDef: { color: theme.muted2, fontSize: theme.fs.sm, lineHeight: 18 },
   actions: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.sp.sm, marginTop: theme.sp.md },
   aBtn: { backgroundColor: theme.surface2, borderColor: theme.border2, borderWidth: 1, borderRadius: theme.radius.sm + 2, paddingHorizontal: theme.sp.md, paddingVertical: theme.sp.sm },
   aTxt: { color: theme.text, fontSize: theme.fs.sm, fontWeight: '700' },

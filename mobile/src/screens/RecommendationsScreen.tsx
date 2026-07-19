@@ -16,6 +16,7 @@ import SmcScreen from './SmcScreen';
 import { useResponsive } from '../responsive';
 import { printHtmlDocument } from '../pdf';
 import { Card, Dropdown, EmptyState, RiskBadge, Segmented } from '../ui';
+import { PaperTrade, addPaperTrade, hasOpenPaper, loadPaperTrades } from '../paperTrades';
 import { INSTITUTIONAL_INFO, RECOMMENDATIONS_INFO, SHORT_TERM_INFO, SMC_INFO } from '../tabInfo';
 import { theme } from '../theme';
 import {
@@ -141,23 +142,27 @@ function RecCard({
   r,
   watched,
   alerted,
+  papered,
   compact,
   onWatch,
   onAlert,
   onChart,
   onAnalyse,
   onPattern,
+  onPaper,
   onBacktest,
 }: {
   r: Recommendation;
   watched: boolean;
   alerted: boolean;
+  papered: boolean;
   compact: boolean;
   onWatch: () => void;
   onAlert: () => void;
   onChart: () => void;
   onAnalyse: () => void;
   onPattern: () => void;
+  onPaper: () => void;
   onBacktest: () => void;
 }) {
   const c = actionColor(r.action);
@@ -238,6 +243,24 @@ function RecCard({
         </View>
       ) : null}
 
+      {/* Plain-English glossary so the setup terms are readable without prior
+          knowledge — matches the depth of the HFT card. */}
+      <Text style={styles.secTitle}>WHAT THIS MEANS</Text>
+      <View style={styles.glossary}>
+        {[
+          ['Confidence', 'A 0–100 blend of the fundamental (Multibagger) score, live momentum and the current chart pattern — higher means more of the model lines up.'],
+          ['Entry / Stop / Target', 'Where to buy, the invalidation level to exit if wrong, and the first profit objective — drawn from pivot & swing structure.'],
+          ['R : R', 'Reward-to-risk — target distance ÷ stop distance. Above ~2:1 means the potential gain outweighs the risked amount.'],
+          ['Support / Resistance', 'The nearest floor buyers defended and ceiling sellers capped — context for where the trade can stall or bounce.'],
+          ['Pattern', 'The active chart formation (e.g. flag, double-bottom) and whether it leans bullish or bearish.'],
+        ].map(([t, d]) => (
+          <View key={t} style={styles.gloRow}>
+            <Text style={styles.gloTerm}>{t}</Text>
+            <Text style={styles.gloDef}>{d}</Text>
+          </View>
+        ))}
+      </View>
+
       <View style={styles.actions}>
         <TouchableOpacity style={styles.aBtn} onPress={onChart} activeOpacity={0.75}>
           <Text style={styles.aTxt}>▤ Chart</Text>
@@ -245,14 +268,17 @@ function RecCard({
         <TouchableOpacity style={styles.aBtn} onPress={onAnalyse} activeOpacity={0.75}>
           <Text style={[styles.aTxt, { color: theme.accent }]}>⚡ Analyse</Text>
         </TouchableOpacity>
+        <TouchableOpacity style={styles.aBtn} onPress={onPattern} activeOpacity={0.75}>
+          <Text style={[styles.aTxt, { color: theme.brand }]}>⚏ Pattern</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.aBtn} onPress={onPaper} activeOpacity={0.75}>
+          <Text style={[styles.aTxt, papered && { color: theme.green }]}>{papered ? '✓ Papered' : '✎ Paper trade'}</Text>
+        </TouchableOpacity>
         <TouchableOpacity style={styles.aBtn} onPress={onWatch} activeOpacity={0.75}>
           <Text style={[styles.aTxt, watched && { color: theme.green }]}>{watched ? '★ Watching' : '☆ Watchlist'}</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.aBtn} onPress={onAlert} activeOpacity={0.75}>
           <Text style={[styles.aTxt, alerted && { color: GOLD }]}>{alerted ? '🔔 Alerted' : '🔔 Alert'}</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.aBtn} onPress={onPattern} activeOpacity={0.75}>
-          <Text style={styles.aTxt}>◫ Pattern</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.aBtn} onPress={onBacktest} activeOpacity={0.75}>
           <Text style={styles.aTxt}>⏱ Backtest</Text>
@@ -282,6 +308,7 @@ function LongTermRecs() {
   const [ready, setReady] = useState(isHydrated());
   const [watch, setWatch] = useState<string[]>([]);
   const [alerts, setAlerts] = useState<LocalAlert[]>([]);
+  const [paper, setPaper] = useState<PaperTrade[]>([]);
   const [detail, setDetail] = useState<Row | null>(null);
   const [flash, setFlash] = useState('');
   const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -298,6 +325,7 @@ function LongTermRecs() {
   useEffect(() => {
     loadWatchlist().then(setWatch);
     loadLocalAlerts().then(setAlerts);
+    loadPaperTrades().then(setPaper);
   }, []);
 
   // The scan: pull Multibagger candidates → deep-analyse each (bounded
@@ -436,6 +464,20 @@ function LongTermRecs() {
   const onChart = (r: Recommendation) => setDetail({ sym: r.symbol, price: r.price } as Row);
   const onAnalyse = (r: Recommendation) => navigate('analysis', { sub: 'mb', symbol: r.symbol });
   const onPattern = (r: Recommendation) => navigate('analysis', { sub: 'patterns', symbol: r.symbol });
+  const onPaper = useCallback(async (r: Recommendation) => {
+    setPaper(
+      await addPaperTrade({
+        symbol: r.symbol,
+        name: r.name || undefined,
+        side: 'long',
+        source: 'Long-term',
+        entry: r.entry,
+        stop: r.stop,
+        target: r.target,
+      }),
+    );
+    toast(`Paper trade logged for ${r.symbol} → see Paper tab`);
+  }, []);
   const onBacktest = async (r: Recommendation) => {
     // Prefill the backtest symbol before switching tabs (Backtest reads it on mount).
     await AsyncStorage.setItem('taureye.backtest.prefill', r.symbol).catch(() => {});
@@ -504,11 +546,13 @@ function LongTermRecs() {
                 compact={!isDesktop}
                 watched={isWatched(r.symbol)}
                 alerted={hasLocalAlert(alerts, r.symbol)}
+                papered={hasOpenPaper(paper, r.symbol)}
                 onWatch={() => onWatch(r)}
                 onAlert={() => onAlert(r)}
                 onChart={() => onChart(r)}
                 onAnalyse={() => onAnalyse(r)}
                 onPattern={() => onPattern(r)}
+                onPaper={() => onPaper(r)}
                 onBacktest={() => onBacktest(r)}
               />
             </View>
@@ -730,6 +774,11 @@ const styles = StyleSheet.create({
   levelLbl: { color: theme.muted },
   why: { gap: 3 },
   whyTxt: { color: theme.muted2, fontSize: theme.fs.sm, lineHeight: 18 },
+  secTitle: { color: theme.muted, fontSize: theme.fs.xs + 1, fontWeight: '800', letterSpacing: 1, marginBottom: theme.sp.xs },
+  glossary: { gap: theme.sp.sm },
+  gloRow: { gap: 1 },
+  gloTerm: { color: theme.brand, fontSize: theme.fs.sm + 1, fontWeight: '800' },
+  gloDef: { color: theme.muted2, fontSize: theme.fs.sm, lineHeight: 18 },
   actions: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.sp.sm, borderTopColor: theme.border, borderTopWidth: 1, paddingTop: theme.sp.md },
   aBtn: {
     backgroundColor: theme.surface2,

@@ -28,7 +28,15 @@
 
     <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">
         <item name="android:background">@drawable/splash</item>
+        <!-- This is the ACTIVE activity theme (see AndroidManifest). On Android
+             15+ the status/navigation bars are transparent and fall back to the
+             window background, so without a dark windowBackground here the bars
+             flashed white at launch (the framework default) before the JS booted.
+             The app defaults to dark, so paint the launch window dark to match. -->
+        <item name="android:windowBackground">@color/app_bg</item>
         <item name="android:statusBarColor">@color/app_bg</item>
         <item name="android:navigationBarColor">@color/app_bg</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
     </style>
 </resources>
