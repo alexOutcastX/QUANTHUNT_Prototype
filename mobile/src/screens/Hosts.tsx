@@ -144,7 +144,7 @@ export function AnalysisHome() {
     <SubTabs
       persistKey="analysis"
       tabs={[
-        { key: 'inst', label: 'Institutional', hint: 'Upside-probability model · Monte-Carlo + historical frequency', render: () => <AnalysisScreen /> },
+        { key: 'inst', label: 'Institutional', hint: 'Full company dossier · fundamentals, valuation, technicals, ownership, filings & investment score', render: () => <AnalysisScreen /> },
         { key: 'shareholders', label: 'Shareholders', hint: "Institutions, promoters & political funding · every link cited", render: () => <EntityGraphScreen /> },
         { key: 'paper', label: 'Paper trades', hint: 'Simulated outcomes of your logged setups · win-rate', render: () => <PaperTradeScreen /> },
         { key: 'reco', label: 'Recommendations', hint: 'Ranked buy setups from the Multibagger candidates', render: () => <RecommendationsScreen /> },
