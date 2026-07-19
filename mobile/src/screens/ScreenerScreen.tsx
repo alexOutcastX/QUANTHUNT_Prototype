@@ -901,7 +901,7 @@ const OP_ITEMS: SelItem[] = [
   { v: 'eq', label: '=' },
 ];
 const OP_LABEL: Record<string, string> = { gt: '>', lt: '<', between: 'between', eq: '=', is: 'is true', has: 'is' };
-const PRESET_GROUPS = ['Trend', 'Momentum', 'Breakouts', 'Volume', 'Fundamentals'] as const;
+const PRESET_GROUPS = ['Strategies', 'Trend', 'Momentum', 'Breakouts', 'Candlesticks', 'Volume', 'Fundamentals'] as const;
 
 function FilterPanel({
   expr,

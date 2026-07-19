@@ -11,7 +11,7 @@ export type Preset = {
   id: string;
   name: string;
   desc: string;
-  group: 'Trend' | 'Momentum' | 'Breakouts' | 'Volume' | 'Fundamentals';
+  group: 'Trend' | 'Momentum' | 'Breakouts' | 'Volume' | 'Fundamentals' | 'Strategies' | 'Candlesticks';
   filters: Record<string, FilterValue>;
 };
 
@@ -41,6 +41,24 @@ export const PRESETS: Preset[] = [
   { id: 'low-pe', name: 'P/E below 20', desc: 'Trailing price-to-earnings under 20', group: 'Fundamentals', filters: { pe: { max: 20 } } },
   { id: 'quality-roe', name: 'ROE above 15%', desc: 'Return on equity above 15%', group: 'Fundamentals', filters: { roe: { min: 15 } } },
   { id: 'low-debt', name: 'D/E below 0.5', desc: 'Debt-to-equity under 0.5', group: 'Fundamentals', filters: { debt_equity: { max: 0.5 } } },
+
+  // ── Strategies ── (multi-rule chart strategies computed server-side)
+  { id: 'minervini', name: 'Minervini Trend Template', desc: 'All 8 of Mark Minervini’s trend-template rules: price above the 50/150/200-DMA (50>150>200), a rising 200-DMA, ≥30% above the 52w low, within 25% of the 52w high, and positive relative strength', group: 'Strategies', filters: { minervini: true } },
+  { id: 'stage2-uptrend', name: 'Stage-2 uptrend (price>150>200, rising)', desc: 'Price above the 150 & 200-DMA with the 200-DMA rising — the core of a stage-2 advance', group: 'Strategies', filters: { d150: { min: 0 }, d200: { min: 0 }, dma200_rising: true } },
+  { id: 'near-high-strong-rs', name: 'Near highs + strong 6m return', desc: 'Within 15% of the 52-week high with a positive 6-month return', group: 'Strategies', filters: { pct_from_high: { min: -15 }, ret_6m: { min: 0 } } },
+
+  // ── Candlesticks ── (pattern on the latest daily bar)
+  { id: 'cs-bullish', name: 'Any bullish candle', desc: 'Hammer, bullish engulfing, piercing, morning star or three white soldiers on the latest bar', group: 'Candlesticks', filters: { cs_bullish: true } },
+  { id: 'cs-bearish', name: 'Any bearish candle', desc: 'Shooting star, bearish engulfing, dark cloud, evening star or three black crows on the latest bar', group: 'Candlesticks', filters: { cs_bearish: true } },
+  { id: 'cs-bull-engulf', name: 'Bullish engulfing', desc: 'A bullish candle whose body engulfs the prior bearish candle', group: 'Candlesticks', filters: { cs_bull_engulf: true } },
+  { id: 'cs-bear-engulf', name: 'Bearish engulfing', desc: 'A bearish candle whose body engulfs the prior bullish candle', group: 'Candlesticks', filters: { cs_bear_engulf: true } },
+  { id: 'cs-hammer', name: 'Hammer', desc: 'Small body at the top with a long lower shadow — bullish reversal after a decline', group: 'Candlesticks', filters: { cs_hammer: true } },
+  { id: 'cs-shooting-star', name: 'Shooting star', desc: 'Small body at the bottom with a long upper shadow — bearish reversal after an advance', group: 'Candlesticks', filters: { cs_shooting_star: true } },
+  { id: 'cs-morning-star', name: 'Morning star', desc: 'Three-bar bullish reversal after a downtrend', group: 'Candlesticks', filters: { cs_morning_star: true } },
+  { id: 'cs-evening-star', name: 'Evening star', desc: 'Three-bar bearish reversal after an uptrend', group: 'Candlesticks', filters: { cs_evening_star: true } },
+  { id: 'cs-doji', name: 'Doji (indecision)', desc: 'Open and close nearly equal — indecision, potential turning point', group: 'Candlesticks', filters: { cs_doji: true } },
+  { id: 'cs-three-white', name: 'Three white soldiers', desc: 'Three rising bullish candles — strong reversal / continuation', group: 'Candlesticks', filters: { cs_three_white: true } },
+  { id: 'cs-three-black', name: 'Three black crows', desc: 'Three falling bearish candles — strong bearish signal', group: 'Candlesticks', filters: { cs_three_black: true } },
 ];
 
 const sameVal = (a: FilterValue | undefined, b: FilterValue): boolean =>
