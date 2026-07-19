@@ -1519,6 +1519,13 @@ def multibagger_report():
             # screen fails fast instead.
             metrics, ident = mb.fetch_metrics(sym, retries=3)
         except ValueError:
+            # The `.info` endpoint is rate-limited. If the background screen has
+            # already scored this scrip, serve the full report from that cache so
+            # a screened multibagger is always analysable.
+            cached = _mb_from_screen_cache(sym)
+            if cached:
+                _MB_CACHE[sym] = (time.time(), cached)
+                return jsonify(cached)
             return jsonify({"error": f"No market data for {sym} — it may be newly "
                                      "listed or delisted, or the data source is "
                                      "briefly unavailable. Try again shortly."}), 404
@@ -1527,12 +1534,40 @@ def multibagger_report():
         _MB_CACHE[sym] = (time.time(), payload)
         return jsonify(payload)
     except Exception as e:
-        # Upstream (yfinance/Yahoo) hiccup, not a bug in our model — report it as
-        # a retryable 503 with a friendly message, never a scary 502.
+        # Upstream (yfinance/Yahoo) hiccup, not a bug in our model. Try the screen
+        # cache before giving up; otherwise report a retryable 503 (never a 502).
+        cached = _mb_from_screen_cache(sym)
+        if cached:
+            return jsonify(cached)
         log.error("Multibagger error for %s: %s", sym, e)
         return jsonify({"error": f"Couldn't analyse {sym} right now — the market "
                                  "data source may be rate-limiting. Try again in a "
                                  "moment."}), 503
+
+
+def _mb_from_screen_cache(sym: str):
+    """Rebuild a full multibagger report from the background screen's stored
+    metrics for `sym` (see mb_screen.cached). Returns the report dict flagged
+    `stale`, or None when the symbol wasn't screened / has no stored metrics."""
+    try:
+        import mb_screen
+        import multibagger as mb
+        c = mb_screen.cached(sym)
+        if not c or not c.get("metrics"):
+            return None
+        payload = mb.score(c["metrics"])
+        payload.update({
+            "symbol": sym,
+            "name": c.get("name") or sym,
+            "sector": c.get("sector"),
+            "industry": c.get("industry"),
+            "price": c.get("price"),
+            "about": c.get("about") or "",
+            "stale": True,  # scored from the last full screen, not a live fetch
+        })
+        return payload
+    except Exception:
+        return None
 
 
 @app.route("/fundamentals")

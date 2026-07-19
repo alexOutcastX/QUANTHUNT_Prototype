@@ -174,3 +174,102 @@ class ResolveResilienceTest(unittest.TestCase):
         self.assertEqual(ident["price"], 250)
         self.assertEqual(metrics["roe_pct"], 24.0)
         self.assertIsInstance(mb.score(metrics)["score"], int)
+
+
+class ProbeFallbackTest(unittest.TestCase):
+    """When `.info` is rate-limited but the chart/history API still returns a
+    price, a user-initiated lookup (retries > 0) must resolve via the probe
+    instead of failing — but the mass screen (retries = 0) must NOT probe."""
+
+    def setUp(self):
+        import sys
+        self._saved = sys.modules.get("yfinance")
+
+    def tearDown(self):
+        import sys
+        if self._saved is not None:
+            sys.modules["yfinance"] = self._saved
+        else:
+            sys.modules.pop("yfinance", None)
+
+    @staticmethod
+    def _install(last_close):
+        import sys, types
+
+        class _Iloc:
+            def __init__(self, v):
+                self._v = v
+
+            def __getitem__(self, i):
+                return self._v[i]
+
+        class _Series:
+            def __init__(self, v):
+                self._v = v
+
+            def dropna(self):
+                return self
+
+            def __len__(self):
+                return len(self._v)
+
+            @property
+            def iloc(self):
+                return _Iloc(self._v)
+
+        class _Frame:
+            def __init__(self, closes):
+                self._c = _Series(closes)
+
+            def __getitem__(self, k):
+                return self._c
+
+        class _FakeTicker:
+            def __init__(self, symbol):
+                self.symbol = symbol
+
+            @property
+            def info(self):
+                return {}  # always rate-limited / sparse
+
+            def history(self, *a, **k):
+                # 3y monthly call (fetch_metrics) and the 5d probe both land here.
+                return _Frame([last_close] * 30)
+
+        mod = types.ModuleType("yfinance")
+        mod.Ticker = _FakeTicker
+        sys.modules["yfinance"] = mod
+
+    def test_user_lookup_probes_price_when_info_sparse(self):
+        self._install(last_close=142.5)
+        t, info = mb._resolve("SMALLCAP", retries=1)
+        self.assertEqual(info.get("regularMarketPrice"), 142.5)
+        metrics, ident = mb.fetch_metrics("SMALLCAP", retries=1)
+        self.assertEqual(ident["price"], 142.5)
+        # A valid (if sparse) report is produced rather than a ValueError.
+        self.assertIsInstance(mb.score(metrics)["score"], int)
+
+    def test_mass_screen_does_not_probe(self):
+        self._install(last_close=142.5)
+        # retries=0 (mass screen): no probe → sparse info → ValueError.
+        with self.assertRaises(ValueError):
+            mb.fetch_metrics("SMALLCAP", with_history=False, retries=0)
+
+
+class ScreenCacheTest(unittest.TestCase):
+    """The background screen stores each hit's full metrics so a rate-limited
+    live report can be rebuilt from it (mb_screen.cached)."""
+
+    def test_cached_returns_stored_metrics(self):
+        import mb_screen
+        mb_screen._state["results"] = [
+            {"symbol": "GOKULAGRO", "score": 68, "name": "Gokul Agro",
+             "sector": "Consumer", "price": 210.0, "metrics": dict(STRONG_SMALLCAP)},
+        ]
+        hit = mb_screen.cached("gokulagro")
+        self.assertIsNotNone(hit)
+        self.assertEqual(hit["metrics"]["roe_pct"], STRONG_SMALLCAP["roe_pct"])
+        self.assertIsNone(mb_screen.cached("NOTLISTED"))
+        # A full report can be rebuilt from the cached metrics.
+        report = mb.score(hit["metrics"])
+        self.assertGreaterEqual(report["score"], 75)

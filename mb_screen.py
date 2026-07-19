@@ -100,7 +100,13 @@ def _run(universe_fn):
                            "market_cap_cr": metrics.get("mcap_cr"),
                            "roe": metrics.get("roe_pct"),
                            "debt_equity": metrics.get("debt_equity"),
-                           "sector": ident.get("sector")}
+                           "sector": ident.get("sector"),
+                           # Identity + the full metrics dict so a live report
+                           # fetch that hits a Yahoo rate-limit can rebuild the
+                           # complete report from what the screen already scored.
+                           "name": ident.get("name"),
+                           "industry": ident.get("industry"),
+                           "metrics": metrics}
             except Exception:
                 pass
             with _lock:
@@ -145,6 +151,19 @@ def ensure_started(universe_fn, force: bool = False) -> None:
         _thread = threading.Thread(target=_run, args=(universe_fn,),
                                    name="mb-screen", daemon=True)
         _thread.start()
+
+
+def cached(symbol: str):
+    """Return a screened symbol's stored scoring data — the full `metrics` dict
+    plus identity (name/sector/price) — so the single-stock report route can
+    fall back to it when a live Yahoo fetch is rate-limited. None when the
+    symbol isn't in the latest screen (or predates the stored-metrics field)."""
+    s = (symbol or "").upper().strip()
+    with _lock:
+        for r in _state["results"]:
+            if str(r.get("symbol", "")).upper() == s and r.get("metrics"):
+                return dict(r)
+    return None
 
 
 def snapshot() -> dict:
