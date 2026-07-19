@@ -279,11 +279,112 @@ export function SectionTitle({ children }: { children: React.ReactNode }) {
 }
 
 // Springy press-scale for a crisp, tactile feel on primary actions.
-function usePressScale() {
+export function usePressScale(pressed = 0.95) {
   const scale = React.useRef(new Animated.Value(1)).current;
   const to = (v: number) => Animated.spring(scale, { toValue: v, useNativeDriver: true, speed: 40, bounciness: 6 }).start();
-  return { scale, onPressIn: () => to(0.95), onPressOut: () => to(1) };
+  return { scale, onPressIn: () => to(pressed), onPressOut: () => to(1) };
 }
+
+// Mount entrance: fade + rise. Pass `index` on list items for a gentle stagger
+// so a freshly-rendered list cascades in instead of popping. The delay is capped
+// so long lists don't feel sluggish, and each item only animates once on mount.
+export function FadeSlideIn({
+  children,
+  index = 0,
+  distance = 12,
+  duration = 300,
+  stagger = 42,
+  style,
+}: {
+  children: React.ReactNode;
+  index?: number;
+  distance?: number;
+  duration?: number;
+  stagger?: number;
+  style?: ViewStyle;
+}) {
+  const a = React.useRef(new Animated.Value(0)).current;
+  React.useEffect(() => {
+    Animated.timing(a, {
+      toValue: 1,
+      duration,
+      delay: Math.min(index, 9) * stagger,
+      useNativeDriver: true,
+    }).start();
+  }, [a, index, duration, stagger]);
+  const translateY = a.interpolate({ inputRange: [0, 1], outputRange: [distance, 0] });
+  return <Animated.View style={[{ opacity: a, transform: [{ translateY }] }, style]}>{children}</Animated.View>;
+}
+
+// A tappable wrapper that gives a springy press-scale (nicer than the flat
+// opacity dip of TouchableOpacity) — used for list rows / cards.
+export function PressableScale({
+  children,
+  onPress,
+  style,
+  pressed = 0.97,
+}: {
+  children: React.ReactNode;
+  onPress: () => void;
+  style?: ViewStyle;
+  pressed?: number;
+}) {
+  const p = usePressScale(pressed);
+  return (
+    <Animated.View style={{ transform: [{ scale: p.scale }] }}>
+      <Pressable onPress={onPress} onPressIn={p.onPressIn} onPressOut={p.onPressOut} style={style}>
+        {children}
+      </Pressable>
+    </Animated.View>
+  );
+}
+
+// Animated bottom-sheet: the scrim fades in and the panel springs up from below.
+// The detail popups (SMC / swing / institutional) render their scrolling content
+// inside this so opening a card feels like a sheet rising, not a hard cut. Tap
+// the scrim to dismiss. (Exit is an immediate unmount — entrance is the polish.)
+export function Sheet({
+  children,
+  onClose,
+  maxHeight = '94%',
+  maxWidth = 620,
+}: {
+  children: React.ReactNode;
+  onClose: () => void;
+  maxHeight?: number | string;
+  maxWidth?: number;
+}) {
+  const a = React.useRef(new Animated.Value(0)).current;
+  React.useEffect(() => {
+    Animated.spring(a, { toValue: 1, useNativeDriver: true, speed: 16, bounciness: 5 }).start();
+  }, [a]);
+  const translateY = a.interpolate({ inputRange: [0, 1], outputRange: [48, 0] });
+  return (
+    <View style={sh.wrap}>
+      <Animated.View style={[sh.scrim, { opacity: a }]}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+      </Animated.View>
+      <Animated.View style={[sh.panel, { maxHeight: maxHeight as number, maxWidth, opacity: a, transform: [{ translateY }] }]}>
+        {children}
+      </Animated.View>
+    </View>
+  );
+}
+
+const sh = StyleSheet.create({
+  wrap: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, justifyContent: 'flex-end' },
+  scrim: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: '#000a' },
+  panel: {
+    backgroundColor: theme.surface,
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    borderColor: theme.border2,
+    borderWidth: 1,
+    padding: theme.sp.lg,
+    alignSelf: 'center',
+    width: '100%',
+  },
+});
 
 export function Btn({
   label,

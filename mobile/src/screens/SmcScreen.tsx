@@ -8,7 +8,7 @@ import { addSymbol, loadWatchlist, normSymbol } from '../watchlist';
 import { LocalAlert, addLocalAlert, hasLocalAlert, loadLocalAlerts } from '../localalerts';
 import { loadNames } from './ScreenerScreen';
 import { useResponsive } from '../responsive';
-import { Card, Dropdown, EmptyState, RiskBadge } from '../ui';
+import { Card, Dropdown, EmptyState, FadeSlideIn, RiskBadge, Sheet } from '../ui';
 import { PaperTrade, addPaperTrade, hasOpenPaper, loadPaperTrades } from '../paperTrades';
 import { theme } from '../theme';
 import {
@@ -120,9 +120,7 @@ function SmcDetail({
     </View>
   );
   return (
-    <View style={styles.modalWrap}>
-      <Pressable style={styles.scrim} onPress={onClose} />
-      <View style={styles.sheet}>
+    <Sheet onClose={onClose} maxHeight="94%">
         <ScrollView bounces={false}>
           <View style={styles.sheetHead}>
             <View style={{ flex: 1 }}>
@@ -263,8 +261,7 @@ function SmcDetail({
             model before risking capital. Educational only, not investment advice.
           </Text>
         </ScrollView>
-      </View>
-    </View>
+    </Sheet>
   );
 }
 
@@ -509,11 +506,13 @@ export default function SmcScreen() {
         ) : null}
 
         <View style={isDesktop ? styles.grid2 : undefined}>
-          {sorted.map((r) => (
+          {sorted.map((r, i) => (
             <View key={r.symbol} style={isDesktop ? styles.gridCell : undefined}>
-              <Card style={{ padding: 0 }}>
-                <SmcRow r={r} onOpen={() => setOpen(r)} />
-              </Card>
+              <FadeSlideIn index={i}>
+                <Card style={{ padding: 0 }}>
+                  <SmcRow r={r} onOpen={() => setOpen(r)} />
+                </Card>
+              </FadeSlideIn>
             </View>
           ))}
         </View>

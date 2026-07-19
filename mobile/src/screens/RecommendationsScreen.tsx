@@ -15,7 +15,7 @@ import InstitutionalScreen from './InstitutionalScreen';
 import SmcScreen from './SmcScreen';
 import { useResponsive } from '../responsive';
 import { printHtmlDocument } from '../pdf';
-import { Card, Dropdown, EmptyState, RiskBadge, Segmented } from '../ui';
+import { Card, Dropdown, EmptyState, FadeSlideIn, RiskBadge, Segmented } from '../ui';
 import { PaperTrade, addPaperTrade, hasOpenPaper, loadPaperTrades } from '../paperTrades';
 import { INSTITUTIONAL_INFO, RECOMMENDATIONS_INFO, SHORT_TERM_INFO, SMC_INFO } from '../tabInfo';
 import { theme } from '../theme';
@@ -539,8 +539,9 @@ function LongTermRecs() {
         ) : null}
 
         <View style={isDesktop ? styles.grid : undefined}>
-          {recs.map((r) => (
+          {recs.map((r, i) => (
             <View key={r.symbol} style={isDesktop ? styles.gridCell : undefined}>
+              <FadeSlideIn index={i}>
               <RecCard
                 r={r}
                 compact={!isDesktop}
@@ -555,6 +556,7 @@ function LongTermRecs() {
                 onPaper={() => onPaper(r)}
                 onBacktest={() => onBacktest(r)}
               />
+              </FadeSlideIn>
             </View>
           ))}
         </View>
