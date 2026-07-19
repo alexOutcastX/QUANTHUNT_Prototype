@@ -370,6 +370,10 @@ export type TimeframeRead = {
 export type HorizonRead = { key: string; label: string; score: number | null; bias: string; from?: string[] };
 export type TimeframesResp = { symbol: string; timeframes: TimeframeRead[]; horizons: HorizonRead[]; error?: string };
 
+// Per-strategy scorecard (/strategy-scores) — shown in every detail popup.
+export type StrategyScore = { id: string; name: string; score: number | null; pass: boolean; note: string };
+export type StrategyScoresResp = { symbol: string; strategies: StrategyScore[]; error?: string };
+
 // On-demand screener.in scrape (/screener-financials) — real Indian promoter /
 // FII / DII shareholding + borrowings that Yahoo/NSE don't reliably give.
 export type ScreenerFinancials = {
@@ -870,6 +874,8 @@ export const api = {
     getJson<TimeframesResp>('/timeframes?symbol=' + encodeURIComponent(symbol), 60000),
   screenerFinancials: (symbol: string) =>
     getJson<ScreenerFinancials>('/screener-financials?symbol=' + encodeURIComponent(symbol), 20000),
+  strategyScores: (symbol: string) =>
+    getJson<StrategyScoresResp>('/strategy-scores?symbol=' + encodeURIComponent(symbol), 60000),
   chartPatterns: (symbol: string, period = '2y') =>
     getJson<ChartPatternsResp>(
       `/chart-patterns?symbol=${encodeURIComponent(symbol)}&period=${encodeURIComponent(period)}`,

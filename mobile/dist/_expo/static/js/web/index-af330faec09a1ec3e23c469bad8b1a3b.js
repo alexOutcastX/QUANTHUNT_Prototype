@@ -1,0 +1,2 @@
+__d(function(g,r,i,a,m,e,d){"use strict";Object.defineProperty(e,'__esModule',{value:!0}),Object.defineProperty(e,"PushNotifications",{enumerable:!0,get:function(){return o}});var t=r(d[0]),n=r(d[1]);Object.keys(n).forEach(function(t){'default'===t||Object.prototype.hasOwnProperty.call(e,t)||Object.defineProperty(e,t,{enumerable:!0,get:function(){return n[t]}})});const o=(0,t.registerPlugin)('PushNotifications',{})},377,[381,384]);
+__d(function(g,r,i,a,m,e,d){},384,[]);

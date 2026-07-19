@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { MbScreenRow, Recommendation, api } from '../api';
 import StockDetail from '../components/StockDetail';
+import StrategyScores from '../components/StrategyScores';
 import SymbolInput from '../components/SymbolInput';
 import TradeVerdict from '../components/TradeVerdict';
 import { Row } from '../screener';
@@ -263,6 +264,8 @@ function RecCard({
           </View>
         ))}
       </View>
+
+      <StrategyScores symbol={r.symbol} />
 
       <View style={styles.actions}>
         <TouchableOpacity style={styles.aBtn} onPress={onChart} activeOpacity={0.75}>
