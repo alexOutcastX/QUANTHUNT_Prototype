@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Linking, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { API_BASE, HolidaysResp, IndexConstituent, IndexQuote, Quote, api } from '../api';
+import { API_BASE, HolidaysResp, IndexConstituent, IndexQuote, MoversResp, Quote, api } from '../api';
 import { loadWatchlist } from '../watchlist';
 import { Card, EmptyState, Loading, SectionTitle, StatTile } from '../ui';
 import { theme } from '../theme';
@@ -17,8 +17,9 @@ export default function DashboardScreen({ onNavigate }: { onNavigate?: (page: st
   const [indices, setIndices] = useState<IndexQuote[] | null>(null);
   const [market, setMarket] = useState<HolidaysResp | null>(null);
   const [movers, setMovers] = useState<Mover[] | null>(null);
-  // Broad universe (NIFTY 500) powers breadth + gainers/losers — one extra fetch.
-  const [broad, setBroad] = useState<IndexConstituent[] | null>(null);
+  // Breadth + gainers/losers now come pre-computed from the server (/movers),
+  // which stays populated even when NSE falls back to the symbols-only CSV.
+  const [mv, setMv] = useState<MoversResp | null>(null);
   const [watch, setWatch] = useState<{ symbol: string; q?: Quote }[] | null>(null);
   const [news, setNews] = useState<NewsItem[] | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -34,12 +35,12 @@ export default function DashboardScreen({ onNavigate }: { onNavigate?: (page: st
         setMovers([...rows.slice(0, 4), ...rows.slice(-4)]);
       })
       .catch(() => setMovers([]));
-    // Broad breadth universe — NIFTY 500 carries per-symbol chg/volume when the
-    // NSE feed is live; keep only rows with a real % change (CSV fallback → empty).
+    // Breadth + top gainers/losers, computed server-side over NIFTY 500 (with a
+    // resilient quote backfill), so this never blanks on the NSE CSV fallback.
     api
-      .indexConstituents('NIFTY 500')
-      .then((idx) => setBroad((idx.data || []).filter((r) => r.chg != null)))
-      .catch(() => setBroad([]));
+      .movers('NIFTY 500', 6)
+      .then(setMv)
+      .catch(() => setMv(null));
     try {
       const wl = await loadWatchlist();
       const syms = wl.slice(0, 8);
@@ -68,36 +69,10 @@ export default function DashboardScreen({ onNavigate }: { onNavigate?: (page: st
 
   const go = (page: string) => onNavigate?.(page);
 
-  // Advance/decline breadth from the broad universe.
-  const breadth = useMemo(() => {
-    const rows = broad || [];
-    let up = 0,
-      down = 0,
-      flat = 0;
-    for (const r of rows) {
-      const c = r.chg as number;
-      if (c > 0) up++;
-      else if (c < 0) down++;
-      else flat++;
-    }
-    const total = rows.length || 1;
-    return { up, down, flat, total, ratio: down ? up / down : up };
-  }, [broad]);
-
-  // Top gainers / losers from the broad universe, skipping obviously illiquid
-  // rows when volume is reported.
-  const liquid = useMemo(
-    () => (broad || []).filter((r) => r.chg != null && (r.volume == null || r.volume > 10000)),
-    [broad],
-  );
-  const gainers = useMemo(
-    () => [...liquid].sort((a, b) => (b.chg as number) - (a.chg as number)).slice(0, 6),
-    [liquid],
-  );
-  const losers = useMemo(
-    () => [...liquid].sort((a, b) => (a.chg as number) - (b.chg as number)).slice(0, 6),
-    [liquid],
-  );
+  // Breadth + gainers/losers are computed on the server now (see /movers).
+  const breadth = mv?.breadth ?? null;
+  const gainers: IndexConstituent[] = mv?.gainers ?? [];
+  const losers: IndexConstituent[] = mv?.losers ?? [];
 
   // Sector performance uses the live NSE sector sub-indices from /indices as
   // proxies (NIFTY IT / Auto / Pharma / FMCG / Metal / Energy / Realty / Bank),
@@ -120,8 +95,8 @@ export default function DashboardScreen({ onNavigate }: { onNavigate?: (page: st
       .sort((a, b) => b.chg - a.chg);
   }, [indices]);
 
-  const upPct = (breadth.up / breadth.total) * 100;
-  const downPct = (breadth.down / breadth.total) * 100;
+  const upPct = breadth ? (breadth.up / breadth.total) * 100 : 0;
+  const downPct = breadth ? (breadth.down / breadth.total) * 100 : 0;
   const flatPct = Math.max(0, 100 - upPct - downPct);
   const sectorMax = Math.max(1, ...sectors.map((s) => Math.abs(s.chg)));
 
@@ -178,9 +153,9 @@ export default function DashboardScreen({ onNavigate }: { onNavigate?: (page: st
 
       <Card style={{ marginTop: theme.sp.lg }}>
         <SectionTitle>Market breadth · NIFTY 500</SectionTitle>
-        {!broad ? (
+        {!mv ? (
           <Loading />
-        ) : broad.length ? (
+        ) : breadth ? (
           <View>
             <View style={styles.breadthNums}>
               <Text style={[styles.breadthN, { color: theme.green }]}>{breadth.up} advancing</Text>
@@ -209,7 +184,7 @@ export default function DashboardScreen({ onNavigate }: { onNavigate?: (page: st
       <View style={styles.cols}>
         <Card style={styles.col}>
           <SectionTitle>Top gainers</SectionTitle>
-          {!broad ? (
+          {!mv ? (
             <Loading />
           ) : gainers.length ? (
             gainers.map((m, i) => (
@@ -231,7 +206,7 @@ export default function DashboardScreen({ onNavigate }: { onNavigate?: (page: st
 
         <Card style={styles.col}>
           <SectionTitle>Top losers</SectionTitle>
-          {!broad ? (
+          {!mv ? (
             <Loading />
           ) : losers.length ? (
             losers.map((m, i) => (

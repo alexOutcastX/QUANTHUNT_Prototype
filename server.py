@@ -787,16 +787,17 @@ def _fetch_niftyindices_csv(name):
     return rows or None
 
 
-@app.route("/index")
-def index_constituents():
-    name = request.args.get("name", "").strip().upper()
-    key  = NSE_INDEX_MAP.get(name)
+def _get_constituents(name):
+    """(rows, source) for an index — NSE live (carries pChange) → niftyindices
+    CSV (symbols only) → last-good disk cache. (None, None) if all fail.
+    Memoized in _INDEX_MEM for _INDEX_MEM_TTL."""
+    key = NSE_INDEX_MAP.get(name)
     if not key:
-        return jsonify({"error": f"Unknown index '{name}'", "available": list(NSE_INDEX_MAP)}), 400
+        return None, None
 
     hit = _INDEX_MEM.get(name)
     if hit and (time.time() - hit[0]) < _INDEX_MEM_TTL:
-        return jsonify({"index": name, "count": len(hit[1]), "data": hit[1], "source": hit[2]})
+        return hit[1], hit[2]
 
     # 1) NSE Direct — live quotes (often blocked from cloud IPs)
     try:
@@ -819,7 +820,7 @@ def index_constituents():
             })
         if rows:
             _index_cache_write(name, rows, "nse")
-            return jsonify({"index": name, "count": len(rows), "data": rows, "source": "nse"})
+            return rows, "nse"
     except Exception as e:
         log.warning("NSE index fetch failed for %s: %s", name, e)
 
@@ -829,18 +830,96 @@ def index_constituents():
         rows = _fetch_niftyindices_csv(name)
         if rows:
             _index_cache_write(name, rows, "niftyindices-csv")
-            return jsonify({"index": name, "count": len(rows), "data": rows,
-                            "source": "niftyindices-csv"})
+            return rows, "niftyindices-csv"
     except Exception as e:
         log.warning("niftyindices CSV fetch failed for %s: %s", name, e)
 
     # 3) last-good disk cache (survives restarts)
     rows, source = _index_cache_read(name)
     if rows:
-        return jsonify({"index": name, "count": len(rows), "data": rows,
-                        "source": f"stale-{source}"})
+        return rows, f"stale-{source}"
+    return None, None
 
+
+@app.route("/index")
+def index_constituents():
+    name = request.args.get("name", "").strip().upper()
+    if name not in NSE_INDEX_MAP:
+        return jsonify({"error": f"Unknown index '{name}'", "available": list(NSE_INDEX_MAP)}), 400
+    rows, source = _get_constituents(name)
+    if rows:
+        return jsonify({"index": name, "count": len(rows), "data": rows, "source": source})
     return jsonify({"error": f"All constituent sources failed for {name}", "data": []}), 502
+
+
+_movers_cache = {}       # index -> (ts, payload)
+_MOVERS_TTL = 180
+
+
+def _rows_with_chg(name, cap=180):
+    """Constituent rows carrying a live `chg`. Uses the NSE feed's pChange when
+    available; otherwise batch-quotes the symbols via Yahoo in one call (bounded
+    to `cap` to keep latency sane)."""
+    rows, _src = _get_constituents(name)
+    if not rows:
+        return []
+    if any(r.get("chg") is not None for r in rows):
+        return rows
+    # CSV fallback gave symbols only — backfill quotes in one batched call so
+    # breadth/movers still work when NSE has blocked the VM.
+    syms = [r["symbol"] for r in rows][:cap]
+    q = _yf_batch(syms)
+    for r in rows:
+        e = q.get(r["symbol"])
+        if e:
+            for k in ("price", "prevClose", "chg", "absChg", "open", "high", "low", "volume"):
+                r[k] = e.get(k)
+    return rows
+
+
+@app.route("/movers")
+def movers():
+    """Advance/decline breadth + top gainers/losers for an index, computed
+    server-side and cached (3 min, stale-on-error). Resilient: NSE pChange when
+    live, else a single Yahoo batch quote, else the last-good snapshot — so the
+    dashboard's breadth/gainers/losers never blank just because NSE blocked the
+    VM (the previous client-side derivation went empty on the CSV fallback)."""
+    name = request.args.get("index", "NIFTY 50").strip().upper()
+    try:
+        top = min(max(int(request.args.get("n", 6) or 6), 1), 15)
+    except Exception:
+        top = 6
+    if name not in NSE_INDEX_MAP:
+        return jsonify({"error": f"Unknown index '{name}'"}), 400
+
+    now = time.time()
+    hit = _movers_cache.get(name)
+    if hit and now - hit[0] < _MOVERS_TTL:
+        return jsonify(hit[1])
+
+    rows = [r for r in _rows_with_chg(name) if r.get("chg") is not None]
+    if not rows:
+        if hit:
+            stale = dict(hit[1]); stale["stale"] = True
+            return jsonify(stale)
+        return jsonify({"index": name, "breadth": None, "gainers": [], "losers": [],
+                        "error": "movers unavailable"}), 502
+
+    up = sum(1 for r in rows if r["chg"] > 0)
+    down = sum(1 for r in rows if r["chg"] < 0)
+    flat = len(rows) - up - down
+    liq = [r for r in rows if (r.get("volume") is None or (r.get("volume") or 0) > 10000)]
+    srt = sorted(liq, key=lambda r: r["chg"], reverse=True)
+    payload = {
+        "index": name,
+        "breadth": {"up": up, "down": down, "flat": flat, "total": len(rows),
+                    "ratio": round(up / down, 2) if down else float(up)},
+        "gainers": srt[:top],
+        "losers": list(reversed(srt[-top:])) if len(srt) >= top else list(reversed(srt)),
+        "asof": int(now),
+    }
+    _movers_cache[name] = (now, payload)
+    return jsonify(payload)
 
 
 @app.route("/universe")
