@@ -8,7 +8,8 @@ import { addSymbol, loadWatchlist, normSymbol } from '../watchlist';
 import { LocalAlert, addLocalAlert, hasLocalAlert, loadLocalAlerts } from '../localalerts';
 import { loadNames } from './ScreenerScreen';
 import { useResponsive } from '../responsive';
-import { Card, Dropdown, EmptyState, RiskBadge } from '../ui';
+import { Card, Dropdown, EmptyState, FadeSlideIn, RiskBadge, Sheet } from '../ui';
+import { PaperTrade, addPaperTrade, hasOpenPaper, loadPaperTrades } from '../paperTrades';
 import { theme } from '../theme';
 import {
   DEPTH_OPTIONS,
@@ -95,14 +96,17 @@ function InstRow({ r, onOpen }: { r: InstitutionalRec; onOpen: () => void }) {
 
 // The detail popup — leads with WHICH strategies flagged the stock and why.
 function InstDetail({
-  r, watched, alerted, onClose, onChart, onAnalyse, onWatch, onAlert,
+  r, watched, alerted, papered, onClose, onChart, onAnalyse, onPattern, onPaper, onWatch, onAlert,
 }: {
   r: InstitutionalRec;
   watched: boolean;
   alerted: boolean;
+  papered: boolean;
   onClose: () => void;
   onChart: () => void;
   onAnalyse: () => void;
+  onPattern: () => void;
+  onPaper: () => void;
   onWatch: () => void;
   onAlert: () => void;
 }) {
@@ -116,9 +120,7 @@ function InstDetail({
     </View>
   );
   return (
-    <View style={styles.modalWrap}>
-      <Pressable style={styles.scrim} onPress={onClose} />
-      <View style={styles.sheet}>
+    <Sheet onClose={onClose} maxHeight="92%">
         <ScrollView bounces={false}>
           <View style={styles.sheetHead}>
             <View style={{ flex: 1 }}>
@@ -188,12 +190,37 @@ function InstDetail({
             </View>
           ) : null}
 
+          {/* Plain-English glossary so the quant-strategy terms are readable
+              without prior knowledge — matches the depth of the HFT card. */}
+          <Text style={styles.secTitle}>WHAT THIS MEANS</Text>
+          <View style={styles.glossary}>
+            {[
+              ['Momentum', 'Buying strength — the stock is trending hard and tends to keep going for a while (winners keep winning).'],
+              ['Trend-following', 'The moving averages are stacked in an uptrend (e.g. golden cross); the strategy rides the established direction.'],
+              ['Breakout', 'A tight, low-volatility squeeze resolving into a fresh high — the range breaks and a new move begins.'],
+              ['Mean-reversion', 'Price is stretched far from its average and the strategy bets on a snap back toward the mean.'],
+              ['Statistical arbitrage', 'The stock looks cheap versus the index / its peers; a relative-value trade betting the gap converges.'],
+              ['R : R', 'Reward-to-risk — target distance ÷ stop distance. Above ~2:1 means the potential gain outweighs the risked amount.'],
+            ].map(([t, d]) => (
+              <View key={t} style={styles.gloRow}>
+                <Text style={styles.gloTerm}>{t}</Text>
+                <Text style={styles.gloDef}>{d}</Text>
+              </View>
+            ))}
+          </View>
+
           <View style={styles.actions}>
             <TouchableOpacity style={styles.aBtn} onPress={onChart} activeOpacity={0.75}>
               <Text style={styles.aTxt}>▤ Chart</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.aBtn} onPress={onAnalyse} activeOpacity={0.75}>
               <Text style={[styles.aTxt, { color: theme.accent }]}>⚡ Analyse</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.aBtn} onPress={onPattern} activeOpacity={0.75}>
+              <Text style={[styles.aTxt, { color: theme.brand }]}>⚏ Pattern</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.aBtn} onPress={onPaper} activeOpacity={0.75}>
+              <Text style={[styles.aTxt, papered && { color: theme.green }]}>{papered ? '✓ Papered' : '✎ Paper trade'}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.aBtn} onPress={onWatch} activeOpacity={0.75}>
               <Text style={[styles.aTxt, watched && { color: theme.green }]}>{watched ? '★ Watching' : '☆ Watchlist'}</Text>
@@ -212,8 +239,7 @@ function InstDetail({
             educational only — not investment advice; always confirm and manage risk.
           </Text>
         </ScrollView>
-      </View>
-    </View>
+    </Sheet>
   );
 }
 
@@ -228,6 +254,7 @@ export default function InstitutionalScreen() {
   const [ready, setReady] = useState(isHydrated());
   const [watch, setWatch] = useState<string[]>([]);
   const [alerts, setAlerts] = useState<LocalAlert[]>([]);
+  const [paper, setPaper] = useState<PaperTrade[]>([]);
   const [sortKey, setSortKey] = useState<'score' | 'upside' | 'rr' | 'time'>('score');
   const [filter, setFilter] = useState<string>('all'); // strategy filter
   const [open, setOpen] = useState<InstitutionalRec | null>(null);
@@ -247,6 +274,7 @@ export default function InstitutionalScreen() {
   useEffect(() => {
     loadWatchlist().then(setWatch);
     loadLocalAlerts().then(setAlerts);
+    loadPaperTrades().then(setPaper);
   }, []);
 
   const runScan = useCallback(async () => {
@@ -389,6 +417,24 @@ export default function InstitutionalScreen() {
     setOpen(null);
     navigate('analysis', { sub: 'mb', symbol: r.symbol });
   };
+  const onPattern = (r: InstitutionalRec) => {
+    setOpen(null);
+    navigate('analysis', { sub: 'patterns', symbol: r.symbol });
+  };
+  const onPaper = async (r: InstitutionalRec) => {
+    setPaper(
+      await addPaperTrade({
+        symbol: r.symbol,
+        name: r.name || undefined,
+        side: 'long',
+        source: 'Institutional',
+        entry: r.entry,
+        stop: r.stop,
+        target: r.target,
+      }),
+    );
+    toast(`Paper trade logged for ${r.symbol} → see Paper tab`);
+  };
 
   return (
     <View style={styles.container}>
@@ -438,11 +484,13 @@ export default function InstitutionalScreen() {
         ) : null}
 
         <View style={isDesktop ? styles.grid2 : undefined}>
-          {sorted.map((r) => (
+          {sorted.map((r, i) => (
             <View key={r.symbol} style={isDesktop ? styles.gridCell : undefined}>
-              <Card style={{ padding: 0 }}>
-                <InstRow r={r} onOpen={() => setOpen(r)} />
-              </Card>
+              <FadeSlideIn index={i}>
+                <Card style={{ padding: 0 }}>
+                  <InstRow r={r} onOpen={() => setOpen(r)} />
+                </Card>
+              </FadeSlideIn>
             </View>
           ))}
         </View>
@@ -453,9 +501,12 @@ export default function InstitutionalScreen() {
           r={open}
           watched={isWatched(open.symbol)}
           alerted={hasLocalAlert(alerts, open.symbol)}
+          papered={hasOpenPaper(paper, open.symbol)}
           onClose={() => setOpen(null)}
           onChart={() => onChart(open)}
           onAnalyse={() => onAnalyse(open)}
+          onPattern={() => onPattern(open)}
+          onPaper={() => onPaper(open)}
           onWatch={() => onWatch(open)}
           onAlert={() => onAlert(open)}
         />
@@ -527,7 +578,7 @@ const styles = StyleSheet.create({
   actionPill: { borderRadius: 4, paddingHorizontal: 6, paddingVertical: 1 },
   actionTxt: { color: theme.onAccent, fontSize: 9, fontWeight: '800', letterSpacing: 0.5, fontFamily: theme.mono },
   primaryTag: { fontSize: theme.fs.sm, fontWeight: '700', marginTop: 3 },
-  secTitle: { color: theme.muted, fontSize: theme.fs.xs + 1, fontWeight: '800', letterSpacing: 1, marginBottom: theme.sp.sm },
+  secTitle: { color: theme.muted, fontSize: theme.fs.xs + 1, fontWeight: '800', letterSpacing: 1, marginBottom: theme.sp.sm, marginTop: theme.sp.xs },
   stratList: { gap: theme.sp.sm, marginBottom: theme.sp.md },
   stratRow: { backgroundColor: theme.surface2, borderRadius: theme.radius.sm, padding: theme.sp.md, gap: 5 },
   stratHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
@@ -549,6 +600,10 @@ const styles = StyleSheet.create({
   etaVal: { color: theme.text, fontFamily: theme.mono, fontWeight: '700', fontSize: theme.fs.md },
   why: { gap: 3, marginTop: theme.sp.md },
   whyTxt: { color: theme.muted2, fontSize: theme.fs.sm, lineHeight: 18 },
+  glossary: { gap: theme.sp.sm, marginBottom: theme.sp.sm, marginTop: theme.sp.md },
+  gloRow: { gap: 1 },
+  gloTerm: { color: theme.brand, fontSize: theme.fs.sm + 1, fontWeight: '800' },
+  gloDef: { color: theme.muted2, fontSize: theme.fs.sm, lineHeight: 18 },
   actions: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.sp.sm, marginTop: theme.sp.md },
   aBtn: { backgroundColor: theme.surface2, borderColor: theme.border2, borderWidth: 1, borderRadius: theme.radius.sm + 2, paddingHorizontal: theme.sp.md, paddingVertical: theme.sp.sm },
   aTxt: { color: theme.text, fontSize: theme.fs.sm, fontWeight: '700' },

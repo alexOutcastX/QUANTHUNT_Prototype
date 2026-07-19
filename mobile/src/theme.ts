@@ -85,7 +85,14 @@ if (WEB) {
     // (prices/symbols) is applied per-component via theme.mono.
     `html,body,#root{-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;` +
     `text-rendering:optimizeLegibility;font-family:-apple-system,BlinkMacSystemFont,` +
-    `"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;}`;
+    `"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;}` +
+    // Paint the page background in the theme surface. The Android shell is
+    // edge-to-edge (content draws behind transparent status/navigation bars),
+    // so whatever colour sits here is what shows through the bars. Without it
+    // the browser default (white) bled through and the bars looked white even
+    // in dark mode. Using the header/tab surface makes the bars blend into the
+    // app chrome and flip correctly with the light/dark toggle.
+    `html,body,#root{background-color:var(--c-surface);}`;
   const style = document.createElement('style');
   style.id = 'te-theme-vars';
   style.textContent = css;
