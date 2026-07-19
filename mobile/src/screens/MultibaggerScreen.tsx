@@ -12,7 +12,7 @@ import { navigate, takeSymbol } from '../navIntent';
 import { ACTIONS_W, COLS, Col, DEFAULT_HIDDEN, cellFlex, loadNames } from './ScreenerScreen';
 import { TrackDir, TrackEntry, addTrack, loadTrack, removeTrack } from '../tracklist';
 import { addSymbol, loadWatchlist, normSymbol, removeSymbol } from '../watchlist';
-import { Btn, Card, EmptyState, InfoButton, Loading, SectionTitle, StatTile } from '../ui';
+import { Btn, Card, Dropdown, EmptyState, InfoButton, InfoContent, Loading, SectionTitle, StatTile } from '../ui';
 import { printHtmlDocument } from '../pdf';
 import { MULTIBAGGER_INFO } from '../tabInfo';
 import { theme } from '../theme';
@@ -39,9 +39,105 @@ const FIXED_CHIPS = [
   'Data coverage ≥ 60%',
 ];
 
+// Discoverable sort chips (headers are tappable too, but easy to miss inside the
+// horizontally-scrolled table). Keys match the analyser/screener sort columns.
+const MB_SORTS: { key: string; label: string }[] = [
+  { key: 'mb_score', label: 'Score' },
+  { key: 'mb_prob', label: '5x Prob' },
+  { key: 'price', label: 'Price' },
+  { key: 'market_cap_cr', label: 'Market cap' },
+  { key: 'pe', label: 'P/E' },
+  { key: 'roe', label: 'ROE' },
+  { key: 'name', label: 'Name' },
+];
+
 // Rows in this list carry the analyser score + 5x probability alongside the
 // screener fields.
 type MbRow = Row & { mbScore?: number; mbProb?: number };
+
+// Strategy dropdown for the multibagger screen. Each strategy narrows the fixed
+// candidate universe to a distinct wealth-compounding thesis (value, quality,
+// hidden small-caps, momentum leaders…) and re-ranks it best-first. 'balanced'
+// keeps the full list on analyser score. Grounded only in fields the list already
+// carries: mbScore/mbProb + fundamentals (_fund) + trend flags (ret_6m/minervini).
+type MbStrategy = { id: string; name: string; info: InfoContent; apply: (rows: MbRow[]) => MbRow[] };
+const fnum = (v: unknown): number | null => (typeof v === 'number' && isFinite(v) ? v : null);
+const fundOf = (r: MbRow) => (r._fund || {}) as Record<string, unknown>;
+const capShort = (r: MbRow) => capBand(fnum(fundOf(r).market_cap_cr))?.short ?? null;
+const byDesc = (get: (r: MbRow) => number | null) => (a: MbRow, b: MbRow) => (get(b) ?? -Infinity) - (get(a) ?? -Infinity);
+const byAsc = (get: (r: MbRow) => number | null) => (a: MbRow, b: MbRow) => (get(a) ?? Infinity) - (get(b) ?? Infinity);
+
+const MB_STRATEGIES: MbStrategy[] = [
+  {
+    id: 'balanced',
+    name: 'Balanced (all candidates)',
+    info: {
+      about: 'The full fixed multibagger screen, ranked by the analyser score. No extra filter — the widest funnel of mid & small caps that clear the base quality bar.',
+      disclaimer: 'Educational screen, not investment advice.',
+    },
+    apply: (rows) => [...rows].sort(byDesc((r) => fnum(r.mbScore))),
+  },
+  {
+    id: 'conviction',
+    name: 'High conviction (score ≥ 75)',
+    info: {
+      about: 'Only the highest-scoring candidates — where the analyser sees strong alignment across growth, cash flow, leverage and trend.',
+      sections: [{ heading: 'Filter', bullets: ['Analyser score ≥ 75', 'Ranked by score, best first'] }],
+      disclaimer: 'A high score is not a guarantee — always verify the thesis.',
+    },
+    apply: (rows) => rows.filter((r) => (fnum(r.mbScore) ?? 0) >= 75).sort(byDesc((r) => fnum(r.mbScore))),
+  },
+  {
+    id: 'value',
+    name: 'Deep value (low P/E · P/B)',
+    info: {
+      about: 'Cheap on earnings and book value — the classic value tilt where a re-rating can drive multi-bagger returns.',
+      sections: [{ heading: 'Filter', bullets: ['P/E between 0 and 22', 'P/B ≤ 4', 'Ranked by lowest P/E first'] }],
+      disclaimer: 'Cheap can stay cheap — check why the market is discounting it.',
+    },
+    apply: (rows) =>
+      rows
+        .filter((r) => { const pe = fnum(fundOf(r).pe); const pb = fnum(fundOf(r).pb); return pe != null && pe > 0 && pe <= 22 && (pb == null || pb <= 4); })
+        .sort(byAsc((r) => fnum(fundOf(r).pe))),
+  },
+  {
+    id: 'quality',
+    name: 'Quality compounder (high ROE/ROCE)',
+    info: {
+      about: 'Businesses that compound capital at high rates of return — the quality-growth thesis behind most durable multibaggers.',
+      sections: [{ heading: 'Filter', bullets: ['ROE ≥ 15% or ROCE ≥ 15%', 'Ranked by ROE, highest first'] }],
+      disclaimer: 'Past returns on capital may not persist — watch for margin pressure.',
+    },
+    apply: (rows) =>
+      rows
+        .filter((r) => (fnum(fundOf(r).roe) ?? 0) >= 15 || (fnum(fundOf(r).roce) ?? 0) >= 15)
+        .sort(byDesc((r) => fnum(fundOf(r).roe))),
+  },
+  {
+    id: 'hidden',
+    name: 'Hidden small-caps',
+    info: {
+      about: 'Small & micro-cap names with the highest analyser 5x-probability — under-followed companies with the most runway to re-rate.',
+      sections: [{ heading: 'Filter', bullets: ['Market cap band SMALL or MICRO', 'Ranked by 5x probability, highest first'] }],
+      disclaimer: 'Small-caps are illiquid and volatile — size positions accordingly.',
+    },
+    apply: (rows) =>
+      rows.filter((r) => { const b = capShort(r); return b === 'SMALL' || b === 'MICRO'; }).sort(byDesc((r) => fnum(r.mbProb))),
+  },
+  {
+    id: 'momentum',
+    name: 'Momentum leaders',
+    info: {
+      about: 'Multibagger candidates that are also trending — a Minervini-style trend template or strong 6-month price return layered on top of the fundamentals.',
+      sections: [{ heading: 'Filter', bullets: ['Minervini trend template OR 6-month return > 0', 'Ranked by 6-month return, highest first'] }],
+      disclaimer: 'Trend can reverse — combine with your own risk management.',
+    },
+    apply: (rows) =>
+      rows
+        .filter((r) => r.minervini === true || (fnum(r.ret_6m) ?? -1) > 0)
+        .sort(byDesc((r) => fnum(r.ret_6m))),
+  },
+];
 
 const tierColor = (score: number) =>
   score >= 75 ? theme.green : score >= 60 ? theme.accent : score >= 45 ? GOLD : theme.red;
@@ -356,6 +452,9 @@ function MbList({
       setSortDir(col === 'sym' || col === 'name' || col === 'exchange' ? 1 : -1);
     }
   };
+  // Strategy dropdown: narrows the fixed universe to a distinct thesis.
+  const [strat, setStrat] = useState('balanced');
+  const stratDef = MB_STRATEGIES.find((s) => s.id === strat) || MB_STRATEGIES[0];
   // Sector search: distinct sectors present in the results; '' = all.
   const [sector, setSector] = useState('');
   const sectors = useMemo(() => {
@@ -364,7 +463,10 @@ function MbList({
     return Array.from(s).sort();
   }, [rows]);
   const matches = useMemo(() => {
-    const filtered = sector ? rows.filter((r) => (r as MbRow)._fund?.sector === sector) : rows;
+    // Strategy first (filters + base ranking), then the sector chip, then the
+    // manual Sort chips / header taps order within.
+    let filtered = stratDef.apply(rows as MbRow[]) as Row[];
+    if (sector) filtered = filtered.filter((r) => (r as MbRow)._fund?.sector === sector);
     if (sortCol === 'mb_score' || sortCol === 'mb_prob') {
       const key = sortCol === 'mb_score' ? 'mbScore' : 'mbProb';
       return [...filtered].sort(
@@ -372,7 +474,7 @@ function MbList({
       );
     }
     return sortRows(filtered, sortCol, sortDir);
-  }, [rows, sector, sortCol, sortDir]);
+  }, [rows, stratDef, sector, sortCol, sortDir]);
   const warming = false;
   // Which scrips the recommendation engine has already deep-analysed (so a
   // rebuild skips them). Recomputed on every render — cheap Set membership.
@@ -421,6 +523,22 @@ function MbList({
         <Text style={styles.lastUpd}>Stocks last updated {fmtAsof(asof)}</Text>
       ) : null}
 
+      {!loading ? (
+        <View style={styles.stratRow}>
+          <Dropdown
+            label="Strategy"
+            value={strat}
+            options={MB_STRATEGIES.map((s) => ({ key: s.id, label: s.name }))}
+            onChange={setStrat}
+          />
+          <InfoButton
+            title={stratDef.name}
+            content={stratDef.info}
+            style={strat !== 'balanced' ? styles.stratInfoOn : styles.stratInfoOff}
+          />
+        </View>
+      ) : null}
+
       {!loading && sectors.length ? (
         <ScrollView
           horizontal
@@ -445,6 +563,29 @@ function MbList({
             </TouchableOpacity>
           ))}
         </ScrollView>
+      ) : null}
+
+      {!loading && matches.length ? (
+        <View style={styles.mSortRow}>
+          <Text style={styles.mSortLabel}>SORT</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.mSortInner}>
+            {MB_SORTS.map((s) => {
+              const on = sortCol === s.key;
+              return (
+                <TouchableOpacity
+                  key={s.key}
+                  style={[styles.mSortChip, on && styles.mSortChipOn]}
+                  onPress={() => onSort(s.key)}
+                  activeOpacity={0.75}
+                >
+                  <Text style={[styles.mSortTxt, on && styles.mSortTxtOn]}>
+                    {s.label}{on ? (sortDir === 1 ? ' ↑' : ' ↓') : ''}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        </View>
       ) : null}
 
       {loading ? <Loading label="Loading mid & small cap candidates…" /> : null}
@@ -968,6 +1109,23 @@ const styles = StyleSheet.create({
   secChipOn: { backgroundColor: theme.accent, borderColor: theme.accent },
   secChipTxt: { color: theme.muted2, fontFamily: theme.mono, fontSize: theme.fs.sm },
   secChipTxtOn: { color: theme.bg, fontWeight: '700' },
+  stratRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingBottom: 8, gap: 6 },
+  stratInfoOn: { opacity: 1 },
+  stratInfoOff: { opacity: 0.4 },
+  mSortRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingBottom: 8, gap: 8 },
+  mSortLabel: { color: theme.muted, fontSize: theme.fs.xs, fontWeight: '700', letterSpacing: 1 },
+  mSortInner: { gap: 8, alignItems: 'center' },
+  mSortChip: {
+    backgroundColor: theme.surface2,
+    borderColor: theme.border,
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+  },
+  mSortChipOn: { backgroundColor: theme.accent, borderColor: theme.accent },
+  mSortTxt: { color: theme.muted2, fontSize: theme.fs.sm },
+  mSortTxtOn: { color: theme.bg, fontWeight: '800' },
   updBtn: {
     backgroundColor: theme.surface2,
     borderColor: theme.border2,
