@@ -15,7 +15,8 @@ import InstitutionalScreen from './InstitutionalScreen';
 import SmcScreen from './SmcScreen';
 import { useResponsive } from '../responsive';
 import { printHtmlDocument } from '../pdf';
-import { Card, Dropdown, EmptyState, FadeSlideIn, RiskBadge, Segmented, Sheet } from '../ui';
+import { LONG_STRATEGIES } from '../strategies';
+import { Card, Dropdown, EmptyState, FadeSlideIn, InfoButton, RiskBadge, Segmented, Sheet } from '../ui';
 import { PaperTrade, addPaperTrade, hasOpenPaper, loadPaperTrades } from '../paperTrades';
 import { INSTITUTIONAL_INFO, RECOMMENDATIONS_INFO, SHORT_TERM_INFO, SMC_INFO } from '../tabInfo';
 import { theme } from '../theme';
@@ -350,6 +351,7 @@ function LongTermRecs() {
   const [paper, setPaper] = useState<PaperTrade[]>([]);
   const [detail, setDetail] = useState<Row | null>(null);
   const [open, setOpen] = useState<Recommendation | null>(null);
+  const [strat, setStrat] = useState('balanced');
   const [flash, setFlash] = useState('');
   const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const cancelRef = useRef<{ cancelled: boolean } | null>(null);
@@ -526,10 +528,28 @@ function LongTermRecs() {
   const onExport = (r: Recommendation) =>
     exportRecommendationsPdf([r], `${r.symbol} · ${r.action} · confidence ${r.confidence}`).catch(() => {});
 
+  // Selected strategy re-ranks / filters the candidate pool (default = balanced).
+  const stratDef = LONG_STRATEGIES.find((s) => s.id === strat) || LONG_STRATEGIES[0];
+  const shown = React.useMemo(() => stratDef.apply(recs), [recs, stratDef]);
+
   return (
     <View style={styles.container}>
-      {/* Compact control row: depth dropdown + PDF + Update. */}
+      {/* Compact control row: strategy + depth dropdowns + PDF + Update. */}
       <View style={styles.controlBar}>
+        <View style={styles.stratWrap}>
+          <Dropdown
+            label="Strategy"
+            value={strat}
+            options={LONG_STRATEGIES.map((s) => ({ key: s.id, label: s.name }))}
+            onChange={setStrat}
+          />
+          {/* ⓘ highlights only once a specific strategy is selected. */}
+          <InfoButton
+            title={stratDef.name}
+            content={stratDef.info}
+            style={strat !== 'balanced' ? styles.stratInfoOn : styles.stratInfoOff}
+          />
+        </View>
         <Dropdown
           label="Depth"
           value={depth}
@@ -580,8 +600,11 @@ function LongTermRecs() {
           />
         ) : null}
 
+        {recs.length && !shown.length ? (
+          <Text style={styles.note}>No candidates match “{stratDef.name}” right now — try another strategy or ⟳ Update.</Text>
+        ) : null}
         <View style={isDesktop ? styles.grid : undefined}>
-          {recs.map((r, i) => (
+          {shown.map((r, i) => (
             <View key={r.symbol} style={isDesktop ? styles.gridCell : undefined}>
               <FadeSlideIn index={i}>
                 <Card style={{ padding: 0 }}>
@@ -733,6 +756,9 @@ const styles = StyleSheet.create({
   // Compact action row (no title) — buttons sit right where the heading used to.
   actionRow: { flexDirection: 'row', justifyContent: 'flex-end', gap: theme.sp.sm, paddingHorizontal: theme.sp.lg, paddingTop: theme.sp.sm, paddingBottom: theme.sp.sm },
   controlBar: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: theme.sp.sm, paddingHorizontal: theme.sp.lg, paddingTop: theme.sp.sm, paddingBottom: theme.sp.sm },
+  stratWrap: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  stratInfoOn: { borderColor: theme.accent, borderWidth: 1.5, backgroundColor: theme.brandSoft },
+  stratInfoOff: { opacity: 0.4 },
   asofInline: { color: theme.muted, fontSize: theme.fs.xs + 1, fontFamily: theme.mono, marginLeft: 'auto' },
   depthRow: {
     flexDirection: 'row',
