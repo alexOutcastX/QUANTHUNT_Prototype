@@ -77,8 +77,8 @@ class MultibaggerScoreTest(unittest.TestCase):
 
     def test_partial_metrics_score_covered_pillars_only(self):
         r = mb.score({"mcap_cr": 900, "roe_pct": 30, "op_margin_pct": 25})
-        # size (18) + quality (18) covered out of 100 -> 36% coverage
-        self.assertEqual(r["coverage_pct"], 36)
+        # size (12) + quality (14) covered out of 100 -> 26% coverage
+        self.assertEqual(r["coverage_pct"], 26)
         self.assertGreaterEqual(r["score"], 90)  # both covered pillars are strong
 
     def test_checklist_states(self):
