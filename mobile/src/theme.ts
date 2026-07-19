@@ -104,6 +104,27 @@ if (WEB) {
     /* ignore */
   }
   applyAttr();
+
+  // Full-viewport backdrop behind the whole app. The Android shell is
+  // edge-to-edge, so the status/navigation-bar regions are part of the WebView
+  // viewport — but the React tree only paints them once the safe-area insets
+  // measure, which at cold start doesn't happen until a full-screen view forces
+  // a re-layout. Until then the WebView's own white background showed through
+  // and the bars looked white. This fixed element covers the entire visual
+  // viewport (exactly like the chart Modal's overlay does) with the theme
+  // surface colour, so those bands are the right colour from the first frame and
+  // flip with the light/dark toggle. It sits behind the app and ignores touches.
+  const paintBackdrop = () => {
+    if (!document.body || document.getElementById('te-safe-backdrop')) return;
+    const bd = document.createElement('div');
+    bd.id = 'te-safe-backdrop';
+    bd.style.cssText =
+      'position:fixed;top:0;left:0;right:0;bottom:0;z-index:-1;' +
+      'background:var(--c-surface);pointer-events:none;';
+    document.body.appendChild(bd);
+  };
+  if (document.body) paintBackdrop();
+  else document.addEventListener('DOMContentLoaded', paintBackdrop);
 }
 
 // Colour values used inside StyleSheets: a CSS var on web (resolves live to the

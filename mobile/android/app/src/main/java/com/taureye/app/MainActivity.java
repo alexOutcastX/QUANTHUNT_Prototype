@@ -37,6 +37,14 @@ public class MainActivity extends BridgeActivity {
             getWindow().setNavigationBarContrastEnforced(false);
         }
 
+        // Paint the WebView's own canvas dark so there is never a white flash in
+        // the status/navigation-bar bands before the web layer paints. The web
+        // side draws a theme-aware backdrop over this (src/theme.ts), so light
+        // mode still ends up white; this is only the floor behind it.
+        if (getBridge() != null && getBridge().getWebView() != null) {
+            getBridge().getWebView().setBackgroundColor(Color.parseColor("#0E1219"));
+        }
+
         // Initial icon appearance for the app's default (dark) theme: light
         // glyphs. @capacitor/status-bar (src/systemBars.ts) flips this at runtime
         // when the user toggles to light mode so the glyphs stay legible.
