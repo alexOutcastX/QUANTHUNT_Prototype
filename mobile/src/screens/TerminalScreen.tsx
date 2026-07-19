@@ -13,6 +13,9 @@ import { API_BASE, GraphResp, LtpResp, api } from '../api';
 import { resolveIndex } from '../indices';
 import HtmlView from '../components/HtmlView';
 import SymbolInput from '../components/SymbolInput';
+import StrategyScores from '../components/StrategyScores';
+import { Sheet } from '../ui';
+import { navigate } from '../navIntent';
 import { getPalette, theme, useThemeMode } from '../theme';
 
 // Self-contained Terminal workspace: d3-force relationship graph + a floating,
@@ -1261,6 +1264,7 @@ export default function TerminalScreen() {
   // Breadcrumb of previously-centred symbols so the graph can step back.
   const [history, setHistory] = useState<string[]>([]);
   const [input, setInput] = useState('');
+  const [dossierOpen, setDossierOpen] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [notFound, setNotFound] = useState<string | null>(null);
   const [aiOn, setAiOn] = useState(false);
@@ -1405,21 +1409,7 @@ export default function TerminalScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.head}>
-        <Text style={styles.title}>
-          TAUREYE TERMINAL{' '}
-          <Text style={styles.titleDim}>
-            · RELATIONSHIP GRAPH ·{' '}
-            {!centre
-              ? 'SELECT A STOCK'
-              : data?.source === 'ai'
-                ? 'AI GRAPH'
-                : data?.source === 'minimal'
-                  ? 'LIVE DATA'
-                  : aiEnabled
-                    ? 'CURATED + AI'
-                    : 'DEMO DATA'}
-          </Text>
-        </Text>
+        <Text style={styles.title} numberOfLines={1}>TAUREYE TERMINAL</Text>
         <TouchableOpacity
           style={[styles.keyBtn, !!aiKey && styles.keyBtnOn]}
           onPress={() => setKeyOpen((v) => !v)}
@@ -1499,6 +1489,14 @@ export default function TerminalScreen() {
         <TouchableOpacity style={styles.goBtn} onPress={go}>
           <Text style={styles.goTxt}>GO</Text>
         </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.dossBtn, !centre && styles.dossBtnOff]}
+          onPress={() => centre && setDossierOpen(true)}
+          disabled={!centre}
+          activeOpacity={0.75}
+        >
+          <Text style={[styles.dossTxt, !centre && styles.dossTxtOff]}>▤ DOSSIER</Text>
+        </TouchableOpacity>
       </View>
       {notFound ? (
         <Text style={styles.warn}>
@@ -1543,6 +1541,70 @@ export default function TerminalScreen() {
         )}
       </View>
       {data ? <Text style={styles.disclaimer}>{data.disclaimer}</Text> : null}
+
+      {dossierOpen && centre ? (
+        <Sheet onClose={() => setDossierOpen(false)}>
+          <ScrollView showsVerticalScrollIndicator={false}>
+            <View style={styles.dossHead}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.dossTitle}>{centre}</Text>
+                <Text style={styles.dossSub}>Company dossier · analyse & export</Text>
+              </View>
+              <TouchableOpacity onPress={() => setDossierOpen(false)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                <Text style={styles.dossX}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <StrategyScores symbol={centre} compact />
+
+            <Text style={styles.dossLabel}>OPEN AS</Text>
+            <TouchableOpacity
+              style={styles.dossAct}
+              activeOpacity={0.8}
+              onPress={() => {
+                setDossierOpen(false);
+                navigate('analysis', { sub: 'inst', symbol: centre });
+              }}
+            >
+              <Text style={styles.dossActTxt}>📄 Full Dossier &amp; Export</Text>
+              <Text style={styles.dossActSub}>Institutional deep report · PDF export</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.dossAct}
+              activeOpacity={0.8}
+              onPress={() => {
+                setDossierOpen(false);
+                navigate('analysis', { sub: 'mb', symbol: centre });
+              }}
+            >
+              <Text style={styles.dossActTxt}>🚀 Analyse as Multibagger</Text>
+              <Text style={styles.dossActSub}>Long-term wealth-compounding potential</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.dossAct}
+              activeOpacity={0.8}
+              onPress={() => {
+                setDossierOpen(false);
+                navigate('analysis', { sub: 'patterns', symbol: centre });
+              }}
+            >
+              <Text style={styles.dossActTxt}>⚡ Trade / Momentum reco</Text>
+              <Text style={styles.dossActSub}>Patterns + multi-timeframe swing read</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.dossAct}
+              activeOpacity={0.8}
+              onPress={() => {
+                setDossierOpen(false);
+                navigate('analysis', { sub: 'inst', symbol: centre });
+              }}
+            >
+              <Text style={styles.dossActTxt}>💼 Investment reco</Text>
+              <Text style={styles.dossActSub}>Fundamentals, financials &amp; verdict</Text>
+            </TouchableOpacity>
+          </ScrollView>
+        </Sheet>
+      ) : null}
     </View>
   );
 }
@@ -1649,6 +1711,33 @@ const styles = StyleSheet.create({
   },
   goBtn: { backgroundColor: theme.accent, borderRadius: 6, paddingHorizontal: 16, paddingVertical: 9 },
   goTxt: { color: theme.bg, fontFamily: theme.mono, fontWeight: '700', fontSize: 13 },
+  dossBtn: {
+    borderColor: theme.accent,
+    borderWidth: 1,
+    borderRadius: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: theme.surface2,
+  },
+  dossBtnOff: { borderColor: theme.border2, backgroundColor: theme.surface2, opacity: 0.5 },
+  dossTxt: { color: theme.accent, fontFamily: theme.mono, fontWeight: '700', fontSize: 12, letterSpacing: 0.5 },
+  dossTxtOff: { color: theme.muted },
+  dossHead: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 12 },
+  dossTitle: { color: theme.text, fontFamily: theme.mono, fontSize: 18, fontWeight: '700', letterSpacing: 0.5 },
+  dossSub: { color: theme.muted, fontSize: 12, marginTop: 2 },
+  dossX: { color: theme.muted, fontSize: 18, paddingHorizontal: 4 },
+  dossLabel: { color: theme.muted, fontFamily: theme.mono, fontSize: 11, letterSpacing: 1, marginTop: 16, marginBottom: 8 },
+  dossAct: {
+    borderColor: theme.border2,
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginBottom: 8,
+    backgroundColor: theme.surface2,
+  },
+  dossActTxt: { color: theme.text, fontSize: 14, fontWeight: '700' },
+  dossActSub: { color: theme.muted, fontSize: 12, marginTop: 2 },
   chipScroll: { flexGrow: 0 },
   chips: { paddingHorizontal: 14, paddingVertical: 8, gap: 6 },
   chip: { borderColor: theme.border, borderWidth: 1, borderRadius: 4, paddingHorizontal: 8, paddingVertical: 3 },

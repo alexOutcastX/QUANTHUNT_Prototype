@@ -7,8 +7,10 @@ import { Row } from '../screener';
 import { addSymbol, loadWatchlist, normSymbol, removeSymbol } from '../watchlist';
 import { LocalAlert, addLocalAlert, hasLocalAlert, loadLocalAlerts } from '../localalerts';
 import { capBand } from '../marketcap';
-import { EmptyState, InfoButton, Loading } from '../ui';
+import { EmptyState, InfoButton, Loading, Sheet } from '../ui';
 import { MOMENTUM_INFO } from '../tabInfo';
+import StrategyScores from '../components/StrategyScores';
+import { navigate } from '../navIntent';
 import { theme } from '../theme';
 
 // Per-symbol enrichment (sector + market cap) fetched separately from the
@@ -114,6 +116,118 @@ function ReadBox({ h, c, width }: { h: MomentumHit; c: string; width?: number })
   );
 }
 
+// Full tap-to-open detail card — mirrors the depth of the long/short/institutional
+// popups: setup verdict, live stats, technical read, glossary, strategy scorecard
+// and the same analyse/export action row.
+function MomDetail({
+  h,
+  enr,
+  watched,
+  alerted,
+  onClose,
+  onChart,
+  onAlert,
+  onWatch,
+  onAnalyse,
+  onPattern,
+  onDossier,
+}: {
+  h: MomentumHit;
+  enr?: Enrich;
+  watched: boolean;
+  alerted: boolean;
+  onClose: () => void;
+  onChart: () => void;
+  onAlert: () => void;
+  onWatch: () => void;
+  onAnalyse: () => void;
+  onPattern: () => void;
+  onDossier: () => void;
+}) {
+  const c = setupColor(h.setup);
+  const stat = (label: string, value: React.ReactNode) => (
+    <View style={styles.dCell}>
+      <Text style={styles.dCellLbl}>{label}</Text>
+      <Text style={styles.dCellVal}>{value}</Text>
+    </View>
+  );
+  return (
+    <Sheet onClose={onClose}>
+      <ScrollView showsVerticalScrollIndicator={false}>
+        <View style={styles.dHead}>
+          <View style={{ flex: 1 }}>
+            <View style={styles.cardSymRow}>
+              <Text style={styles.dSym}>{h.symbol}</Text>
+              <Text style={styles.cardExch}>{h.exchange}</Text>
+              {capTag(enr?.mcap)}
+            </View>
+            <Text style={styles.dName} numberOfLines={2}>
+              {h.name || '—'}
+              {enr?.sector ? <Text style={styles.cardSector}> · {enr.sector}</Text> : null}
+            </Text>
+          </View>
+          <TouchableOpacity onPress={onClose} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+            <Text style={styles.dX}>✕</Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.dVerdict}>
+          <Text style={[styles.setupBadge, { color: c, borderColor: c, fontSize: theme.fs.sm }]}>{SETUP_LABEL[h.setup]}</Text>
+          <View style={styles.dScoreBox}>
+            <Text style={[styles.dScore, { color: c }]}>{h.score}</Text>
+            <Text style={styles.dScoreSub}>/100 · {h.probability}% prob</Text>
+          </View>
+        </View>
+
+        <View style={styles.dGrid}>
+          {stat('LTP', `₹${fmtIN(h.price)}`)}
+          {stat('% CHG', <Text style={{ color: (h.chg ?? 0) >= 0 ? theme.green : theme.red }}>{pct(h.chg, 2)}</Text>)}
+          {stat('RSI', h.rsi != null ? h.rsi.toFixed(0) : '—')}
+          {stat('REL VOL', h.relvol != null ? h.relvol.toFixed(2) + 'x' : '—')}
+          {stat('VS 200DMA', <Text style={{ color: (h.d200 ?? 0) >= 0 ? theme.green : theme.red }}>{pct(h.d200)}</Text>)}
+          {stat('52W HIGH', <Text style={{ color: theme.red }}>{pct(h.pct_from_high)}</Text>)}
+          {stat('UPSIDE', <Text style={{ color: (h.upside_pct ?? 0) > 0 ? theme.green : theme.muted }}>{h.upside_pct != null ? '+' + h.upside_pct.toFixed(1) + '%' : '—'}</Text>)}
+          {h.target != null ? stat('TARGET', `₹${fmtIN(h.target)}`) : null}
+        </View>
+
+        <Text style={styles.dSecTitle}>TECHNICAL READ</Text>
+        <ReadBox h={h} c={c} />
+
+        <StrategyScores symbol={h.symbol} />
+
+        <View style={styles.dActions}>
+          <TouchableOpacity style={styles.dActBtn} onPress={onChart} activeOpacity={0.75}>
+            <Text style={styles.dActTxt}>▤ Chart</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.dActBtn} onPress={onAnalyse} activeOpacity={0.75}>
+            <Text style={[styles.dActTxt, { color: theme.accent }]}>🚀 Multibagger</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.dActBtn} onPress={onPattern} activeOpacity={0.75}>
+            <Text style={styles.dActTxt}>📈 Pattern</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.dActBtn} onPress={onDossier} activeOpacity={0.75}>
+            <Text style={styles.dActTxt}>🏛 Dossier</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.dActBtn} onPress={onWatch} activeOpacity={0.75}>
+            <Text style={[styles.dActTxt, watched && { color: theme.green }]}>{watched ? '★ Watching' : '☆ Watchlist'}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.dActBtn} onPress={onAlert} activeOpacity={0.75}>
+            <Text style={[styles.dActTxt, alerted && { color: GOLD }]}>{alerted ? '🔔 Alerted' : '🔔 Alert'}</Text>
+          </TouchableOpacity>
+        </View>
+
+        <TouchableOpacity style={styles.dClose} onPress={onClose} activeOpacity={0.75}>
+          <Text style={styles.dCloseTxt}>Close</Text>
+        </TouchableOpacity>
+        <Text style={styles.dDisc}>
+          Momentum setup on a live NSE/BSE scan. Probability is an indicative base-rate heuristic, not a forecast —
+          for information only, not investment advice. Always confirm and manage risk.
+        </Text>
+      </ScrollView>
+    </Sheet>
+  );
+}
+
 // Session caches — switching tabs doesn't refetch.
 let momCache: MomentumHit[] | null = null;
 let momNote = '';
@@ -129,7 +243,7 @@ export default function MomentumScreen() {
   const [setupFilter, setSetupFilter] = useState<'all' | SetupKind>('all');
   const [enrich, setEnrich] = useState<Record<string, Enrich>>(momEnrichCache);
   const [sector, setSector] = useState('');
-  const [expanded, setExpanded] = useState<string | null>(null);
+  const [sel, setSel] = useState<MomentumHit | null>(null);
   const [detail, setDetail] = useState<Row | null>(null);
   const [watch, setWatch] = useState<string[]>([]);
   const [alerts, setAlerts] = useState<LocalAlert[]>([]);
@@ -390,11 +504,10 @@ export default function MomentumScreen() {
                 <Text style={[styles.th, { width: ACTIONS_W, textAlign: 'center' }]}>ACTIONS</Text>
               </View>
               {shown.map((h) => {
-                const open = expanded === h.symbol;
                 const c = setupColor(h.setup);
                 return (
                   <View key={h.symbol}>
-                    <TouchableOpacity style={styles.dataRow} onPress={() => setExpanded(open ? null : h.symbol)} activeOpacity={0.8}>
+                    <TouchableOpacity style={styles.dataRow} onPress={() => setSel(h)} activeOpacity={0.8}>
                       <Text style={[styles.sym, { width: 92 }]} numberOfLines={1}>{h.symbol}</Text>
                       <Text style={[styles.name, { width: 190 }]} numberOfLines={1}>{h.name || '—'}</Text>
                       <Text style={[styles.exch, { width: 46 }]}>{h.exchange}</Text>
@@ -426,7 +539,6 @@ export default function MomentumScreen() {
                         </TouchableOpacity>
                       </View>
                     </TouchableOpacity>
-                    {open ? <ReadBox h={h} c={c} width={TABLE_W} /> : null}
                   </View>
                 );
               })}
@@ -436,11 +548,10 @@ export default function MomentumScreen() {
 
         {shown.length && !isDesktop
           ? shown.map((h) => {
-              const open = expanded === h.symbol;
               const c = setupColor(h.setup);
               return (
                 <View key={h.symbol}>
-                  <TouchableOpacity style={styles.card} onPress={() => setExpanded(open ? null : h.symbol)} activeOpacity={0.8}>
+                  <TouchableOpacity style={styles.card} onPress={() => setSel(h)} activeOpacity={0.8}>
                     <View style={styles.cardTop}>
                       <View style={{ flex: 1 }}>
                         <View style={styles.cardSymRow}>
@@ -485,10 +596,9 @@ export default function MomentumScreen() {
                           {isWatched(h.symbol) ? '★ Watching' : '☆ Watch'}
                         </Text>
                       </TouchableOpacity>
-                      <Text style={styles.cardHint}>{open ? 'tap to collapse' : 'tap for read'}</Text>
+                      <Text style={styles.cardHint}>tap for full read</Text>
                     </View>
                   </TouchableOpacity>
-                  {open ? <ReadBox h={h} c={c} /> : null}
                 </View>
               );
             })
@@ -504,6 +614,21 @@ export default function MomentumScreen() {
         ) : null}
       </ScrollView>
 
+      {sel ? (
+        <MomDetail
+          h={sel}
+          enr={enrich[sel.symbol]}
+          watched={isWatched(sel.symbol)}
+          alerted={isAlerted(sel.symbol)}
+          onClose={() => setSel(null)}
+          onChart={() => { const h = sel; setSel(null); openChart(h); }}
+          onAlert={() => onAlert(sel)}
+          onWatch={() => toggleWatch(sel.symbol)}
+          onAnalyse={() => { const s = sel.symbol; setSel(null); navigate('analysis', { sub: 'mb', symbol: s }); }}
+          onPattern={() => { const s = sel.symbol; setSel(null); navigate('analysis', { sub: 'patterns', symbol: s }); }}
+          onDossier={() => { const s = sel.symbol; setSel(null); navigate('analysis', { sub: 'inst', symbol: s }); }}
+        />
+      ) : null}
       {detail ? <StockDetail row={detail} onClose={() => setDetail(null)} /> : null}
       {flash ? (
         <View style={styles.toast} pointerEvents="none">
@@ -672,4 +797,49 @@ const styles = StyleSheet.create({
     maxWidth: '92%',
   },
   toastTxt: { color: theme.text, fontSize: theme.fs.sm + 1, fontWeight: '600' },
+  // detail popup
+  dHead: { flexDirection: 'row', alignItems: 'flex-start', gap: theme.sp.md, marginBottom: theme.sp.md },
+  dSym: { color: theme.accent, fontFamily: theme.mono, fontWeight: '700', fontSize: theme.fs.lg },
+  dName: { color: theme.muted2, fontSize: theme.fs.sm, marginTop: 3 },
+  dX: { color: theme.muted, fontSize: 18, paddingHorizontal: 4 },
+  dVerdict: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: theme.surface2,
+    borderColor: theme.border2,
+    borderWidth: 1,
+    borderRadius: theme.radius.md,
+    paddingHorizontal: theme.sp.lg,
+    paddingVertical: theme.sp.md,
+    marginBottom: theme.sp.md,
+  },
+  dScoreBox: { flexDirection: 'row', alignItems: 'baseline', gap: 4 },
+  dScore: { fontFamily: theme.mono, fontWeight: '800', fontSize: theme.fs.xxl },
+  dScoreSub: { color: theme.muted, fontSize: theme.fs.xs + 1 },
+  dGrid: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: theme.sp.sm },
+  dCell: { width: '25%', paddingVertical: theme.sp.sm },
+  dCellLbl: { color: theme.muted, fontSize: theme.fs.xs, letterSpacing: 0.5, marginBottom: 2 },
+  dCellVal: { color: theme.text, fontFamily: theme.mono, fontSize: theme.fs.md, fontWeight: '700' },
+  dSecTitle: { color: theme.muted2, fontSize: theme.fs.xs + 1, fontWeight: '800', letterSpacing: 1, marginTop: theme.sp.md, marginBottom: theme.sp.sm },
+  dActions: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.sp.sm, marginTop: theme.sp.md },
+  dActBtn: {
+    borderColor: theme.border2,
+    borderWidth: 1,
+    borderRadius: theme.radius.sm + 2,
+    paddingHorizontal: theme.sp.md,
+    paddingVertical: theme.sp.sm,
+    backgroundColor: theme.surface2,
+  },
+  dActTxt: { color: theme.text, fontSize: theme.fs.sm, fontWeight: '700' },
+  dClose: {
+    marginTop: theme.sp.lg,
+    borderColor: theme.border2,
+    borderWidth: 1,
+    borderRadius: theme.radius.md,
+    paddingVertical: theme.sp.md,
+    alignItems: 'center',
+  },
+  dCloseTxt: { color: theme.muted2, fontSize: theme.fs.md, fontWeight: '700' },
+  dDisc: { color: theme.muted, fontSize: theme.fs.xs + 1, lineHeight: 16, marginTop: theme.sp.md, marginBottom: theme.sp.md },
 });
