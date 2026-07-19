@@ -9,7 +9,8 @@ import { addSymbol, loadWatchlist, normSymbol } from '../watchlist';
 import { LocalAlert, addLocalAlert, hasLocalAlert, loadLocalAlerts } from '../localalerts';
 import { loadNames } from './ScreenerScreen';
 import { useResponsive } from '../responsive';
-import { Card, Dropdown, EmptyState, FadeSlideIn, RiskBadge, Sheet } from '../ui';
+import { Card, Dropdown, EmptyState, FadeSlideIn, InfoButton, RiskBadge, Sheet } from '../ui';
+import { SHORT_STRATEGIES, SwingLike } from '../strategies';
 import { PaperTrade, addPaperTrade, hasOpenPaper, loadPaperTrades } from '../paperTrades';
 import { theme } from '../theme';
 import {
@@ -231,6 +232,7 @@ export default function ShortTermScreen() {
   const [alerts, setAlerts] = useState<LocalAlert[]>([]);
   const [paper, setPaper] = useState<PaperTrade[]>([]);
   const [sortKey, setSortKey] = useState<'prob' | 'upside' | 'rsi' | 'rr' | 'time'>('prob');
+  const [strat, setStrat] = useState('balanced');
   const [open, setOpen] = useState<SwingRec | null>(null);
   const [detail, setDetail] = useState<Row | null>(null);
   const [flash, setFlash] = useState('');
@@ -366,6 +368,12 @@ export default function ShortTermScreen() {
     { key: 'rr', label: 'R:R' },
     { key: 'time', label: 'Time to target' },
   ];
+  // Strategy re-ranks / filters the pool; 'balanced' keeps the manual Sort.
+  const stratDef = SHORT_STRATEGIES.find((s) => s.id === strat) || SHORT_STRATEGIES[0];
+  const shown = useMemo(
+    () => (strat === 'balanced' ? sorted : (stratDef.apply(recs as SwingLike[]) as typeof recs)),
+    [sorted, recs, stratDef, strat],
+  );
 
   const isWatched = (s: string) => watch.includes(normSymbol(s));
   const onWatch = async (r: SwingRec) => {
@@ -406,13 +414,26 @@ export default function ShortTermScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.controlBar}>
+        <View style={styles.stratWrap}>
+          <Dropdown
+            label="Strategy"
+            value={strat}
+            options={SHORT_STRATEGIES.map((s) => ({ key: s.id, label: s.name }))}
+            onChange={setStrat}
+          />
+          <InfoButton
+            title={stratDef.name}
+            content={stratDef.info}
+            style={strat !== 'balanced' ? styles.stratInfoOn : styles.stratInfoOff}
+          />
+        </View>
         <Dropdown
           label="Depth"
           value={depth}
           options={DEPTH_OPTIONS.map((n) => ({ key: n, label: String(n) }))}
           onChange={onDepth}
         />
-        {!scanning && recs.length > 1 ? (
+        {!scanning && recs.length > 1 && strat === 'balanced' ? (
           <Dropdown label="Sort" value={sortKey} options={SORTS} onChange={setSortKey} />
         ) : null}
         <TouchableOpacity style={[styles.updBtn, scanning && { opacity: 0.5 }]} onPress={runScan} disabled={scanning} activeOpacity={0.75}>
@@ -442,8 +463,11 @@ export default function ShortTermScreen() {
           />
         ) : null}
 
+        {recs.length && !shown.length ? (
+          <Text style={styles.note}>No setups match “{stratDef.name}” right now — try another strategy or ⟳ Update.</Text>
+        ) : null}
         <View style={isDesktop ? styles.grid2 : undefined}>
-          {sorted.map((r, i) => (
+          {shown.map((r, i) => (
             <View key={r.symbol} style={isDesktop ? styles.gridCell : undefined}>
               <FadeSlideIn index={i}>
                 <Card style={{ padding: 0 }}>
@@ -485,6 +509,9 @@ const styles = StyleSheet.create({
   note: { color: theme.muted, fontSize: theme.fs.sm, paddingHorizontal: theme.sp.lg, paddingBottom: theme.sp.sm },
   actionRow: { flexDirection: 'row', justifyContent: 'flex-end', paddingHorizontal: theme.sp.lg, paddingTop: theme.sp.sm, paddingBottom: theme.sp.sm },
   controlBar: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: theme.sp.sm, paddingHorizontal: theme.sp.lg, paddingTop: theme.sp.sm, paddingBottom: theme.sp.sm },
+  stratWrap: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  stratInfoOn: { borderColor: theme.accent, borderWidth: 1.5, backgroundColor: theme.brandSoft },
+  stratInfoOff: { opacity: 0.4 },
   asofInline: { color: theme.muted, fontSize: theme.fs.xs + 1, fontFamily: theme.mono, marginLeft: 'auto' },
   updBtn: {
     backgroundColor: theme.accent,
