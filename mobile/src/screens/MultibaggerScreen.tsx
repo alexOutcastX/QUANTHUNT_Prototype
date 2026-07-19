@@ -8,7 +8,8 @@ import StockDetail from '../components/StockDetail';
 import SymbolInput from '../components/SymbolInput';
 import { Row, sortRows } from '../screener';
 import { capBand } from '../marketcap';
-import { navigate, takeSymbol } from '../navIntent';
+import { navigate, takeSector, takeSymbol } from '../navIntent';
+import { mergeSectors } from '../sectors';
 import { ACTIONS_W, COLS, Col, DEFAULT_HIDDEN, cellFlex, loadNames } from './ScreenerScreen';
 import { TrackDir, TrackEntry, addTrack, loadTrack, removeTrack } from '../tracklist';
 import { addSymbol, loadWatchlist, normSymbol, removeSymbol } from '../watchlist';
@@ -455,13 +456,19 @@ function MbList({
   // Strategy dropdown: narrows the fixed universe to a distinct thesis.
   const [strat, setStrat] = useState('balanced');
   const stratDef = MB_STRATEGIES.find((s) => s.id === strat) || MB_STRATEGIES[0];
-  // Sector search: distinct sectors present in the results; '' = all.
+  // Sector search: the exhaustive canonical list (unioned with any sector present
+  // in the results), so every sector is always selectable — including one routed
+  // in from the sectoral heatmap that may not yet have a loaded match. '' = all.
   const [sector, setSector] = useState('');
-  const sectors = useMemo(() => {
-    const s = new Set<string>();
-    rows.forEach((r) => { const v = (r as MbRow)._fund?.sector; if (v) s.add(String(v)); });
-    return Array.from(s).sort();
-  }, [rows]);
+  const sectors = useMemo(
+    () => mergeSectors(rows.map((r) => (r as MbRow)._fund?.sector)),
+    [rows],
+  );
+  // Honour a sector routed in from the heatmap (tap sector → Multibagger).
+  useEffect(() => {
+    const s = takeSector('mb');
+    if (s) setSector(s);
+  }, []);
   const matches = useMemo(() => {
     // Strategy first (filters + base ranking), then the sector chip, then the
     // manual Sort chips / header taps order within.

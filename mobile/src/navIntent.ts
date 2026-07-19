@@ -9,13 +9,13 @@
 //   → the Analysis SubTabs group switches its active sub-tab to 'mb'
 //   → MultibaggerScreen consumes the pending symbol on mount and analyses it.
 
-export type NavIntent = { page: string; sub?: string; symbol?: string };
+export type NavIntent = { page: string; sub?: string; symbol?: string; sector?: string };
 
 let pending: NavIntent | null = null;
 const listeners = new Set<() => void>();
 
-export function navigate(page: string, opts: { sub?: string; symbol?: string } = {}): void {
-  pending = { page, sub: opts.sub, symbol: opts.symbol };
+export function navigate(page: string, opts: { sub?: string; symbol?: string; sector?: string } = {}): void {
+  pending = { page, sub: opts.sub, symbol: opts.symbol, sector: opts.sector };
   listeners.forEach((l) => {
     try {
       l();
@@ -43,6 +43,18 @@ export function takeSymbol(sub: string): string | undefined {
   if (pending && pending.sub === sub && pending.symbol) {
     const s = pending.symbol;
     pending = { ...pending, symbol: undefined };
+    return s;
+  }
+  return undefined;
+}
+
+// Consume a pending sector filter for a given sub-tab (one-shot). Used by the
+// sectoral heatmap: tap a sector → pick a screening method → route here with the
+// sector, and the screen applies it as a filter and auto-runs its scan.
+export function takeSector(sub: string): string | undefined {
+  if (pending && pending.sub === sub && pending.sector) {
+    const s = pending.sector;
+    pending = { ...pending, sector: undefined };
     return s;
   }
   return undefined;
