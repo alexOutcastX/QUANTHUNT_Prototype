@@ -91,6 +91,78 @@ def _beta(close, idx_ret):
         return None
 
 
+def _candle_parts(o, h, l, c):
+    body = abs(c - o)
+    rng = (h - l) or 1e-9
+    upper = h - max(o, c)
+    lower = min(o, c) - l
+    return body, rng, upper, lower
+
+
+def candlesticks(o, h, l, c):
+    """Detect the common candlestick patterns on the LAST bar of the OHLC
+    sequences (chronological lists of floats). Pure-Python so it is unit-tested
+    without pandas. Returns a dict of boolean flags plus cs_bullish/cs_bearish
+    roll-ups. Mirrors the classic single/two/three-bar definitions."""
+    keys = ("cs_doji", "cs_hammer", "cs_shooting_star", "cs_bull_engulf",
+            "cs_bear_engulf", "cs_piercing", "cs_dark_cloud", "cs_morning_star",
+            "cs_evening_star", "cs_three_white", "cs_three_black")
+    f = {k: False for k in keys}
+    n = min(len(o), len(h), len(l), len(c))
+    if n < 1:
+        f["cs_bullish"] = f["cs_bearish"] = False
+        return f
+    o1, h1, l1, c1 = float(o[-1]), float(h[-1]), float(l[-1]), float(c[-1])
+    body1, rng1, up1, lo1 = _candle_parts(o1, h1, l1, c1)
+    f["cs_doji"] = body1 <= 0.1 * rng1
+    f["cs_hammer"] = body1 > 0 and lo1 >= 2 * body1 and up1 <= body1
+    f["cs_shooting_star"] = body1 > 0 and up1 >= 2 * body1 and lo1 <= body1
+    if n >= 2:
+        o0, c0 = float(o[-2]), float(c[-2])
+        body0 = abs(c0 - o0)
+        prev_bear, prev_bull = c0 < o0, c0 > o0
+        cur_bull, cur_bear = c1 > o1, c1 < o1
+        mid0 = (o0 + c0) / 2
+        f["cs_bull_engulf"] = prev_bear and cur_bull and c1 >= o0 and o1 <= c0 and body1 > body0
+        f["cs_bear_engulf"] = prev_bull and cur_bear and o1 >= c0 and c1 <= o0 and body1 > body0
+        f["cs_piercing"] = prev_bear and cur_bull and o1 < c0 and mid0 < c1 < o0
+        f["cs_dark_cloud"] = prev_bull and cur_bear and o1 > c0 and o0 < c1 < mid0
+    if n >= 3:
+        o2, c2 = float(o[-3]), float(c[-3])
+        body2 = abs(c2 - o2)
+        small_mid = body2 > 0 and abs(float(c[-2]) - float(o[-2])) <= 0.5 * body2
+        mid2 = (o2 + c2) / 2
+        f["cs_morning_star"] = c2 < o2 and small_mid and c1 > o1 and c1 > mid2
+        f["cs_evening_star"] = c2 > o2 and small_mid and c1 < o1 and c1 < mid2
+        c_2 = float(c[-2])
+        f["cs_three_white"] = (c2 > o2 and c_2 > float(o[-2]) and c1 > o1 and c_2 > c2 and c1 > c_2)
+        f["cs_three_black"] = (c2 < o2 and c_2 < float(o[-2]) and c1 < o1 and c_2 < c2 and c1 < c_2)
+    f["cs_bullish"] = any(f[k] for k in ("cs_hammer", "cs_bull_engulf", "cs_piercing", "cs_morning_star", "cs_three_white"))
+    f["cs_bearish"] = any(f[k] for k in ("cs_shooting_star", "cs_bear_engulf", "cs_dark_cloud", "cs_evening_star", "cs_three_black"))
+    return f
+
+
+def minervini(price, sma50, sma150, sma200, sma200_prev, pct_from_low, pct_from_high, rs_positive):
+    """Mark Minervini's Trend Template. Returns (all_pass, rules_passed_count).
+    `rs_positive` is a relative-strength proxy (6-month return positive) standing
+    in for the IBD RS-rating ≥ 70 rule, which needs a full-universe ranking."""
+    def gt(a, b):
+        return a is not None and b is not None and a > b
+    rules = [
+        gt(price, sma150),                                   # 1 price > 150-DMA
+        gt(price, sma200),                                   # 2 price > 200-DMA
+        gt(sma150, sma200),                                  # 3 150-DMA > 200-DMA
+        gt(sma200, sma200_prev),                             # 4 200-DMA rising
+        gt(sma50, sma150) and gt(sma150, sma200),            # 5 50 > 150 > 200
+        gt(price, sma50),                                    # 6 price > 50-DMA
+        pct_from_low is not None and pct_from_low >= 30,     # 7 ≥30% above 52w low
+        pct_from_high is not None and pct_from_high >= -25,  # 8 within 25% of high
+        bool(rs_positive),                                   # 9 relative strength
+    ]
+    passed = sum(1 for r in rules if r)
+    return all(rules), passed
+
+
 def _compute_row(sym, idx_ret, suffix=".NS"):
     """Compute the technical snapshot for one symbol. Returns dict or None.
     `suffix` selects the exchange feed (".NS" NSE, ".BO" BSE-only listings)."""
@@ -238,6 +310,30 @@ def _compute_row(sym, idx_ret, suffix=".NS"):
     cam_l3 = pC - (pH - pL) * 1.1 / 4
     cam_l4 = pC - (pH - pL) * 1.1 / 2
 
+    # ── Minervini Trend Template + a relative-strength proxy ──
+    sma150 = _sma(close, 150)
+
+    def _last(s, i=-1):
+        try:
+            v = float(s.iloc[i])
+            return None if math.isnan(v) else v
+        except (IndexError, TypeError, ValueError):
+            return None
+
+    v50, v150, v200 = _last(sma50), _last(sma150), _last(sma200)
+    v200_prev = _last(sma200, -21) if len(close) > 21 else None
+    dma200_rising = bool(v200 is not None and v200_prev is not None and v200 > v200_prev)
+    ret_6m = None
+    if len(close) > 126:
+        base = float(close.iloc[-127])
+        if base > 0:
+            ret_6m = round((price / base - 1) * 100, 2)
+    rs_positive = ret_6m is not None and ret_6m > 0
+    mnv_all, mnv_passed = minervini(price, v50, v150, v200, v200_prev, pct_from_low, pct_from_high, rs_positive)
+
+    # ── Candlestick patterns on the latest bar ──
+    cs = candlesticks(list(df["Open"]), list(high), list(low), list(close))
+
     return {
         "price": round(price, 2),
         "prevClose": round(prev, 2),
@@ -249,6 +345,7 @@ def _compute_row(sym, idx_ret, suffix=".NS"):
         "d9": dist(_sma(close, 9)),
         "d20": dist(_sma(close, 20)),
         "d50": dist(_sma(close, 50)),
+        "d150": dist(sma150),
         "d200": dist(_sma(close, 200)),
         "rsi": _num(rsi.iloc[-1], 1),
         "macd": _num(macd_hist.iloc[-1], 3),
@@ -279,6 +376,13 @@ def _compute_row(sym, idx_ret, suffix=".NS"):
         "volume_spike": volume_spike,
         "cam_break_up": bool(price > cam_h4),
         "cam_break_down": bool(price < cam_l4),
+        # Minervini Trend Template + relative strength
+        "dma200_rising": dma200_rising,
+        "ret_6m": ret_6m,
+        "minervini": bool(mnv_all),
+        "minervini_rules": mnv_passed,
+        # Candlestick patterns on the latest bar
+        **cs,
     }
 
 
