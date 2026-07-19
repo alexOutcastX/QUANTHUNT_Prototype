@@ -39,8 +39,9 @@ const FIXED_CHIPS = [
   'Data coverage ≥ 60%',
 ];
 
-// Rows in this list carry the analyser score alongside the screener fields.
-type MbRow = Row & { mbScore?: number };
+// Rows in this list carry the analyser score + 5x probability alongside the
+// screener fields.
+type MbRow = Row & { mbScore?: number; mbProb?: number };
 
 const tierColor = (score: number) =>
   score >= 75 ? theme.green : score >= 60 ? theme.accent : score >= 45 ? GOLD : theme.red;
@@ -197,6 +198,7 @@ function MbList({
             d200: c.vs_200dma,
             pct_from_high: c.pct_from_high,
             mbScore: c.score,
+            mbProb: c.probability_pct,
             _fund: { market_cap_cr: c.market_cap_cr, roe: c.roe, debt_equity: c.debt_equity, sector: c.sector } as Row['_fund'],
           }));
         // 1) Poll the server-side full-universe screen. Matches stream in
@@ -300,6 +302,24 @@ function MbList({
     }),
     [],
   );
+  // Indicative 5x-probability column (from the analyser), sortable like Score.
+  const probCol: Col = useMemo(
+    () => ({
+      key: 'mb_prob',
+      label: 'Prob',
+      w: 56,
+      flex: 0,
+      render: (r) => {
+        const p = (r as MbRow).mbProb;
+        return (
+          <Text style={{ fontFamily: theme.mono, fontWeight: '700', fontSize: theme.fs.sm, color: p == null ? theme.muted : tierColor(p >= 40 ? 75 : p >= 25 ? 60 : p >= 12 ? 45 : 0) }}>
+            {p == null ? '—' : p + '%'}
+          </Text>
+        );
+      },
+    }),
+    [],
+  );
   // Market-cap band tag (LARGE / MID / SMALL / MICRO) — its own column.
   const capCol: Col = useMemo(
     () => ({
@@ -322,8 +342,8 @@ function MbList({
   const visibleCols = useMemo(() => {
     const base = COLS.filter((c) => !DEFAULT_HIDDEN.includes(c.key));
     const at = base.findIndex((c) => c.key === 'exchange') + 1;
-    return [...base.slice(0, at || 3), scoreCol, capCol, ...base.slice(at || 3)];
-  }, [scoreCol, capCol]);
+    return [...base.slice(0, at || 3), scoreCol, probCol, capCol, ...base.slice(at || 3)];
+  }, [scoreCol, probCol, capCol]);
   const tableW = useMemo(() => visibleCols.reduce((a, c) => a + c.w, 0) + MB_ACTIONS_W, [visibleCols]);
 
   // Column sorting (tap a header) — defaults to analyser score, best first.
@@ -345,9 +365,10 @@ function MbList({
   }, [rows]);
   const matches = useMemo(() => {
     const filtered = sector ? rows.filter((r) => (r as MbRow)._fund?.sector === sector) : rows;
-    if (sortCol === 'mb_score') {
+    if (sortCol === 'mb_score' || sortCol === 'mb_prob') {
+      const key = sortCol === 'mb_score' ? 'mbScore' : 'mbProb';
       return [...filtered].sort(
-        (a, b) => (((a as MbRow).mbScore ?? -1) - ((b as MbRow).mbScore ?? -1)) * sortDir,
+        (a, b) => (((a as MbRow)[key] ?? -1) - ((b as MbRow)[key] ?? -1)) * sortDir,
       );
     }
     return sortRows(filtered, sortCol, sortDir);
