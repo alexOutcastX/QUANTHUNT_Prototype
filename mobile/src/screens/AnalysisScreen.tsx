@@ -25,6 +25,7 @@ import {
 } from '../api';
 import { Assessment, assess } from '../analysis';
 import SymbolInput from '../components/SymbolInput';
+import StrategyScores from '../components/StrategyScores';
 import { printHtmlDocument } from '../pdf';
 import { takeSymbol } from '../navIntent';
 import { theme } from '../theme';
@@ -299,6 +300,9 @@ export default function AnalysisScreen() {
               </View>
               <Text style={styles.verdictNote}>{v.note}</Text>
             </Card>
+
+            {/* Strategy scorecard — same scoring shown in every popup */}
+            <Card><StrategyScores symbol={d.sym} /></Card>
 
             {/* Business overview */}
             {about ? (

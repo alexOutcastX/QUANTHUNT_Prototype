@@ -3,6 +3,7 @@ import { Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SwingRec, api } from '../api';
 import StockDetail from '../components/StockDetail';
+import StrategyScores from '../components/StrategyScores';
 import { Row } from '../screener';
 import { navigate } from '../navIntent';
 import { addSymbol, loadWatchlist, normSymbol } from '../watchlist';
@@ -182,6 +183,8 @@ function SwingDetail({
               </View>
             ))}
           </View>
+
+          <StrategyScores symbol={r.symbol} />
 
           <View style={styles.actions}>
             <TouchableOpacity style={styles.aBtn} onPress={onChart} activeOpacity={0.75}>

@@ -2835,6 +2835,30 @@ def timeframes_route():
         return jsonify({"error": f"Couldn't analyse timeframes for {sym} — try again shortly."}), 503
 
 
+_STRAT_CACHE = {}
+_STRAT_TTL = 600  # 10 min
+
+
+@app.route("/strategy-scores")
+def strategy_scores_route():
+    """Per-strategy scorecard for one symbol (Minervini, momentum, breakout,
+    candlestick, growth, FCF, debt, value, multibagger) — shown in every popup."""
+    sym = request.args.get("symbol", "").strip().upper().replace("NSE:", "").replace("BSE:", "")
+    if not sym:
+        return jsonify({"error": "symbol required"}), 400
+    cached = _STRAT_CACHE.get(sym)
+    if cached and time.time() - cached[0] < _STRAT_TTL:
+        return jsonify(cached[1])
+    try:
+        import strategy_scores
+        payload = strategy_scores.analyse(sym)
+        _STRAT_CACHE[sym] = (time.time(), payload)
+        return jsonify(payload)
+    except Exception as e:
+        log.error("strategy-scores error %s: %s", sym, e)
+        return jsonify({"error": f"Couldn't score {sym} right now — try again shortly."}), 503
+
+
 _SCR_CACHE = {}
 _SCR_TTL = 6 * 3600  # shareholding/balance change quarterly — cache for hours
 
