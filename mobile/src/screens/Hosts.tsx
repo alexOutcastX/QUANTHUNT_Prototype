@@ -7,6 +7,7 @@ import { theme } from '../theme';
 import AnalysisScreen from './AnalysisScreen';
 import BacktestScreen from './BacktestScreen';
 import CalculatorScreen from './CalculatorScreen';
+import AnnouncementsScreen from './AnnouncementsScreen';
 import ChatScreen from './ChatScreen';
 import ChartScreen from './ChartScreen';
 import PortfolioScreen from './PortfolioScreen';
@@ -204,6 +205,7 @@ export function ChartsHome() {
 // back header. Keeps the bottom tab bar to five primary destinations.
 const MORE_ITEMS: { key: string; label: string; hint: string; render: () => React.ReactElement }[] = [
   { key: 'community', label: 'Community chat', hint: 'Global room, topic channels & direct messages with other traders', render: () => <ChatScreen /> },
+  { key: 'announcements', label: 'Announcements', hint: 'Updates & notices from the team', render: () => <AnnouncementsScreen /> },
   { key: 'heatmap', label: 'Heatmap', hint: 'Sector & index day-change map · drill into constituents', render: () => <HeatmapScreen /> },
   { key: 'universe', label: 'Universe', hint: 'Index constituents · mcap segments · heatmap', render: () => <UniverseScreen /> },
   { key: 'charts', label: 'Charts', hint: 'Native charts + TradingView', render: () => <ChartsHome /> },
