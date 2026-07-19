@@ -10,7 +10,8 @@ import { capBand } from '../marketcap';
 import { EmptyState, InfoButton, Loading, Sheet } from '../ui';
 import { MOMENTUM_INFO } from '../tabInfo';
 import StrategyScores from '../components/StrategyScores';
-import { navigate } from '../navIntent';
+import { navigate, takeSector } from '../navIntent';
+import { mergeSectors } from '../sectors';
 import { theme } from '../theme';
 
 // Per-symbol enrichment (sector + market cap) fetched separately from the
@@ -254,6 +255,8 @@ export default function MomentumScreen() {
   useEffect(() => {
     loadWatchlist().then(setWatch);
     loadLocalAlerts().then(setAlerts);
+    const s = takeSector('momentum');
+    if (s) setSector(s);
   }, []);
 
   const toast = (m: string) => {
@@ -365,12 +368,12 @@ export default function MomentumScreen() {
     if (col === 'cap') return enrich[h.symbol]?.mcap ?? null;
     return h[col as keyof MomentumHit] as string | number | null | undefined;
   };
-  // Distinct sectors present across the enriched hits ('' = all).
-  const sectors = useMemo(() => {
-    const s = new Set<string>();
-    hits.forEach((h) => { const v = enrich[h.symbol]?.sector; if (v) s.add(String(v)); });
-    return Array.from(s).sort();
-  }, [hits, enrich]);
+  // Exhaustive canonical sector list (unioned with any present in the enriched
+  // hits) so every sector is selectable, including one routed from the heatmap.
+  const sectors = useMemo(
+    () => mergeSectors(hits.map((h) => enrich[h.symbol]?.sector)),
+    [hits, enrich],
+  );
   const shown = useMemo(() => {
     const filtered = hits.filter(
       (h) =>

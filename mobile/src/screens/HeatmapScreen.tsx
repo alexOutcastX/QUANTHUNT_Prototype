@@ -3,7 +3,9 @@ import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-nati
 import { IndexQuote, ScanRow, api } from '../api';
 import StockDetail from '../components/StockDetail';
 import { Row } from '../screener';
-import { EmptyState, Loading, ScreenTitle } from '../ui';
+import { EmptyState, Loading, ScreenTitle, Sheet } from '../ui';
+import { navigate } from '../navIntent';
+import { mergeSectors, shortSector } from '../sectors';
 import { theme } from '../theme';
 
 // Day-change → tile colour. Neutral surface at 0%, saturating to full green /
@@ -29,6 +31,7 @@ const fmtLevel = (v?: number | null) =>
   v == null || !isFinite(v) ? '—' : v.toLocaleString('en-IN', { maximumFractionDigits: 2 });
 
 const CATS: { key: string; label: string }[] = [
+  { key: 'sectors', label: 'Sectors' },
   { key: 'domestic', label: 'Indian indices' },
   { key: 'international', label: 'Global' },
   { key: 'depository', label: 'ADRs' },
@@ -107,8 +110,14 @@ export default function HeatmapScreen() {
   const [detail, setDetail] = useState<Row | null>(null);
   const [gridW, setGridW] = useState(0);
 
-  // Load the index list for the active category (cached per category).
+  // Load the index list for the active category (cached per category). The
+  // 'sectors' category is a live aggregate (SectorMap), not an /indices list.
   useEffect(() => {
+    if (cat === 'sectors') {
+      setLoading(false);
+      setErr('');
+      return;
+    }
     if (idxCache[cat]) {
       setIndices(idxCache[cat]);
       setLoading(false);
@@ -164,7 +173,7 @@ export default function HeatmapScreen() {
         title="Heatmap"
         sub="Sector & index day-change map · tap any tile to drill into its constituents"
       />
-      <View style={styles.catRow}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.catScroll} contentContainerStyle={styles.catRow}>
         {CATS.map((c) => (
           <TouchableOpacity
             key={c.key}
@@ -175,8 +184,11 @@ export default function HeatmapScreen() {
             <Text style={[styles.catTxt, cat === c.key && styles.catTxtOn]}>{c.label}</Text>
           </TouchableOpacity>
         ))}
-      </View>
+      </ScrollView>
 
+      {cat === 'sectors' ? (
+        <SectorMap />
+      ) : (
       <ScrollView contentContainerStyle={styles.scrollPad}>
         {loading ? <Loading label="Loading live index levels…" /> : null}
         {!loading && err ? <EmptyState icon="⚠" title="Couldn't load indices" hint={err} /> : null}
@@ -209,8 +221,212 @@ export default function HeatmapScreen() {
 
         {!loading && indices.length ? <Legend /> : null}
       </ScrollView>
+      )}
 
-      {detail ? <StockDetail row={detail} onClose={() => setDetail(null)} /> : null}
+      {cat !== 'sectors' && detail ? (
+        <StockDetail row={detail} onClose={() => setDetail(null)} />
+      ) : null}
+    </View>
+  );
+}
+
+// ── Sectoral heatmap: every constituent of a broad NSE universe mapped to its
+// sector, tiles coloured by the (cap-weighted) sector day-change. Tapping a
+// sector opens a picker that routes into Recommendations / Momentum / Multibagger
+// with that sector pre-filtered and the scan auto-running.
+const SECTOR_UNIVERSE = 'NIFTY 500';
+type SecCache = {
+  secBySym: Record<string, string | null>;
+  mcapBySym: Record<string, number | null>;
+  chgBySym: Record<string, number | null>;
+};
+let sectorCache: SecCache | null = null;
+
+const SCREEN_ROUTES: { sub: string; label: string; icon: string; hint: string }[] = [
+  { sub: 'reco', label: 'Recommendations', icon: '💼', hint: 'Long-term buy setups in this sector' },
+  { sub: 'momentum', label: 'Momentum', icon: '⚡', hint: 'Breakout & trend radar in this sector' },
+  { sub: 'mb', label: 'Multibagger', icon: '🚀', hint: 'Multibagger candidates in this sector' },
+];
+
+function SectorMap() {
+  const [secBySym, setSecBySym] = useState<Record<string, string | null>>(sectorCache?.secBySym || {});
+  const [mcapBySym, setMcapBySym] = useState<Record<string, number | null>>(sectorCache?.mcapBySym || {});
+  const [chgBySym, setChgBySym] = useState<Record<string, number | null>>(sectorCache?.chgBySym || {});
+  const [loading, setLoading] = useState(!sectorCache);
+  const [note, setNote] = useState('');
+  const [err, setErr] = useState('');
+  const [gridW, setGridW] = useState(0);
+  const [pick, setPick] = useState<string | null>(null);
+  const token = useRef(0);
+
+  useEffect(() => {
+    if (sectorCache) return; // served from the session cache
+    const my = ++token.current;
+    setLoading(true);
+    setErr('');
+    const sAcc: Record<string, string | null> = {};
+    const mAcc: Record<string, number | null> = {};
+    const cAcc: Record<string, number | null> = {};
+    (async () => {
+      try {
+        const idx = await api.indexConstituents(SECTOR_UNIVERSE);
+        if (token.current !== my) return;
+        const rows = idx.data || [];
+        const syms = rows.map((d) => d.symbol).filter(Boolean);
+        if (!syms.length) {
+          setErr(idx.error || `No constituent list available for ${SECTOR_UNIVERSE}.`);
+          setLoading(false);
+          return;
+        }
+        rows.forEach((d) => { cAcc[d.symbol] = d.chg ?? null; });
+        setChgBySym({ ...cAcc });
+        setLoading(false);
+        // Sector + market cap per stock (poll a few rounds for cold symbols).
+        let pending = syms;
+        for (let round = 0; round < 4 && pending.length; round++) {
+          const fb = await api.fundamentalsBulk(pending);
+          if (token.current !== my) return;
+          Object.entries(fb.data || {}).forEach(([sym, f]) => {
+            const rec = f as Record<string, unknown>;
+            sAcc[sym] = typeof rec.sector === 'string' ? (rec.sector as string) : null;
+            mAcc[sym] = typeof rec.market_cap_cr === 'number' ? (rec.market_cap_cr as number) : null;
+          });
+          setSecBySym({ ...sAcc });
+          setMcapBySym({ ...mAcc });
+          pending = fb.pending || [];
+          const mapped = syms.length - pending.length;
+          setNote(`Mapping sectors… ${mapped}/${syms.length}`);
+          if (pending.length) await new Promise((r) => setTimeout(r, 1500));
+        }
+        // Live day change (the /index feed is often null on cloud IPs).
+        setNote(`Loading live changes for ${syms.length} stocks…`);
+        await api.scan(syms, {
+          onBatch: (sd, done, total) => {
+            if (token.current !== my) return;
+            Object.entries(sd).forEach(([sym, s]) => {
+              if (s && typeof s.chg === 'number') cAcc[sym] = s.chg;
+            });
+            setChgBySym({ ...cAcc });
+            setNote(`Live changes ${Math.min(done, total)}/${total}`);
+          },
+        });
+        if (token.current !== my) return;
+        setNote('');
+        sectorCache = { secBySym: sAcc, mcapBySym: mAcc, chgBySym: cAcc };
+      } catch (e) {
+        if (token.current !== my) return;
+        setErr(e instanceof Error ? e.message : 'Failed to build the sector map');
+        setLoading(false);
+      }
+    })();
+    return () => {
+      token.current++;
+    };
+  }, []);
+
+  // Aggregate per sector: constituent count, total market cap, and a cap-weighted
+  // average day change (equal-weight fallback where a market cap is missing).
+  const agg = useMemo(() => {
+    const m: Record<string, { count: number; mcap: number; chgW: number; chgDen: number }> = {};
+    Object.keys(secBySym).forEach((sym) => {
+      const sec = secBySym[sym];
+      if (!sec) return;
+      const a = (m[sec] ||= { count: 0, mcap: 0, chgW: 0, chgDen: 0 });
+      a.count++;
+      const mc = mcapBySym[sym];
+      if (mc && mc > 0) a.mcap += mc;
+      const c = chgBySym[sym];
+      if (typeof c === 'number' && isFinite(c)) {
+        const w = mc && mc > 0 ? mc : 1;
+        a.chgW += c * w;
+        a.chgDen += w;
+      }
+    });
+    return m;
+  }, [secBySym, mcapBySym, chgBySym]);
+  const sectorRows = useMemo(() => {
+    const present = Object.keys(agg);
+    return mergeSectors(present)
+      .filter((s) => agg[s]?.count)
+      .map((s) => ({ sector: s, ...agg[s], chg: agg[s].chgDen ? agg[s].chgW / agg[s].chgDen : null }))
+      .sort((a, b) => b.count - a.count);
+  }, [agg]);
+
+  const cols = gridW ? Math.max(2, Math.min(5, Math.floor(gridW / 150))) : 2;
+  const gap = 8;
+  const tileW = gridW ? (gridW - gap * (cols - 1)) / cols : 0;
+  const mapped = Object.values(secBySym).filter(Boolean).length;
+
+  const route = (sub: string) => {
+    const s = pick;
+    setPick(null);
+    if (s) navigate('analysis', { sub, sector: s });
+  };
+
+  return (
+    <View style={{ flex: 1 }}>
+      <ScrollView contentContainerStyle={styles.scrollPad}>
+        {loading ? <Loading label={`Loading ${SECTOR_UNIVERSE} constituents…`} /> : null}
+        {!loading && err ? <EmptyState icon="⚠" title="Couldn't build sector map" hint={err} /> : null}
+        {!loading && !err ? (
+          <>
+            <Text style={styles.drillNote}>
+              {SECTOR_UNIVERSE} · {mapped} stocks mapped across {sectorRows.length} sectors · tiles
+              coloured by cap-weighted day change{note ? ` · ${note}` : ''}
+            </Text>
+            <Text style={styles.secHint}>Tap a sector to screen it — Recommendations, Momentum or Multibagger.</Text>
+            <View style={styles.grid} onLayout={(e) => setGridW(e.nativeEvent.layout.width)}>
+              {gridW && sectorRows.length
+                ? sectorRows.map((r) => (
+                    <TouchableOpacity
+                      key={r.sector}
+                      style={[styles.secTile, { width: tileW, backgroundColor: heatColor(r.chg) }]}
+                      onPress={() => setPick(r.sector)}
+                      activeOpacity={0.85}
+                    >
+                      <Text style={[styles.secTileName, { color: inkFor(r.chg) }]} numberOfLines={2}>
+                        {shortSector(r.sector)}
+                      </Text>
+                      <Text style={[styles.secTileChg, { color: inkFor(r.chg) }]}>{pct(r.chg)}</Text>
+                      <Text style={[styles.secTileMeta, { color: inkFor(r.chg) }]}>{r.count} stocks</Text>
+                    </TouchableOpacity>
+                  ))
+                : !loading && !sectorRows.length ? (
+                    <Text style={styles.drillNote}>Mapping sectors…</Text>
+                  ) : null}
+            </View>
+            {sectorRows.length ? <Legend /> : null}
+          </>
+        ) : null}
+      </ScrollView>
+
+      {pick ? (
+        <Sheet onClose={() => setPick(null)} maxHeight="70%">
+          <View style={styles.pickHead}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.pickTitle}>{pick}</Text>
+              <Text style={styles.pickSub}>
+                {agg[pick]?.count || 0} stocks · avg {pct(agg[pick]?.chgDen ? agg[pick].chgW / agg[pick].chgDen : null)} today
+              </Text>
+            </View>
+            <TouchableOpacity onPress={() => setPick(null)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+              <Text style={styles.pickX}>✕</Text>
+            </TouchableOpacity>
+          </View>
+          <Text style={styles.pickLabel}>SCREEN THIS SECTOR VIA</Text>
+          {SCREEN_ROUTES.map((s) => (
+            <TouchableOpacity key={s.sub} style={styles.pickAct} activeOpacity={0.8} onPress={() => route(s.sub)}>
+              <Text style={styles.pickActTxt}>{s.icon}  {s.label}</Text>
+              <Text style={styles.pickActSub}>{s.hint}</Text>
+            </TouchableOpacity>
+          ))}
+          <Text style={styles.pickDisc}>
+            Opens the chosen screener with the {pick} sector filter applied and its scan auto-running.
+            Sector map is based on {SECTOR_UNIVERSE} constituents; individual screens cover their own
+            (broader) universes. Educational only — not investment advice.
+          </Text>
+        </Sheet>
+      ) : null}
     </View>
   );
 }
@@ -419,7 +635,8 @@ function Legend() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.bg },
-  catRow: { flexDirection: 'row', gap: theme.sp.sm, paddingHorizontal: theme.sp.lg, paddingBottom: theme.sp.sm },
+  catScroll: { flexGrow: 0, flexShrink: 0 },
+  catRow: { flexDirection: 'row', gap: theme.sp.sm, paddingHorizontal: theme.sp.lg, paddingBottom: theme.sp.sm, alignItems: 'center' },
   catChip: {
     borderColor: theme.border2,
     borderWidth: 1,
@@ -478,4 +695,35 @@ const styles = StyleSheet.create({
   legend: { flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'center', paddingTop: theme.sp.sm },
   legendTxt: { color: theme.muted, fontSize: theme.fs.xs + 1, fontFamily: theme.mono },
   legendSwatch: { width: 22, height: 12, borderRadius: 2 },
+  // sectoral heatmap
+  secHint: { color: theme.muted2, fontSize: theme.fs.sm },
+  secTile: {
+    borderRadius: theme.radius.sm + 2,
+    borderColor: theme.border,
+    borderWidth: 1,
+    padding: theme.sp.md,
+    minHeight: 86,
+    justifyContent: 'space-between',
+  },
+  secTileName: { fontSize: theme.fs.sm, fontWeight: '800' },
+  secTileChg: { fontSize: theme.fs.lg, fontWeight: '800', fontFamily: theme.mono },
+  secTileMeta: { fontSize: theme.fs.xs + 1, fontFamily: theme.mono, opacity: 0.9 },
+  // sector → screen picker
+  pickHead: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: theme.sp.sm },
+  pickTitle: { color: theme.text, fontSize: theme.fs.lg, fontWeight: '800' },
+  pickSub: { color: theme.muted, fontSize: theme.fs.sm, marginTop: 2 },
+  pickX: { color: theme.muted, fontSize: 18, paddingHorizontal: 4 },
+  pickLabel: { color: theme.muted, fontSize: theme.fs.xs, fontWeight: '700', letterSpacing: 1, marginTop: theme.sp.sm, marginBottom: theme.sp.sm },
+  pickAct: {
+    borderColor: theme.border2,
+    borderWidth: 1,
+    borderRadius: theme.radius.md,
+    paddingHorizontal: theme.sp.lg,
+    paddingVertical: theme.sp.md,
+    marginBottom: theme.sp.sm,
+    backgroundColor: theme.surface2,
+  },
+  pickActTxt: { color: theme.text, fontSize: theme.fs.md + 1, fontWeight: '700' },
+  pickActSub: { color: theme.muted, fontSize: theme.fs.sm, marginTop: 2 },
+  pickDisc: { color: theme.muted, fontSize: theme.fs.xs + 1, lineHeight: 16, marginTop: theme.sp.sm },
 });

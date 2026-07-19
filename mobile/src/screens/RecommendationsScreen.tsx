@@ -7,7 +7,8 @@ import SymbolInput from '../components/SymbolInput';
 import TradeVerdict from '../components/TradeVerdict';
 import { Row } from '../screener';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { navigate } from '../navIntent';
+import { navigate, peekNav, subscribeNav, takeSector } from '../navIntent';
+import { mergeSectors } from '../sectors';
 import { addSymbol, loadWatchlist, normSymbol } from '../watchlist';
 import { LocalAlert, addLocalAlert, hasLocalAlert, loadLocalAlerts } from '../localalerts';
 import { loadNames } from './ScreenerScreen';
@@ -368,6 +369,8 @@ function LongTermRecs() {
   const [open, setOpen] = useState<Recommendation | null>(null);
   const [strat, setStrat] = useState('balanced');
   const [sortKey, setSortKey] = useState<RecSortKey>('confidence');
+  const [sector, setSector] = useState('');
+  const [secMap, setSecMap] = useState<Record<string, string | null>>({});
   const [flash, setFlash] = useState('');
   const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const cancelRef = useRef<{ cancelled: boolean } | null>(null);
@@ -384,7 +387,34 @@ function LongTermRecs() {
     loadWatchlist().then(setWatch);
     loadLocalAlerts().then(setAlerts);
     loadPaperTrades().then(setPaper);
+    const s = takeSector('reco');
+    if (s) setSector(s);
   }, []);
+
+  // Enrich the buy list with each stock's sector (the recommendation payload
+  // doesn't carry one) so the sector filter — and heatmap routing — can work.
+  useEffect(() => {
+    const missing = recs.map((r) => r.symbol).filter((s) => !(s in secMap));
+    if (!missing.length) return;
+    let cancelled = false;
+    api
+      .fundamentalsBulk(missing)
+      .then((res) => {
+        if (cancelled || !res.data) return;
+        setSecMap((prev) => {
+          const next = { ...prev };
+          missing.forEach((s) => {
+            const f = res.data[s] as Record<string, unknown> | undefined;
+            next[s] = f && typeof f.sector === 'string' ? (f.sector as string) : null;
+          });
+          return next;
+        });
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [recs, secMap]);
 
   // The scan: pull Multibagger candidates → deep-analyse each (bounded
   // concurrency) → merge into the persistent cache. A rebuild is incremental —
@@ -547,8 +577,14 @@ function LongTermRecs() {
   // Selected strategy re-ranks / filters the candidate pool (default = balanced);
   // the Sort dropdown then orders whatever the strategy returned.
   const stratDef = LONG_STRATEGIES.find((s) => s.id === strat) || LONG_STRATEGIES[0];
+  // Exhaustive sector list (canonical ∪ sectors present in the enriched recs).
+  const sectors = React.useMemo(
+    () => mergeSectors(recs.map((r) => secMap[r.symbol])),
+    [recs, secMap],
+  );
   const shown = React.useMemo(() => {
-    const base = [...stratDef.apply(recs)];
+    let base = [...stratDef.apply(recs)];
+    if (sector) base = base.filter((r) => secMap[r.symbol] === sector);
     const asc = sortKey === 'eta_days';
     base.sort((a, b) => {
       const va = (a[sortKey] ?? (asc ? Infinity : -Infinity)) as number;
@@ -556,7 +592,7 @@ function LongTermRecs() {
       return asc ? va - vb : vb - va;
     });
     return base;
-  }, [recs, stratDef, sortKey]);
+  }, [recs, stratDef, sortKey, sector, secMap]);
 
   return (
     <View style={styles.container}>
@@ -622,6 +658,28 @@ function LongTermRecs() {
         <Text style={styles.note}>{status}</Text>
       ) : null}
 
+      {recs.length ? (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.secScroll} contentContainerStyle={styles.secRow}>
+          <TouchableOpacity
+            style={[styles.secChip, sector === '' && styles.secChipOn]}
+            onPress={() => setSector('')}
+            activeOpacity={0.75}
+          >
+            <Text style={[styles.secChipTxt, sector === '' && styles.secChipTxtOn]}>All sectors</Text>
+          </TouchableOpacity>
+          {sectors.map((s) => (
+            <TouchableOpacity
+              key={s}
+              style={[styles.secChip, sector === s && styles.secChipOn]}
+              onPress={() => setSector((cur) => (cur === s ? '' : s))}
+              activeOpacity={0.75}
+            >
+              <Text style={[styles.secChipTxt, sector === s && styles.secChipTxtOn]}>{s}</Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      ) : null}
+
       <ScrollView contentContainerStyle={styles.body}>
         {!scanning && error ? <EmptyState icon="⚠" title="Couldn't build recommendations" hint={error} /> : null}
         {ready && !scanning && !error && !recs.length ? (
@@ -633,7 +691,9 @@ function LongTermRecs() {
         ) : null}
 
         {recs.length && !shown.length ? (
-          <Text style={styles.note}>No candidates match “{stratDef.name}” right now — try another strategy or ⟳ Update.</Text>
+          <Text style={styles.note}>
+            {sector ? `No ${sector} candidates in this list right now — clear the sector or ⟳ Update.` : `No candidates match “${stratDef.name}” right now — try another strategy or ⟳ Update.`}
+          </Text>
         ) : null}
         <View style={isDesktop ? styles.grid : undefined}>
           {shown.map((r, i) => (
@@ -697,14 +757,29 @@ export default function RecommendationsScreen() {
   const [mode, setMode] = useState<RecMode>('long');
   const [modeHydrated, setModeHydrated] = useState(false);
   // Remember which sub-list was open so returning to the app doesn't snap back
-  // to Long term.
+  // to Long term. Exception: a sector routed in from the heatmap targets the
+  // Long-term buy list, so force that mode when such an intent is pending.
   useEffect(() => {
+    const p = peekNav();
+    if (p?.sub === 'reco' && p?.sector) {
+      setMode('long');
+      setModeHydrated(true);
+      return;
+    }
     AsyncStorage.getItem('taureye.reco.mode')
       .then((v) => {
         if (v && (REC_MODES as string[]).includes(v)) setMode(v as RecMode);
       })
       .finally(() => setModeHydrated(true));
   }, []);
+  useEffect(
+    () =>
+      subscribeNav(() => {
+        const p = peekNav();
+        if (p?.sub === 'reco' && p?.sector) setMode('long');
+      }),
+    [],
+  );
   useEffect(() => {
     if (modeHydrated) AsyncStorage.setItem('taureye.reco.mode', mode).catch(() => {});
   }, [mode, modeHydrated]);
@@ -784,6 +859,20 @@ const styles = StyleSheet.create({
   modeTxt: { color: theme.muted2, fontSize: theme.fs.sm, fontWeight: '700' },
   modeTxtOn: { color: theme.onAccent },
   note: { color: theme.muted, fontSize: theme.fs.sm, paddingHorizontal: theme.sp.lg, paddingBottom: theme.sp.sm },
+  // sector filter chips (exhaustive list)
+  secScroll: { flexGrow: 0, flexShrink: 0 },
+  secRow: { gap: 6, paddingHorizontal: theme.sp.md, paddingBottom: theme.sp.sm, alignItems: 'center' },
+  secChip: {
+    borderColor: theme.border2,
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 11,
+    paddingVertical: 4,
+    backgroundColor: theme.surface2,
+  },
+  secChipOn: { backgroundColor: theme.brandSoft, borderColor: theme.brand },
+  secChipTxt: { color: theme.muted2, fontFamily: theme.mono, fontSize: theme.fs.sm },
+  secChipTxtOn: { color: theme.brand, fontWeight: '800' },
   headBtns: { flexDirection: 'row', gap: theme.sp.sm },
   // Compact action row (no title) — buttons sit right where the heading used to.
   actionRow: { flexDirection: 'row', justifyContent: 'flex-end', gap: theme.sp.sm, paddingHorizontal: theme.sp.lg, paddingTop: theme.sp.sm, paddingBottom: theme.sp.sm },
