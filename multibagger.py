@@ -62,7 +62,48 @@ def _resolve(base: str, retries: int = 1):
                     _t.sleep(min(1.0 * (2 ** attempt), 5.0))  # exp backoff, capped 5s
         if has(info):
             return t, info
+
+    # Both exchanges' `.info` came back empty/sparse. For a bare symbol that's
+    # almost always a quoteSummary rate-limit (the `.info` endpoint is the most
+    # throttled), not a delisted scrip — the mass screen just found this symbol.
+    # For a user-initiated lookup (retries > 0) fall back to the far-more-
+    # reliable chart / fast_info price so a valid scrip still resolves (with a
+    # sparse but real report) instead of failing with "no data". The mass screen
+    # (retries = 0) skips this to keep one HTTP call per symbol.
+    if retries > 0:
+        for suffix in (".NS", ".BO"):
+            t = yf.Ticker(base + suffix)
+            px = _probe_price(t)
+            if px:
+                return t, {"regularMarketPrice": px, "shortName": base}
     return last_t, {}
+
+
+def _probe_price(t):
+    """Last-resort liveness/price probe that avoids the heavily rate-limited
+    `.info`/quoteSummary endpoint: try `fast_info`, then the chart (history) API
+    — both hold up far better under load. Returns a positive float or None.
+    Fully guarded so a fake/again-throttled ticker just yields None."""
+    try:
+        fi = getattr(t, "fast_info", None)
+        if fi is not None:
+            for k in ("last_price", "lastPrice", "regular_market_price"):
+                try:
+                    v = fi[k] if hasattr(fi, "__getitem__") else getattr(fi, k, None)
+                except Exception:
+                    v = getattr(fi, k, None)
+                if v and float(v) > 0:
+                    return float(v)
+    except Exception:
+        pass
+    try:
+        h = t.history(period="5d", interval="1d", auto_adjust=True)
+        closes = h["Close"].dropna()
+        if len(closes) and float(closes.iloc[-1]) > 0:
+            return float(closes.iloc[-1])
+    except Exception:
+        pass
+    return None
 
 
 def fetch_metrics(symbol: str, with_history: bool = True, retries: int = 1):
