@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { RiskHolding, RiskReport, api } from '../api';
+import SymbolInput from '../components/SymbolInput';
 import { Btn, Card, EmptyState, Loading, ScreenTitle, SectionTitle, StatTile } from '../ui';
 import { theme } from '../theme';
 
@@ -50,14 +51,16 @@ export default function RiskScreen() {
         <SectionTitle>Holdings</SectionTitle>
         <Card>
           {rows.map((r, i) => (
-            <View key={i} style={styles.editRow}>
-              <TextInput
+            // Earlier rows sit above later ones so a focused row's autocomplete
+            // dropdown overlays the rows beneath it instead of being painted over.
+            <View key={i} style={[styles.editRow, { zIndex: rows.length - i }]}>
+              <SymbolInput
                 value={r.symbol}
-                onChangeText={(t) => setRow(i, { symbol: t })}
+                onChangeText={(t) => setRow(i, { symbol: t.toUpperCase() })}
+                onSelect={(s) => setRow(i, { symbol: s.toUpperCase() })}
                 placeholder="SYMBOL"
-                placeholderTextColor={theme.muted}
-                autoCapitalize="characters"
-                style={[styles.cell, styles.symCell]}
+                inputStyle={[styles.cell, styles.symCell]}
+                containerStyle={styles.symInput}
               />
               <TextInput
                 value={r.qty}
@@ -197,6 +200,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.sp.md,
     paddingVertical: theme.sp.sm,
   },
+  symInput: { flex: 1 },
   symCell: { flex: 1, letterSpacing: 1 },
   qtyCell: { width: 84, textAlign: 'right' },
   rowX: { color: theme.muted, fontSize: theme.fs.md, paddingHorizontal: 4 },
