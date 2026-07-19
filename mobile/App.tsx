@@ -2,6 +2,7 @@ import { StatusBar } from 'expo-status-bar';
 import React, { useEffect } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { capgoNotifyReady } from './src/capgo';
+import { initPush } from './src/push';
 import { initSystemBars } from './src/systemBars';
 import { useThemeMode } from './src/theme';
 import Shell from './src/Shell';
@@ -16,6 +17,7 @@ export default function App() {
   useEffect(() => {
     capgoNotifyReady();
     initSystemBars();
+    initPush();
   }, []);
   return (
     <SafeAreaProvider>

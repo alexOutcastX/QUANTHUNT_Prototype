@@ -27,6 +27,7 @@ import entity_graph as _egraph   # grounded institution⇄company graph from NSE
 import affiliations as _affil     # seed-grounded promoter + political funding graphs
 import alerts as _alerts        # server-side price/technical alerts (store-backed)
 import apikeys as _apikeys      # public-API key issue/verify (hashed, store-backed)
+import push as _push            # FCM push delivery + device-token registry + broadcasts
 
 # Support both normal run and PyInstaller frozen exe
 _BASE_DIR = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
@@ -2151,6 +2152,87 @@ def _alert_notify(alert, quote):
             requests.post(hook, json={"alert": alert, "quote": quote}, timeout=6)
         except Exception:
             pass
+    # Push to every registered device (no-op until FCM creds are configured).
+    try:
+        _push.notify_alert(alert, quote)
+    except Exception:
+        pass
+
+
+# ── Push notifications: device tokens, dev broadcasts, background evaluator ──
+@app.route("/push/register", methods=["POST"])
+@rate_limit("push_reg", 60, 300)
+def push_register():
+    """A device registers its FCM token so alerts + broadcasts can reach it."""
+    body = request.get_json(silent=True) or {}
+    token = str(body.get("token", "")).strip()
+    if not token:
+        return jsonify({"ok": False, "reason": "token required"}), 400
+    n = _push.register(token, str(body.get("platform", "android")))
+    return jsonify({"ok": True, "count": n, "configured": _push.configured()})
+
+
+@app.route("/push/unregister", methods=["POST"])
+@rate_limit("push_reg", 60, 300)
+def push_unregister():
+    body = request.get_json(silent=True) or {}
+    n = _push.unregister(str(body.get("token", "")).strip())
+    return jsonify({"ok": True, "count": n})
+
+
+@app.route("/push/status")
+def push_status():
+    return jsonify({"configured": _push.configured(), "devices": len(_push.tokens())})
+
+
+@app.route("/broadcast", methods=["GET"])
+def broadcast_list():
+    """Recent dev broadcasts — an in-app announcements inbox (public read)."""
+    return jsonify({"items": _push.broadcast_log(50)})
+
+
+@app.route("/broadcast", methods=["POST"])
+@require_owner
+@rate_limit("broadcast", 20, 300)
+def broadcast_send():
+    """Owner-only: push a dev message to every registered device + log it."""
+    body = request.get_json(silent=True) or {}
+    title = str(body.get("title", "")).strip()
+    msg = str(body.get("body", "")).strip()
+    if not title and not msg:
+        return jsonify({"ok": False, "reason": "title or body required"}), 400
+    res = _push.broadcast(title or "TaurEye", msg, body.get("data") or {})
+    return jsonify({"ok": True, **res})
+
+
+# Background alert evaluator: periodically checks server alerts against live
+# quotes and fires them (→ webhook + push) so triggers reach the user without
+# the app open. Mirrors _warm_scan_loop; started in __main__ and wsgi.py.
+ALERT_LOOP = os.environ.get("ALERT_LOOP", "on")
+_ALERT_INTERVAL = int(os.environ.get("ALERT_INTERVAL_SEC", "120") or "120")
+
+
+def _alert_loop():
+    time.sleep(20)  # let the service settle before hitting data sources
+    while True:
+        try:
+            syms = _alerts.symbols_watched()
+            if syms:
+                quotes = {}
+                for s in syms[:100]:
+                    _fetch_one(s, quotes)
+                fired = _alerts.check(quotes, notify=_alert_notify)
+                if fired:
+                    log.info("Alert loop fired %d alert(s)", len(fired))
+        except Exception as e:
+            log.warning("Alert loop failed: %s", e)
+        time.sleep(_ALERT_INTERVAL)
+
+
+def start_alert_loop():
+    """Start the alert evaluator once (called from __main__ and wsgi.py)."""
+    if ALERT_LOOP and ALERT_LOOP.lower() not in ("0", "off", "false", "no"):
+        threading.Thread(target=_alert_loop, name="alert-loop", daemon=True).start()
 
 
 @app.route("/alerts", methods=["GET"])
@@ -2776,6 +2858,7 @@ if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     threading.Thread(target=_prefetch_universe, daemon=True).start()
     start_scan_warm()
+    start_alert_loop()
     print("\n" + "=" * 60)
     print("  QuantHunt — NSE Direct + YF fallback")
     print("  Universe: bhavcopy EQ/BE + NIFTY MICROCAP 250")
