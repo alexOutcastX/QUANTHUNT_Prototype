@@ -333,6 +333,14 @@ export type BrokerHolding = {
 
 export type AuthStatus = { configured: boolean; owner: boolean };
 
+export type Broadcast = {
+  title: string;
+  body: string;
+  ts: number;
+  sent?: number;
+  data?: Record<string, unknown>;
+};
+
 // Corporate / institutional data (NSE public feeds).
 export type Announcement = { date: string; subject: string; detail: string; attachment: string };
 export type CorpAction = { type: string; ex_date: string; record_date: string; detail: string };
@@ -833,6 +841,10 @@ export const api = {
   corpShareholding: (s: string) => getJson<{ latest: Shareholding | null; source: string }>('/corporate/shareholding?symbol=' + encodeURIComponent(s)),
   corpDeals: () => getJson<{ bulk: Deal[]; block: Deal[]; source: string }>('/corporate/deals'),
   authStatus: () => getJson<AuthStatus>('/auth/status'),
+  // Dev broadcasts / announcements: public inbox + owner-only send.
+  broadcasts: () => getJson<{ items: Broadcast[] }>('/broadcast'),
+  broadcastSend: (title: string, body: string) =>
+    postJson<{ ok: boolean; sent: number; configured?: boolean }>('/broadcast', { title, body }),
   authLogin: (password: string) => postJson<{ owner: boolean }>('/auth/login', { password }),
   authLogout: () => postJson<{ owner: boolean }>('/auth/logout', {}),
   brokerStatus: () => getJson<BrokerStatus>('/broker/status'),
