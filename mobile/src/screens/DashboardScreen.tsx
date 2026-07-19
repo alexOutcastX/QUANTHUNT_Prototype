@@ -2,6 +2,8 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Linking, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { API_BASE, HolidaysResp, IndexConstituent, IndexQuote, MoversResp, Quote, api } from '../api';
 import { loadWatchlist } from '../watchlist';
+import { SimState, loadSim, metrics } from '../paperSim';
+import { navigate } from '../navIntent';
 import { Card, EmptyState, Loading, SectionTitle, StatTile } from '../ui';
 import { theme } from '../theme';
 
@@ -22,6 +24,10 @@ export default function DashboardScreen({ onNavigate }: { onNavigate?: (page: st
   const [mv, setMv] = useState<MoversResp | null>(null);
   const [watch, setWatch] = useState<{ symbol: string; q?: Quote }[] | null>(null);
   const [news, setNews] = useState<NewsItem[] | null>(null);
+  // Paper-trading simulator snapshot: virtual account equity + all-time P&L,
+  // marked against live prices for the open positions.
+  const [sim, setSim] = useState<SimState | null>(null);
+  const [simPrices, setSimPrices] = useState<Record<string, number>>({});
   const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async () => {
@@ -59,6 +65,24 @@ export default function DashboardScreen({ onNavigate }: { onNavigate?: (page: st
     } catch {
       setNews([]);
     }
+    try {
+      const s = await loadSim();
+      setSim(s);
+      const syms = s.positions.map((p) => p.symbol);
+      if (syms.length) {
+        const q = await api.ltp(syms);
+        const px: Record<string, number> = {};
+        for (const sym of syms) {
+          const p = q[sym]?.price;
+          if (p != null) px[sym] = p;
+        }
+        setSimPrices(px);
+      } else {
+        setSimPrices({});
+      }
+    } catch {
+      /* simulator card just shows starting state on failure */
+    }
   }, []);
 
   useEffect(() => {
@@ -94,6 +118,10 @@ export default function DashboardScreen({ onNavigate }: { onNavigate?: (page: st
       .slice()
       .sort((a, b) => b.chg - a.chg);
   }, [indices]);
+
+  const simM = sim ? metrics(sim, simPrices) : null;
+  const inr = (v: number) =>
+    '₹' + Math.round(v).toLocaleString('en-IN');
 
   const upPct = breadth ? (breadth.up / breadth.total) * 100 : 0;
   const downPct = breadth ? (breadth.down / breadth.total) * 100 : 0;
@@ -298,6 +326,57 @@ export default function DashboardScreen({ onNavigate }: { onNavigate?: (page: st
         </Card>
       </View>
 
+      <TouchableOpacity
+        activeOpacity={0.85}
+        onPress={() => navigate('analysis', { sub: 'paper' })}
+        style={{ marginTop: theme.sp.lg }}
+      >
+        <Card>
+          <View style={styles.paperHead}>
+            <SectionTitle>Paper portfolio</SectionTitle>
+            <Text style={styles.moreLinkInline}>Open ›</Text>
+          </View>
+          {!simM ? (
+            <Loading />
+          ) : (
+            <View>
+              <View style={styles.paperTop}>
+                <View>
+                  <Text style={styles.paperLabel}>Portfolio value</Text>
+                  <Text style={styles.paperEquity}>{inr(simM.equity)}</Text>
+                </View>
+                <View style={{ alignItems: 'flex-end' }}>
+                  <Text style={styles.paperLabel}>All-time P&amp;L</Text>
+                  <Text style={[styles.paperPnl, { color: colorOf(simM.pnl) }]}>
+                    {(simM.pnl >= 0 ? '+' : '') + inr(simM.pnl)} ({pct(simM.pnlPct)})
+                  </Text>
+                </View>
+              </View>
+              <View style={styles.paperStats}>
+                <View style={styles.paperStat}>
+                  <Text style={styles.paperStatN}>{inr(sim?.cash ?? 0)}</Text>
+                  <Text style={styles.paperStatL}>Cash</Text>
+                </View>
+                <View style={styles.paperStat}>
+                  <Text style={styles.paperStatN}>{inr(simM.invested)}</Text>
+                  <Text style={styles.paperStatL}>Invested</Text>
+                </View>
+                <View style={styles.paperStat}>
+                  <Text style={[styles.paperStatN, { color: colorOf(simM.unrealized) }]}>
+                    {(simM.unrealized >= 0 ? '+' : '') + inr(simM.unrealized)}
+                  </Text>
+                  <Text style={styles.paperStatL}>Unrealised</Text>
+                </View>
+                <View style={styles.paperStat}>
+                  <Text style={styles.paperStatN}>{sim?.positions.length ?? 0}</Text>
+                  <Text style={styles.paperStatL}>Holdings</Text>
+                </View>
+              </View>
+            </View>
+          )}
+        </Card>
+      </TouchableOpacity>
+
       <Card style={{ marginTop: theme.sp.lg }}>
         <SectionTitle>Latest market news</SectionTitle>
         {!news ? (
@@ -380,6 +459,22 @@ const styles = StyleSheet.create({
   sname: { width: 96, color: theme.text, fontSize: theme.fs.sm + 1, fontWeight: '600' },
   sbarWrap: { flex: 1, height: 6, borderRadius: 3, backgroundColor: theme.surface2, overflow: 'hidden' },
   schg: { fontFamily: theme.mono, fontSize: theme.fs.sm + 1, minWidth: 68, textAlign: 'right' },
+  paperHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  moreLinkInline: { color: theme.muted, fontSize: theme.fs.sm, fontWeight: '600' },
+  paperTop: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginTop: theme.sp.xs },
+  paperLabel: { color: theme.muted, fontSize: theme.fs.xs + 1, fontWeight: '600' },
+  paperEquity: { color: theme.text, fontFamily: theme.mono, fontSize: theme.fs.xxl, fontWeight: '800', marginTop: 2 },
+  paperPnl: { fontFamily: theme.mono, fontSize: theme.fs.md, fontWeight: '800', marginTop: 2 },
+  paperStats: {
+    flexDirection: 'row',
+    marginTop: theme.sp.md,
+    borderTopColor: theme.border,
+    borderTopWidth: 1,
+    paddingTop: theme.sp.md,
+  },
+  paperStat: { flex: 1 },
+  paperStatN: { color: theme.text, fontFamily: theme.mono, fontSize: theme.fs.sm + 1, fontWeight: '700' },
+  paperStatL: { color: theme.muted, fontSize: theme.fs.xs, marginTop: 2 },
   nrow: { paddingVertical: 12, borderTopColor: theme.border, borderTopWidth: 1 },
   ntitle: { color: theme.text, fontSize: theme.fs.md, lineHeight: 20 },
   nmeta: { color: theme.muted, fontSize: theme.fs.xs + 1, marginTop: 4 },
