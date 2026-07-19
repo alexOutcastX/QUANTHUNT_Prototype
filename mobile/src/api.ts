@@ -152,6 +152,7 @@ export type ScanRow = {
   d9?: number | null;
   d20?: number | null;
   d50?: number | null;
+  d150?: number | null;
   d200?: number | null;
   rsi?: number | null;
   macd?: number | null;
@@ -189,6 +190,25 @@ export type ScanRow = {
   cam_l4?: number | null;
   cam_break_up?: boolean | null;
   cam_break_down?: boolean | null;
+  // Minervini Trend Template + relative strength
+  dma200_rising?: boolean | null;
+  ret_6m?: number | null;
+  minervini?: boolean | null;
+  minervini_rules?: number | null;
+  // Candlestick patterns on the latest bar
+  cs_doji?: boolean | null;
+  cs_hammer?: boolean | null;
+  cs_shooting_star?: boolean | null;
+  cs_bull_engulf?: boolean | null;
+  cs_bear_engulf?: boolean | null;
+  cs_piercing?: boolean | null;
+  cs_dark_cloud?: boolean | null;
+  cs_morning_star?: boolean | null;
+  cs_evening_star?: boolean | null;
+  cs_three_white?: boolean | null;
+  cs_three_black?: boolean | null;
+  cs_bullish?: boolean | null;
+  cs_bearish?: boolean | null;
 };
 export type ScanResp = {
   data: Record<string, ScanRow>;

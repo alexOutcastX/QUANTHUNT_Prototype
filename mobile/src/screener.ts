@@ -103,6 +103,7 @@ export const FILTER_DEFS: FilterDef[] = [
   // Trend
   { key: 'd20', label: 'Price vs 20 DMA', group: 'Trend', type: 'range', unit: '%', get: (s) => n(s.d20) },
   { key: 'd50', label: 'Price vs 50 DMA', group: 'Trend', type: 'range', unit: '%', get: (s) => n(s.d50) },
+  { key: 'd150', label: 'Price vs 150 DMA', group: 'Trend', type: 'range', unit: '%', get: (s) => n(s.d150) },
   { key: 'd200', label: 'Price vs 200 DMA', group: 'Trend', type: 'range', unit: '%', get: (s) => n(s.d200) },
   { key: 'macd', label: 'MACD Histogram', group: 'Trend', type: 'range', get: (s) => n(s.macd) },
   { key: 'pct_from_high', label: '% from 52W High', group: 'Trend', type: 'range', unit: '%', get: (s) => n(s.pct_from_high) },
@@ -130,6 +131,22 @@ export const FILTER_DEFS: FilterDef[] = [
   { key: 'volume_spike', label: 'Volume spike (≥2.5×)', group: 'Signals', type: 'toggle', get: (s) => s.volume_spike === true },
   { key: 'cam_break_up', label: 'Camarilla H4 breakout', group: 'Signals', type: 'toggle', get: (s) => s.cam_break_up === true },
   { key: 'cam_break_down', label: 'Camarilla L4 breakdown', group: 'Signals', type: 'toggle', get: (s) => s.cam_break_down === true },
+  // Strategies — multi-rule chart strategies computed server-side
+  { key: 'minervini', label: 'Minervini Trend Template', group: 'Strategies', type: 'toggle', get: (s) => s.minervini === true },
+  { key: 'dma200_rising', label: '200-DMA rising', group: 'Strategies', type: 'toggle', get: (s) => s.dma200_rising === true },
+  { key: 'ret_6m', label: '6-month return', group: 'Strategies', type: 'range', unit: '%', get: (s) => n(s.ret_6m) },
+  // Candlestick patterns on the latest bar
+  { key: 'cs_bullish', label: 'Any bullish candle', group: 'Candlesticks', type: 'toggle', get: (s) => s.cs_bullish === true },
+  { key: 'cs_bearish', label: 'Any bearish candle', group: 'Candlesticks', type: 'toggle', get: (s) => s.cs_bearish === true },
+  { key: 'cs_bull_engulf', label: 'Bullish engulfing', group: 'Candlesticks', type: 'toggle', get: (s) => s.cs_bull_engulf === true },
+  { key: 'cs_bear_engulf', label: 'Bearish engulfing', group: 'Candlesticks', type: 'toggle', get: (s) => s.cs_bear_engulf === true },
+  { key: 'cs_hammer', label: 'Hammer', group: 'Candlesticks', type: 'toggle', get: (s) => s.cs_hammer === true },
+  { key: 'cs_shooting_star', label: 'Shooting star', group: 'Candlesticks', type: 'toggle', get: (s) => s.cs_shooting_star === true },
+  { key: 'cs_morning_star', label: 'Morning star', group: 'Candlesticks', type: 'toggle', get: (s) => s.cs_morning_star === true },
+  { key: 'cs_evening_star', label: 'Evening star', group: 'Candlesticks', type: 'toggle', get: (s) => s.cs_evening_star === true },
+  { key: 'cs_doji', label: 'Doji', group: 'Candlesticks', type: 'toggle', get: (s) => s.cs_doji === true },
+  { key: 'cs_three_white', label: 'Three white soldiers', group: 'Candlesticks', type: 'toggle', get: (s) => s.cs_three_white === true },
+  { key: 'cs_three_black', label: 'Three black crows', group: 'Candlesticks', type: 'toggle', get: (s) => s.cs_three_black === true },
   // Volume
   { key: 'volume', label: 'Volume', group: 'Volume', type: 'range', get: (s) => n(s.volume) },
   { key: 'avgvol', label: 'Avg Volume', group: 'Volume', type: 'range', get: (s) => n(s.avgvol) },
