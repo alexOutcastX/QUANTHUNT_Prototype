@@ -16,6 +16,7 @@ import {
   Fundamentals,
   MultibaggerReport,
   Recommendation,
+  ReportResp,
   RiskReport,
   ScanRow,
   Shareholding,
@@ -60,6 +61,7 @@ type Dossier = {
   hold?: Shareholding | null;
   flows?: FlowEdge[];
   risk?: RiskReport | null;
+  rep?: ReportResp | null;
   mc?: Assessment | null;
 };
 
@@ -138,6 +140,7 @@ export default function AnalysisScreen() {
     add(api.corpShareholding(s).then((r) => patch(s, { hold: r.latest || null })));
     add(api.symbolFlows(s).then((r) => patch(s, { flows: r.flows || [] })));
     add(api.riskPortfolio([{ symbol: s, qty: 1 }]).then((r) => patch(s, { risk: r && r.ok ? r : null })));
+    add(api.report(s).then((r) => patch(s, { rep: r && !r.error ? r : null })));
     // Upside-probability model (Monte-Carlo + historical frequency over 5y).
     add(
       api.history(s, '5y', '1d').then((h) => {
@@ -183,6 +186,9 @@ export default function AnalysisScreen() {
   const rec = d?.rec;
   const fund = d?.fund;
   const tech = d?.tech;
+  const rep = d?.rep;
+  const bal = rep?.balance_sheet;
+  const cflow = rep?.cash_flow;
   const m = (mb?.metrics || {}) as Record<string, number | null>;
   const name = mb?.name || fund?.longName || fund?.name || d?.sym || '';
   const sector = mb?.sector || fund?.sector || null;
@@ -327,6 +333,81 @@ export default function AnalysisScreen() {
               </>
             ) : null}
 
+            {/* Profit & loss — annual */}
+            {rep?.fin_years && rep.fin_years.length ? (
+              <>
+                <SectionTitle>Profit &amp; loss · annual</SectionTitle>
+                <Card>
+                  <View style={styles.finHead}>
+                    <Text style={[styles.finHc, styles.finPeriod]}>YEAR</Text>
+                    <Text style={[styles.finHc, styles.finNum]}>REVENUE</Text>
+                    <Text style={[styles.finHc, styles.finNum]}>PAT</Text>
+                    <Text style={[styles.finHc, styles.finNum]}>PAT Δ</Text>
+                  </View>
+                  {rep.fin_years.map((y, i) => (
+                    <View key={i} style={styles.finRow}>
+                      <Text style={[styles.finV, styles.finPeriod]}>{y.year}</Text>
+                      <Text style={[styles.finV, styles.finNum]}>{fmtCr(y.revenue)}</Text>
+                      <Text style={[styles.finV, styles.finNum, { color: dirColor(y.net_income) }]}>{fmtCr(y.net_income)}</Text>
+                      <Text style={[styles.finV, styles.finNum, { color: dirColor(y.ni_growth) }]}>{pctS(y.ni_growth)}</Text>
+                    </View>
+                  ))}
+                </Card>
+              </>
+            ) : null}
+
+            {/* Profit & loss — quarterly */}
+            {rep?.fin_quarters && rep.fin_quarters.length ? (
+              <>
+                <SectionTitle>Profit &amp; loss · quarterly</SectionTitle>
+                <Card>
+                  <View style={styles.finHead}>
+                    <Text style={[styles.finHc, styles.finPeriod]}>QUARTER</Text>
+                    <Text style={[styles.finHc, styles.finNum]}>REVENUE</Text>
+                    <Text style={[styles.finHc, styles.finNum]}>PAT</Text>
+                    <Text style={[styles.finHc, styles.finNum]}>OP INC</Text>
+                  </View>
+                  {rep.fin_quarters.map((q, i) => (
+                    <View key={i} style={styles.finRow}>
+                      <Text style={[styles.finV, styles.finPeriod]}>{q.period}</Text>
+                      <Text style={[styles.finV, styles.finNum]}>{fmtCr(q.revenue)}</Text>
+                      <Text style={[styles.finV, styles.finNum, { color: dirColor(q.net_income) }]}>{fmtCr(q.net_income)}</Text>
+                      <Text style={[styles.finV, styles.finNum]}>{fmtCr(q.op_income)}</Text>
+                    </View>
+                  ))}
+                </Card>
+              </>
+            ) : null}
+
+            {/* Balance sheet */}
+            {bal && (bal.total_debt != null || bal.equity != null || bal.total_assets != null) ? (
+              <>
+                <SectionTitle>Balance sheet</SectionTitle>
+                <Card>
+                  <KV k="Total debt / borrowings" v={fmtCr(bal.total_debt ?? m.total_debt_cr)} color={(bal.total_debt ?? 0) > 0 ? theme.text : undefined} />
+                  {bal.long_term_debt != null ? <KV k="Long-term borrowings" v={fmtCr(bal.long_term_debt)} /> : null}
+                  {bal.current_debt != null ? <KV k="Short-term borrowings" v={fmtCr(bal.current_debt)} /> : null}
+                  <KV k="Cash & equivalents" v={fmtCr(bal.cash)} color={theme.green} />
+                  <KV k="Shareholders' equity / net worth" v={fmtCr(bal.equity)} />
+                  <KV k="Total assets" v={fmtCr(bal.total_assets)} />
+                  {bal.inventory != null ? <KV k="Inventory" v={fmtCr(bal.inventory)} /> : null}
+                  {bal.receivables != null ? <KV k="Receivables" v={fmtCr(bal.receivables)} /> : null}
+                </Card>
+              </>
+            ) : null}
+
+            {/* Cash flow */}
+            {cflow && (cflow.fcf != null || cflow.ocf != null) ? (
+              <>
+                <SectionTitle>Cash flow</SectionTitle>
+                <Card>
+                  <KV k="Operating cash flow" v={fmtCr(cflow.ocf)} color={dirColor(cflow.ocf)} />
+                  <KV k="Free cash flow" v={fmtCr(cflow.fcf ?? m.fcf_cr)} color={dirColor(cflow.fcf ?? m.fcf_cr)} />
+                  {cflow.capex != null ? <KV k="Capex" v={fmtCr(cflow.capex)} /> : null}
+                </Card>
+              </>
+            ) : null}
+
             {/* In-depth technicals */}
             {tech ? (
               <>
@@ -399,12 +480,12 @@ export default function AnalysisScreen() {
                   <KV k="Promoter pledge" v={num(d.hold.pledge, 2, '%')} color={(d.hold.pledge ?? 0) > 0 ? theme.red : undefined} />
                 </Card>
               </>
-            ) : mb ? (
+            ) : (mb || rep?.shareholding) ? (
               <>
                 <SectionTitle>Ownership</SectionTitle>
                 <Card>
-                  <KV k="Promoter / insider" v={num(m.insider_pct, 1, '%')} />
-                  <KV k="Institutions" v={num(m.institution_pct, 1, '%')} />
+                  <KV k="Promoter / insider" v={num(m.insider_pct ?? rep?.shareholding?.insiders_pct ?? null, 1, '%')} />
+                  <KV k="Institutions" v={num(m.institution_pct ?? rep?.shareholding?.institutions_pct ?? null, 1, '%')} />
                 </Card>
               </>
             ) : null}
@@ -587,6 +668,20 @@ function dossierHtml(d: Dossier): string {
   const flags = mb?.red_flags?.length ? `<h2>Red flags</h2><ul>${mb.red_flags.map((x) => `<li style="color:${red}">${esc(x)}</li>`).join('')}</ul>` : '';
   const strengths = mb?.strengths?.length ? `<h2>What works</h2><ul>${mb.strengths.map((x) => `<li style="color:${green}">${esc(x)}</li>`).join('')}</ul>` : '';
   const docLinks = docs.length ? `<h2>Management commentary & filings</h2><ul>${docs.slice(0, 10).map((a) => `<li>${a.attachment ? `<a href="${esc(a.attachment)}">${esc(a.subject)}</a>` : esc(a.subject)} <span style="color:#888">— ${esc(a.date)}</span></li>`).join('')}</ul>` : '';
+  const rep = d.rep;
+  const plRows = rep?.fin_years?.length
+    ? `<h2>Profit & loss (annual)</h2><table><tr><td><b>Year</b></td><td style="text-align:right"><b>Revenue</b></td><td style="text-align:right"><b>PAT</b></td><td style="text-align:right"><b>PAT growth</b></td></tr>${rep.fin_years.map((y) => `<tr><td>${esc(y.year)}</td><td style="text-align:right">${esc(fmtCr(y.revenue))}</td><td style="text-align:right">${esc(fmtCr(y.net_income))}</td><td style="text-align:right">${esc(pctS(y.ni_growth))}</td></tr>`).join('')}</table>`
+    : '';
+  const qRows = rep?.fin_quarters?.length
+    ? `<h2>Profit & loss (quarterly)</h2><table><tr><td><b>Quarter</b></td><td style="text-align:right"><b>Revenue</b></td><td style="text-align:right"><b>PAT</b></td></tr>${rep.fin_quarters.map((q) => `<tr><td>${esc(q.period)}</td><td style="text-align:right">${esc(fmtCr(q.revenue))}</td><td style="text-align:right">${esc(fmtCr(q.net_income))}</td></tr>`).join('')}</table>`
+    : '';
+  const b2 = rep?.balance_sheet;
+  const bsRows = b2 ? `<h2>Balance sheet & cash flow</h2><table>${[
+    ['Total debt / borrowings', fmtCr(b2.total_debt)], ['Long-term borrowings', fmtCr(b2.long_term_debt)],
+    ['Cash & equivalents', fmtCr(b2.cash)], ["Shareholders' equity", fmtCr(b2.equity)],
+    ['Total assets', fmtCr(b2.total_assets)],
+    ['Operating cash flow', fmtCr(rep?.cash_flow?.ocf)], ['Free cash flow', fmtCr(rep?.cash_flow?.fcf)],
+  ].map(([k, v]) => row(k, v)).join('')}</table>` : '';
   return `<html><head><title>TaurEye — Institutional dossier — ${esc(d.sym)}</title>
 <style>body{font-family:Arial,sans-serif;color:#111;background:#fff;max-width:800px;margin:24px auto;padding:0 16px}
 h1{font-size:20px;margin-bottom:0}h2{font-size:14px;margin:18px 0 6px}
@@ -600,6 +695,7 @@ ${mb ? `<div>${esc(mb.tier)} · multibagging potential (5x+ in 5–10y): <b styl
 <p>${esc(v.note)}</p>
 ${mb?.about || fund?.description ? `<h2>Business overview</h2><p>${esc(mb?.about || fund?.description)}</p>` : ''}
 ${fundRows ? `<h2>Fundamentals & valuation</h2><table>${fundRows}</table>` : ''}
+${plRows}${qRows}${bsRows}
 ${techRows ? `<h2>In-depth technicals</h2><table>${techRows}</table>` : ''}
 ${setupRows ? `<h2>Trade setup</h2><table>${setupRows}</table>` : ''}
 ${holdRows ? `<h2>Ownership</h2><table>${holdRows}</table>` : ''}
@@ -661,6 +757,12 @@ const styles = StyleSheet.create({
   cH: { flex: 1 },
   cN: { width: 84, textAlign: 'right' },
   small: { color: theme.muted, fontSize: theme.fs.xs + 1, lineHeight: 16, marginBottom: theme.sp.xs },
+  finHead: { flexDirection: 'row', alignItems: 'center', paddingBottom: theme.sp.sm, borderBottomColor: theme.border2, borderBottomWidth: 1 },
+  finHc: { color: theme.muted2, fontSize: theme.fs.xs, fontWeight: '700', letterSpacing: 0.4 },
+  finRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 7, borderBottomColor: theme.border, borderBottomWidth: 1 },
+  finV: { color: theme.text, fontFamily: theme.mono, fontSize: theme.fs.sm },
+  finPeriod: { flex: 1.4, textAlign: 'left' },
+  finNum: { flex: 1, textAlign: 'right' },
   checkWrap: { flexDirection: 'row', flexWrap: 'wrap' },
   checkItem: { flexDirection: 'row', alignItems: 'center', gap: 7, width: '50%', minWidth: 220, paddingVertical: 5 },
   checkMark: { fontFamily: theme.mono, fontSize: theme.fs.md, fontWeight: '800', width: 14 },

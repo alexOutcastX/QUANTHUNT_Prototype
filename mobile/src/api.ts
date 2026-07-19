@@ -361,6 +361,29 @@ export type Broadcast = {
   data?: Record<string, unknown>;
 };
 
+// Full company report (/report) — used by the institutional dossier for
+// quarterly + annual P&L, balance sheet, cash flow and shareholding.
+export type ReportFinYear = {
+  year: string; revenue: number | null; net_income: number | null;
+  op_income?: number | null; net_margin?: number | null;
+  rev_growth?: number | null; ni_growth?: number | null;
+};
+export type ReportFinQuarter = {
+  period: string; revenue: number | null; net_income: number | null; op_income?: number | null;
+};
+export type ReportResp = {
+  fin_years?: ReportFinYear[];
+  fin_quarters?: ReportFinQuarter[];
+  shareholding?: { insiders_pct?: number | null; institutions_pct?: number | null };
+  balance_sheet?: {
+    total_debt?: number | null; long_term_debt?: number | null; current_debt?: number | null;
+    total_assets?: number | null; equity?: number | null; cash?: number | null;
+    inventory?: number | null; receivables?: number | null;
+  };
+  cash_flow?: { ocf?: number | null; fcf?: number | null; capex?: number | null };
+  error?: string;
+};
+
 // Corporate / institutional data (NSE public feeds).
 export type Announcement = { date: string; subject: string; detail: string; attachment: string };
 export type CorpAction = { type: string; ex_date: string; record_date: string; detail: string };
@@ -823,6 +846,8 @@ export const api = {
     ),
   multibagger: (symbol: string) =>
     getJson<MultibaggerReport>('/multibagger?symbol=' + encodeURIComponent(symbol), 60000),
+  report: (symbol: string) =>
+    getJson<ReportResp>('/report?symbol=' + encodeURIComponent(symbol), 60000),
   chartPatterns: (symbol: string, period = '2y') =>
     getJson<ChartPatternsResp>(
       `/chart-patterns?symbol=${encodeURIComponent(symbol)}&period=${encodeURIComponent(period)}`,
