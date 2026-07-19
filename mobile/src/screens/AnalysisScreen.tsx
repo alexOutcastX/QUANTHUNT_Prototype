@@ -437,6 +437,7 @@ export default function AnalysisScreen() {
                   {d.risk?.sharpe != null ? <KV k="Sharpe" v={plain(d.risk.sharpe, 2)} /> : null}
                   <KV k="Beta vs NIFTY" v={plain(d.risk?.beta ?? tech?.beta ?? null, 2)} color={(d.risk?.beta ?? tech?.beta ?? 0) > 1 ? theme.red : undefined} />
                   <KV k="Debt / equity" v={plain(m.debt_equity ?? fund?.debt_equity ?? null, 2)} color={(m.debt_equity ?? fund?.debt_equity ?? 0) > 1.5 ? theme.red : undefined} />
+                  <KV k="Total debt / borrowings" v={fmtCr(m.total_debt_cr)} color={(m.total_debt_cr ?? 0) > 0 ? theme.text : undefined} />
                 </Card>
                 {mb?.red_flags?.length ? (
                   <Card style={{ marginTop: theme.sp.sm }}><Bullets items={mb.red_flags} color={theme.red} glyph="▼" /></Card>
@@ -561,6 +562,7 @@ function dossierHtml(d: Dossier): string {
     ['ROE', num(m.roe_pct, 1, '%')],
     ['Op margin', num(m.op_margin_pct, 1, '%')],
     ['Debt/equity', plain(m.debt_equity ?? fund?.debt_equity ?? null, 2)],
+    ['Total debt / borrowings', fmtCr(m.total_debt_cr)],
     ['Free cash flow', fmtCr(m.fcf_cr)],
     ['P/E', plain(m.pe ?? fund?.pe ?? null, 1)],
     ['PEG', plain(m.peg ?? null, 2)],
