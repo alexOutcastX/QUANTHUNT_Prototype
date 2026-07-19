@@ -72,8 +72,13 @@ export function printHtmlDocument(html: string, onFail?: () => void): boolean {
     onFail?.();
     return false;
   }
-  // Print once the iframe has laid out. onload is most reliable; the timeout is
-  // a fallback for WebViews that don't fire onload for a document.write().
+  // Android's WebView blocks print() when it's called outside the tap gesture
+  // (i.e. from an async onload / timeout) — which is why "export" silently did
+  // nothing on the phone. `document.write` populates the iframe synchronously,
+  // so fire once RIGHT NOW, still inside the user gesture. onload + a timeout
+  // stay as fallbacks for desktop browsers that need layout first (the `fired`
+  // guard means only the first one actually prints).
+  fire();
   iframe.onload = fire;
   setTimeout(fire, 500);
   return true;
