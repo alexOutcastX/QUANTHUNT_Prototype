@@ -3,13 +3,17 @@
 // (Take / Watch / Avoid) plus the setup, a risk score and the reasoning.
 import React, { useEffect, useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { Recommendation, api } from '../api';
+import { Recommendation, TimeframesResp, api } from '../api';
 import { addPaperTrade } from '../paperTrades';
 import { Loading, RiskBadge } from '../ui';
 import { theme } from '../theme';
 
 const money = (v?: number | null) => (v == null || !isFinite(v) ? '—' : '₹' + v.toLocaleString('en-IN', { maximumFractionDigits: 2 }));
 const pct = (v?: number | null, d = 1) => (v == null || !isFinite(v) ? '—' : (v >= 0 ? '+' : '') + v.toFixed(d) + '%');
+const biasColor = (b?: string) =>
+  b === 'bullish' ? theme.green : b === 'bearish' ? theme.red : b === 'neutral' ? '#e0a92e' : theme.muted;
+const scoreColor = (s: number | null | undefined) =>
+  s == null ? theme.muted : s >= 60 ? theme.green : s <= 40 ? theme.red : '#e0a92e';
 
 type Verdict = { label: string; color: string; sub: string };
 function verdictFor(r: Recommendation): Verdict {
@@ -24,6 +28,14 @@ export default function TradeVerdict({ symbol, onClose }: { symbol: string; onCl
   const [rec, setRec] = useState<Recommendation | null | undefined>(undefined);
   const [err, setErr] = useState('');
   const [papered, setPapered] = useState(false);
+  const [tf, setTf] = useState<TimeframesResp | null | undefined>(undefined);
+
+  useEffect(() => {
+    let alive = true;
+    setTf(undefined);
+    api.timeframes(symbol).then((r) => { if (alive) setTf(r && !r.error ? r : null); }).catch(() => { if (alive) setTf(null); });
+    return () => { alive = false; };
+  }, [symbol]);
 
   useEffect(() => {
     let alive = true;
@@ -69,7 +81,41 @@ export default function TradeVerdict({ symbol, onClose }: { symbol: string; onCl
                 <View style={[styles.verdict, { borderColor: v.color }]}>
                   <Text style={[styles.verdictLabel, { color: v.color }]}>{v.label}</Text>
                   <Text style={styles.verdictSub}>{v.sub}</Text>
+                  <Text style={styles.verdictNote}>This is a blended daily read — see the per-timeframe scores below (they can disagree).</Text>
                 </View>
+              ) : null}
+
+              {/* Near → far horizon outlook */}
+              {tf === undefined ? (
+                <Text style={styles.tfLoading}>Reading 5-minute → weekly timeframes…</Text>
+              ) : tf && tf.horizons?.length ? (
+                <>
+                  <Text style={styles.secTitle}>OUTLOOK · NEAR → FAR</Text>
+                  <View style={styles.hzRow}>
+                    {tf.horizons.map((h) => (
+                      <View key={h.key} style={styles.hzCell}>
+                        <Text style={styles.hzLbl}>{h.label}</Text>
+                        <Text style={[styles.hzScore, { color: scoreColor(h.score) }]}>{h.score == null ? '—' : h.score}</Text>
+                        <Text style={[styles.hzBias, { color: biasColor(h.bias) }]}>{h.bias}</Text>
+                      </View>
+                    ))}
+                  </View>
+                  <Text style={styles.secTitle}>TIMEFRAME READ · 5-MIN → WEEKLY</Text>
+                  {tf.timeframes.map((t) => (
+                    <View key={t.tf} style={styles.tfRow}>
+                      <Text style={styles.tfLabel}>{t.label}</Text>
+                      <View style={styles.tfMid}>
+                        <View style={styles.tfBarWrap}>
+                          <View style={[styles.tfBar, { width: (`${t.score ?? 0}%`) as `${number}%`, backgroundColor: scoreColor(t.score) }]} />
+                        </View>
+                        <Text style={styles.tfMeta} numberOfLines={1}>
+                          {t.score == null ? 'no data' : `RSI ${t.rsi ?? '—'} · vs 20EMA ${pct(t.vs_ema20)} · vs 50EMA ${pct(t.vs_ema50)}`}
+                        </Text>
+                      </View>
+                      <Text style={[styles.tfBias, { color: biasColor(t.bias) }]}>{t.score == null ? 'n/a' : `${t.bias} ${t.score}`}</Text>
+                    </View>
+                  ))}
+                </>
               ) : null}
 
               {rec.name ? <Text style={styles.name}>{rec.name}</Text> : null}
@@ -144,6 +190,20 @@ const styles = StyleSheet.create({
   verdict: { borderWidth: 1.5, borderRadius: theme.radius.lg, padding: theme.sp.lg, marginBottom: theme.sp.md, backgroundColor: theme.surface2 },
   verdictLabel: { fontSize: theme.fs.xl, fontWeight: '900', letterSpacing: 0.3 },
   verdictSub: { color: theme.muted2, fontSize: theme.fs.sm, marginTop: 6, lineHeight: 19 },
+  verdictNote: { color: theme.muted, fontSize: theme.fs.xs + 1, marginTop: 6, fontStyle: 'italic' },
+  tfLoading: { color: theme.muted, fontSize: theme.fs.sm, marginBottom: theme.sp.md },
+  hzRow: { flexDirection: 'row', gap: theme.sp.sm, marginBottom: theme.sp.xs },
+  hzCell: { flex: 1, alignItems: 'center', backgroundColor: theme.surface2, borderColor: theme.border, borderWidth: 1, borderRadius: theme.radius.sm + 2, paddingVertical: theme.sp.sm, gap: 2 },
+  hzLbl: { color: theme.muted, fontSize: 9, fontWeight: '700', letterSpacing: 0.3, textAlign: 'center' },
+  hzScore: { fontFamily: theme.mono, fontSize: theme.fs.lg, fontWeight: '800' },
+  hzBias: { fontSize: 9, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.3 },
+  tfRow: { flexDirection: 'row', alignItems: 'center', gap: theme.sp.sm, paddingVertical: 6, borderBottomColor: theme.border, borderBottomWidth: 1 },
+  tfLabel: { width: 68, color: theme.text, fontSize: theme.fs.sm, fontWeight: '700' },
+  tfMid: { flex: 1, gap: 3 },
+  tfBarWrap: { height: 6, borderRadius: 3, backgroundColor: theme.surface3, overflow: 'hidden' },
+  tfBar: { height: '100%', borderRadius: 3 },
+  tfMeta: { color: theme.muted, fontFamily: theme.mono, fontSize: theme.fs.xs },
+  tfBias: { width: 84, textAlign: 'right', fontFamily: theme.mono, fontSize: theme.fs.xs + 1, fontWeight: '800' },
   name: { color: theme.muted2, fontSize: theme.fs.md, marginBottom: theme.sp.sm },
   badges: { flexDirection: 'row', alignItems: 'center', gap: theme.sp.sm, marginBottom: theme.sp.md, flexWrap: 'wrap' },
   metaPill: { flexDirection: 'row', alignItems: 'center', gap: 6, borderColor: theme.border2, borderWidth: 1, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 3 },

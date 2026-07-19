@@ -18,7 +18,7 @@ jobs:
           python-version: "3.11"
 
       - name: Python syntax (compile, no imports/network)
-        run: python -m py_compile server.py fundamentals.py wsgi.py auth.py broker.py news.py ai_graph.py holidays.py scanner.py relations.py store.py ydata.py multibagger.py mb_screen.py push.py chat.py
+        run: python -m py_compile server.py fundamentals.py wsgi.py auth.py broker.py news.py ai_graph.py holidays.py scanner.py relations.py store.py ydata.py multibagger.py mb_screen.py timeframes.py push.py chat.py
 
       - name: Stdlib-only unit tests (auth, holidays, store)
         run: python -m unittest discover -s tests -p 'test_*.py' -v

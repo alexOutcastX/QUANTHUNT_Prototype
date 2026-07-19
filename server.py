@@ -2812,6 +2812,29 @@ def report():
         return jsonify({"error": str(e)}), 502
 
 
+_TF_CACHE = {}
+_TF_TTL = 180  # 3 min — intraday reads move fast but not every second
+
+
+@app.route("/timeframes")
+def timeframes_route():
+    """Multi-timeframe trade analysis (5-min → weekly + near/far horizons)."""
+    sym = request.args.get("symbol", "").strip().upper().replace("NSE:", "").replace("BSE:", "")
+    if not sym:
+        return jsonify({"error": "symbol required"}), 400
+    cached = _TF_CACHE.get(sym)
+    if cached and time.time() - cached[0] < _TF_TTL:
+        return jsonify(cached[1])
+    try:
+        import timeframes as _tf
+        payload = _tf.analyse(sym)
+        _TF_CACHE[sym] = (time.time(), payload)
+        return jsonify(payload)
+    except Exception as e:
+        log.error("timeframes error %s: %s", sym, e)
+        return jsonify({"error": f"Couldn't analyse timeframes for {sym} — try again shortly."}), 503
+
+
 def _prefetch_universe():
     """Background prefetch so first /universe call is instant."""
     try:
