@@ -2541,6 +2541,23 @@ def report():
         except Exception as e:
             log.warning("Income stmt error %s: %s", sym, e)
 
+        # ── Quarterly Income Statement (last ~6 quarters) ──────────────────────
+        fin_quarters = []
+        try:
+            qinc = ticker.quarterly_income_stmt
+            if qinc is not None and not qinc.empty:
+                prev_rev = prev_ni = None
+                for col in list(qinc.columns)[:6]:
+                    q   = str(col)[:10]
+                    rev = qinc.loc["Total Revenue",    col] if "Total Revenue"    in qinc.index else None
+                    ni  = qinc.loc["Net Income",       col] if "Net Income"       in qinc.index else None
+                    op  = qinc.loc["Operating Income", col] if "Operating Income" in qinc.index else None
+                    # QoQ growth (statements are newest-first, so prev is the NEXT col)
+                    fin_quarters.append({"period": q, "revenue": fmt_cr(rev),
+                                         "net_income": fmt_cr(ni), "op_income": fmt_cr(op)})
+        except Exception as e:
+            log.warning("Quarterly stmt error %s: %s", sym, e)
+
         # ── Balance Sheet ──────────────────────────────────────────────────────
         bs = {}
         try:
@@ -2549,15 +2566,23 @@ def report():
                 c = bal.columns[0]
                 def bv(k): return bal.loc[k, c] if k in bal.index else None
                 bs = {
-                    "total_debt":   fmt_cr(bv("Total Debt")),
-                    "total_assets": fmt_cr(bv("Total Assets")),
-                    "equity":       fmt_cr(bv("Stockholders Equity")),
-                    "cash":         fmt_cr(bv("Cash And Cash Equivalents")),
-                    "inventory":    fmt_cr(bv("Inventory")),
-                    "receivables":  fmt_cr(bv("Accounts Receivable")),
+                    "total_debt":     fmt_cr(bv("Total Debt")),
+                    "long_term_debt": fmt_cr(bv("Long Term Debt")),
+                    "current_debt":   fmt_cr(bv("Current Debt")),
+                    "total_assets":   fmt_cr(bv("Total Assets")),
+                    "equity":         fmt_cr(bv("Stockholders Equity")),
+                    "cash":           fmt_cr(bv("Cash And Cash Equivalents")),
+                    "inventory":      fmt_cr(bv("Inventory")),
+                    "receivables":    fmt_cr(bv("Accounts Receivable")),
                 }
         except Exception as e:
             log.warning("Balance sheet error %s: %s", sym, e)
+
+        # ── Shareholding (best-effort from Yahoo held-percentages) ─────────────
+        shareholding = {
+            "insiders_pct":     pct(info.get("heldPercentInsiders")),
+            "institutions_pct": pct(info.get("heldPercentInstitutions")),
+        }
 
         # ── Cash Flow ──────────────────────────────────────────────────────────
         cf = {}
@@ -2768,6 +2793,8 @@ def report():
             "description": (info.get("longBusinessSummary") or "")[:900],
             # Multi-year
             "fin_years": fin_years,
+            "fin_quarters": fin_quarters,
+            "shareholding": shareholding,
             "balance_sheet": bs,
             "cash_flow": cf,
             # Technical
