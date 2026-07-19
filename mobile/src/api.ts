@@ -215,6 +215,15 @@ export type IndexResp = {
   data: IndexConstituent[];
   error?: string;
 };
+export type MoversResp = {
+  index: string;
+  breadth: { up: number; down: number; flat: number; total: number; ratio: number } | null;
+  gainers: IndexConstituent[];
+  losers: IndexConstituent[];
+  asof?: number;
+  stale?: boolean;
+  error?: string;
+};
 
 export type ReturnsRow = { ret1y?: number | null; ret3y?: number | null; ret5y?: number | null };
 export type ReturnsResp = Record<string, ReturnsRow>;
@@ -850,6 +859,11 @@ export const api = {
   graph: (symbol?: string, ai?: AiCreds) => fetchGraph(symbol, ai),
   indexConstituents: (name: string) =>
     getJson<IndexResp>('/index?name=' + encodeURIComponent(name)),
+  // Server-computed breadth + top gainers/losers (resilient: NSE pChange, else a
+  // Yahoo batch quote, else last-good). Keeps the dashboard populated even when
+  // the NSE constituent feed falls back to the symbols-only CSV.
+  movers: (index = 'NIFTY 50', n = 6) =>
+    getJson<MoversResp>('/movers?index=' + encodeURIComponent(index) + '&n=' + n),
   // /returns caps at 50 symbols/call; batch and merge.
   returns: async (symbols: string[]): Promise<ReturnsResp> => {
     const merged: ReturnsResp = {};
