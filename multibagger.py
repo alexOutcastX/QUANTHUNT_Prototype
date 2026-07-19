@@ -13,19 +13,23 @@
 
 PILLARS = [
     # (key, label, weight, what the big players look for)
-    ("size", "Size & runway", 18,
-     "Small base: nearly every 100-bagger started as a small cap - a 500cr company can 100x, a 5L cr one cannot."),
-    ("growth", "Growth engine", 24,
-     "Sustained revenue & earnings growth >15-20% - the single biggest driver of multibagger returns."),
-    ("quality", "Quality & moat", 18,
+    # Reweighted so the factors that actually build multibaggers — profit (PAT)
+    # growth, real free cash flow, and low debt/borrowings — dominate the score.
+    ("growth", "Profit growth engine", 26,
+     "Sustained profit (PAT) & revenue growth >15-20%, PAT-weighted - the single biggest driver of multibagger returns."),
+    ("cashflow", "Free cash flow", 16,
+     "Real, growing free cash flow - the difference between a compounding business and a story that keeps raising capital."),
+    ("leverage", "Debt & borrowings", 16,
+     "Low total debt / borrowings and healthy liquidity - leverage is how promising small caps die before they compound."),
+    ("quality", "Quality & moat", 14,
      "High return on equity with strong margins, held for years - Mayer's 'twin engines' of growth and returns on capital."),
-    ("balance", "Balance sheet", 14,
-     "Low debt and positive cash generation - leverage is how promising small caps die before they compound."),
-    ("ownership", "Ownership", 10,
+    ("size", "Size & runway", 12,
+     "Small base: nearly every 100-bagger started as a small cap - a 500cr company can 100x, a 5L cr one cannot."),
+    ("ownership", "Ownership", 7,
      "High promoter/insider stake (skin in the game) and low institutional ownership (still undiscovered)."),
-    ("valuation", "Valuation", 10,
+    ("valuation", "Valuation", 5,
      "Growth at a reasonable price - Lynch's PEG: pay less than the growth rate, avoid paying up for the story."),
-    ("momentum", "Trend", 6,
+    ("momentum", "Trend", 4,
      "Price in a long-term uptrend - winners keep making highs; big players add to strength, not to falling knives."),
 ]
 
@@ -150,6 +154,7 @@ def fetch_metrics(symbol: str, with_history: bool = True, retries: int = 1):
         "op_margin_pct":       pctf(info.get("operatingMargins")),
         "profit_margin_pct":   pctf(info.get("profitMargins")),
         "debt_equity":         round(de / 100, 2) if de is not None else None,
+        "total_debt_cr":       cr(info.get("totalDebt")),
         "current_ratio":       info.get("currentRatio"),
         "fcf_cr":              cr(info.get("freeCashflow")),
         "insider_pct":         pctf(info.get("heldPercentInsiders")),
@@ -217,10 +222,14 @@ def _pillar_scores(m):
     rev = _band(m.get("revenue_growth_pct"), [
         (25, 100), (15, 82), (8, 58), (0, 34), (float("-inf"), 10),
     ])
-    earn = _band(m.get("earnings_growth_pct"), [
+    earn = _band(m.get("earnings_growth_pct"), [   # earnings growth == PAT growth
         (30, 100), (18, 84), (10, 60), (0, 34), (float("-inf"), 8),
     ])
-    s["growth"] = _avg(rev, earn)
+    # PAT (profit) growth is the priority — weight it 2x revenue growth.
+    if earn is not None and rev is not None:
+        s["growth"] = (earn * 2 + rev) / 3
+    else:
+        s["growth"] = earn if earn is not None else rev
 
     roe = _band(m.get("roe_pct"), [
         (25, 100), (18, 84), (12, 62), (8, 40), (float("-inf"), 15),
@@ -230,16 +239,28 @@ def _pillar_scores(m):
     ])
     s["quality"] = _avg(roe, opm)
 
+    # Free cash flow as its own pillar. Positive FCF scores by its yield vs
+    # market cap (real cash relative to price); negative FCF is penalised hard.
+    fcf, mc = m.get("fcf_cr"), m.get("mcap_cr")
+    if fcf is None:
+        s["cashflow"] = None
+    elif fcf <= 0:
+        s["cashflow"] = 18
+    elif mc and mc > 0:
+        s["cashflow"] = _band((fcf / mc) * 100, [
+            (8, 100), (4, 86), (2, 68), (0.5, 50), (float("-inf"), 32),
+        ])
+    else:
+        s["cashflow"] = 80  # positive FCF, magnitude unknown
+
+    # Debt & borrowings — low leverage plus liquidity.
     de = _band_low(m.get("debt_equity"), [
-        (0.1, 100), (0.3, 86), (0.7, 62), (1.5, 32), (float("inf"), 10),
+        (0.1, 100), (0.3, 86), (0.7, 60), (1.5, 30), (float("inf"), 8),
     ])
     cr = _band(m.get("current_ratio"), [
         (2, 100), (1.2, 72), (0.8, 42), (float("-inf"), 15),
     ])
-    fcf = None
-    if m.get("fcf_cr") is not None:
-        fcf = 100 if m["fcf_cr"] > 0 else 20
-    s["balance"] = _avg(de, cr, fcf)
+    s["leverage"] = _avg(de, cr)
 
     ins = _band(m.get("insider_pct"), [
         (60, 100), (45, 82), (30, 58), (15, 36), (float("-inf"), 20),
