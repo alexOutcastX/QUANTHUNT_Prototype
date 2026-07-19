@@ -13,6 +13,7 @@ import { ACTIONS_W, COLS, Col, DEFAULT_HIDDEN, cellFlex, loadNames } from './Scr
 import { TrackDir, TrackEntry, addTrack, loadTrack, removeTrack } from '../tracklist';
 import { addSymbol, loadWatchlist, normSymbol, removeSymbol } from '../watchlist';
 import { Btn, Card, EmptyState, InfoButton, Loading, SectionTitle, StatTile } from '../ui';
+import { printHtmlDocument } from '../pdf';
 import { MULTIBAGGER_INFO } from '../tabInfo';
 import { theme } from '../theme';
 import { getScanned, hydrateScan, isIncluded, subscribeScan, toggleInclude } from '../scanStore';
@@ -58,61 +59,74 @@ const fmtCr = (v: number | null | undefined) =>
 const esc = (s: unknown) =>
   String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
-// Printable HTML report (web: opens a print window → "Save as PDF").
+// Tier → print colour (green/amber/red), matching the on-screen score bands.
+const GREEN = '#1e8449';
+const RED = '#c0392b';
+const AMBER = '#b7791f';
+const tierHex = (score: number) => (score >= 75 ? GREEN : score >= 60 ? '#1d6fb8' : score >= 45 ? AMBER : RED);
+// Green for a positive number, red for a negative one — for directional metrics.
+const signHex = (v: string) => {
+  const n = parseFloat(String(v).replace(/[^0-9.\-]/g, ''));
+  if (!isFinite(n) || n === 0) return '#111';
+  return n > 0 ? GREEN : RED;
+};
+
+// Printable HTML report — always black-on-white (see pdf.ts FORCE_LIGHT), with
+// colour on the score, probability and directional numbers.
 function reportHtml(r: MultibaggerReport): string {
   const m = r.metrics || {};
-  const row = (k: string, v: string) => `<tr><td>${esc(k)}</td><td style="text-align:right">${esc(v)}</td></tr>`;
+  const row = (k: string, v: string, color = '#111') =>
+    `<tr><td>${esc(k)}</td><td style="text-align:right;color:${color};font-weight:600">${esc(v)}</td></tr>`;
   const pillars = r.pillars
-    .map((p) => row(`${p.label} (${p.weight}%)`, p.score == null ? 'no data' : String(p.score)))
+    .map((p) => row(`${p.label} (${p.weight}%)`, p.score == null ? 'no data' : String(p.score), p.score == null ? '#888' : tierHex(p.score)))
     .join('');
   const checks = r.checklist
-    .map((c) => `<li>${c.state === 'pass' ? '✓' : c.state === 'fail' ? '✗' : '?'} ${esc(c.label)}</li>`)
+    .map((c) => `<li style="color:${c.state === 'pass' ? GREEN : c.state === 'fail' ? RED : '#888'}">${c.state === 'pass' ? '✓' : c.state === 'fail' ? '✗' : '?'} <span style="color:#111">${esc(c.label)}</span></li>`)
     .join('');
-  const list = (xs: string[]) => xs.map((x) => `<li>${esc(x)}</li>`).join('');
-  const nums = [
-    ['Market cap', fmtCr(m.mcap_cr)], ['Revenue growth', fmt(m.revenue_growth_pct, '%')],
-    ['Earnings growth', fmt(m.earnings_growth_pct, '%')], ['ROE', fmt(m.roe_pct, '%')],
-    ['Op margin', fmt(m.op_margin_pct, '%')], ['Debt/equity', fmt(m.debt_equity, '', 2)],
-    ['Free cash flow', fmtCr(m.fcf_cr)], ['Promoter/insider', fmt(m.insider_pct, '%')],
-    ['Institutions', fmt(m.institution_pct, '%')], ['P/E', fmt(m.pe, '', 1)],
-    ['PEG', fmt(m.peg, '', 2)], ['vs 200-DMA', fmt(m.vs_200dma_pct, '%')],
-    ['3y price CAGR', fmt(m.price_cagr_3y_pct, '%')], ['From 52w high', fmt(m.pct_from_high_pct, '%')],
-  ].map(([k, v]) => row(k, v)).join('');
+  const list = (xs: string[], color: string) => xs.map((x) => `<li style="color:${color}">${esc(x)}</li>`).join('');
+  // 'signed' rows get green/red by sign; the rest stay black.
+  const nums: [string, string, boolean][] = [
+    ['Market cap', fmtCr(m.mcap_cr), false], ['Revenue growth', fmt(m.revenue_growth_pct, '%'), true],
+    ['Earnings growth', fmt(m.earnings_growth_pct, '%'), true], ['ROE', fmt(m.roe_pct, '%'), false],
+    ['Op margin', fmt(m.op_margin_pct, '%'), false], ['Debt/equity', fmt(m.debt_equity, '', 2), false],
+    ['Free cash flow', fmtCr(m.fcf_cr), true], ['Promoter/insider', fmt(m.insider_pct, '%'), false],
+    ['Institutions', fmt(m.institution_pct, '%'), false], ['P/E', fmt(m.pe, '', 1), false],
+    ['PEG', fmt(m.peg, '', 2), false], ['vs 200-DMA', fmt(m.vs_200dma_pct, '%'), true],
+    ['3y price CAGR', fmt(m.price_cagr_3y_pct, '%'), true], ['From 52w high', fmt(m.pct_from_high_pct, '%'), false],
+  ];
+  const numRows = nums.map(([k, v, signed]) => row(k, v, signed && v !== '—' ? signHex(v) : '#111')).join('');
+  const tc = tierHex(r.score);
+  const price = r.price != null ? '₹' + r.price.toLocaleString('en-IN') : '';
   return `<html><head><title>TaurEye — Multibagger report — ${esc(r.symbol)}</title>
-<style>body{font-family:Arial,sans-serif;color:#111;max-width:760px;margin:24px auto;padding:0 16px}
-h1{font-size:20px;margin-bottom:0}h2{font-size:14px;margin:18px 0 6px}
+<style>body{font-family:Arial,sans-serif;color:#111;background:#fff;max-width:760px;margin:24px auto;padding:0 16px}
+h1{font-size:20px;margin-bottom:0}h2{font-size:14px;margin:18px 0 6px;color:#111}
 table{border-collapse:collapse;width:100%}td{border-bottom:1px solid #ddd;padding:5px 4px;font-size:12px}
 ul{margin:4px 0;padding-left:18px;font-size:12px;line-height:1.5}p{font-size:11px;color:#555}
 .score{font-size:40px;font-weight:800}</style></head><body>
 <h1>${esc(r.name)} <span style="color:#888;font-size:13px">${esc(r.symbol)}${r.sector ? ' · ' + esc(r.sector) : ''}</span></h1>
-<div class="score">${r.score}/100 — ${esc(r.tier)}</div>
-<div>Indicative probability of a 5x+ outcome over 5–10 years: <b>${r.probability_pct}%</b>${r.coverage_pct < 100 ? ` (data coverage ${r.coverage_pct}%)` : ''}</div>
+${price ? `<div style="font-size:15px;font-weight:700;color:#111;margin-top:4px">${esc(price)} <span style="color:#888;font-weight:400;font-size:12px">${esc(fmtCr(m.mcap_cr))}</span></div>` : ''}
+<div class="score" style="color:${tc}">${r.score}/100 — ${esc(r.tier)}</div>
+<div>Indicative probability of a 5x+ outcome over 5–10 years: <b style="color:${tc}">${r.probability_pct}%</b>${r.coverage_pct < 100 ? ` <span style="color:#888">(data coverage ${r.coverage_pct}%)</span>` : ''}</div>
 <h2>Pillars</h2><table>${pillars}</table>
 <h2>Checklist</h2><ul>${checks}</ul>
-${r.strengths.length ? `<h2>What works</h2><ul>${list(r.strengths)}</ul>` : ''}
-${r.red_flags.length ? `<h2>Red flags</h2><ul>${list(r.red_flags)}</ul>` : ''}
-<h2>Key numbers</h2><table>${nums}</table>
+${r.strengths.length ? `<h2>What works</h2><ul>${list(r.strengths, GREEN)}</ul>` : ''}
+${r.red_flags.length ? `<h2>Red flags</h2><ul>${list(r.red_flags, RED)}</ul>` : ''}
+<h2>Key numbers</h2><table>${numRows}</table>
 ${r.about ? `<h2>About</h2><p>${esc(r.about)}</p>` : ''}
 <p>${esc(r.methodology)}</p><p><i>${esc(r.disclaimer)}</i></p></body></html>`;
 }
 
 async function exportReport(r: MultibaggerReport): Promise<void> {
-  if (Platform.OS !== 'web') {
+  // Route through the shared print helper: real "Save as PDF" download on both
+  // desktop and the Android WebView, forced to a white page. Only a true native
+  // RN runtime with no DOM falls back to a text share.
+  const ok = printHtmlDocument(reportHtml(r));
+  if (!ok && Platform.OS !== 'web') {
     await Share.share({
       title: `Multibagger report — ${r.symbol}`,
       message: `${r.name} (${r.symbol}): ${r.score}/100 — ${r.tier} · probability ${r.probability_pct}%`,
     });
-    return;
   }
-  const win = (globalThis as { window?: any }).window;
-  const w = win?.open?.('', '_blank');
-  if (!w) return; // popup blocked
-  w.document.write(reportHtml(r));
-  w.document.close();
-  w.focus();
-  setTimeout(() => {
-    try { w.print(); } catch { /* user can print manually */ }
-  }, 250);
 }
 
 // ── Fixed-filter multibagger screener (list only) ────────────────────────────
@@ -551,16 +565,20 @@ export default function MultibaggerScreen() {
     });
   };
 
-  const analyse = (symOverride?: string) => {
+  // `attempt` drives a single automatic retry: the report source (Yahoo) can
+  // rate-limit a small-cap on the first hit, so a screened stock that "can't be
+  // analysed" almost always succeeds on a second try a moment later.
+  const analyse = (symOverride?: string, attempt = 0) => {
     const sym = (symOverride ?? symbol).trim().toUpperCase().replace(/^[A-Z]+:/, '');
-    if (!sym || busy) return;
+    if (!sym) return;
+    if (busy && attempt === 0) return;
     setView('analyse');
     setSymbol(sym);
     setError('');
-    pushRecent(sym);
+    if (attempt === 0) pushRecent(sym);
     // Served from the searched-symbols cache when fresh — no refetch.
     const hit = reportCache.get(sym);
-    if (hit && Date.now() - hit.ts < REPORT_TTL) {
+    if (hit && Date.now() - hit.ts < REPORT_TTL && attempt === 0) {
       setReport(hit.report);
       setCandles(hit.candles);
       setBusy(false);
@@ -568,27 +586,41 @@ export default function MultibaggerScreen() {
     }
     setBusy(true);
     setReport(null);
-    setCandles([]);
+    if (attempt === 0) setCandles([]);
+    const fail = (msg: string) => {
+      // Keep the spinner up and retry once for a likely-transient rate-limit;
+      // only surface the error after the retry also fails.
+      if (attempt < 1) {
+        setTimeout(() => analyse(sym, attempt + 1), 2500);
+      } else {
+        setError(msg);
+        setBusy(false);
+      }
+    };
     api
       .multibagger(sym)
       .then((r) => {
         if (r && !r.error) {
           setReport(r);
+          setBusy(false);
           const entry = reportCache.get(sym);
           reportCache.set(sym, { report: r, candles: entry?.candles || [], ts: Date.now() });
-        } else setError(r?.error || 'No data available for ' + sym);
+        } else {
+          fail(r?.error || 'No data available for ' + sym);
+        }
       })
-      .catch((e) => setError(e instanceof Error ? e.message : 'Analysis failed'))
-      .finally(() => setBusy(false));
-    api
-      .history(sym, '6mo', '1d')
-      .then((h) => {
-        const cs = Array.isArray(h.candles) ? h.candles : [];
-        setCandles(cs);
-        const entry = reportCache.get(sym);
-        if (entry) entry.candles = cs;
-      })
-      .catch(() => setCandles([]));
+      .catch((e) => fail(e instanceof Error ? e.message : 'Analysis failed'));
+    if (attempt === 0) {
+      api
+        .history(sym, '6mo', '1d')
+        .then((h) => {
+          const cs = Array.isArray(h.candles) ? h.candles : [];
+          setCandles(cs);
+          const entry = reportCache.get(sym);
+          if (entry) entry.candles = cs;
+        })
+        .catch(() => setCandles([]));
+    }
   };
 
   // Auto-analyse a symbol handed off from another screen (e.g. the Pattern
@@ -671,7 +703,14 @@ export default function MultibaggerScreen() {
 
           <ScrollView contentContainerStyle={styles.body}>
             {busy ? <Loading label={`Reading ${symbol.toUpperCase()} fundamentals, ownership and trend…`} /> : null}
-            {!busy && error ? <EmptyState icon="⚠" title="Analysis failed" hint={error} /> : null}
+            {!busy && error ? (
+              <>
+                <EmptyState icon="⚠" title="Analysis failed" hint={error} />
+                <View style={{ alignItems: 'center', marginTop: theme.sp.md }}>
+                  <Btn label="↻ Retry" onPress={() => analyse(symbol)} />
+                </View>
+              </>
+            ) : null}
             {!busy && !error && !report ? (
               <EmptyState
                 icon="◆"
