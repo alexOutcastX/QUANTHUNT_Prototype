@@ -4,5 +4,8 @@ requests
 pandas
 yfinance
 ta
+# FCM HTTP v1 auth for push notifications (lazy-imported in push.py; only needed
+# once FCM_SERVICE_ACCOUNT is configured — the app runs fine without it).
+google-auth
 # tvDatafeed is not on PyPI anymore; install from GitHub:
 tvdatafeed @ git+https://github.com/rongardF/tvdatafeed.git
