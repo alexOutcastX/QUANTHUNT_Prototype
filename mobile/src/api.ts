@@ -361,6 +361,15 @@ export type Broadcast = {
   data?: Record<string, unknown>;
 };
 
+// Multi-timeframe trade analysis (/timeframes): 5-min → weekly + near/far horizons.
+export type TimeframeRead = {
+  tf: string; label: string; price?: number | null; rsi?: number | null;
+  macd?: number | null; vs_ema20?: number | null; vs_ema50?: number | null;
+  score: number | null; bias: string;
+};
+export type HorizonRead = { key: string; label: string; score: number | null; bias: string; from?: string[] };
+export type TimeframesResp = { symbol: string; timeframes: TimeframeRead[]; horizons: HorizonRead[]; error?: string };
+
 // Full company report (/report) — used by the institutional dossier for
 // quarterly + annual P&L, balance sheet, cash flow and shareholding.
 export type ReportFinYear = {
@@ -848,6 +857,8 @@ export const api = {
     getJson<MultibaggerReport>('/multibagger?symbol=' + encodeURIComponent(symbol), 60000),
   report: (symbol: string) =>
     getJson<ReportResp>('/report?symbol=' + encodeURIComponent(symbol), 60000),
+  timeframes: (symbol: string) =>
+    getJson<TimeframesResp>('/timeframes?symbol=' + encodeURIComponent(symbol), 60000),
   chartPatterns: (symbol: string, period = '2y') =>
     getJson<ChartPatternsResp>(
       `/chart-patterns?symbol=${encodeURIComponent(symbol)}&period=${encodeURIComponent(period)}`,
