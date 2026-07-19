@@ -15,7 +15,7 @@ import InstitutionalScreen from './InstitutionalScreen';
 import SmcScreen from './SmcScreen';
 import { useResponsive } from '../responsive';
 import { printHtmlDocument } from '../pdf';
-import { Card, Dropdown, EmptyState, FadeSlideIn, RiskBadge, Segmented } from '../ui';
+import { Card, Dropdown, EmptyState, FadeSlideIn, RiskBadge, Segmented, Sheet } from '../ui';
 import { PaperTrade, addPaperTrade, hasOpenPaper, loadPaperTrades } from '../paperTrades';
 import { INSTITUTIONAL_INFO, RECOMMENDATIONS_INFO, SHORT_TERM_INFO, SMC_INFO } from '../tabInfo';
 import { theme } from '../theme';
@@ -151,6 +151,7 @@ function RecCard({
   onPattern,
   onPaper,
   onBacktest,
+  onExport,
 }: {
   r: Recommendation;
   watched: boolean;
@@ -164,6 +165,7 @@ function RecCard({
   onPattern: () => void;
   onPaper: () => void;
   onBacktest: () => void;
+  onExport?: () => void;
 }) {
   const c = actionColor(r.action);
   return (
@@ -283,8 +285,42 @@ function RecCard({
         <TouchableOpacity style={styles.aBtn} onPress={onBacktest} activeOpacity={0.75}>
           <Text style={styles.aTxt}>⏱ Backtest</Text>
         </TouchableOpacity>
+        {onExport ? (
+          <TouchableOpacity style={styles.aBtn} onPress={onExport} activeOpacity={0.75}>
+            <Text style={styles.aTxt}>⤓ Export PDF</Text>
+          </TouchableOpacity>
+        ) : null}
       </View>
     </Card>
+  );
+}
+
+// Compact list row for the Long-term tab — mirrors the Institutional/HFT list
+// UX: a tight card you tap to open the full report in a popup.
+function LongRow({ r, onOpen }: { r: Recommendation; onOpen: () => void }) {
+  const c = actionColor(r.action);
+  return (
+    <TouchableOpacity style={styles.lrow} onPress={onOpen} activeOpacity={0.7}>
+      <View style={styles.lrowLeft}>
+        <View style={styles.lrowTop}>
+          <Text style={styles.lrowSym}>{r.symbol}</Text>
+          <View style={[styles.actionPill, { backgroundColor: c }]}>
+            <Text style={styles.actionTxt}>{r.action}</Text>
+          </View>
+        </View>
+        {r.name ? <Text style={styles.name} numberOfLines={1}>{r.name}</Text> : null}
+        <Text style={styles.lrowSetup} numberOfLines={1}>
+          entry {money(r.entry)} · SL {money(r.stop)} · tgt {money(r.target)} ({signPct(r.upside_pct)})
+          {r.rr != null ? ` · ${r.rr.toFixed(1)}:1` : ''}{r.eta ? ` · ⏱ ${r.eta}` : ''}
+        </Text>
+      </View>
+      <View style={styles.lrowRight}>
+        <Text style={[styles.lrowConf, { color: c }]}>{r.confidence}</Text>
+        <Text style={styles.lrowConfLbl}>confidence</Text>
+        <Text style={styles.lrowUpside}>▲ {signPct(r.upside_pct)}</Text>
+      </View>
+      <Text style={styles.lrowChev}>›</Text>
+    </TouchableOpacity>
   );
 }
 
@@ -310,6 +346,7 @@ function LongTermRecs() {
   const [alerts, setAlerts] = useState<LocalAlert[]>([]);
   const [paper, setPaper] = useState<PaperTrade[]>([]);
   const [detail, setDetail] = useState<Row | null>(null);
+  const [open, setOpen] = useState<Recommendation | null>(null);
   const [flash, setFlash] = useState('');
   const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const cancelRef = useRef<{ cancelled: boolean } | null>(null);
@@ -483,6 +520,8 @@ function LongTermRecs() {
     await AsyncStorage.setItem('taureye.backtest.prefill', r.symbol).catch(() => {});
     navigate('analysis', { sub: 'bt' });
   };
+  const onExport = (r: Recommendation) =>
+    exportRecommendationsPdf([r], `${r.symbol} · ${r.action} · confidence ${r.confidence}`).catch(() => {});
 
   return (
     <View style={styles.container}>
@@ -542,20 +581,9 @@ function LongTermRecs() {
           {recs.map((r, i) => (
             <View key={r.symbol} style={isDesktop ? styles.gridCell : undefined}>
               <FadeSlideIn index={i}>
-              <RecCard
-                r={r}
-                compact={!isDesktop}
-                watched={isWatched(r.symbol)}
-                alerted={hasLocalAlert(alerts, r.symbol)}
-                papered={hasOpenPaper(paper, r.symbol)}
-                onWatch={() => onWatch(r)}
-                onAlert={() => onAlert(r)}
-                onChart={() => onChart(r)}
-                onAnalyse={() => onAnalyse(r)}
-                onPattern={() => onPattern(r)}
-                onPaper={() => onPaper(r)}
-                onBacktest={() => onBacktest(r)}
-              />
+                <Card style={{ padding: 0 }}>
+                  <LongRow r={r} onOpen={() => setOpen(r)} />
+                </Card>
               </FadeSlideIn>
             </View>
           ))}
@@ -570,6 +598,27 @@ function LongTermRecs() {
         ) : null}
       </ScrollView>
 
+      {open ? (
+        <Sheet onClose={() => setOpen(null)} maxHeight="92%">
+          <ScrollView bounces={false} contentContainerStyle={{ padding: theme.sp.md }}>
+            <RecCard
+              r={open}
+              compact={!isDesktop}
+              watched={isWatched(open.symbol)}
+              alerted={hasLocalAlert(alerts, open.symbol)}
+              papered={hasOpenPaper(paper, open.symbol)}
+              onWatch={() => onWatch(open)}
+              onAlert={() => onAlert(open)}
+              onChart={() => { const r = open; setOpen(null); onChart(r); }}
+              onAnalyse={() => { const r = open; setOpen(null); onAnalyse(r); }}
+              onPattern={() => { const r = open; setOpen(null); onPattern(r); }}
+              onPaper={() => onPaper(open)}
+              onBacktest={() => { const r = open; setOpen(null); onBacktest(r); }}
+              onExport={() => onExport(open)}
+            />
+          </ScrollView>
+        </Sheet>
+      ) : null}
       {detail ? <StockDetail row={detail} onClose={() => setDetail(null)} /> : null}
       {flash ? (
         <View style={styles.toast} pointerEvents="none">
@@ -723,6 +772,17 @@ const styles = StyleSheet.create({
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.sp.md },
   gridCell: { width: '48.5%', minWidth: 440, flexGrow: 1 },
   card: { gap: theme.sp.md },
+  // Compact Long-term list row (tap → detail popup).
+  lrow: { flexDirection: 'row', alignItems: 'center', padding: theme.sp.md, gap: theme.sp.md },
+  lrowLeft: { flex: 1, gap: 2 },
+  lrowTop: { flexDirection: 'row', alignItems: 'center', gap: theme.sp.sm, flexWrap: 'wrap' },
+  lrowSym: { color: theme.text, fontFamily: theme.mono, fontWeight: '800', fontSize: theme.fs.md + 1 },
+  lrowSetup: { color: theme.muted, fontSize: theme.fs.xs + 1, fontFamily: theme.mono },
+  lrowRight: { alignItems: 'flex-end', minWidth: 84 },
+  lrowConf: { fontFamily: theme.mono, fontWeight: '800', fontSize: 22, lineHeight: 24 },
+  lrowConfLbl: { color: theme.muted, fontSize: theme.fs.xs, marginTop: -1 },
+  lrowUpside: { color: theme.green, fontFamily: theme.mono, fontWeight: '700', fontSize: theme.fs.sm, marginTop: 3 },
+  lrowChev: { color: theme.muted2, fontSize: 22 },
   cardHead: { flexDirection: 'row', alignItems: 'flex-start', gap: theme.sp.md },
   symRow: { flexDirection: 'row', alignItems: 'center', gap: theme.sp.sm },
   sym: { color: theme.text, fontFamily: theme.mono, fontWeight: '800', fontSize: theme.fs.lg },
