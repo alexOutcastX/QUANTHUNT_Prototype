@@ -370,6 +370,15 @@ export type TimeframeRead = {
 export type HorizonRead = { key: string; label: string; score: number | null; bias: string; from?: string[] };
 export type TimeframesResp = { symbol: string; timeframes: TimeframeRead[]; horizons: HorizonRead[]; error?: string };
 
+// On-demand screener.in scrape (/screener-financials) — real Indian promoter /
+// FII / DII shareholding + borrowings that Yahoo/NSE don't reliably give.
+export type ScreenerFinancials = {
+  symbol: string;
+  shareholding?: { promoter?: number; fii?: number; dii?: number; government?: number; public?: number };
+  balance?: { borrowings?: number; reserves?: number; equity_capital?: number; total_liabilities?: number };
+  source?: string; url?: string; ok?: boolean; error?: string;
+};
+
 // Full company report (/report) — used by the institutional dossier for
 // quarterly + annual P&L, balance sheet, cash flow and shareholding.
 export type ReportFinYear = {
@@ -859,6 +868,8 @@ export const api = {
     getJson<ReportResp>('/report?symbol=' + encodeURIComponent(symbol), 60000),
   timeframes: (symbol: string) =>
     getJson<TimeframesResp>('/timeframes?symbol=' + encodeURIComponent(symbol), 60000),
+  screenerFinancials: (symbol: string) =>
+    getJson<ScreenerFinancials>('/screener-financials?symbol=' + encodeURIComponent(symbol), 20000),
   chartPatterns: (symbol: string, period = '2y') =>
     getJson<ChartPatternsResp>(
       `/chart-patterns?symbol=${encodeURIComponent(symbol)}&period=${encodeURIComponent(period)}`,

@@ -19,6 +19,7 @@ import {
   ReportResp,
   RiskReport,
   ScanRow,
+  ScreenerFinancials,
   Shareholding,
   api,
 } from '../api';
@@ -111,6 +112,8 @@ export default function AnalysisScreen() {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [d, setD] = useState<Dossier | null>(null);
+  // On-demand screener.in scrape (real promoter/FII/DII shareholding + borrowings).
+  const [scr, setScr] = useState<ScreenerFinancials | null | 'loading'>(null);
 
   // Merge a partial into the dossier only while it still refers to `s` (guards
   // against a slow response from a previous symbol overwriting a newer one).
@@ -124,6 +127,7 @@ export default function AnalysisScreen() {
     setBusy(true);
     setMsg(null);
     setD({ sym: s });
+    setScr(null);
     setSym(s);
 
     // Fan out every source in parallel; each fills its own section as it lands
@@ -170,6 +174,12 @@ export default function AnalysisScreen() {
     if (s) { setSym(s); run(s); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const fetchScreener = () => {
+    if (!d || scr === 'loading') return;
+    setScr('loading');
+    api.screenerFinancials(d.sym).then((r) => setScr(r)).catch(() => setScr({ symbol: d.sym, ok: false }));
+  };
 
   const exportPdf = () => {
     if (!d) return;
@@ -490,6 +500,39 @@ export default function AnalysisScreen() {
               </>
             ) : null}
 
+            {/* Real shareholding + borrowings — on-demand scrape from screener.in */}
+            <SectionTitle>Shareholding & borrowings · screener.in</SectionTitle>
+            <Card>
+              {scr === null ? (
+                <>
+                  <Text style={styles.small}>Pull the real promoter / FII / DII split and borrowings from screener.in on demand.</Text>
+                  <TouchableOpacity style={styles.scrBtn} onPress={fetchScreener} activeOpacity={0.8}>
+                    <Text style={styles.scrBtnTxt}>↻ Fetch from screener.in</Text>
+                  </TouchableOpacity>
+                </>
+              ) : scr === 'loading' ? (
+                <ActivityIndicator color={theme.accent} />
+              ) : scr && scr.ok && scr.shareholding && Object.keys(scr.shareholding).length ? (
+                <>
+                  <KV k="Promoters" v={num(scr.shareholding.promoter ?? null, 2, '%')} />
+                  <KV k="FII" v={num(scr.shareholding.fii ?? null, 2, '%')} />
+                  <KV k="DII" v={num(scr.shareholding.dii ?? null, 2, '%')} />
+                  <KV k="Public" v={num(scr.shareholding.public ?? null, 2, '%')} />
+                  {scr.shareholding.government != null ? <KV k="Government" v={num(scr.shareholding.government, 2, '%')} /> : null}
+                  {scr.balance?.borrowings != null ? <KV k="Borrowings (latest FY)" v={fmtCr(scr.balance.borrowings)} color={(scr.balance.borrowings ?? 0) > 0 ? theme.text : theme.green} /> : null}
+                  {scr.balance?.reserves != null ? <KV k="Reserves" v={fmtCr(scr.balance.reserves)} /> : null}
+                  <Text style={styles.small}>Source: screener.in</Text>
+                </>
+              ) : (
+                <>
+                  <Text style={styles.small}>Couldn't read screener.in for {d.sym} (blocked or no data). Try again.</Text>
+                  <TouchableOpacity style={styles.scrBtn} onPress={fetchScreener} activeOpacity={0.8}>
+                    <Text style={styles.scrBtnTxt}>↻ Retry</Text>
+                  </TouchableOpacity>
+                </>
+              )}
+            </Card>
+
             {/* Institutional relationships */}
             {d.flows && d.flows.length ? (
               <>
@@ -763,6 +806,8 @@ const styles = StyleSheet.create({
   finV: { color: theme.text, fontFamily: theme.mono, fontSize: theme.fs.sm },
   finPeriod: { flex: 1.4, textAlign: 'left' },
   finNum: { flex: 1, textAlign: 'right' },
+  scrBtn: { marginTop: theme.sp.sm, alignSelf: 'flex-start', backgroundColor: theme.surface2, borderColor: theme.accent, borderWidth: 1, borderRadius: theme.radius.sm + 2, paddingHorizontal: theme.sp.md, paddingVertical: 8 },
+  scrBtnTxt: { color: theme.accent, fontSize: theme.fs.sm, fontWeight: '800' },
   checkWrap: { flexDirection: 'row', flexWrap: 'wrap' },
   checkItem: { flexDirection: 'row', alignItems: 'center', gap: 7, width: '50%', minWidth: 220, paddingVertical: 5 },
   checkMark: { fontFamily: theme.mono, fontSize: theme.fs.md, fontWeight: '800', width: 14 },
