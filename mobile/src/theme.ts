@@ -105,6 +105,27 @@ if (WEB) {
   }
   applyAttr();
 
+  // Set viewport-fit=cover as early as possible (synchronously, before React
+  // mounts) so the page's visual viewport extends into the status/navigation-bar
+  // regions from the very first frame. Without this the WebView's own (white)
+  // canvas shows in those bands at cold start and no DOM element can cover them
+  // until a later re-layout. (Shell also sets this, but that runs after mount —
+  // too late to stop the initial white flash.)
+  try {
+    let vp = document.querySelector('meta[name="viewport"]');
+    if (!vp) {
+      vp = document.createElement('meta');
+      vp.setAttribute('name', 'viewport');
+      document.head.appendChild(vp);
+    }
+    vp.setAttribute(
+      'content',
+      'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover',
+    );
+  } catch {
+    /* ignore */
+  }
+
   // Full-viewport backdrop behind the whole app. The Android shell is
   // edge-to-edge, so the status/navigation-bar regions are part of the WebView
   // viewport — but the React tree only paints them once the safe-area insets
