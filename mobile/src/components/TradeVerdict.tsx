@@ -5,6 +5,7 @@ import React, { useEffect, useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Recommendation, TimeframesResp, api } from '../api';
 import { addPaperTrade } from '../paperTrades';
+import StrategyScores from './StrategyScores';
 import { Loading, RiskBadge } from '../ui';
 import { theme } from '../theme';
 
@@ -134,6 +135,8 @@ export default function TradeVerdict({ symbol, onClose }: { symbol: string; onCl
                 <Cell k="Pattern" v={String(rec.pattern_score)} />
                 <Cell k="ETA" v={rec.eta || '—'} />
               </View>
+
+              <StrategyScores symbol={symbol} />
 
               {rec.rationale?.length ? (
                 <>
