@@ -170,7 +170,13 @@ export default function AnalysisScreen() {
 
   const exportPdf = () => {
     if (!d) return;
-    printHtmlDocument(dossierHtml(d));
+    try {
+      const ok = printHtmlDocument(dossierHtml(d));
+      setMsg(ok ? 'Opening the print / Save-as-PDF dialog…' : "Couldn't open the print dialog on this device.");
+    } catch {
+      setMsg('Export failed — please try again.');
+    }
+    setTimeout(() => setMsg(null), 2600);
   };
 
   const mb = d?.mb;

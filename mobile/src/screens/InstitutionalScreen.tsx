@@ -219,6 +219,9 @@ function InstDetail({
             <TouchableOpacity style={styles.aBtn} onPress={onPattern} activeOpacity={0.75}>
               <Text style={styles.aTxt}>📈 Pattern</Text>
             </TouchableOpacity>
+            <TouchableOpacity style={styles.aBtn} onPress={() => navigate('analysis', { sub: 'inst', symbol: r.symbol })} activeOpacity={0.75}>
+              <Text style={styles.aTxt}>🏛 Dossier</Text>
+            </TouchableOpacity>
             <TouchableOpacity style={styles.aBtn} onPress={onPaper} activeOpacity={0.75}>
               <Text style={[styles.aTxt, papered && { color: theme.green }]}>{papered ? '✓ Papered' : '✎ Paper trade'}</Text>
             </TouchableOpacity>

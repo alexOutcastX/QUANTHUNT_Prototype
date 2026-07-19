@@ -8,7 +8,7 @@ import StockDetail from '../components/StockDetail';
 import SymbolInput from '../components/SymbolInput';
 import { Row, sortRows } from '../screener';
 import { capBand } from '../marketcap';
-import { takeSymbol } from '../navIntent';
+import { navigate, takeSymbol } from '../navIntent';
 import { ACTIONS_W, COLS, Col, DEFAULT_HIDDEN, cellFlex, loadNames } from './ScreenerScreen';
 import { TrackDir, TrackEntry, addTrack, loadTrack, removeTrack } from '../tracklist';
 import { addSymbol, loadWatchlist, normSymbol, removeSymbol } from '../watchlist';
@@ -784,6 +784,9 @@ export default function MultibaggerScreen() {
                     </TouchableOpacity>
                     <TouchableOpacity style={styles.actBtn} onPress={addToWatchlist} activeOpacity={0.75}>
                       <Text style={styles.actTxt}>★ Watchlist</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.actBtn} onPress={() => navigate('analysis', { sub: 'inst', symbol: report.symbol })} activeOpacity={0.75}>
+                      <Text style={styles.actTxt}>🏛 Dossier</Text>
                     </TouchableOpacity>
                     <TouchableOpacity style={styles.actBtn} onPress={addToBacktest} activeOpacity={0.75}>
                       <Text style={styles.actTxt}>⏱ Backtest</Text>
