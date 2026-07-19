@@ -38,6 +38,18 @@ import {
 const GOLD = '#f5c518';
 const CONCURRENCY = 3;
 
+// Manual sort for the long-term buy list — orders whatever the active strategy
+// returned. All descending (best-first) except time-to-target, which is ascending.
+type RecSortKey = 'confidence' | 'upside_pct' | 'rr' | 'momentum_score' | 'fundamental_score' | 'eta_days';
+const REC_SORTS: { key: RecSortKey; label: string }[] = [
+  { key: 'confidence', label: 'Confidence' },
+  { key: 'upside_pct', label: 'Upside' },
+  { key: 'rr', label: 'R : R' },
+  { key: 'momentum_score', label: 'Momentum' },
+  { key: 'fundamental_score', label: 'Fundamentals' },
+  { key: 'eta_days', label: 'Time to target' },
+];
+
 const money = (v?: number | null) =>
   v == null || !isFinite(v) ? '—' : '₹' + v.toLocaleString('en-IN', { maximumFractionDigits: 2 });
 const signPct = (v?: number | null, d = 1) =>
@@ -355,6 +367,7 @@ function LongTermRecs() {
   const [detail, setDetail] = useState<Row | null>(null);
   const [open, setOpen] = useState<Recommendation | null>(null);
   const [strat, setStrat] = useState('balanced');
+  const [sortKey, setSortKey] = useState<RecSortKey>('confidence');
   const [flash, setFlash] = useState('');
   const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const cancelRef = useRef<{ cancelled: boolean } | null>(null);
@@ -531,9 +544,19 @@ function LongTermRecs() {
   const onExport = (r: Recommendation) =>
     exportRecommendationsPdf([r], `${r.symbol} · ${r.action} · confidence ${r.confidence}`).catch(() => {});
 
-  // Selected strategy re-ranks / filters the candidate pool (default = balanced).
+  // Selected strategy re-ranks / filters the candidate pool (default = balanced);
+  // the Sort dropdown then orders whatever the strategy returned.
   const stratDef = LONG_STRATEGIES.find((s) => s.id === strat) || LONG_STRATEGIES[0];
-  const shown = React.useMemo(() => stratDef.apply(recs), [recs, stratDef]);
+  const shown = React.useMemo(() => {
+    const base = [...stratDef.apply(recs)];
+    const asc = sortKey === 'eta_days';
+    base.sort((a, b) => {
+      const va = (a[sortKey] ?? (asc ? Infinity : -Infinity)) as number;
+      const vb = (b[sortKey] ?? (asc ? Infinity : -Infinity)) as number;
+      return asc ? va - vb : vb - va;
+    });
+    return base;
+  }, [recs, stratDef, sortKey]);
 
   return (
     <View style={styles.container}>
@@ -553,6 +576,12 @@ function LongTermRecs() {
             style={strat !== 'balanced' ? styles.stratInfoOn : styles.stratInfoOff}
           />
         </View>
+        <Dropdown
+          label="Sort"
+          value={sortKey}
+          options={REC_SORTS.map((s) => ({ key: s.key, label: s.label }))}
+          onChange={(k) => setSortKey(k as RecSortKey)}
+        />
         <Dropdown
           label="Depth"
           value={depth}
