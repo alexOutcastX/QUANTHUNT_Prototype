@@ -13,7 +13,7 @@ import { mergeSectors } from '../sectors';
 import { ACTIONS_W, COLS, Col, DEFAULT_HIDDEN, cellFlex, loadNames } from './ScreenerScreen';
 import { TrackDir, TrackEntry, addTrack, loadTrack, removeTrack } from '../tracklist';
 import { addSymbol, loadWatchlist, normSymbol, removeSymbol } from '../watchlist';
-import { Btn, Card, Dropdown, EmptyState, InfoButton, InfoContent, Loading, SectionTitle, StatTile } from '../ui';
+import { Btn, Card, Dropdown, EmptyState, FrozenTable, InfoButton, InfoContent, Loading, SectionTitle, StatTile } from '../ui';
 import { openPdfPreview } from '../pdf';
 import { MULTIBAGGER_INFO } from '../tabInfo';
 import { theme } from '../theme';
@@ -508,7 +508,7 @@ function MbList({
   };
 
   return (
-    <ScrollView style={{ flex: 1 }}>
+    <View style={{ flex: 1 }}>
       <View style={styles.fixedRow}>
         <Text style={styles.fixedLabel}>FIXED SCREEN</Text>
         {FIXED_CHIPS.map((c) => (
@@ -601,8 +601,9 @@ function MbList({
       {loading ? <Loading label="Loading mid & small cap candidates…" /> : null}
 
       {!loading ? (
-        <ScrollView horizontal showsHorizontalScrollIndicator contentContainerStyle={{ minWidth: '100%' }}>
-          <View style={{ minWidth: tableW, flexGrow: 1 }}>
+        <FrozenTable
+          width={tableW}
+          header={
             <View style={styles.headerRow}>
               {visibleCols.map((c) => (
                 <TouchableOpacity
@@ -621,6 +622,8 @@ function MbList({
                 <Text style={styles.thTxt}>Actions</Text>
               </View>
             </View>
+          }
+        >
             {matches.length === 0 ? (
               <EmptyState
                 icon="◆"
@@ -694,10 +697,9 @@ function MbList({
                 );
               })
             )}
-          </View>
-        </ScrollView>
+        </FrozenTable>
       ) : null}
-    </ScrollView>
+    </View>
   );
 }
 
