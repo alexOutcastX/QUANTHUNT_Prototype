@@ -35,8 +35,45 @@ _state = {
     "universe": 0,
     "results": [],           # [{symbol, score, tier, probability_pct, coverage_pct,
                              #   price, vs_200dma, market_cap_cr, roe, debt_equity, sector}]
+    # Sector tally accumulated over EVERY symbol the sweep touches (not just the
+    # 60+ scorers) so the sectoral heatmap gets full NSE+BSE coverage for free —
+    # the .info fetch that scores each stock already carries sector/chg/mcap.
+    # sector -> {"count", "mcap", "chg_w", "chg_den"} (see _acc_sector).
+    "sector_acc": {},
+    "sector_universe": 0,    # symbols with a resolved sector this sweep
     "error": None,
 }
+
+
+def _acc_sector(acc: dict, sector, chg, mcap) -> None:
+    """Fold one stock into the per-sector accumulator (in place). Cap-weights the
+    day change, falling back to equal weight when a market cap is missing."""
+    if not sector:
+        return
+    a = acc.setdefault(sector, {"count": 0, "mcap": 0.0, "chg_w": 0.0, "chg_den": 0.0})
+    a["count"] += 1
+    m = float(mcap) if isinstance(mcap, (int, float)) and mcap and mcap > 0 else 0.0
+    a["mcap"] += m
+    if isinstance(chg, (int, float)):
+        w = m if m > 0 else 1.0
+        a["chg_w"] += float(chg) * w
+        a["chg_den"] += w
+
+
+def sectors_from_acc(acc: dict) -> list:
+    """Reduce the accumulator to a display list: one row per sector with its
+    constituent count, total market cap and cap-weighted average day change.
+    Sorted biggest-count first. Pure — unit-tested without any data deps."""
+    out = []
+    for sec, a in acc.items():
+        out.append({
+            "sector": sec,
+            "count": a["count"],
+            "market_cap_cr": round(a["mcap"], 2) if a["mcap"] else None,
+            "chg": round(a["chg_w"] / a["chg_den"], 2) if a["chg_den"] else None,
+        })
+    out.sort(key=lambda x: -x["count"])
+    return out
 
 
 def _load_disk():
@@ -48,6 +85,8 @@ def _load_disk():
                 "status": "done", "asof": saved.get("asof", 0),
                 "universe": saved.get("universe", 0),
                 "results": saved["results"],
+                "sector_acc": saved.get("sector_acc") or {},
+                "sector_universe": saved.get("sector_universe", 0),
             })
     except Exception:
         pass
@@ -58,7 +97,8 @@ _load_disk()
 
 def _save_disk():
     try:
-        payload = {k: _state[k] for k in ("asof", "universe", "results")}
+        payload = {k: _state[k] for k in
+                   ("asof", "universe", "results", "sector_acc", "sector_universe")}
         with open(_FILE + ".tmp", "w") as f:
             json.dump(payload, f)
         os.replace(_FILE + ".tmp", _FILE)
@@ -73,9 +113,12 @@ def _run(universe_fn):
         from concurrent.futures import ThreadPoolExecutor
 
         syms = [x["symbol"] for x in (universe_fn() or []) if x.get("symbol")]
+        sector_acc = {}
+        sector_ct = [0]
         with _lock:
             _state.update({"status": "running", "universe": len(syms), "error": None,
-                           "results": [], "progress": f"0/{len(syms)} analysed"})
+                           "results": [], "progress": f"0/{len(syms)} analysed",
+                           "sector_acc": {}, "sector_universe": 0})
 
         results = []
         done_ct = [0]
@@ -85,6 +128,15 @@ def _run(universe_fn):
             try:
                 metrics, ident = mb.fetch_metrics(s, with_history=False, retries=0)
                 r = mb.score(metrics)
+                # Fold EVERY resolved stock into the sector tally (not just the
+                # 60+ scorers) so the sectoral heatmap sees the whole universe.
+                sec = ident.get("sector")
+                if sec:
+                    with _lock:
+                        _acc_sector(sector_acc, sec, ident.get("chg"), metrics.get("mcap_cr"))
+                        sector_ct[0] += 1
+                        _state["sector_acc"] = sector_acc
+                        _state["sector_universe"] = sector_ct[0]
                 if (r["score"] >= CRITERIA["min_score"]
                         and r["coverage_pct"] >= CRITERIA["min_coverage_pct"]):
                     hit = {"symbol": s, "score": r["score"], "tier": r["tier"],
@@ -178,5 +230,24 @@ def snapshot() -> dict:
             "matches": len(_state["results"]),
             "results": _state["results"],
             "criteria": CRITERIA,
+            "error": _state["error"],
+        }
+
+
+def sector_snapshot() -> dict:
+    """Full NSE+BSE sectoral aggregate, computed as a by-product of the same
+    universe sweep the multibagger screen runs. Every stock with a resolved
+    sector is folded in — not just the scorers — so the sectoral heatmap gets
+    whole-market coverage with no extra data fetching."""
+    with _lock:
+        running = _thread is not None
+        return {
+            "status": "running" if running else _state["status"],
+            "refreshing": running,
+            "progress": _state["progress"],
+            "asof": _state["asof"],
+            "universe": _state["universe"],          # total scrips in the sweep
+            "mapped": _state.get("sector_universe", 0),  # scrips with a sector
+            "sectors": sectors_from_acc(_state.get("sector_acc") or {}),
             "error": _state["error"],
         }
