@@ -18,6 +18,8 @@ import os
 import threading
 import time
 
+import sectors as _sectors   # app-wide NSE sector classification (long-tail accumulator)
+
 log = logging.getLogger("mb_screen")
 
 _FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "mb_screen.json")
@@ -130,13 +132,24 @@ def _run(universe_fn):
                 r = mb.score(metrics)
                 # Fold EVERY resolved stock into the sector tally (not just the
                 # 60+ scorers) so the sectoral heatmap sees the whole universe.
-                sec = ident.get("sector")
-                if sec:
+                # Also accumulate the Yahoo GICS sector into the app-wide NSE
+                # classification (translated) so the long tail the NSE index
+                # files miss still gets a sector — persisted, so it only grows.
+                gics = ident.get("sector")
+                if gics:
+                    try:
+                        _sectors.record(s, gics)
+                    except Exception:
+                        pass
                     with _lock:
-                        _acc_sector(sector_acc, sec, ident.get("chg"), metrics.get("mcap_cr"))
+                        _acc_sector(sector_acc, gics, ident.get("chg"), metrics.get("mcap_cr"))
                         sector_ct[0] += 1
                         _state["sector_acc"] = sector_acc
                         _state["sector_universe"] = sector_ct[0]
+                # Emit the app-wide NSE macro sector (falls back to the raw GICS
+                # value) so the multibagger rows speak the same sector language
+                # as the heatmap and the sector filter.
+                nse_sector = _sectors.sector_of(s, gics) or gics
                 if (r["score"] >= CRITERIA["min_score"]
                         and r["coverage_pct"] >= CRITERIA["min_coverage_pct"]):
                     hit = {"symbol": s, "score": r["score"], "tier": r["tier"],
@@ -152,7 +165,7 @@ def _run(universe_fn):
                            "market_cap_cr": metrics.get("mcap_cr"),
                            "roe": metrics.get("roe_pct"),
                            "debt_equity": metrics.get("debt_equity"),
-                           "sector": ident.get("sector"),
+                           "sector": nse_sector,
                            # Identity + the full metrics dict so a live report
                            # fetch that hits a Yahoo rate-limit can rebuild the
                            # complete report from what the screen already scored.
@@ -174,6 +187,10 @@ def _run(universe_fn):
             list(pool.map(check, syms))
 
         results.sort(key=lambda x: -x["score"])   # best score first
+        try:
+            _sectors.flush()   # persist the sweep's long-tail sector additions
+        except Exception:
+            pass
         with _lock:
             _state.update({"status": "done", "asof": int(time.time()),
                            "results": results, "progress": ""})

@@ -343,7 +343,7 @@ function SectorMap() {
           <>
             <Text style={styles.drillNote}>
               Full NSE + BSE · {meta.mapped.toLocaleString('en-IN')} stocks mapped across{' '}
-              {sectorRows.length} sectors · tiles coloured by cap-weighted day change
+              {sectorRows.length} sectors · tiles coloured by value-weighted day change
               {note ? ` · ${note}` : ''}
             </Text>
             <Text style={styles.secHint}>Tap a sector to screen it — Recommendations, Momentum or Multibagger.</Text>

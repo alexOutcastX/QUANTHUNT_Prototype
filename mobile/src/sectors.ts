@@ -1,40 +1,61 @@
 // Canonical sector taxonomy shared by every screener + the sectoral heatmap.
 //
-// The app's per-stock sector comes from the fundamentals feed (Yahoo `sector`),
-// which uses the 11 GICS sectors. Screens historically built their sector-filter
-// chips only from sectors *present in the current results*, so a sector with no
-// current match was un-selectable — and the heatmap couldn't route into it. This
-// module gives every screen the full, exhaustive list so any sector is always a
-// valid filter, and `mergeSectors` folds in any extra label the live data throws
-// up (defensive: a feed occasionally returns a non-GICS string).
+// The whole app now speaks NSE's macro-economic sectors (~21) rather than
+// Yahoo's 11 GICS buckets. The backend classifies every scrip into one of these
+// (from the NSE index "Industry" files, with a GICS-translation fallback for the
+// long tail — see sectors.py), so a per-stock `sector` field and the heatmap
+// tiles use the same detailed labels, and a heatmap tap always routes into a
+// screener that recognises the sector. `mergeSectors` still folds in any extra
+// label the live data throws up so nothing is ever un-selectable.
 
 export const CANONICAL_SECTORS: string[] = [
-  'Basic Materials',
-  'Communication Services',
-  'Consumer Cyclical',
-  'Consumer Defensive',
-  'Energy',
+  'Automobile and Auto Components',
+  'Capital Goods',
+  'Chemicals',
+  'Construction',
+  'Construction Materials',
+  'Consumer Durables',
+  'Consumer Services',
+  'Diversified',
+  'Fast Moving Consumer Goods',
   'Financial Services',
+  'Forest Materials',
   'Healthcare',
-  'Industrials',
-  'Real Estate',
-  'Technology',
-  'Utilities',
+  'Information Technology',
+  'Media Entertainment & Publication',
+  'Metals & Mining',
+  'Oil Gas & Consumable Fuels',
+  'Power',
+  'Realty',
+  'Services',
+  'Telecommunication',
+  'Textiles',
 ];
 
-// Short display + heat-tile label for each canonical sector (keeps tiles legible).
+// Short display + heat-tile label for each canonical sector (keeps tiles
+// legible — the full NSE names are long).
 export const SECTOR_SHORT: Record<string, string> = {
-  'Basic Materials': 'Materials',
-  'Communication Services': 'Comms',
-  'Consumer Cyclical': 'Consumer Cyc.',
-  'Consumer Defensive': 'Consumer Def.',
-  Energy: 'Energy',
+  'Automobile and Auto Components': 'Auto',
+  'Capital Goods': 'Capital Goods',
+  Chemicals: 'Chemicals',
+  Construction: 'Construction',
+  'Construction Materials': 'Constr. Materials',
+  'Consumer Durables': 'Consumer Dur.',
+  'Consumer Services': 'Consumer Svc.',
+  Diversified: 'Diversified',
+  'Fast Moving Consumer Goods': 'FMCG',
   'Financial Services': 'Financials',
+  'Forest Materials': 'Forest Mat.',
   Healthcare: 'Healthcare',
-  Industrials: 'Industrials',
-  'Real Estate': 'Real Estate',
-  Technology: 'Technology',
-  Utilities: 'Utilities',
+  'Information Technology': 'IT',
+  'Media Entertainment & Publication': 'Media',
+  'Metals & Mining': 'Metals & Mining',
+  'Oil Gas & Consumable Fuels': 'Oil & Gas',
+  Power: 'Power',
+  Realty: 'Realty',
+  Services: 'Services',
+  Telecommunication: 'Telecom',
+  Textiles: 'Textiles',
 };
 
 // The exhaustive, de-duplicated, sorted sector list: the canonical set unioned
