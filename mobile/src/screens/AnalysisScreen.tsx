@@ -26,7 +26,7 @@ import {
 import { Assessment, assess } from '../analysis';
 import SymbolInput from '../components/SymbolInput';
 import StrategyScores from '../components/StrategyScores';
-import { printHtmlDocument } from '../pdf';
+import { openPdfPreview } from '../pdf';
 import { takeSymbol } from '../navIntent';
 import { theme } from '../theme';
 import { Card, EmptyState, Loading, ScreenTitle, SectionTitle, StatTile } from '../ui';
@@ -185,8 +185,11 @@ export default function AnalysisScreen() {
   const exportPdf = () => {
     if (!d) return;
     try {
-      const ok = printHtmlDocument(dossierHtml(d));
-      setMsg(ok ? 'Opening the print / Save-as-PDF dialog…' : "Couldn't open the print dialog on this device.");
+      const ok = openPdfPreview(dossierHtml(d), {
+        docType: 'Institutional dossier',
+        fileName: `TaurEye-${d.sym}-dossier`,
+      });
+      setMsg(ok ? 'Opening the report preview…' : "Couldn't open the report preview on this device.");
     } catch {
       setMsg('Export failed — please try again.');
     }
