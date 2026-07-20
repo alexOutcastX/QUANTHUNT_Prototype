@@ -692,7 +692,7 @@ function dossierHtml(d: Dossier): string {
   const v = verdict(mb, rec);
   const row = (k: string, val: string) => `<tr><td>${esc(k)}</td><td style="text-align:right">${esc(val)}</td></tr>`;
   const docs = (d.ann || []).filter((a) => DOC_RE.test(a.subject || ''));
-  const green = '#1e8449', red = '#c0392b';
+  const green = '#0ca678', red = '#e03131';
   const tHex = mb ? (mb.score >= 75 ? green : mb.score >= 60 ? '#1d6fb8' : mb.score >= 45 ? '#b7791f' : red) : '#111';
   const fundRows = mb || fund ? [
     ['Market cap', fmtCr(m.mcap_cr ?? fund?.market_cap_cr ?? null)],
@@ -734,8 +734,9 @@ function dossierHtml(d: Dossier): string {
   })();
   // Strategy scorecard — how well the stock fits each screening strategy now.
   const scoreHex = (n: number | null) =>
-    n == null ? '#111' : n >= 70 ? green : n >= 50 ? '#b7791f' : red;
-  const biasHex = (b: string) => (/bull/i.test(b) ? green : /bear/i.test(b) ? red : '#b7791f');
+    n == null ? '#111' : n >= 70 ? green : n >= 50 ? '#f08c00' : red;
+  const biasHex = (b: string) => (/bull/i.test(b) ? green : /bear/i.test(b) ? red : '#f08c00');
+  const biasCls = (b: string) => (/bull/i.test(b) ? 'g' : /bear/i.test(b) ? 'r' : 'a');
   const stratBlock = d.strat && d.strat.length
     ? `<h2>Strategy scorecard</h2><p style="margin:0 0 4px">How well ${esc(d.sym)} fits each screening strategy right now — 0–100, ✓ qualifies (≥70).</p>` +
       `<table><tr><td><b>Strategy</b></td><td style="text-align:right"><b>Score</b></td><td style="text-align:center"><b>Fit</b></td></tr>` +
@@ -750,29 +751,25 @@ function dossierHtml(d: Dossier): string {
         .join('') +
       `</table>`
     : '';
-  // Multi-timeframe technical read (5-min → weekly) + horizon roll-ups.
+  // Technical setup — one card per timeframe (5-min → weekly) + horizon roll-ups.
+  const tfCard = (t: TimeframesResp['timeframes'][number]) =>
+    `<div class="tf-card">` +
+    `<div class="tf-top"><span class="tf-tf">${esc(t.label)}</span>` +
+    `<span class="pill ${biasCls(t.bias)}">${esc(t.bias)}</span></div>` +
+    `<div class="tf-top"><span class="tf-score" style="color:${scoreHex(t.score)}">${t.score != null ? t.score : '—'}` +
+    `<span class="tf-of"> /100</span></span></div>` +
+    `<div class="tf-row"><span>Price</span><b>${t.price != null ? esc(money(t.price)) : '—'}</b></div>` +
+    `<div class="tf-row"><span>RSI</span><b>${t.rsi != null ? t.rsi.toFixed(0) : '—'}</b></div>` +
+    `<div class="tf-row"><span>vs EMA20</span><b style="color:${(t.vs_ema20 ?? 0) >= 0 ? green : red}">${t.vs_ema20 != null ? pctS(t.vs_ema20) : '—'}</b></div>` +
+    `<div class="tf-row"><span>vs EMA50</span><b style="color:${(t.vs_ema50 ?? 0) >= 0 ? green : red}">${t.vs_ema50 != null ? pctS(t.vs_ema50) : '—'}</b></div>` +
+    `</div>`;
   const tfBlock = d.tf && d.tf.timeframes?.length
-    ? `<h2>Multi-timeframe technicals</h2>` +
-      `<table><tr><td><b>Timeframe</b></td><td style="text-align:right"><b>Price</b></td><td style="text-align:right"><b>RSI</b></td>` +
-      `<td style="text-align:right"><b>vs EMA20</b></td><td style="text-align:right"><b>vs EMA50</b></td>` +
-      `<td style="text-align:right"><b>Score</b></td><td style="text-align:right"><b>Bias</b></td></tr>` +
-      d.tf.timeframes
-        .map(
-          (t) =>
-            `<tr><td>${esc(t.label)}</td>` +
-            `<td style="text-align:right">${t.price != null ? esc(money(t.price)) : '—'}</td>` +
-            `<td style="text-align:right">${t.rsi != null ? t.rsi.toFixed(0) : '—'}</td>` +
-            `<td style="text-align:right;color:${(t.vs_ema20 ?? 0) >= 0 ? green : red}">${t.vs_ema20 != null ? pctS(t.vs_ema20) : '—'}</td>` +
-            `<td style="text-align:right;color:${(t.vs_ema50 ?? 0) >= 0 ? green : red}">${t.vs_ema50 != null ? pctS(t.vs_ema50) : '—'}</td>` +
-            `<td style="text-align:right;color:${scoreHex(t.score)};font-weight:700">${t.score != null ? t.score : '—'}</td>` +
-            `<td style="text-align:right;color:${biasHex(t.bias)};font-weight:700">${esc(t.bias)}</td></tr>`,
-        )
-        .join('') +
-      `</table>` +
+    ? `<h2>Technical setup · by timeframe</h2>` +
+      `<div class="tf-grid">${d.tf.timeframes.map(tfCard).join('')}</div>` +
       (d.tf.horizons?.length
-        ? `<p style="margin:5px 0 0"><b>Horizon read:</b> ${d.tf.horizons
-            .map((h) => `${esc(h.label)} — <b style="color:${biasHex(h.bias)}">${esc(h.bias)}</b>${h.score != null ? ` (${h.score})` : ''}`)
-            .join(' · ')}</p>`
+        ? `<p style="margin:8px 0 0"><b>Horizon read</b> &nbsp; ${d.tf.horizons
+            .map((h) => `${esc(h.label)} <span class="pill ${biasCls(h.bias)}">${esc(h.bias)}${h.score != null ? ` ${h.score}` : ''}</span>`)
+            .join(' &nbsp; ')}</p>`
         : '')
     : '';
   const flags = mb?.red_flags?.length ? `<h2>Red flags</h2><ul>${mb.red_flags.map((x) => `<li style="color:${red}">${esc(x)}</li>`).join('')}</ul>` : '';
