@@ -12,6 +12,15 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_BASE } from './api';
 import { navigate } from './navIntent';
 
+// Push delivery needs a configured Firebase project (google-services.json + FCM
+// credentials in the Android build). Until that ships, calling
+// PushNotifications.register() throws a NATIVE "Default FirebaseApp is not
+// initialized" exception the moment the user grants the notification permission
+// — and a native crash can't be caught by the JS try/catch below, so the app
+// hard-crashes ("keeps stopping"). Keep the whole flow gated off until Firebase
+// is wired up: flip this to true in the same change that adds google-services.json.
+const PUSH_ENABLED = false;
+
 let started = false;
 
 function isNative(): boolean {
@@ -40,7 +49,7 @@ function onTap(data: Record<string, unknown> | undefined): void {
 }
 
 export async function initPush(): Promise<void> {
-  if (started || !isNative()) return;
+  if (!PUSH_ENABLED || started || !isNative()) return;
   started = true;
   try {
     const mod = await import('@capacitor/push-notifications');
