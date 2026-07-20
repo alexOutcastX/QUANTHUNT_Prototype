@@ -153,8 +153,10 @@ function MomDetail({
     </View>
   );
   return (
-    <Sheet onClose={onClose}>
-      <ScrollView showsVerticalScrollIndicator={false}>
+    <Sheet onClose={onClose} maxHeight="97%">
+      {/* Sticky header (index 0): the company name + close button stay pinned
+          while the body scrolls, so they're always visible. */}
+      <ScrollView showsVerticalScrollIndicator={false} stickyHeaderIndices={[0]}>
         <View style={styles.dHead}>
           <View style={{ flex: 1 }}>
             <View style={styles.cardSymRow}>
@@ -800,8 +802,18 @@ const styles = StyleSheet.create({
     maxWidth: '92%',
   },
   toastTxt: { color: theme.text, fontSize: theme.fs.sm + 1, fontWeight: '600' },
-  // detail popup
-  dHead: { flexDirection: 'row', alignItems: 'flex-start', gap: theme.sp.md, marginBottom: theme.sp.md },
+  // detail popup — dHead is a sticky header, so it needs a solid background and
+  // a divider to sit cleanly over the scrolling body.
+  dHead: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: theme.sp.md,
+    backgroundColor: theme.surface,
+    paddingBottom: theme.sp.md,
+    marginBottom: theme.sp.sm,
+    borderBottomColor: theme.border,
+    borderBottomWidth: 1,
+  },
   dSym: { color: theme.accent, fontFamily: theme.mono, fontWeight: '700', fontSize: theme.fs.lg },
   dName: { color: theme.muted2, fontSize: theme.fs.sm, marginTop: 3 },
   dX: { color: theme.muted, fontSize: 18, paddingHorizontal: 4 },
