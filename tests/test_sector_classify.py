@@ -191,6 +191,47 @@ class TestRefreshBseLayer(unittest.TestCase):
         self.assertEqual(sectors._map["XYZ"], "Financial Services")
 
 
+class TestCacheVersion(unittest.TestCase):
+    def test_stale_version_cache_is_discarded(self):
+        import json
+        import tempfile
+        # write a cache stamped with an old version
+        with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as f:
+            json.dump({"version": sectors.CACHE_VERSION - 1,
+                       "map": {"TCS": "Information Technology"}, "fetched_ts": 9e9}, f)
+            path = f.name
+        orig_file, orig_map, orig_ts = sectors._FILE, dict(sectors._map), sectors._fetched_ts
+        try:
+            sectors._FILE = path
+            sectors._map = {}
+            sectors._fetched_ts = 0
+            sectors._load_disk()
+            # old-version cache ignored → map stays empty so a re-pull is forced
+            self.assertEqual(sectors._map, {})
+            self.assertEqual(sectors._fetched_ts, 0)
+        finally:
+            sectors._FILE, sectors._map, sectors._fetched_ts = orig_file, orig_map, orig_ts
+            os.unlink(path)
+
+    def test_current_version_cache_loads(self):
+        import json
+        import tempfile
+        with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as f:
+            json.dump({"version": sectors.CACHE_VERSION,
+                       "map": {"TCS": "Information Technology"}, "fetched_ts": 123}, f)
+            path = f.name
+        orig_file, orig_map, orig_ts = sectors._FILE, dict(sectors._map), sectors._fetched_ts
+        try:
+            sectors._FILE = path
+            sectors._map = {}
+            sectors._fetched_ts = 0
+            sectors._load_disk()
+            self.assertEqual(sectors._map.get("TCS"), "Information Technology")
+        finally:
+            sectors._FILE, sectors._map, sectors._fetched_ts = orig_file, orig_map, orig_ts
+            os.unlink(path)
+
+
 class TestBuildHeatmap(unittest.TestCase):
     def setUp(self):
         sectors._map = {
