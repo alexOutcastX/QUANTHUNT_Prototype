@@ -13,6 +13,8 @@ public class MainActivity extends BridgeActivity {
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
+        // Local plugins must be registered before the bridge starts.
+        registerPlugin(PrinterPlugin.class);
         super.onCreate(savedInstanceState);
 
         // TRUE edge-to-edge: let the WebView draw *behind* the status and
