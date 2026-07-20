@@ -167,12 +167,14 @@ function RecCard({
   onPaper,
   onBacktest,
   onExport,
+  hideHead,
 }: {
   r: Recommendation;
   watched: boolean;
   alerted: boolean;
   papered: boolean;
   compact: boolean;
+  hideHead?: boolean;
   onWatch: () => void;
   onAlert: () => void;
   onChart: () => void;
@@ -185,21 +187,23 @@ function RecCard({
   const c = actionColor(r.action);
   return (
     <Card style={styles.card}>
-      <View style={styles.cardHead}>
-        <View style={{ flex: 1 }}>
-          <View style={styles.symRow}>
-            <Text style={styles.sym}>{r.symbol}</Text>
-            <View style={[styles.actionPill, { backgroundColor: c }]}>
-              <Text style={styles.actionTxt}>{r.action}</Text>
+      {hideHead ? null : (
+        <View style={styles.cardHead}>
+          <View style={{ flex: 1 }}>
+            <View style={styles.symRow}>
+              <Text style={styles.sym}>{r.symbol}</Text>
+              <View style={[styles.actionPill, { backgroundColor: c }]}>
+                <Text style={styles.actionTxt}>{r.action}</Text>
+              </View>
             </View>
+            {r.name ? <Text style={styles.name} numberOfLines={1}>{r.name}</Text> : null}
           </View>
-          {r.name ? <Text style={styles.name} numberOfLines={1}>{r.name}</Text> : null}
+          <View style={styles.confBox}>
+            <Text style={[styles.confVal, compact && styles.confValCompact, { color: c }]}>{r.confidence}</Text>
+            <Text style={styles.confLbl}>confidence</Text>
+          </View>
         </View>
-        <View style={styles.confBox}>
-          <Text style={[styles.confVal, compact && styles.confValCompact, { color: c }]}>{r.confidence}</Text>
-          <Text style={styles.confLbl}>confidence</Text>
-        </View>
-      </View>
+      )}
 
       <View style={styles.scores}>
         <Score label="FUNDAMENTAL" value={r.fundamental_score} />
@@ -717,10 +721,32 @@ function LongTermRecs() {
       </ScrollView>
 
       {open ? (
-        <Sheet onClose={() => setOpen(null)} maxHeight="92%">
-          <ScrollView bounces={false} contentContainerStyle={{ padding: theme.sp.md }}>
+        <Sheet onClose={() => setOpen(null)} maxHeight="94%">
+          {/* Pinned header (sticky): the symbol, name and ✕ close stay visible
+              while the card body scrolls. */}
+          <ScrollView bounces={false} stickyHeaderIndices={[0]} showsVerticalScrollIndicator={false}>
+            <View style={styles.sheetHead}>
+              <View style={{ flex: 1 }}>
+                <View style={styles.symRow}>
+                  <Text style={styles.sym}>{open.symbol}</Text>
+                  <View style={[styles.actionPill, { backgroundColor: actionColor(open.action) }]}>
+                    <Text style={styles.actionTxt}>{open.action}</Text>
+                  </View>
+                </View>
+                {open.name ? <Text style={styles.name} numberOfLines={2}>{open.name}</Text> : null}
+              </View>
+              <View style={styles.confBox}>
+                <Text style={[styles.confVal, styles.confValCompact, { color: actionColor(open.action) }]}>{open.confidence}</Text>
+                <Text style={styles.confLbl}>confidence</Text>
+              </View>
+              <TouchableOpacity onPress={() => setOpen(null)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} style={styles.sheetX}>
+                <Text style={styles.sheetXTxt}>✕</Text>
+              </TouchableOpacity>
+            </View>
+            <View style={{ padding: theme.sp.md }}>
             <RecCard
               r={open}
+              hideHead
               compact={!isDesktop}
               watched={isWatched(open.symbol)}
               alerted={hasLocalAlert(alerts, open.symbol)}
@@ -734,6 +760,7 @@ function LongTermRecs() {
               onBacktest={() => { const r = open; setOpen(null); onBacktest(r); }}
               onExport={() => onExport(open)}
             />
+            </View>
           </ScrollView>
         </Sheet>
       ) : null}
@@ -934,6 +961,21 @@ const styles = StyleSheet.create({
   lrowUpside: { color: theme.green, fontFamily: theme.mono, fontWeight: '700', fontSize: theme.fs.sm, marginTop: 3 },
   lrowChev: { color: theme.muted2, fontSize: 22 },
   cardHead: { flexDirection: 'row', alignItems: 'flex-start', gap: theme.sp.md },
+  // Sticky sheet header — solid background + divider so it sits over the
+  // scrolling card body; keeps the symbol/name and ✕ close always visible.
+  sheetHead: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: theme.sp.md,
+    backgroundColor: theme.surface,
+    paddingHorizontal: theme.sp.md,
+    paddingTop: theme.sp.md,
+    paddingBottom: theme.sp.sm,
+    borderBottomColor: theme.border,
+    borderBottomWidth: 1,
+  },
+  sheetX: { paddingHorizontal: 4, paddingTop: 2 },
+  sheetXTxt: { color: theme.muted, fontSize: 18 },
   symRow: { flexDirection: 'row', alignItems: 'center', gap: theme.sp.sm },
   sym: { color: theme.text, fontFamily: theme.mono, fontWeight: '800', fontSize: theme.fs.lg },
   actionPill: { borderRadius: 4, paddingHorizontal: 7, paddingVertical: 2 },
