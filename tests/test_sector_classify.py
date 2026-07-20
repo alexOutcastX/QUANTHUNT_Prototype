@@ -120,6 +120,77 @@ class TestRefreshClassification(unittest.TestCase):
         self.assertEqual(n, 0)
 
 
+class TestIndustryToMacro(unittest.TestCase):
+    def test_maps_granular_bse_industries(self):
+        cases = {
+            "IT - Software": "Information Technology",
+            "Banks": "Financial Services",
+            "Pharmaceuticals & Biotechnology": "Healthcare",
+            "Auto Ancillaries": "Automobile and Auto Components",
+            "Cement & Cement Products": "Construction Materials",
+            "Ferrous Metals": "Metals & Mining",
+            "Petroleum Products": "Oil Gas & Consumable Fuels",
+            "Textiles - Cotton": "Textiles",
+            "Realty": "Realty",
+            "Power Generation & Distribution": "Power",
+            "Telecom - Services": "Telecommunication",
+            "Paper": "Forest Materials",
+            "Fertilizers": "Chemicals",
+            "Retailing": "Consumer Services",
+        }
+        for raw, expect in cases.items():
+            self.assertEqual(sectors.industry_to_macro(raw), expect, raw)
+
+    def test_specific_beats_generic(self):
+        # cement must not be swallowed by "construction"
+        self.assertEqual(sectors.industry_to_macro("Cement"), "Construction Materials")
+        # ferrous must not be a generic metal-only match issue
+        self.assertEqual(sectors.industry_to_macro("Ferrous Metals"), "Metals & Mining")
+
+    def test_unknown_industry_still_classified(self):
+        # never silently dropped — passes through canonicalised
+        self.assertTrue(sectors.industry_to_macro("Some Exotic Trade"))
+
+    def test_empty(self):
+        self.assertEqual(sectors.industry_to_macro(""), "")
+        self.assertEqual(sectors.industry_to_macro(None), "")
+
+
+class TestRefreshBseLayer(unittest.TestCase):
+    def setUp(self):
+        sectors._map = {}
+        sectors._fetched_ts = 0
+
+    def test_bse_rows_populate_and_nse_overwrites(self):
+        bse = [("TCS", "IT - Software"), ("SOMESME", "Textiles - Cotton"),
+               ("HDFCBANK", "Banks")]
+        seed = {
+            "ind_niftytotalmarket_list.csv":
+                "Company,Industry,Symbol,Series,ISIN\nHDFC Bank,Financial Services,HDFCBANK,EQ,X\n",
+        }
+
+        def fetch(path):
+            name = path.rsplit("/", 1)[-1]
+            if name in seed:
+                return seed[name]
+            raise RuntimeError("404")
+
+        n = sectors.refresh_classification(fetch, bse_rows=bse, force=True)
+        self.assertGreaterEqual(n, 3)
+        # BSE-only SME still classified
+        self.assertEqual(sectors._map["SOMESME"], "Textiles")
+        self.assertEqual(sectors._map["TCS"], "Information Technology")
+        # NSE index is authoritative — HDFCBANK keeps the NSE macro sector
+        self.assertEqual(sectors._map["HDFCBANK"], "Financial Services")
+
+    def test_bse_only_still_works_without_nse(self):
+        def fetch(path):
+            raise RuntimeError("nse down")
+        n = sectors.refresh_classification(fetch, bse_rows=[("XYZ", "Banks")], force=True)
+        self.assertEqual(n, 1)
+        self.assertEqual(sectors._map["XYZ"], "Financial Services")
+
+
 class TestBuildHeatmap(unittest.TestCase):
     def setUp(self):
         sectors._map = {
