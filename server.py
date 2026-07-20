@@ -1502,6 +1502,17 @@ def multibagger_screen():
     return jsonify(mbs.snapshot())
 
 
+@app.route("/sectors")
+def sectors_aggregate():
+    """Full NSE+BSE sectoral heatmap aggregate. Piggybacks on the multibagger
+    screen's universe sweep (every stock's .info already carries sector / day
+    change / market cap), so opening the heatmap warms the same background job
+    rather than re-sweeping the market. ?refresh=1 forces a re-run."""
+    import mb_screen as mbs
+    mbs.ensure_started(get_universe, force=request.args.get("refresh") == "1")
+    return jsonify(mbs.sector_snapshot())
+
+
 @app.route("/multibagger")
 def multibagger_report():
     """One-click multibagger-potential report (see multibagger.py for the model)."""
