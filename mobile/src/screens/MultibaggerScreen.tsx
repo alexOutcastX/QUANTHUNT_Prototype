@@ -13,7 +13,7 @@ import { mergeSectors } from '../sectors';
 import { ACTIONS_W, COLS, Col, DEFAULT_HIDDEN, cellFlex, loadNames } from './ScreenerScreen';
 import { TrackDir, TrackEntry, addTrack, loadTrack, removeTrack } from '../tracklist';
 import { addSymbol, loadWatchlist, normSymbol, removeSymbol } from '../watchlist';
-import { Btn, Card, Dropdown, EmptyState, FrozenTable, InfoButton, InfoContent, Loading, SectionTitle, StatTile } from '../ui';
+import { Btn, Card, Dropdown, EmptyState, InfoButton, InfoContent, Loading, SectionTitle, StatTile } from '../ui';
 import { openPdfPreview } from '../pdf';
 import { MULTIBAGGER_INFO } from '../tabInfo';
 import { theme } from '../theme';
@@ -34,12 +34,6 @@ const reportCache = new Map<string, { report: MultibaggerReport; candles: Candle
 // The screen is simply "analyser score ≥ 60" computed SERVER-SIDE over the
 // whole listed NSE universe (see mb_screen.py); a data-coverage floor keeps
 // thin-data stocks from sneaking in on one strong pillar.
-const FIXED_CHIPS = [
-  'Analyser score ≥ 60',
-  'Full NSE universe',
-  'Data coverage ≥ 60%',
-];
-
 // Discoverable sort chips (headers are tappable too, but easy to miss inside the
 // horizontally-scrolled table). Keys match the analyser/screener sort columns.
 const MB_SORTS: { key: string; label: string }[] = [
@@ -508,14 +502,8 @@ function MbList({
   };
 
   return (
-    <View style={{ flex: 1 }}>
+    <ScrollView style={{ flex: 1 }}>
       <View style={styles.fixedRow}>
-        <Text style={styles.fixedLabel}>FIXED SCREEN</Text>
-        {FIXED_CHIPS.map((c) => (
-          <View key={c} style={styles.fixedChip}>
-            <Text style={styles.fixedChipTxt}>{c}</Text>
-          </View>
-        ))}
         <TouchableOpacity
           style={[styles.updBtn, loading && { opacity: 0.5 }]}
           onPress={forceRefresh}
@@ -524,7 +512,7 @@ function MbList({
         >
           <Text style={styles.updTxt}>⟳ Update list</Text>
         </TouchableOpacity>
-        <Text style={styles.fixedNote} numberOfLines={1}>
+        <Text style={styles.fixedNote} numberOfLines={2}>
           {matches.length} match{matches.length === 1 ? '' : 'es'}
           {warming ? ' · loading fundamentals…' : ''} · {note} · tap a symbol to analyse
         </Text>
@@ -601,9 +589,8 @@ function MbList({
       {loading ? <Loading label="Loading mid & small cap candidates…" /> : null}
 
       {!loading ? (
-        <FrozenTable
-          width={tableW}
-          header={
+        <ScrollView horizontal showsHorizontalScrollIndicator contentContainerStyle={{ minWidth: '100%' }}>
+          <View style={{ minWidth: tableW, flexGrow: 1 }}>
             <View style={styles.headerRow}>
               {visibleCols.map((c) => (
                 <TouchableOpacity
@@ -622,8 +609,6 @@ function MbList({
                 <Text style={styles.thTxt}>Actions</Text>
               </View>
             </View>
-          }
-        >
             {matches.length === 0 ? (
               <EmptyState
                 icon="◆"
@@ -697,9 +682,10 @@ function MbList({
                 );
               })
             )}
-        </FrozenTable>
+          </View>
+        </ScrollView>
       ) : null}
-    </View>
+    </ScrollView>
   );
 }
 
