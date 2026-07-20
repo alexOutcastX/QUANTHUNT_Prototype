@@ -7,6 +7,7 @@
 // lib. No native plugins required.
 import React from 'react';
 import { closePdfPreview, peekPdf, subscribePdf } from '../pdf';
+import { printReportNative } from '../printer';
 
 export default function PdfPreview() {
   const [, force] = React.useReducer((x: number) => x + 1, 0);
@@ -16,7 +17,7 @@ export default function PdfPreview() {
   const doc = peekPdf();
   if (!doc) return null;
 
-  const print = () => {
+  const webPrint = () => {
     const ifr = iframeRef.current;
     try {
       ifr?.contentWindow?.focus?.();
@@ -28,6 +29,14 @@ export default function PdfPreview() {
         /* nothing else we can do */
       }
     }
+  };
+  // On the Android app, route to the native print dialog (web print() is a no-op
+  // in the WebView). Fall back to browser print on desktop / if the native
+  // bridge isn't present (older APK).
+  const print = () => {
+    printReportNative(doc.html, doc.fileName).then((handled) => {
+      if (!handled) webPrint();
+    });
   };
 
   const btn = (label: string, onClick: () => void, primary?: boolean) =>
