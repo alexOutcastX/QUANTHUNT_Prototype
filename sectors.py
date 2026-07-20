@@ -143,6 +143,80 @@ def translate_gics(gics) -> str:
     return _GICS_TO_NSE.get(str(gics).strip().lower(), _canon(gics))
 
 
+# BSE's scrip master tags every listed company with a granular "Industry" (e.g.
+# "IT - Software", "Auto Ancillaries", "Cement & Cement Products"). This folds
+# those ~100 granular industries into our 22 macro sectors by keyword, so the
+# whole BSE universe (~4,000 scrips the NSE index files never list) gets a
+# sector. Rules are checked in order — put the specific ones first (cement before
+# construction, ferrous before generic metals).
+_INDUSTRY_RULES = [
+    (("cement",), "Construction Materials"),
+    (("bank", "finance", "nbfc", "insurance", "financial", "broking", "broker",
+      "asset management", "housing", "holding compan", "investment", "capital market",
+      "stock", "depositor", "fintech", "microfinance", "leasing"), "Financial Services"),
+    # Healthcare before IT so "biotechnology" isn't caught by an IT keyword.
+    (("pharma", "drug", "healthcare", "hospital", "biotech", "medical", "diagnostic",
+      "health care", "life science"), "Healthcare"),
+    (("it - ", "it-", "software", "information technology", "computers", "bpo",
+      "it enabled", "internet", "e-commerce techn"), "Information Technology"),
+    # Telecom before the broad "services" rule so "Telecom - Services" lands here.
+    (("telecom", "telephone", "telecommunication"), "Telecommunication"),
+    (("auto ", "auto-", "automobile", "tyre", "auto ancill", "auto compon", "two wheeler",
+      "commercial vehicle", "passenger", "4 wheeler", "2/3 wheeler"), "Automobile and Auto Components"),
+    (("cigarett", "tobacco", "food", "beverage", "sugar", "tea", "coffee", "dairy",
+      "fmcg", "personal care", "household product", "breweries", "distilleries",
+      "edible oil", "packaged food", "agro product", "agricultural food"),
+     "Fast Moving Consumer Goods"),
+    (("consumer durable", "consumer electronic", "household appliance", "footwear",
+      "furniture", "jewel", "gems", "watches", "leisure product", "plywood boards"),
+     "Consumer Durables"),
+    (("media", "entertainment", "film", "broadcast", "publish", "print", "newspaper",
+      "tv ", "television", "animation"), "Media Entertainment & Publication"),
+    (("retail", "trading", "e-commerce", "hotel", "restaurant", "tourism", "leisure",
+      "amusement", "education", "food service"), "Consumer Services"),
+    (("logistic", "transport", "shipping", "port", "airline", "aviation", "courier",
+      "warehous", "rail", "road ", "consultanc", "services", "staffing", "diversified commercial"),
+     "Services"),
+    (("realty", "real estate", "residential", "commercial complex", "township"), "Realty"),
+    (("power", "electric util", "power generation", "renewable", "utilit", "distribution - electricity"),
+     "Power"),
+    (("oil", "gas", "petroleum", "refiner", "lng", "coal", " fuel", "petrochemical"),
+     "Oil Gas & Consumable Fuels"),
+    (("ferrous", "steel", "iron", "aluminium", "aluminum", "copper", "zinc", "lead",
+      "mining", "metal", "mineral", "ore"), "Metals & Mining"),
+    (("chemical", "fertiliz", "fertilis", "agrochemical", "pesticide", "paints",
+      "dyes", "pigment", "specialty chem", "petrochem"), "Chemicals"),
+    (("textile", "apparel", "garment", "fabric", "cotton", "yarn", "spinning",
+      "readymade", "hosiery"), "Textiles"),
+    (("paper", "forest", "wood", "timber", "jute"), "Forest Materials"),
+    (("construction", "civil", "infrastructur", "roads", "epc", "engineering - construction"),
+     "Construction"),
+    (("capital good", "electrical equip", "heavy electrical", "industrial",
+      "machinery", "engineering", "defence", "defense", "aerospace", "abrasives",
+      "bearing", "casting", "compressor", "pump", "electricals", "electrode",
+      "packaging", "container"), "Capital Goods"),
+    (("diversified", "conglomerat", "miscellaneous"), "Diversified"),
+]
+
+
+def industry_to_macro(raw) -> str:
+    """Map a granular exchange industry label (mainly BSE) to one of the 22 NSE
+    macro sectors. Unmatched labels fall back to the alias/title-case pass-through
+    so a scrip is still classified (never silently dropped)."""
+    if not raw:
+        return ""
+    key = " ".join(str(raw).strip().split()).lower()
+    if not key:
+        return ""
+    if key in _ALIASES:
+        return _ALIASES[key]
+    for keywords, sector in _INDUSTRY_RULES:
+        for kw in keywords:
+            if kw in key:
+                return sector
+    return _canon(raw)
+
+
 def _load_disk():
     global _map, _fetched_ts
     try:
@@ -182,28 +256,48 @@ def _parse_index_csv(text: str):
             yield sym, sec
 
 
-def refresh_classification(fetch_text, force: bool = False) -> int:
-    """(Re)build the NSE index classification map. `fetch_text(url)` must return
-    the CSV body for an absolute URL (or raise). Best-effort per file — a failed
-    download just contributes nothing. Returns the number of symbols mapped.
+def refresh_classification(fetch_text, bse_rows=None, force: bool = False) -> int:
+    """(Re)build the classification map from two layers, merged in priority order
+    so authoritative data always wins:
 
-    The result is merged into (never replaces) the existing map, so the
-    accumulated Yahoo long-tail from record() survives a refresh."""
+      1. BSE scrip master (`bse_rows`: iterable of (symbol, raw_industry)) — the
+         broad base, covering the ~4,000+ BSE-listed universe the NSE index files
+         never reach. Granular industries are folded into the 22 macro sectors.
+      2. NSE index "Industry" files (`fetch_text(url)` returns the CSV body) — the
+         most authoritative macro-sector source; overwrites the BSE layer.
+
+    Both are best-effort — a failed source just contributes nothing. The result
+    is merged into (never wholesale replaces) the existing map, so the Yahoo
+    long-tail accumulated via record() survives a refresh. Returns the total
+    number of symbols mapped."""
     global _fetched_ts
     with _lock:
         fresh = _map and (time.time() - _fetched_ts) < _TTL
     if fresh and not force:
         return len(_map)
+
+    # Layer 1 — BSE scrip master (lower priority, broadest coverage).
     added = {}
+    try:
+        for sym, ind in (bse_rows or []):
+            s = (sym or "").strip().upper()
+            sec = industry_to_macro(ind)
+            if s and sec:
+                added[s] = sec
+    except Exception:
+        pass
+
+    # Layer 2 — NSE index Industry files (authoritative; overwrite the BSE layer).
     for name in NSE_INDEX_FILES:
         try:
             text = fetch_text(NSE_INDICES_PATH + name)
             if not text or "," not in text[:200]:
                 continue
             for sym, sec in _parse_index_csv(text):
-                added[sym] = sec       # index files are authoritative; overwrite
+                added[sym] = sec
         except Exception:
             continue
+
     with _lock:
         _map.update(added)
         _fetched_ts = time.time()

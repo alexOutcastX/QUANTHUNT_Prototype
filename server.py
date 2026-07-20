@@ -367,6 +367,42 @@ def _nse_archive_text(path):
     return r.text
 
 
+def _bse_scrip_industries():
+    """Every actively-listed BSE equity + its industry, from the BSE scrip master.
+    Returns a list of (symbol, industry) — the broad base for the sector map
+    (~4,000+ scrips the NSE index files never list). Best-effort: any failure
+    returns an empty list and the classifier simply falls back to NSE + Yahoo."""
+    sess = requests.Session()
+    sess.headers.update({
+        "User-Agent": HEADERS["User-Agent"],
+        "Accept": "application/json, text/plain, */*",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Referer": "https://www.bseindia.com/",
+    })
+    try:                                   # warm cookies like the bhavcopy session
+        sess.get(BSE_BASE, timeout=8)
+    except Exception:
+        pass
+    url = "https://api.bseindia.com/BseIndiaAPI/api/ListofScripData/w"
+    params = {"Group": "", "Scripcode": "", "industry": "", "segment": "Equity", "status": "Active"}
+    r = sess.get(url, params=params, timeout=30)
+    if r.status_code != 200:
+        raise RuntimeError(f"BSE scrip master HTTP {r.status_code}")
+    data = r.json()
+    rows = data if isinstance(data, list) else (data.get("Table") or [])
+    out = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        # field names vary in case across BSE responses — probe both.
+        sym = (row.get("scrip_id") or row.get("Scrip_Id") or row.get("SCRIP_ID") or "").strip().upper()
+        ind = (row.get("INDUSTRY") or row.get("Industry") or row.get("industry") or "").strip()
+        if sym and ind:
+            out.append((sym, ind))
+    log.info("BSE scrip master: %d classified scrips", len(out))
+    return out
+
+
 def _sector_refresh_running():
     with _sector_refresh_lock:
         return _sector_refresh_thread is not None
@@ -390,7 +426,12 @@ def _ensure_sector_classification(force=False):
         def _work():
             global _sector_refresh_thread
             try:
-                n = _sectors.refresh_classification(_nse_archive_text, force=force)
+                try:
+                    bse_rows = _bse_scrip_industries()
+                except Exception as e:
+                    log.warning("BSE scrip master fetch failed: %s", e)
+                    bse_rows = []
+                n = _sectors.refresh_classification(_nse_archive_text, bse_rows=bse_rows, force=force)
                 log.info("Sector classification refreshed: %d symbols mapped", n)
             except Exception as e:
                 log.warning("Sector classification refresh failed: %s", e)
