@@ -34,17 +34,6 @@ const reportCache = new Map<string, { report: MultibaggerReport; candles: Candle
 // The screen is simply "analyser score ≥ 60" computed SERVER-SIDE over the
 // whole listed NSE universe (see mb_screen.py); a data-coverage floor keeps
 // thin-data stocks from sneaking in on one strong pillar.
-// Discoverable sort chips (headers are tappable too, but easy to miss inside the
-// horizontally-scrolled table). Keys match the analyser/screener sort columns.
-const MB_SORTS: { key: string; label: string }[] = [
-  { key: 'mb_score', label: 'Score' },
-  { key: 'mb_prob', label: '5x Prob' },
-  { key: 'price', label: 'Price' },
-  { key: 'market_cap_cr', label: 'Market cap' },
-  { key: 'pe', label: 'P/E' },
-  { key: 'roe', label: 'ROE' },
-  { key: 'name', label: 'Name' },
-];
 
 // Rows in this list carry the analyser score + 5x probability alongside the
 // screener fields.
@@ -241,10 +230,14 @@ function MbList({
   onAnalyse,
   onDetail,
   toast,
+  refreshSignal,
+  onLoadingChange,
 }: {
   onAnalyse: (sym: string) => void;
   onDetail: (r: Row) => void;
   toast: (msg: string) => void;
+  refreshSignal: number;
+  onLoadingChange: (loading: boolean) => void;
 }) {
   const [rows, setRows] = useState<Row[]>(mbRowsCache || []);
   const [note, setNote] = useState(mbNoteCache);
@@ -272,6 +265,18 @@ function MbList({
     setNote('Restarting the universe screen…');
     setTick((t) => t + 1);
   };
+
+  // The ⟳ Update-list button now lives in the parent top row (beside the
+  // Screener/Analyser toggle). The parent bumps refreshSignal to trigger a
+  // rebuild, and reads loading back so it can disable the button mid-run.
+  useEffect(() => {
+    if (refreshSignal > 0) forceRefresh();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshSignal]);
+  useEffect(() => {
+    onLoadingChange(loading);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading]);
 
   useEffect(() => {
     if (mbRowsCache && tick === 0) return;
@@ -503,24 +508,7 @@ function MbList({
 
   return (
     <ScrollView style={{ flex: 1 }}>
-      <View style={styles.fixedRow}>
-        <TouchableOpacity
-          style={[styles.updBtn, loading && { opacity: 0.5 }]}
-          onPress={forceRefresh}
-          disabled={loading}
-          activeOpacity={0.75}
-        >
-          <Text style={styles.updTxt}>⟳ Update list</Text>
-        </TouchableOpacity>
-        <Text style={styles.fixedNote} numberOfLines={2}>
-          {matches.length} match{matches.length === 1 ? '' : 'es'}
-          {warming ? ' · loading fundamentals…' : ''} · {note} · tap a symbol to analyse
-        </Text>
-      </View>
-      {asof ? (
-        <Text style={styles.lastUpd}>Stocks last updated {fmtAsof(asof)}</Text>
-      ) : null}
-
+      {/* Strategy first — the ⟳ Update-list button lives in the parent top row. */}
       {!loading ? (
         <View style={styles.stratRow}>
           <Dropdown
@@ -537,52 +525,25 @@ function MbList({
         </View>
       ) : null}
 
-      {!loading && sectors.length ? (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.secRow}
-        >
-          <TouchableOpacity
-            style={[styles.secChip, sector === '' && styles.secChipOn]}
-            onPress={() => setSector('')}
-            activeOpacity={0.75}
-          >
-            <Text style={[styles.secChipTxt, sector === '' && styles.secChipTxtOn]}>All sectors</Text>
-          </TouchableOpacity>
-          {sectors.map((s) => (
-            <TouchableOpacity
-              key={s}
-              style={[styles.secChip, sector === s && styles.secChipOn]}
-              onPress={() => setSector((cur) => (cur === s ? '' : s))}
-              activeOpacity={0.75}
-            >
-              <Text style={[styles.secChipTxt, sector === s && styles.secChipTxtOn]}>{s}</Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
+      {/* Update text: match count + status, then when the list last refreshed. */}
+      <Text style={styles.fixedNote} numberOfLines={2}>
+        {matches.length} match{matches.length === 1 ? '' : 'es'}
+        {warming ? ' · loading fundamentals…' : ''} · {note} · tap a symbol to analyse
+      </Text>
+      {asof ? (
+        <Text style={styles.lastUpd}>Stocks last updated {fmtAsof(asof)}</Text>
       ) : null}
 
-      {!loading && matches.length ? (
-        <View style={styles.mSortRow}>
-          <Text style={styles.mSortLabel}>SORT</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.mSortInner}>
-            {MB_SORTS.map((s) => {
-              const on = sortCol === s.key;
-              return (
-                <TouchableOpacity
-                  key={s.key}
-                  style={[styles.mSortChip, on && styles.mSortChipOn]}
-                  onPress={() => onSort(s.key)}
-                  activeOpacity={0.75}
-                >
-                  <Text style={[styles.mSortTxt, on && styles.mSortTxtOn]}>
-                    {s.label}{on ? (sortDir === 1 ? ' ↑' : ' ↓') : ''}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
+      {/* Sector filter as a dropdown (was a chip row). Column headers handle
+          sorting now, so the separate SORT bar is gone. */}
+      {!loading && sectors.length ? (
+        <View style={styles.secRow}>
+          <Dropdown
+            label="Sector"
+            value={sector}
+            options={[{ key: '', label: 'All sectors' }, ...sectors.map((s) => ({ key: s, label: s }))]}
+            onChange={setSector}
+          />
         </View>
       ) : null}
 
@@ -692,6 +653,11 @@ function MbList({
 // ── Screen: sub-tabs (fixed screener list ⇄ one-click analyser) ──────────────
 export default function MultibaggerScreen() {
   const [view, setView] = useState<'screen' | 'analyse'>('screen');
+  // ⟳ Update-list lives here (beside the Screener/Analyser toggle). Bumping
+  // mbRefresh triggers a rebuild inside MbList; mbLoading mirrors its progress
+  // so the button disables mid-run.
+  const [mbRefresh, setMbRefresh] = useState(0);
+  const [mbLoading, setMbLoading] = useState(false);
   const [symbol, setSymbol] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -829,12 +795,28 @@ export default function MultibaggerScreen() {
               </Text>
             </TouchableOpacity>
           ))}
+          {view === 'screen' ? (
+            <TouchableOpacity
+              style={[styles.updBtn, mbLoading && { opacity: 0.5 }]}
+              onPress={() => !mbLoading && setMbRefresh((t) => t + 1)}
+              disabled={mbLoading}
+              activeOpacity={0.75}
+            >
+              <Text style={styles.updTxt}>⟳ Update list</Text>
+            </TouchableOpacity>
+          ) : null}
         </View>
         <InfoButton title="Multibagger" content={MULTIBAGGER_INFO} />
       </View>
 
       {view === 'screen' ? (
-        <MbList onAnalyse={(s) => analyse(s)} onDetail={setDetail} toast={toast} />
+        <MbList
+          onAnalyse={(s) => analyse(s)}
+          onDetail={setDetail}
+          toast={toast}
+          refreshSignal={mbRefresh}
+          onLoadingChange={setMbLoading}
+        />
       ) : (
         <>
           <View style={styles.inputRow}>
@@ -1075,55 +1057,12 @@ const styles = StyleSheet.create({
   segBtnOn: { backgroundColor: theme.accent, borderColor: theme.accent },
   segTxt: { color: theme.muted2, fontSize: theme.fs.sm, fontWeight: '700' },
   segTxtOn: { color: theme.onAccent },
-  // fixed-screen banner
-  fixedRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: theme.sp.sm,
-    paddingHorizontal: theme.sp.lg,
-    paddingBottom: theme.sp.sm,
-  },
-  fixedLabel: { color: theme.muted, fontSize: theme.fs.xs + 1, fontWeight: '700', letterSpacing: 1 },
-  fixedChip: {
-    backgroundColor: theme.surface2,
-    borderColor: GOLD,
-    borderWidth: 1,
-    borderRadius: 999,
-    paddingHorizontal: theme.sp.md,
-    paddingVertical: 4,
-  },
-  fixedChipTxt: { color: GOLD, fontSize: theme.fs.sm },
-  fixedNote: { color: theme.muted, fontSize: theme.fs.sm, flexShrink: 1 },
-  secRow: { gap: 6, paddingHorizontal: 12, paddingBottom: 8, alignItems: 'center' },
-  secChip: {
-    borderColor: theme.border2,
-    borderWidth: 1,
-    borderRadius: 999,
-    paddingHorizontal: 11,
-    paddingVertical: 4,
-    backgroundColor: theme.surface2,
-  },
-  secChipOn: { backgroundColor: theme.accent, borderColor: theme.accent },
-  secChipTxt: { color: theme.muted2, fontFamily: theme.mono, fontSize: theme.fs.sm },
-  secChipTxtOn: { color: theme.bg, fontWeight: '700' },
+  // Status line under the controls: match count + build progress.
+  fixedNote: { color: theme.muted, fontSize: theme.fs.sm, paddingHorizontal: 12, paddingBottom: 6 },
+  secRow: { flexDirection: 'row', paddingHorizontal: 12, paddingBottom: 8, alignItems: 'center' },
   stratRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingBottom: 8, gap: 6 },
   stratInfoOn: { opacity: 1 },
   stratInfoOff: { opacity: 0.4 },
-  mSortRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingBottom: 8, gap: 8 },
-  mSortLabel: { color: theme.muted, fontSize: theme.fs.xs, fontWeight: '700', letterSpacing: 1 },
-  mSortInner: { gap: 8, alignItems: 'center' },
-  mSortChip: {
-    backgroundColor: theme.surface2,
-    borderColor: theme.border,
-    borderWidth: 1,
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-  },
-  mSortChipOn: { backgroundColor: theme.accent, borderColor: theme.accent },
-  mSortTxt: { color: theme.muted2, fontSize: theme.fs.sm },
-  mSortTxtOn: { color: theme.bg, fontWeight: '800' },
   updBtn: {
     backgroundColor: theme.surface2,
     borderColor: theme.border2,
