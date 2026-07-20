@@ -47,43 +47,74 @@ export function professionalShell(html: string, opts: { docType?: string; dateSt
   html = withLightScheme(html);
   const docType = opts.docType || 'Company report';
   const dateStr = opts.dateStr || nowStr();
+  // "New-age fintech" report skin: a gradient hero card, colour-coded section
+  // eyebrows, rounded striped tables, pills and metric/timeframe cards. Bold but
+  // still A4 and print-clean (print-color-adjust:exact keeps every colour).
   const CHROME =
     '<style>' +
-    '@page{size:A4;margin:16mm 14mm 18mm}' +
-    '*{-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
+    '@page{size:A4;margin:12mm 12mm 14mm}' +
+    '*{-webkit-print-color-adjust:exact;print-color-adjust:exact;box-sizing:border-box}' +
     'html,body{background:#fff}' +
-    'body{margin:0 auto;padding:0 20px;max-width:820px;font-family:Georgia,"Times New Roman",serif;color:#1a1a1a}' +
-    // masthead
-    '.rp-head{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;' +
-    'border-bottom:2.5px solid #0d2b4e;padding:6px 0 8px;margin:0 0 16px}' +
-    '.rp-firm{font-family:"Helvetica Neue",Arial,sans-serif;font-weight:800;letter-spacing:.4px;font-size:16px;color:#0d2b4e}' +
-    '.rp-firm i{color:#c8a24a;font-style:normal}' +
-    '.rp-meta{text-align:right;font-family:"Helvetica Neue",Arial,sans-serif}' +
-    '.rp-doc{font-size:9.5px;letter-spacing:1.6px;text-transform:uppercase;color:#64748b}' +
-    '.rp-date{font-size:9.5px;color:#94a3b8;margin-top:2px}' +
-    // section headers styled like a research note
-    'h1{font-family:"Helvetica Neue",Arial,sans-serif;font-size:19px;color:#0d2b4e;margin:0 0 2px}' +
-    'h2{font-family:"Helvetica Neue",Arial,sans-serif;font-size:12.5px;color:#0d2b4e;text-transform:uppercase;' +
-    'letter-spacing:.6px;border-bottom:1px solid #d5dbe3;padding-bottom:3px;margin:16px 0 7px}' +
+    'body{margin:0;padding:0;font-family:-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:#0f172a;font-size:10.5pt;line-height:1.5}' +
+    // gradient hero card
+    '.rp-hero{display:flex;align-items:center;justify-content:space-between;gap:14px;' +
+    'background:linear-gradient(120deg,#4338ca 0%,#6d28d9 58%,#7c3aed 100%);color:#fff;' +
+    'border-radius:16px;padding:18px 22px;margin:0 0 18px}' +
+    '.rp-brand{font-weight:800;font-size:20px;letter-spacing:.2px}' +
+    '.rp-brand i{color:#fbbf24;font-style:normal}' +
+    '.rp-brand small{display:block;font-weight:600;font-size:9px;letter-spacing:2px;text-transform:uppercase;color:#ddd6fe;margin-top:3px}' +
+    '.rp-meta{text-align:right}' +
+    '.rp-doc{font-size:10px;font-weight:800;letter-spacing:1.8px;text-transform:uppercase;color:#f5f3ff}' +
+    '.rp-date{font-size:9.5px;color:#d8b4fe;margin-top:3px}' +
+    // typography
+    'h1{font-size:21px;font-weight:800;letter-spacing:-.3px;color:#0f172a;margin:0 0 2px}' +
+    '.sub{color:#64748b;font-size:11px}' +
+    '.big{font-size:29px;font-weight:800;letter-spacing:-.5px;margin:4px 0}' +
+    'h2{font-size:9.5px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:#6d28d9;' +
+    'margin:20px 0 8px;padding:0;border:0;display:flex;align-items:center;gap:8px}' +
+    'h2::before{content:"";width:16px;height:3px;border-radius:3px;background:linear-gradient(90deg,#6d28d9,#4c6ef5)}' +
+    'p{font-size:10pt;color:#334155;line-height:1.55;margin:6px 0}a{color:#4c6ef5;text-decoration:none}' +
+    'ul{margin:5px 0;padding-left:18px;font-size:10pt;line-height:1.65}li{margin:2px 0}' +
+    // rounded striped tables
+    'table{border-collapse:separate;border-spacing:0;width:100%;font-size:9.5pt;' +
+    'border:1px solid #e9e7f5;border-radius:12px;overflow:hidden;margin:2px 0}' +
+    'td{padding:7px 12px;border-bottom:1px solid #f1eff9}tr:last-child td{border-bottom:0}' +
+    'tr:nth-child(even) td{background:#faf9ff}' +
+    // header rows are the ones the builders bold — tint just those (not the first
+    // data row of header-less tables). :has() is supported by the print WebView.
+    'tr:has(td b:first-child) td{background:#f3f0ff;color:#4c1d95}' +
+    // pills
+    '.pill{display:inline-block;font-size:9px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;padding:3px 10px;border-radius:999px}' +
+    '.pill.g{background:#d3f9d8;color:#0b7a53}.pill.r{background:#ffe3e3;color:#c92a2a}.pill.a{background:#fff3bf;color:#a5680a}' +
+    // timeframe technical-setup cards
+    '.tf-grid{display:flex;flex-wrap:wrap;gap:9px;margin:4px 0}' +
+    '.tf-card{flex:1 1 30%;min-width:150px;border:1px solid #e9e7f5;border-radius:14px;' +
+    'padding:11px 13px;background:linear-gradient(180deg,#ffffff,#faf9ff);page-break-inside:avoid}' +
+    '.tf-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px}' +
+    '.tf-tf{font-weight:800;font-size:12px;color:#0f172a}' +
+    '.tf-score{font-weight:800;font-size:22px;letter-spacing:-.5px;line-height:1}' +
+    '.tf-of{color:#94a3b8;font-size:9px;font-weight:600}' +
+    '.tf-row{display:flex;justify-content:space-between;font-size:9px;color:#64748b;padding:1.5px 0}' +
+    '.tf-row b{color:#0f172a;font-weight:700}' +
     'table,ul,h2,.rec,.verdictCard{page-break-inside:avoid}' +
-    'thead{display:table-header-group}' +
     // confidential footer — repeats on every printed page
     '.rp-foot{display:none}' +
     '@media print{.rp-foot{display:block;position:fixed;bottom:0;left:0;right:0;text-align:center;' +
-    'font-family:"Helvetica Neue",Arial,sans-serif;font-size:8px;letter-spacing:.5px;color:#94a3b8;' +
-    'padding:3px 0;border-top:1px solid #e5e7eb;background:#fff}body{padding-bottom:14mm}}' +
+    'font-size:8px;letter-spacing:.4px;color:#94a3b8;padding:3px 0;border-top:1px solid #eee;background:#fff}' +
+    '.rp-body{padding-bottom:12mm}}' +
     '</style>';
   const withCss = /<\/head>/i.test(html) ? html.replace(/<\/head>/i, CHROME + '</head>') : CHROME + html;
-  const header =
-    '<div class="rp-head"><div class="rp-firm">Taur<i>Eye</i></div>' +
+  const hero =
+    '<div class="rp-hero"><div class="rp-brand">Taur<i>Eye</i><small>Intelligence</small></div>' +
     '<div class="rp-meta"><div class="rp-doc">' + esc(docType) + '</div>' +
     (dateStr ? '<div class="rp-date">' + esc(dateStr) + '</div>' : '') + '</div></div>';
   const footer =
     '<div class="rp-foot">TaurEye · ' + esc(docType) +
     ' · Confidential — aggregated from public data &amp; models · educational only, not investment advice</div>';
+  // Wrap the report content in a padded body so the hero can sit flush at the top.
   return withCss
-    .replace(/<body[^>]*>/i, (m) => m + header)
-    .replace(/<\/body>/i, footer + '</body>');
+    .replace(/<body[^>]*>/i, (m) => m + hero + '<main class="rp-body">')
+    .replace(/<\/body>/i, '</main>' + footer + '</body>');
 }
 
 // ── Preview-modal intent store ───────────────────────────────────────────────
