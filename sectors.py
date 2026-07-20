@@ -115,15 +115,23 @@ _ALIASES = {
 
 _FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sectors_cache.json")
 _TTL = 24 * 3600          # re-fetch the classification once a day
-# Bump when the set of classification SOURCES changes so a redeploy discards a
-# cache built by older code and re-pulls everything. (2 = adds the BSE scrip
-# master layer.) Without this, a still-fresh cache from the prior deploy blocks
-# the new source from ever being fetched until its 24h TTL lapses.
-CACHE_VERSION = 2
+# Bump when the set of classification SOURCES (or how they're fetched) changes so
+# a redeploy discards a cache built by older code and re-pulls everything.
+# (2 = adds BSE scrip master; 3 = hardened BSE fetch — Origin header, www-host
+# fallback, wider field/shape probing.) Without this, a still-fresh cache from
+# the prior deploy blocks the new fetch from ever running until its 24h TTL lapses.
+CACHE_VERSION = 3
 _lock = threading.Lock()
 # symbol(upper) -> canonical NSE sector.
 _map = {}
 _fetched_ts = 0
+# Last refresh's per-source contribution (for /sectors diagnostics).
+_diag = {}
+
+
+def diag() -> dict:
+    with _lock:
+        return dict(_diag)
 
 
 def _canon(raw) -> str:
@@ -279,37 +287,49 @@ def refresh_classification(fetch_text, bse_rows=None, force: bool = False) -> in
     is merged into (never wholesale replaces) the existing map, so the Yahoo
     long-tail accumulated via record() survives a refresh. Returns the total
     number of symbols mapped."""
-    global _fetched_ts
+    global _fetched_ts, _diag
     with _lock:
         fresh = _map and (time.time() - _fetched_ts) < _TTL
     if fresh and not force:
         return len(_map)
 
     # Layer 1 — BSE scrip master (lower priority, broadest coverage).
-    added = {}
+    bse_added = {}
     try:
         for sym, ind in (bse_rows or []):
             s = (sym or "").strip().upper()
             sec = industry_to_macro(ind)
             if s and sec:
-                added[s] = sec
+                bse_added[s] = sec
     except Exception:
         pass
 
     # Layer 2 — NSE index Industry files (authoritative; overwrite the BSE layer).
+    nse_added = {}
+    nse_files_ok = 0
     for name in NSE_INDEX_FILES:
         try:
             text = fetch_text(NSE_INDICES_PATH + name)
             if not text or "," not in text[:200]:
                 continue
+            got = 0
             for sym, sec in _parse_index_csv(text):
-                added[sym] = sec
+                nse_added[sym] = sec
+                got += 1
+            if got:
+                nse_files_ok += 1
         except Exception:
             continue
+
+    added = {}
+    added.update(bse_added)     # BSE first…
+    added.update(nse_added)     # …NSE index overwrites (authoritative)
 
     with _lock:
         _map.update(added)
         _fetched_ts = time.time()
+        _diag = {"bse_rows": len(bse_added), "nse_index": len(nse_added),
+                 "nse_files_ok": nse_files_ok, "total": len(_map)}
         _save_disk()
         return len(_map)
 

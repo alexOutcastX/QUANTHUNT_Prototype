@@ -367,40 +367,71 @@ def _nse_archive_text(path):
     return r.text
 
 
+# Last BSE scrip-master fetch outcome, surfaced in /sectors for diagnostics.
+_bse_diag = {"tried": False}
+
+
 def _bse_scrip_industries():
     """Every actively-listed BSE equity + its industry, from the BSE scrip master.
     Returns a list of (symbol, industry) — the broad base for the sector map
     (~4,000+ scrips the NSE index files never list). Best-effort: any failure
-    returns an empty list and the classifier simply falls back to NSE + Yahoo."""
+    returns an empty list and the classifier simply falls back to NSE + Yahoo.
+    Records the attempt outcome in _bse_diag so /sectors can report what happened."""
+    global _bse_diag
     sess = requests.Session()
     sess.headers.update({
         "User-Agent": HEADERS["User-Agent"],
         "Accept": "application/json, text/plain, */*",
         "Accept-Language": "en-US,en;q=0.9",
         "Referer": "https://www.bseindia.com/",
+        "Origin": "https://www.bseindia.com",
     })
     try:                                   # warm cookies like the bhavcopy session
         sess.get(BSE_BASE, timeout=8)
     except Exception:
         pass
-    url = "https://api.bseindia.com/BseIndiaAPI/api/ListofScripData/w"
     params = {"Group": "", "Scripcode": "", "industry": "", "segment": "Equity", "status": "Active"}
-    r = sess.get(url, params=params, timeout=30)
-    if r.status_code != 200:
-        raise RuntimeError(f"BSE scrip master HTTP {r.status_code}")
-    data = r.json()
-    rows = data if isinstance(data, list) else (data.get("Table") or [])
-    out = []
-    for row in rows:
-        if not isinstance(row, dict):
+    # api.bseindia.com is the canonical host; fall back to the www host in case
+    # the api subdomain isn't reachable from the VM's egress.
+    hosts = [
+        "https://api.bseindia.com/BseIndiaAPI/api/ListofScripData/w",
+        "https://www.bseindia.com/BseIndiaAPI/api/ListofScripData/w",
+    ]
+    last = None
+    for url in hosts:
+        try:
+            r = sess.get(url, params=params, timeout=30)
+            status = r.status_code
+            if status != 200:
+                last = f"HTTP {status} @ {url.split('/')[2]}"
+                continue
+            body = r.json()
+            if isinstance(body, str):
+                body = json.loads(body)
+            rows = body if isinstance(body, list) else (body.get("Table") or body.get("data") or [])
+            out = []
+            for row in rows:
+                if not isinstance(row, dict):
+                    continue
+                sym = (row.get("scrip_id") or row.get("Scrip_Id") or row.get("SCRIP_ID")
+                       or row.get("ScripID") or row.get("Scrip_Cd") or "").strip().upper()
+                ind = (row.get("INDUSTRY") or row.get("Industry") or row.get("industry")
+                       or row.get("Industry_New") or row.get("NewIndustry") or "").strip()
+                if sym and ind:
+                    out.append((sym, ind))
+            _bse_diag = {"tried": True, "host": url.split('/')[2], "status": status,
+                         "raw_rows": len(rows), "parsed": len(out),
+                         "sample_keys": list(rows[0].keys())[:12] if rows and isinstance(rows[0], dict) else []}
+            log.info("BSE scrip master: %d/%d classified scrips via %s", len(out), len(rows), url.split('/')[2])
+            if out:
+                return out
+            last = f"0 parsed of {len(rows)} rows @ {url.split('/')[2]}"
+        except Exception as e:
+            last = f"{type(e).__name__}: {e}"
             continue
-        # field names vary in case across BSE responses — probe both.
-        sym = (row.get("scrip_id") or row.get("Scrip_Id") or row.get("SCRIP_ID") or "").strip().upper()
-        ind = (row.get("INDUSTRY") or row.get("Industry") or row.get("industry") or "").strip()
-        if sym and ind:
-            out.append((sym, ind))
-    log.info("BSE scrip master: %d classified scrips", len(out))
-    return out
+    _bse_diag = {"tried": True, "error": str(last)}
+    log.warning("BSE scrip master failed: %s", last)
+    return []
 
 
 def _sector_refresh_running():
@@ -1645,6 +1676,10 @@ def sectors_aggregate():
         "universe": agg["universe"],
         "mapped": agg["mapped"],
         "sectors": agg["sectors"],
+        # Per-source classification breakdown — helps diagnose coverage: how many
+        # symbols the BSE scrip master vs the NSE index files each contributed.
+        "diag": {"classify": _sectors.diag(), "bse": _bse_diag,
+                 "classified_symbols": _sectors.map_size()},
         "error": None,
     })
 
