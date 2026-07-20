@@ -14,7 +14,7 @@ import { ACTIONS_W, COLS, Col, DEFAULT_HIDDEN, cellFlex, loadNames } from './Scr
 import { TrackDir, TrackEntry, addTrack, loadTrack, removeTrack } from '../tracklist';
 import { addSymbol, loadWatchlist, normSymbol, removeSymbol } from '../watchlist';
 import { Btn, Card, Dropdown, EmptyState, InfoButton, InfoContent, Loading, SectionTitle, StatTile } from '../ui';
-import { printHtmlDocument } from '../pdf';
+import { openPdfPreview } from '../pdf';
 import { MULTIBAGGER_INFO } from '../tabInfo';
 import { theme } from '../theme';
 import { getScanned, hydrateScan, isIncluded, subscribeScan, toggleInclude } from '../scanStore';
@@ -218,7 +218,10 @@ async function exportReport(r: MultibaggerReport): Promise<void> {
   // Route through the shared print helper: real "Save as PDF" download on both
   // desktop and the Android WebView, forced to a white page. Only a true native
   // RN runtime with no DOM falls back to a text share.
-  const ok = printHtmlDocument(reportHtml(r));
+  const ok = openPdfPreview(reportHtml(r), {
+    docType: 'Multibagger report',
+    fileName: `TaurEye-${r.symbol}-multibagger`,
+  });
   if (!ok && Platform.OS !== 'web') {
     await Share.share({
       title: `Multibagger report — ${r.symbol}`,

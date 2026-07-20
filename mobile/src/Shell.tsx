@@ -19,6 +19,7 @@ import HolidaysScreen from './screens/HolidaysScreen';
 import IndicesScreen from './screens/IndicesScreen';
 import HeatmapScreen from './screens/HeatmapScreen';
 import TickerStrip from './components/TickerStrip';
+import PdfPreview from './components/PdfPreview';
 import { peekNav, subscribeNav } from './navIntent';
 import { theme, toggleThemeMode, useThemeMode } from './theme';
 
@@ -211,7 +212,13 @@ export default function Shell() {
     // the WebView edge-to-edge behind a transparent status bar.
     if (m) m.setAttribute('content', 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover');
   }, []);
-  return isDesktop ? <DesktopShell version={version} /> : <MobileShell version={version} />;
+  return (
+    <>
+      {isDesktop ? <DesktopShell version={version} /> : <MobileShell version={version} />}
+      {/* Global PDF export preview — any screen's Export button opens it here. */}
+      <PdfPreview />
+    </>
+  );
 }
 
 const styles = StyleSheet.create({
