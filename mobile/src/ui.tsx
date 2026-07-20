@@ -343,43 +343,6 @@ export function PressableScale({
 // The detail popups (SMC / swing / institutional) render their scrolling content
 // inside this so opening a card feels like a sheet rising, not a hard cut. Tap
 // the scrim to dismiss. (Exit is an immediate unmount — entrance is the polish.)
-// Table with a FROZEN header row: the header scrolls horizontally in sync with
-// the body (so columns stay aligned) but never vertically — only the rows area
-// scrolls. Shared so every screener behaves identically. `width` is the total
-// table width; `header` renders the column-title row, `children` the data rows.
-export function FrozenTable({
-  width,
-  header,
-  children,
-  style,
-}: {
-  width: number;
-  header: React.ReactNode;
-  children: React.ReactNode;
-  style?: ViewStyle;
-}) {
-  const headRef = React.useRef<ScrollView>(null);
-  return (
-    <View style={[{ flex: 1 }, style]}>
-      {/* Frozen header — mirrored to the body's horizontal offset, no vertical scroll. */}
-      <ScrollView ref={headRef} horizontal scrollEnabled={false} showsHorizontalScrollIndicator={false}>
-        <View style={{ minWidth: width }}>{header}</View>
-      </ScrollView>
-      {/* Body — vertical scroll (rows) wrapping a horizontal scroll (columns). */}
-      <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator
-          scrollEventThrottle={16}
-          onScroll={(e) => headRef.current?.scrollTo({ x: e.nativeEvent.contentOffset.x, animated: false })}
-        >
-          <View style={{ minWidth: width }}>{children}</View>
-        </ScrollView>
-      </ScrollView>
-    </View>
-  );
-}
-
 export function Sheet({
   children,
   onClose,
