@@ -508,6 +508,25 @@ export type MbScreenResp = {
   error?: string | null;
 };
 
+// Full NSE+BSE sectoral aggregate (from /sectors) — a by-product of the
+// multibagger universe sweep.
+export type SectorAgg = {
+  sector: string;
+  count: number;
+  market_cap_cr: number | null;
+  chg: number | null;
+};
+export type SectorsResp = {
+  status: 'idle' | 'running' | 'done' | 'error';
+  refreshing?: boolean;
+  progress?: string;
+  asof: number;
+  universe: number;
+  mapped: number;
+  sectors: SectorAgg[];
+  error?: string | null;
+};
+
 // Classic chart-pattern recognition (from /chart-patterns).
 export type ChartPattern = {
   type: string;
@@ -907,6 +926,8 @@ export const api = {
     getJson<MomentumScreenResp>('/momentum/screen' + (refresh ? '?refresh=1' : ''), 30000),
   mbScreen: (refresh = false) =>
     getJson<MbScreenResp>('/multibagger/screen' + (refresh ? '?refresh=1' : ''), 30000),
+  sectors: (refresh = false) =>
+    getJson<SectorsResp>('/sectors' + (refresh ? '?refresh=1' : ''), 30000),
   riskPortfolio: (holdings: RiskHolding[], conf = 0.95) =>
     postJson<RiskReport>('/risk/portfolio', { holdings, conf }),
   corpAnnouncements: (s: string) => getJson<{ items: Announcement[]; source: string }>('/corporate/announcements?symbol=' + encodeURIComponent(s)),
