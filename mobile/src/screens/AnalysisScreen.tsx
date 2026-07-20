@@ -21,6 +21,8 @@ import {
   ScanRow,
   ScreenerFinancials,
   Shareholding,
+  StrategyScore,
+  TimeframesResp,
   api,
 } from '../api';
 import { Assessment, assess } from '../analysis';
@@ -65,6 +67,8 @@ type Dossier = {
   risk?: RiskReport | null;
   rep?: ReportResp | null;
   mc?: Assessment | null;
+  strat?: StrategyScore[];
+  tf?: TimeframesResp | null;
 };
 
 // Announcement subjects that carry management commentary / primary documents.
@@ -146,6 +150,10 @@ export default function AnalysisScreen() {
     add(api.symbolFlows(s).then((r) => patch(s, { flows: r.flows || [] })));
     add(api.riskPortfolio([{ symbol: s, qty: 1 }]).then((r) => patch(s, { risk: r && r.ok ? r : null })));
     add(api.report(s).then((r) => patch(s, { rep: r && !r.error ? r : null })));
+    // Strategy scorecard + multi-timeframe technicals — surfaced on screen and
+    // folded into the exported dossier PDF.
+    add(api.strategyScores(s).then((r) => patch(s, { strat: r && !r.error ? r.strategies : [] })));
+    add(api.timeframes(s).then((r) => patch(s, { tf: r && !r.error ? r : null })));
     // Upside-probability model (Monte-Carlo + historical frequency over 5y).
     add(
       api.history(s, '5y', '1d').then((h) => {
@@ -715,6 +723,58 @@ function dossierHtml(d: Dossier): string {
     ['DII', num(d.hold.dii, 2, '%')], ['Public', num(d.hold.public, 2, '%')],
     ['Pledge', num(d.hold.pledge, 2, '%')],
   ].map(([k, val]) => row(k, val)).join('') : '';
+  // Report date — also shown in the masthead, but stated in the body so it's
+  // unambiguous on every printed page of the dossier.
+  const dateStr = (() => {
+    try {
+      return new Date().toLocaleString('en-IN', { dateStyle: 'long', timeStyle: 'short' });
+    } catch {
+      return '';
+    }
+  })();
+  // Strategy scorecard — how well the stock fits each screening strategy now.
+  const scoreHex = (n: number | null) =>
+    n == null ? '#111' : n >= 70 ? green : n >= 50 ? '#b7791f' : red;
+  const biasHex = (b: string) => (/bull/i.test(b) ? green : /bear/i.test(b) ? red : '#b7791f');
+  const stratBlock = d.strat && d.strat.length
+    ? `<h2>Strategy scorecard</h2><p style="margin:0 0 4px">How well ${esc(d.sym)} fits each screening strategy right now — 0–100, ✓ qualifies (≥70).</p>` +
+      `<table><tr><td><b>Strategy</b></td><td style="text-align:right"><b>Score</b></td><td style="text-align:center"><b>Fit</b></td></tr>` +
+      [...d.strat]
+        .sort((a, b) => (b.score ?? -1) - (a.score ?? -1))
+        .map(
+          (s) =>
+            `<tr><td>${esc(s.name)}${s.note ? ` <span style="color:#888;font-size:10px">— ${esc(s.note)}</span>` : ''}</td>` +
+            `<td style="text-align:right;color:${scoreHex(s.score)};font-weight:700">${s.score != null ? s.score : '—'}</td>` +
+            `<td style="text-align:center">${s.pass ? `<span style="color:${green};font-weight:700">✓</span>` : '<span style="color:#bbb">—</span>'}</td></tr>`,
+        )
+        .join('') +
+      `</table>`
+    : '';
+  // Multi-timeframe technical read (5-min → weekly) + horizon roll-ups.
+  const tfBlock = d.tf && d.tf.timeframes?.length
+    ? `<h2>Multi-timeframe technicals</h2>` +
+      `<table><tr><td><b>Timeframe</b></td><td style="text-align:right"><b>Price</b></td><td style="text-align:right"><b>RSI</b></td>` +
+      `<td style="text-align:right"><b>vs EMA20</b></td><td style="text-align:right"><b>vs EMA50</b></td>` +
+      `<td style="text-align:right"><b>Score</b></td><td style="text-align:right"><b>Bias</b></td></tr>` +
+      d.tf.timeframes
+        .map(
+          (t) =>
+            `<tr><td>${esc(t.label)}</td>` +
+            `<td style="text-align:right">${t.price != null ? esc(money(t.price)) : '—'}</td>` +
+            `<td style="text-align:right">${t.rsi != null ? t.rsi.toFixed(0) : '—'}</td>` +
+            `<td style="text-align:right;color:${(t.vs_ema20 ?? 0) >= 0 ? green : red}">${t.vs_ema20 != null ? pctS(t.vs_ema20) : '—'}</td>` +
+            `<td style="text-align:right;color:${(t.vs_ema50 ?? 0) >= 0 ? green : red}">${t.vs_ema50 != null ? pctS(t.vs_ema50) : '—'}</td>` +
+            `<td style="text-align:right;color:${scoreHex(t.score)};font-weight:700">${t.score != null ? t.score : '—'}</td>` +
+            `<td style="text-align:right;color:${biasHex(t.bias)};font-weight:700">${esc(t.bias)}</td></tr>`,
+        )
+        .join('') +
+      `</table>` +
+      (d.tf.horizons?.length
+        ? `<p style="margin:5px 0 0"><b>Horizon read:</b> ${d.tf.horizons
+            .map((h) => `${esc(h.label)} — <b style="color:${biasHex(h.bias)}">${esc(h.bias)}</b>${h.score != null ? ` (${h.score})` : ''}`)
+            .join(' · ')}</p>`
+        : '')
+    : '';
   const flags = mb?.red_flags?.length ? `<h2>Red flags</h2><ul>${mb.red_flags.map((x) => `<li style="color:${red}">${esc(x)}</li>`).join('')}</ul>` : '';
   const strengths = mb?.strengths?.length ? `<h2>What works</h2><ul>${mb.strengths.map((x) => `<li style="color:${green}">${esc(x)}</li>`).join('')}</ul>` : '';
   const docLinks = docs.length ? `<h2>Management commentary & filings</h2><ul>${docs.slice(0, 10).map((a) => `<li>${a.attachment ? `<a href="${esc(a.attachment)}">${esc(a.subject)}</a>` : esc(a.subject)} <span style="color:#888">— ${esc(a.date)}</span></li>`).join('')}</ul>` : '';
@@ -739,14 +799,17 @@ table{border-collapse:collapse;width:100%}td{border-bottom:1px solid #ddd;paddin
 ul{margin:4px 0;padding-left:18px;font-size:12px;line-height:1.6}p{font-size:12px;color:#444;line-height:1.5}
 a{color:#1d6fb8}.big{font-size:34px;font-weight:800}.sub{color:#666;font-size:12px}</style></head><body>
 <h1>${esc(name)} <span class="sub">${esc(d.sym)}${sector ? ' · ' + esc(sector) : ''}</span></h1>
+${dateStr ? `<div class="sub" style="margin:1px 0 6px">Report generated ${esc(dateStr)}</div>` : ''}
 ${price != null ? `<div style="font-size:15px;font-weight:700">${esc(money(price))} <span class="sub">${esc(fmtCr(m.mcap_cr ?? fund?.market_cap_cr ?? null))}</span></div>` : ''}
 <div class="big" style="color:${v.color === theme.green ? green : v.color === theme.red ? red : '#b7791f'}">${esc(v.label)}${mb ? ` · ${mb.score}/100` : ''}</div>
 ${mb ? `<div>${esc(mb.tier)} · multibagging potential (5x+ in 5–10y): <b style="color:${tHex}">${mb.probability_pct}%</b>${rec ? ` · trade engine: <b>${esc(rec.action)}</b> (confidence ${rec.confidence})` : ''}</div>` : ''}
 <p>${esc(v.note)}</p>
 ${mb?.about || fund?.description ? `<h2>Business overview</h2><p>${esc(mb?.about || fund?.description)}</p>` : ''}
+${stratBlock}
 ${fundRows ? `<h2>Fundamentals & valuation</h2><table>${fundRows}</table>` : ''}
 ${plRows}${qRows}${bsRows}
 ${techRows ? `<h2>In-depth technicals</h2><table>${techRows}</table>` : ''}
+${tfBlock}
 ${setupRows ? `<h2>Trade setup</h2><table>${setupRows}</table>` : ''}
 ${holdRows ? `<h2>Ownership</h2><table>${holdRows}</table>` : ''}
 ${strengths}${flags}${docLinks}
