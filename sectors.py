@@ -114,7 +114,12 @@ _ALIASES = {
 }
 
 _FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sectors_cache.json")
-_TTL = 24 * 3600          # re-fetch the NSE classification once a day
+_TTL = 24 * 3600          # re-fetch the classification once a day
+# Bump when the set of classification SOURCES changes so a redeploy discards a
+# cache built by older code and re-pulls everything. (2 = adds the BSE scrip
+# master layer.) Without this, a still-fresh cache from the prior deploy blocks
+# the new source from ever being fetched until its 24h TTL lapses.
+CACHE_VERSION = 2
 _lock = threading.Lock()
 # symbol(upper) -> canonical NSE sector.
 _map = {}
@@ -222,6 +227,10 @@ def _load_disk():
     try:
         with open(_FILE) as f:
             saved = json.load(f)
+        # Discard a cache written by an older source set — leaving _map empty +
+        # _fetched_ts 0 makes the next /sectors call re-pull every source.
+        if saved.get("version") != CACHE_VERSION:
+            return
         if isinstance(saved, dict) and isinstance(saved.get("map"), dict):
             _map = {str(k).upper(): v for k, v in saved["map"].items() if v}
             _fetched_ts = saved.get("fetched_ts", 0)
@@ -235,7 +244,7 @@ _load_disk()
 def _save_disk():
     try:
         with open(_FILE + ".tmp", "w") as f:
-            json.dump({"map": _map, "fetched_ts": _fetched_ts}, f)
+            json.dump({"version": CACHE_VERSION, "map": _map, "fetched_ts": _fetched_ts}, f)
         os.replace(_FILE + ".tmp", _FILE)
     except Exception:
         pass
