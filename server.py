@@ -29,6 +29,7 @@ import alerts as _alerts        # server-side price/technical alerts (store-back
 import apikeys as _apikeys      # public-API key issue/verify (hashed, store-backed)
 import push as _push            # FCM push delivery + device-token registry + broadcasts
 import chat as _chat            # in-app messaging: global room + channels + DMs
+import sectors as _sectors      # app-wide NSE sector classification + heatmap aggregate
 
 # Support both normal run and PyInstaller frozen exe
 _BASE_DIR = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
@@ -165,18 +166,31 @@ def _load_bhavcopy():
                 continue
             reader = csv.DictReader(io.StringIO(r.text))
             rows   = list(reader)
-            # column ' SERIES' has a leading space
-            series_col = next((k for k in (rows[0].keys() if rows else [])
-                               if 'SERIES' in k), None)
-            if not series_col:
+            if not rows:
                 continue
-            eq = [
-                {"symbol": row["SYMBOL"].strip(), "exchange": "NSE",
-                 "price": float(row[" CLOSE_PRICE"].strip()) if " CLOSE_PRICE" in row else 0}
-                for row in rows
-                if row.get(series_col, "").strip() in ("EQ", "BE")
-                and row.get("SYMBOL", "").strip()
-            ]
+            # sec_bhavdata_full column names carry a leading space (' SERIES',
+            # ' CLOSE_PRICE', …) — key each row by stripped name so we can also
+            # pull prev-close (day change) and turnover (the heatmap weight).
+            def _num(v):
+                try:
+                    return float(str(v).strip().replace(",", ""))
+                except Exception:
+                    return 0.0
+            eq = []
+            for raw in rows:
+                row = {(k or "").strip(): v for k, v in raw.items()}
+                if row.get("SERIES", "").strip() not in ("EQ", "BE"):
+                    continue
+                sym = row.get("SYMBOL", "").strip()
+                if not sym:
+                    continue
+                close = _num(row.get("CLOSE_PRICE"))
+                prev  = _num(row.get("PREV_CLOSE"))
+                chg   = round((close - prev) / prev * 100, 2) if prev else None
+                # TURNOVER is in lakhs of rupees; scale to rupees for a weight.
+                turnover = _num(row.get("TURNOVER_LACS")) * 1e5
+                eq.append({"symbol": sym, "exchange": "NSE", "price": close,
+                           "chg": chg, "turnover": turnover})
             log.info("Bhavcopy %s: %d EQ/BE symbols", d, len(eq))
             return eq, d
         except Exception as e:
@@ -222,9 +236,18 @@ def _load_bse():
             nam_c = cols.get("FinInstrmNm")
             typ_c = cols.get("FinInstrmTp")
             cls_c = cols.get("ClsPric")
+            prv_c = cols.get("PrvsClsgPric")
+            trf_c = cols.get("TtlTrfVal")      # total traded value (rupees)
             opt_c = cols.get("OptnTp")
             if not sym_c:
                 continue
+
+            def _num(v):
+                try:
+                    return float(str(v or "0").strip().replace(",", ""))
+                except Exception:
+                    return 0.0
+
             out = []
             for row in reader:
                 sym = (row.get(sym_c) or "").strip().upper()
@@ -236,12 +259,13 @@ def _load_bse():
                     t = (row.get(typ_c) or "").strip().upper()
                     if t and t not in ("STK", "EQ", "EQUITY", "E"):
                         continue
-                try:
-                    price = float((row.get(cls_c) or "0").strip()) if cls_c else 0.0
-                except Exception:
-                    price = 0.0
+                price = _num(row.get(cls_c)) if cls_c else 0.0
+                prev  = _num(row.get(prv_c)) if prv_c else 0.0
+                chg   = round((price - prev) / prev * 100, 2) if prev else None
+                turnover = _num(row.get(trf_c)) if trf_c else 0.0
                 name = (row.get(nam_c) or "").strip() if nam_c else ""
-                out.append({"symbol": sym, "exchange": "BSE", "price": price, "name": name})
+                out.append({"symbol": sym, "exchange": "BSE", "price": price,
+                            "name": name, "chg": chg, "turnover": turnover})
             log.info("BSE bhavcopy %s: %d equity scrips", d, len(out))
             if out:
                 return out
@@ -326,6 +350,56 @@ def get_universe():
         _universe_ts    = time.time()
         log.info("Universe ready: %d symbols (bhavcopy date: %s)", len(bhav), bhav_date)
         return _universe_cache
+
+
+# ── Sector classification (NSE index Industry files → sectors.py) ────────────
+_sector_refresh_lock = threading.Lock()
+_sector_refresh_thread = None
+
+
+def _nse_archive_text(path):
+    """Fetch a text/CSV body from the NSE archive host (cookie-warmed session).
+    Raises on non-200 so refresh_classification skips a failed file."""
+    s = nse_session()
+    r = s.get(NSE_ARCHIVE + path, timeout=20)
+    if r.status_code != 200:
+        raise RuntimeError(f"HTTP {r.status_code}")
+    return r.text
+
+
+def _sector_refresh_running():
+    with _sector_refresh_lock:
+        return _sector_refresh_thread is not None
+
+
+def _ensure_sector_classification(force=False):
+    """Kick a background pull of the NSE sector classification if it's stale (or
+    forced) and not already running. Non-blocking: the heatmap serves whatever
+    the disk-cached map already covers while a refresh runs."""
+    global _sector_refresh_thread
+    with _sector_refresh_lock:
+        if _sector_refresh_thread is not None:
+            return
+        if not force and _sectors.map_size() > 0:
+            # A day-TTL check lives inside refresh_classification; only spawn a
+            # thread when there's a real chance of work.
+            import time as _t
+            if (_t.time() - _sectors._fetched_ts) < _sectors._TTL:
+                return
+
+        def _work():
+            global _sector_refresh_thread
+            try:
+                n = _sectors.refresh_classification(_nse_archive_text, force=force)
+                log.info("Sector classification refreshed: %d symbols mapped", n)
+            except Exception as e:
+                log.warning("Sector classification refresh failed: %s", e)
+            finally:
+                with _sector_refresh_lock:
+                    _sector_refresh_thread = None
+
+        _sector_refresh_thread = threading.Thread(target=_work, name="sector-classify", daemon=True)
+        _sector_refresh_thread.start()
 
 
 def _fetch_one(sym, out):
@@ -1504,13 +1578,34 @@ def multibagger_screen():
 
 @app.route("/sectors")
 def sectors_aggregate():
-    """Full NSE+BSE sectoral heatmap aggregate. Piggybacks on the multibagger
-    screen's universe sweep (every stock's .info already carries sector / day
-    change / market cap), so opening the heatmap warms the same background job
-    rather than re-sweeping the market. ?refresh=1 forces a re-run."""
-    import mb_screen as mbs
-    mbs.ensure_started(get_universe, force=request.args.get("refresh") == "1")
-    return jsonify(mbs.sector_snapshot())
+    """Full NSE+BSE sectoral heatmap aggregate over the WHOLE listed universe.
+
+    Day change + traded-value weight come straight from the bhavcopy (every
+    scrip, no per-stock Yahoo call), and each symbol is classified into NSE's
+    macro-economic sectors (~22 — far finer than Yahoo's 11 GICS buckets) via
+    the disk-cached NSE index classification (see sectors.py). So the heatmap
+    covers thousands of scrips across all sectors instantly, instead of only the
+    few hundred a rate-limited .info sweep could resolve. ?refresh=1 re-pulls
+    the NSE classification."""
+    _ensure_sector_classification(force=request.args.get("refresh") == "1")
+    universe = get_universe()
+    agg = _sectors.build_heatmap(universe)
+    with _universe_lock:
+        asof = int(_universe_ts)
+    # While the NSE classification is still downloading (cold cache), report
+    # `running` so the heatmap keeps polling and the tiles fill in as more of
+    # the universe gets classified — then settle to `done`.
+    refreshing = _sector_refresh_running()
+    return jsonify({
+        "status": "running" if refreshing else "done",
+        "refreshing": refreshing,
+        "progress": f"{agg['mapped']:,} of {agg['universe']:,} scrips classified" if refreshing else "",
+        "asof": asof,
+        "universe": agg["universe"],
+        "mapped": agg["mapped"],
+        "sectors": agg["sectors"],
+        "error": None,
+    })
 
 
 @app.route("/multibagger")
@@ -1570,7 +1665,7 @@ def _mb_from_screen_cache(sym: str):
         payload.update({
             "symbol": sym,
             "name": c.get("name") or sym,
-            "sector": c.get("sector"),
+            "sector": _sectors.sector_of(sym, c.get("sector")) or c.get("sector"),
             "industry": c.get("industry"),
             "price": c.get("price"),
             "about": c.get("about") or "",
@@ -1618,7 +1713,7 @@ def fundamentals():
         payload = {
             "symbol":       sym,
             "name":         info.get("longName") or info.get("shortName", sym),
-            "sector":       info.get("sector"),
+            "sector":       _sectors.sector_of(sym, info.get("sector")) or info.get("sector"),
             "industry":     info.get("industry"),
             "exchange":     info.get("exchange"),
             "market_cap_cr": fmt_cr(info.get("marketCap")),
@@ -1657,7 +1752,19 @@ def fundamentals_bulk():
     if not syms:
         return jsonify({"data": {}, "pending": [], "provider": _fund.EODHD_KEY and "EODHD" or "yfinance",
                         "cached": 0, "total": 0})
-    return jsonify(_fund.bulk(syms))
+    out = _fund.bulk(syms)
+    # Overlay the app-wide NSE macro sector so the screeners' sector filters use
+    # the same taxonomy as the sectoral heatmap (keeps heatmap→screener routing
+    # consistent). Falls back to the provider's raw sector when unclassified.
+    try:
+        for sym, row in (out.get("data") or {}).items():
+            if isinstance(row, dict):
+                nse = _sectors.sector_of(sym, row.get("sector"))
+                if nse:
+                    row["sector"] = nse
+    except Exception:
+        pass
+    return jsonify(out)
 
 
 @app.route("/returns")
@@ -2763,7 +2870,7 @@ def report():
         return _no_cache(jsonify({
             "symbol": sym,
             "name": info.get("longName") or info.get("shortName", sym),
-            "sector": info.get("sector"),
+            "sector": _sectors.sector_of(sym, info.get("sector")) or info.get("sector"),
             "industry": info.get("industry"),
             "market_cap_cr": mcap_cr,
             "market_cap_cat": mcap_cat,
