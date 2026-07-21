@@ -117,10 +117,10 @@ _FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sectors_cache.
 _TTL = 24 * 3600          # re-fetch the classification once a day
 # Bump when the set of classification SOURCES (or how they're fetched) changes so
 # a redeploy discards a cache built by older code and re-pulls everything.
-# (2 = adds BSE scrip master; 3 = hardened BSE fetch — Origin header, www-host
-# fallback, wider field/shape probing.) Without this, a still-fresh cache from
-# the prior deploy blocks the new fetch from ever running until its 24h TTL lapses.
-CACHE_VERSION = 3
+# (2 = adds BSE scrip master; 3 = hardened BSE fetch; 4 = NSE per-symbol quote
+# classifier for the NSE tail the index files miss.) Without this, a still-fresh
+# cache from the prior deploy blocks the new pass from running until its 24h TTL.
+CACHE_VERSION = 4
 _lock = threading.Lock()
 # symbol(upper) -> canonical NSE sector.
 _map = {}
@@ -351,6 +351,23 @@ def record(symbol, gics) -> None:
         # via flush() so a whole-universe sweep doesn't thrash the disk.
         if not _map.get(sym):
             _map[sym] = sec
+
+
+def set_sector(symbol, raw_sector, overwrite: bool = False) -> bool:
+    """Fill an exact, authoritative sector for a symbol (e.g. from NSE's own
+    per-stock industryInfo). Canonicalised to the 22 macro sectors. Gap-fill by
+    default; pass overwrite=True to replace. Returns whether the map changed."""
+    if not symbol:
+        return False
+    sym = str(symbol).strip().upper()
+    sec = _canon(raw_sector)
+    if not sym or not sec:
+        return False
+    with _lock:
+        if overwrite or not _map.get(sym):
+            _map[sym] = sec
+            return True
+    return False
 
 
 def flush() -> None:

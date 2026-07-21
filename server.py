@@ -434,6 +434,44 @@ def _bse_scrip_industries():
     return []
 
 
+def _nse_industry_sector(sym):
+    """NSE's own macro sector for one symbol, from the equity-quote industryInfo
+    (macro/sector/industry). Reliable from the VM (the app already uses this API).
+    Returns a raw sector string or None."""
+    try:
+        data = nse_get("/api/quote-equity", params={"symbol": sym}, retries=1)
+        ii = (data or {}).get("industryInfo") or {}
+        return ii.get("sector") or ii.get("macro") or ii.get("industry")
+    except Exception:
+        return None
+
+
+def _nse_classify_universe(universe, cap=2500):
+    """Classify NSE-listed scrips the index files miss, one quote-API call each
+    (bounded pool, own count). This is what lifts NSE coverage from the ~751 the
+    index files cap at toward the full ~2,000 NSE universe. Records exact NSE
+    sectors; persists once at the end. Returns the number newly classified."""
+    from concurrent.futures import ThreadPoolExecutor
+    todo = [x["symbol"] for x in (universe or [])
+            if x.get("exchange") == "NSE" and x.get("symbol")
+            and not _sectors.sector_of(x["symbol"])][:cap]
+    if not todo:
+        return 0
+    added = [0]
+
+    def one(s):
+        sec = _nse_industry_sector(s)
+        if sec and _sectors.set_sector(s, sec):
+            added[0] += 1
+
+    # Gentle concurrency — NSE throttles aggressive bursts.
+    with ThreadPoolExecutor(max_workers=6) as pool:
+        list(pool.map(one, todo))
+    _sectors.flush()
+    log.info("NSE per-symbol classify: +%d of %d attempted", added[0], len(todo))
+    return added[0]
+
+
 def _sector_refresh_running():
     with _sector_refresh_lock:
         return _sector_refresh_thread is not None
@@ -464,6 +502,15 @@ def _ensure_sector_classification(force=False):
                     bse_rows = []
                 n = _sectors.refresh_classification(_nse_archive_text, bse_rows=bse_rows, force=force)
                 log.info("Sector classification refreshed: %d symbols mapped", n)
+                # NSE index files cap at ~751; the BSE API is Akamai-blocked from
+                # the VM. Close the NSE tail with the per-symbol quote API, which
+                # is reliably reachable — this is what carries NSE toward ~2,000.
+                try:
+                    added = _nse_classify_universe(get_universe())
+                    log.info("NSE per-symbol classify added %d; total mapped %d",
+                             added, _sectors.map_size())
+                except Exception as e:
+                    log.warning("NSE per-symbol classify failed: %s", e)
             except Exception as e:
                 log.warning("Sector classification refresh failed: %s", e)
             finally:
