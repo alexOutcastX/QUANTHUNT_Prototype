@@ -13,6 +13,7 @@ import StockScreen from './screens/StockScreen';
 import TerminalScreen from './screens/TerminalScreen';
 import HeatmapScreen from './screens/HeatmapScreen';
 import TickerStrip from './components/TickerStrip';
+import CommandPalette from './components/CommandPalette';
 import PdfPreview from './components/PdfPreview';
 import { navigate, peekNav, subscribeNav } from './navIntent';
 import { isClassicNav, navModeReady, subscribeNavMode } from './navMode';
@@ -122,6 +123,7 @@ function legacyNav(k: string, setActive: (k: string) => void) {
 
 function NewDesktopShell() {
   const [active, setActive] = useState('today');
+  const [palette, setPalette] = useState(false);
   const cur = NAV.find((t) => t.k === active) || NAV[0];
   useEffect(
     () =>
@@ -131,11 +133,28 @@ function NewDesktopShell() {
       }),
     [],
   );
+  // ⌘K / Ctrl+K opens the palette anywhere (web only).
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K')) {
+        e.preventDefault();
+        setPalette((v) => !v);
+      }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, []);
   return (
     <View style={styles.desktop}>
       <View style={styles.brandBar}>
         <Brand big />
         <MarketChip />
+        <TouchableOpacity style={styles.searchBtn} onPress={() => setPalette(true)} activeOpacity={0.75}>
+          <Icon name="search" size={13} color={theme.muted} />
+          <Text style={styles.searchTxt}>Search</Text>
+          <Text style={styles.searchKbd}>⌘K</Text>
+        </TouchableOpacity>
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -166,6 +185,7 @@ function NewDesktopShell() {
       </View>
       <TickerStrip />
       <View style={styles.main}>{cur.render((k) => legacyNav(k, setActive))}</View>
+      <CommandPalette open={palette} onClose={() => setPalette(false)} />
     </View>
   );
 }
@@ -173,6 +193,7 @@ function NewDesktopShell() {
 function NewMobileShell() {
   const insets = useSafeAreaInsets();
   const [active, setActive] = useState('today');
+  const [palette, setPalette] = useState(false);
   const [hydrated, setHydrated] = useState(false);
   const tab = NAV.find((t) => t.k === active) || NAV[0];
   // Restore the last tab so backgrounding the app and returning doesn't dump
@@ -201,10 +222,19 @@ function NewMobileShell() {
         <Brand />
         <View style={styles.headerRight}>
           <MarketChip />
+          <TouchableOpacity
+            style={styles.themeBtn}
+            onPress={() => setPalette(true)}
+            activeOpacity={0.75}
+            accessibilityLabel="Search stocks and pages"
+          >
+            <Icon name="search" size={16} color={theme.muted2} />
+          </TouchableOpacity>
           <ThemeToggle />
         </View>
       </View>
       <View style={styles.mobileBody}>{tab.render((k) => legacyNav(k, setActive))}</View>
+      <CommandPalette open={palette} onClose={() => setPalette(false)} />
       <View style={[styles.tabBar, { paddingBottom: insets.bottom || 8 }]}>
         {NAV.map((t) => {
           const on = active === t.k;
@@ -459,6 +489,28 @@ const styles = StyleSheet.create({
   },
   mktDot: { width: 6, height: 6, borderRadius: 999 },
   mktTxt: { color: theme.muted2, fontSize: 10, fontFamily: theme.mono, letterSpacing: 0.4 },
+
+  searchBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    backgroundColor: theme.surface2,
+    borderColor: theme.border,
+    borderWidth: 1,
+    borderRadius: theme.radius.md,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  searchTxt: { color: theme.muted, fontSize: 11 },
+  searchKbd: {
+    color: theme.muted2,
+    fontSize: 9,
+    fontFamily: theme.mono,
+    backgroundColor: theme.surface3,
+    borderRadius: 4,
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+  },
 
   themeBtn: {
     width: 34,
