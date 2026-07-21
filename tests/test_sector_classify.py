@@ -280,7 +280,84 @@ class TestBuildHeatmap(unittest.TestCase):
 
     def test_empty_universe(self):
         res = sectors.build_heatmap([])
-        self.assertEqual(res, {"universe": 0, "mapped": 0, "sectors": []})
+        self.assertEqual(res, {"universe": 0, "mapped": 0, "level": "macro", "sectors": []})
+
+    def test_default_level_is_macro(self):
+        res = sectors.build_heatmap([{"symbol": "TCS", "chg": 1.0, "turnover": 1.0}])
+        self.assertEqual(res["level"], "macro")
+
+
+class TestHeatmapLevels(unittest.TestCase):
+    """The heatmap's classification-depth toggle (macro / industry / basic)."""
+
+    def setUp(self):
+        sectors._map = {
+            "HDFCBANK": "Financial Services",
+            "ICICIBANK": "Financial Services",
+            "TCS": "Information Technology",
+        }
+        sectors._industry = {
+            "HDFCBANK": "Banks",
+            "ICICIBANK": "Banks",
+            "TCS": "IT - Software",
+        }
+        sectors._basic = {
+            "HDFCBANK": "Private Sector Bank",
+            "ICICIBANK": "Private Sector Bank",
+            "TCS": "Computers - Software & Consulting",
+        }
+        sectors._fetched_ts = 0
+
+    def _uni(self):
+        return [
+            {"symbol": "HDFCBANK", "chg": 1.0, "turnover": 10.0},
+            {"symbol": "ICICIBANK", "chg": 3.0, "turnover": 10.0},
+            {"symbol": "TCS", "chg": -1.0, "turnover": 10.0},
+        ]
+
+    def test_macro_level_groups_into_sectors(self):
+        res = sectors.build_heatmap(self._uni(), level="macro")
+        self.assertEqual(res["level"], "macro")
+        by = {r["sector"]: r for r in res["sectors"]}
+        self.assertEqual(by["Financial Services"]["count"], 2)
+        self.assertEqual(by["Information Technology"]["count"], 1)
+
+    def test_industry_level_splits_and_carries_parent(self):
+        res = sectors.build_heatmap(self._uni(), level="industry")
+        self.assertEqual(res["level"], "industry")
+        by = {r["sector"]: r for r in res["sectors"]}
+        self.assertIn("Banks", by)
+        self.assertEqual(by["Banks"]["count"], 2)
+        # equal turnover -> average of +1 and +3
+        self.assertAlmostEqual(by["Banks"]["chg"], 2.0, places=2)
+        self.assertEqual(by["Banks"]["parent"], "Financial Services")
+        self.assertEqual(by["IT - Software"]["parent"], "Information Technology")
+
+    def test_basic_level_is_finest(self):
+        res = sectors.build_heatmap(self._uni(), level="basic")
+        by = {r["sector"]: r for r in res["sectors"]}
+        self.assertEqual(by["Private Sector Bank"]["count"], 2)
+        self.assertEqual(by["Private Sector Bank"]["parent"], "Financial Services")
+
+    def test_finer_level_falls_back_to_macro_when_unknown(self):
+        # A symbol with a macro sector but no industry/basic still appears,
+        # bucketed under its macro label (never dropped).
+        sectors._industry = {}
+        sectors._basic = {}
+        res = sectors.build_heatmap(self._uni(), level="basic")
+        self.assertEqual(res["mapped"], 3)
+        by = {r["sector"]: r for r in res["sectors"]}
+        self.assertEqual(by["Financial Services"]["count"], 2)
+        self.assertEqual(by["Financial Services"]["parent"], "Financial Services")
+
+    def test_unknown_level_defaults_to_macro(self):
+        res = sectors.build_heatmap(self._uni(), level="bogus")
+        self.assertEqual(res["level"], "macro")
+
+    def test_label_at_returns_label_and_macro(self):
+        self.assertEqual(sectors.label_at("HDFCBANK", "industry"), ("Banks", "Financial Services"))
+        self.assertEqual(sectors.label_at("HDFCBANK", "macro"), ("Financial Services", "Financial Services"))
+        self.assertEqual(sectors.label_at("UNKNOWN", "basic"), ("", ""))
 
 
 if __name__ == "__main__":

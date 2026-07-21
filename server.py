@@ -1748,12 +1748,18 @@ def sectors_aggregate():
     few hundred a rate-limited .info sweep could resolve. ?refresh=1 re-pulls
     the NSE classification."""
     _ensure_sector_classification(force=request.args.get("refresh") == "1")
+    # Classification level for the heatmap tiles: macro (22 NSE sectors, default),
+    # industry (~65) or basic (~200). Screeners still filter by macro — each finer
+    # tile carries its parent macro for routing.
+    level = (request.args.get("level") or "macro").strip().lower()
+    if level not in _sectors.LEVELS:
+        level = "macro"
     # Never block the worker thread on a cold bhavcopy fetch — serve whatever
     # universe is cached and warm the rest in the background (see
     # get_universe_nonblocking). A cold heatmap comes back empty with
     # `running`, and the tiles fill in on the next poll.
     universe, warming = get_universe_nonblocking()
-    agg = _sectors.build_heatmap(universe)
+    agg = _sectors.build_heatmap(universe, level=level)
     with _universe_lock:
         asof = int(_universe_ts)
     # While the NSE classification is still downloading (cold cache) or the
@@ -1766,14 +1772,17 @@ def sectors_aggregate():
         "refreshing": refreshing,
         "progress": f"{agg['mapped']:,} of {agg['universe']:,} scrips classified" if refreshing else "",
         "asof": asof,
+        "level": agg["level"],
         "universe": agg["universe"],
         "mapped": agg["mapped"],
         "sectors": agg["sectors"],
         # Per-source classification breakdown — helps diagnose coverage: how many
-        # symbols the BSE scrip master vs the NSE index files each contributed.
+        # symbols the BSE scrip master vs the NSE index files each contributed,
+        # plus the distinct-bucket count at each classification level.
         "diag": {"classify": _sectors.diag(), "bse": _bse_diag,
                  "static": _sectors.static_count(),
-                 "classified_symbols": _sectors.map_size()},
+                 "classified_symbols": _sectors.map_size(),
+                 "levels": _sectors.level_counts()},
         "error": None,
     })
 
