@@ -6,6 +6,7 @@ import { chartHtml } from '../chartHtml';
 import HtmlView from '../components/HtmlView';
 import StockDetail from '../components/StockDetail';
 import SymbolInput from '../components/SymbolInput';
+import ChecklistPanel from '../components/ChecklistPanel';
 import { Row, sortRows } from '../screener';
 import { capBand } from '../marketcap';
 import { navigate, takeSector, takeSymbol } from '../navIntent';
@@ -917,6 +918,9 @@ export default function MultibaggerScreen() {
                     </TouchableOpacity>
                   </View>
                 </Card>
+
+                <SectionTitle>Fundamental checklist</SectionTitle>
+                <Card><ChecklistPanel symbol={report.symbol} /></Card>
 
                 {candles.length ? (
                   <>
