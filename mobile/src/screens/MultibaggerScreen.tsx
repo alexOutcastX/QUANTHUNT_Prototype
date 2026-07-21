@@ -14,7 +14,7 @@ import { mergeSectors } from '../sectors';
 import { ACTIONS_W, COLS, Col, DEFAULT_HIDDEN, cellFlex, loadNames } from './ScreenerScreen';
 import { TrackDir, TrackEntry, addTrack, loadTrack, removeTrack } from '../tracklist';
 import { addSymbol, loadWatchlist, normSymbol, removeSymbol } from '../watchlist';
-import { Btn, Card, Dropdown, EmptyState, InfoButton, InfoContent, Loading, SectionTitle, StatTile } from '../ui';
+import { Btn, Card, Dropdown, EmptyState, InfoButton, InfoContent, Loading, SectionTitle, Sheet, StatTile } from '../ui';
 import { openPdfPreview } from '../pdf';
 import { MULTIBAGGER_INFO } from '../tabInfo';
 import { theme } from '../theme';
@@ -247,6 +247,7 @@ function MbList({
   const [tick, setTick] = useState(0);
   const [track, setTrack] = useState<TrackEntry[]>([]);
   const [watch, setWatch] = useState<string[]>([]);
+  const [analyseMenu, setAnalyseMenu] = useState<string | null>(null); // row → analyse-as menu
   const [, setScanTick] = useState(0); // re-render when the reco scan store changes
 
   useEffect(() => {
@@ -508,6 +509,7 @@ function MbList({
   };
 
   return (
+    <>
     <ScrollView style={{ flex: 1 }}>
       {/* Strategy first — the ⟳ Update-list button lives in the parent top row. */}
       {!loading ? (
@@ -614,8 +616,8 @@ function MbList({
                       <TouchableOpacity style={styles.aBtn} onPress={() => onToggleWatch(item)} activeOpacity={0.75}>
                         <Text style={[styles.aBtnTxt, starred && { color: theme.green }]}>{starred ? '★' : '☆'}</Text>
                       </TouchableOpacity>
-                      <TouchableOpacity style={styles.aBtn} onPress={() => onAnalyse(item.sym)} activeOpacity={0.75}>
-                        <Text style={[styles.aBtnTxt, { color: theme.accent }]}>Analyse</Text>
+                      <TouchableOpacity style={styles.aBtn} onPress={() => setAnalyseMenu(item.sym)} activeOpacity={0.75}>
+                        <Text style={[styles.aBtnTxt, { color: theme.accent }]}>Analyse ▾</Text>
                       </TouchableOpacity>
                       {scanned ? (
                         <TouchableOpacity
@@ -648,6 +650,33 @@ function MbList({
         </ScrollView>
       ) : null}
     </ScrollView>
+
+    {analyseMenu ? (
+      <Sheet onClose={() => setAnalyseMenu(null)} maxHeight="55%">
+        <Text style={styles.menuTitle}>{analyseMenu}</Text>
+        <Text style={styles.menuLabel}>ANALYSE AS</Text>
+        {[
+          { icon: '🚀', label: 'Multibagger', hint: '5x-potential score + fundamental checklist', run: () => onAnalyse(analyseMenu) },
+          { icon: '⚡', label: 'Momentum', hint: 'Multi-timeframe trade rating, S/R, momentum', run: () => navigate('analysis', { sub: 'momentum', symbol: analyseMenu }) },
+          { icon: '🏛', label: 'Institutional dossier', hint: 'Full company report — financials, ownership, filings', run: () => navigate('analysis', { sub: 'inst', symbol: analyseMenu }) },
+        ].map((o) => (
+          <TouchableOpacity
+            key={o.label}
+            style={styles.menuAct}
+            activeOpacity={0.8}
+            onPress={() => {
+              const run = o.run;
+              setAnalyseMenu(null);
+              run();
+            }}
+          >
+            <Text style={styles.menuActTxt}>{o.icon}  {o.label}</Text>
+            <Text style={styles.menuActSub}>{o.hint}</Text>
+          </TouchableOpacity>
+        ))}
+      </Sheet>
+    ) : null}
+    </>
   );
 }
 
@@ -909,6 +938,12 @@ export default function MultibaggerScreen() {
                     </TouchableOpacity>
                     <TouchableOpacity style={styles.actBtn} onPress={() => navigate('analysis', { sub: 'inst', symbol: report.symbol })} activeOpacity={0.75}>
                       <Text style={styles.actTxt}>🏛 Dossier</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.actBtn} onPress={() => navigate('analysis', { sub: 'momentum', symbol: report.symbol })} activeOpacity={0.75}>
+                      <Text style={styles.actTxt}>⚡ Momentum</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.actBtn} onPress={() => navigate('analysis', { sub: 'patterns', symbol: report.symbol })} activeOpacity={0.75}>
+                      <Text style={styles.actTxt}>📈 Pattern</Text>
                     </TouchableOpacity>
                     <TouchableOpacity style={styles.actBtn} onPress={addToBacktest} activeOpacity={0.75}>
                       <Text style={styles.actTxt}>⏱ Backtest</Text>
@@ -1217,6 +1252,20 @@ const styles = StyleSheet.create({
     paddingVertical: theme.sp.sm + 1,
   },
   actTxt: { color: theme.text, fontSize: theme.fs.sm + 1, fontWeight: '600' },
+  // row → "analyse as" menu
+  menuTitle: { color: theme.text, fontSize: theme.fs.lg, fontWeight: '800' },
+  menuLabel: { color: theme.muted, fontSize: theme.fs.xs, fontWeight: '700', letterSpacing: 1, marginTop: theme.sp.sm, marginBottom: theme.sp.sm },
+  menuAct: {
+    borderColor: theme.border2,
+    borderWidth: 1,
+    borderRadius: theme.radius.md,
+    paddingHorizontal: theme.sp.lg,
+    paddingVertical: theme.sp.md,
+    marginBottom: theme.sp.sm,
+    backgroundColor: theme.surface2,
+  },
+  menuActTxt: { color: theme.text, fontSize: theme.fs.md + 1, fontWeight: '700' },
+  menuActSub: { color: theme.muted, fontSize: theme.fs.sm, marginTop: 2 },
   chartCard: { height: 240, padding: 0, overflow: 'hidden' },
   chart: { flex: 1 },
   pillarRow: { paddingVertical: theme.sp.sm, gap: 5 },
