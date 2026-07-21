@@ -19,7 +19,12 @@ Environment=PORT=5000
 EnvironmentFile=-/opt/quanthunt/.env
 # One worker, many threads: the universe/price caches are per-process in memory,
 # so multiple workers would each re-fetch from NSE and defeat the 6-hour cache.
-ExecStart=/opt/quanthunt/venv/bin/gunicorn --bind 127.0.0.1:5000 --workers 1 --threads 8 --timeout 120 wsgi:app
+# Threads (not workers) absorb the burst of parallel calls a single dossier /
+# analyser open fires (strategy + timeframes + checklist + fundamentals + …),
+# each of which can block for seconds on yfinance/NSE. 8 threads saturated and
+# hung the whole site; 32 gives ample headroom for several concurrent users.
+# --graceful-timeout recycles a worker that a stuck request wedges.
+ExecStart=/opt/quanthunt/venv/bin/gunicorn --bind 127.0.0.1:5000 --workers 1 --threads 32 --timeout 120 --graceful-timeout 30 wsgi:app
 Restart=always
 RestartSec=3
 
