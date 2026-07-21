@@ -1577,7 +1577,7 @@ export default function TerminalScreen() {
                 navigate('analysis', { sub: 'inst', symbol: centre });
               }}
             >
-              <Text style={styles.dossActTxt}>📄 Full Dossier &amp; Export</Text>
+              <Text style={styles.dossActTxt}>Full Dossier &amp; Export</Text>
               <Text style={styles.dossActSub}>Institutional deep report · PDF export</Text>
             </TouchableOpacity>
             <TouchableOpacity
@@ -1588,7 +1588,7 @@ export default function TerminalScreen() {
                 navigate('analysis', { sub: 'mb', symbol: centre });
               }}
             >
-              <Text style={styles.dossActTxt}>🚀 Analyse as Multibagger</Text>
+              <Text style={styles.dossActTxt}>Analyse as Multibagger</Text>
               <Text style={styles.dossActSub}>Long-term wealth-compounding potential</Text>
             </TouchableOpacity>
             <TouchableOpacity
@@ -1599,7 +1599,7 @@ export default function TerminalScreen() {
                 navigate('analysis', { sub: 'patterns', symbol: centre });
               }}
             >
-              <Text style={styles.dossActTxt}>⚡ Trade / Momentum reco</Text>
+              <Text style={styles.dossActTxt}>Trade / Momentum reco</Text>
               <Text style={styles.dossActSub}>Patterns + multi-timeframe swing read</Text>
             </TouchableOpacity>
             <TouchableOpacity
@@ -1610,7 +1610,7 @@ export default function TerminalScreen() {
                 navigate('analysis', { sub: 'inst', symbol: centre });
               }}
             >
-              <Text style={styles.dossActTxt}>💼 Investment reco</Text>
+              <Text style={styles.dossActTxt}>Investment reco</Text>
               <Text style={styles.dossActSub}>Fundamentals, financials &amp; verdict</Text>
             </TouchableOpacity>
           </ScrollView>

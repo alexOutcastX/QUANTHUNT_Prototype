@@ -657,9 +657,9 @@ function MbList({
         <Text style={styles.menuLabel}>ANALYSE AS</Text>
         {[
           { icon: '◆', label: 'Symbol overview', hint: 'Price, technicals, fundamentals & patterns on one page', run: () => openStock(analyseMenu) },
-          { icon: '🚀', label: 'Multibagger', hint: '5x-potential score + fundamental checklist', run: () => onAnalyse(analyseMenu) },
-          { icon: '⚡', label: 'Momentum', hint: 'Multi-timeframe trade rating, S/R, momentum', run: () => navigate('analysis', { sub: 'momentum', symbol: analyseMenu }) },
-          { icon: '🏛', label: 'Institutional dossier', hint: 'Full company report — financials, ownership, filings', run: () => navigate('analysis', { sub: 'inst', symbol: analyseMenu }) },
+          { icon: '◈', label: 'Multibagger', hint: '5x-potential score + fundamental checklist', run: () => onAnalyse(analyseMenu) },
+          { icon: '▲', label: 'Momentum', hint: 'Multi-timeframe trade rating, S/R, momentum', run: () => navigate('analysis', { sub: 'momentum', symbol: analyseMenu }) },
+          { icon: '▦', label: 'Institutional dossier', hint: 'Full company report — financials, ownership, filings', run: () => navigate('analysis', { sub: 'inst', symbol: analyseMenu }) },
         ].map((o) => (
           <TouchableOpacity
             key={o.label}
@@ -822,7 +822,7 @@ export default function MultibaggerScreen() {
               activeOpacity={0.75}
             >
               <Text style={[styles.segTxt, view === v && styles.segTxtOn]}>
-                {v === 'screen' ? '◆ Screener' : '⚡ Analyser'}
+                {v === 'screen' ? 'Screener' : 'Analyser'}
               </Text>
             </TouchableOpacity>
           ))}
@@ -860,7 +860,7 @@ export default function MultibaggerScreen() {
               inputStyle={styles.input}
               containerStyle={{ flex: 1 }}
             />
-            <Btn label={busy ? 'Analysing…' : '⚡ Analyse'} onPress={() => analyse()} disabled={busy || !symbol.trim()} />
+            <Btn label={busy ? 'Analysing…' : 'Analyse'} onPress={() => analyse()} disabled={busy || !symbol.trim()} />
           </View>
 
           {recent.length ? (
@@ -938,13 +938,13 @@ export default function MultibaggerScreen() {
                       <Text style={styles.actTxt}>★ Watchlist</Text>
                     </TouchableOpacity>
                     <TouchableOpacity style={styles.actBtn} onPress={() => navigate('analysis', { sub: 'inst', symbol: report.symbol })} activeOpacity={0.75}>
-                      <Text style={styles.actTxt}>🏛 Dossier</Text>
+                      <Text style={styles.actTxt}>Dossier</Text>
                     </TouchableOpacity>
                     <TouchableOpacity style={styles.actBtn} onPress={() => navigate('analysis', { sub: 'momentum', symbol: report.symbol })} activeOpacity={0.75}>
-                      <Text style={styles.actTxt}>⚡ Momentum</Text>
+                      <Text style={styles.actTxt}>Momentum</Text>
                     </TouchableOpacity>
                     <TouchableOpacity style={styles.actBtn} onPress={() => navigate('analysis', { sub: 'patterns', symbol: report.symbol })} activeOpacity={0.75}>
-                      <Text style={styles.actTxt}>📈 Pattern</Text>
+                      <Text style={styles.actTxt}>Pattern</Text>
                     </TouchableOpacity>
                     <TouchableOpacity style={styles.actBtn} onPress={addToBacktest} activeOpacity={0.75}>
                       <Text style={styles.actTxt}>⏱ Backtest</Text>

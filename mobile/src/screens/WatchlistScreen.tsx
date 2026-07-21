@@ -491,7 +491,7 @@ export default function WatchlistScreen() {
             disabled={!active}
             activeOpacity={0.75}
           >
-            <Text style={[styles.toolTxt, styles.toolTxtDanger]}>🗑 Delete</Text>
+            <Text style={[styles.toolTxt, styles.toolTxtDanger]}>Delete</Text>
           </TouchableOpacity>
         </ScrollView>
 

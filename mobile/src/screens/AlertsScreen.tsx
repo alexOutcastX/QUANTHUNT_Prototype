@@ -65,7 +65,7 @@ function TargetAlerts() {
         <SectionTitle>Price-target alerts · live upside</SectionTitle>
         <EmptyState
           title="No target alerts yet"
-          hint="Tap 🔔 Alert on any Momentum stock — the remaining upside to its target updates live here."
+          hint="Tap Alert on any Momentum stock — the remaining upside to its target updates live here."
         />
       </>
     );

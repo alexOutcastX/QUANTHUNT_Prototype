@@ -100,7 +100,7 @@ export default function PdfPreview() {
         { style: { flex: 1, color: '#fff', fontWeight: 700, fontSize: 15, letterSpacing: 0.2 } },
         doc.docType,
       ),
-      btn('🖨  Print / Save as PDF', print, true),
+      btn('Print / Save as PDF', print, true),
       btn('✕', closePdfPreview),
     ),
     React.createElement(

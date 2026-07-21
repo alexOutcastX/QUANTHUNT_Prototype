@@ -183,7 +183,7 @@ function CurrentCard({ p, actions }: { p: ChartPattern; actions: CardActions }) 
           <Text style={styles.actTxt}>▤ Chart</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.actBtn} onPress={actions.onMultibagger} activeOpacity={0.75}>
-          <Text style={[styles.actTxt, { color: theme.accent }]}>⚡ Multibagger</Text>
+          <Text style={[styles.actTxt, { color: theme.accent }]}>Multibagger</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.actBtn} onPress={actions.onInstitutional} activeOpacity={0.75}>
           <Text style={styles.actTxt}>◪ Institutional</Text>

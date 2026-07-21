@@ -666,7 +666,7 @@ export default function AnalysisScreen() {
                       activeOpacity={a.attachment ? 0.6 : 1}
                     >
                       <Text style={styles.docSubj} numberOfLines={2}>
-                        {a.attachment ? '📄 ' : '• '}{a.subject}
+                        {a.attachment ? '❐ ' : '• '}{a.subject}
                       </Text>
                       <Text style={styles.docDate}>{a.date}{a.attachment ? '  ›' : ''}</Text>
                     </TouchableOpacity>
@@ -687,7 +687,7 @@ export default function AnalysisScreen() {
                       onPress={() => a.attachment && Linking.openURL(a.attachment).catch(() => {})}
                       activeOpacity={a.attachment ? 0.6 : 1}
                     >
-                      <Text style={styles.docSubj} numberOfLines={2}>{a.attachment ? '📄 ' : '• '}{a.subject}</Text>
+                      <Text style={styles.docSubj} numberOfLines={2}>{a.attachment ? '❐ ' : '• '}{a.subject}</Text>
                       <Text style={styles.docDate}>{a.date}</Text>
                     </TouchableOpacity>
                   ))}

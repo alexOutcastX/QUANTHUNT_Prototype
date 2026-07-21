@@ -91,7 +91,7 @@ export default function AnnouncementsScreen() {
             </Card>
           ))
         ) : (
-          <EmptyState icon="📣" title="No announcements yet" hint="Updates and notices from the team will appear here." />
+          <EmptyState icon="▤" title="No announcements yet" hint="Updates and notices from the team will appear here." />
         )}
       </ScrollView>
       {flash ? <View style={styles.toast} pointerEvents="none"><Text style={styles.toastTxt}>{flash}</Text></View> : null}

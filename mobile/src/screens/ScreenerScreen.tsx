@@ -954,7 +954,7 @@ function FilterPanel({
     <View style={styles.panel}>
       <View style={styles.nlBox}>
         <View style={styles.nlRow}>
-          <Text style={styles.spark}>✨</Text>
+          <Text style={styles.spark}>✦</Text>
           <TextInput
             style={styles.nlInput}
             value={nlText}
@@ -1005,7 +1005,7 @@ function FilterPanel({
               <Text style={styles.filterTxt}>↗ Share</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.filterBtn} onPress={onSaveScreen} activeOpacity={0.75}>
-              <Text style={styles.filterTxt}>💾 Save screen{savedCount ? ` (${savedCount})` : ''}</Text>
+              <Text style={styles.filterTxt}>Save screen{savedCount ? ` (${savedCount})` : ''}</Text>
             </TouchableOpacity>
           </View>
         </View>
