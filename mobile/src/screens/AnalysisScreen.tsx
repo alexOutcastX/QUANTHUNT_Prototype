@@ -12,6 +12,7 @@ import {
 import {
   Announcement,
   CorpAction,
+  ChecklistResp,
   FlowEdge,
   Fundamentals,
   MultibaggerReport,
@@ -28,6 +29,7 @@ import {
 import { Assessment, assess } from '../analysis';
 import SymbolInput from '../components/SymbolInput';
 import StrategyScores from '../components/StrategyScores';
+import ChecklistPanel from '../components/ChecklistPanel';
 import { openPdfPreview } from '../pdf';
 import { takeSymbol } from '../navIntent';
 import { theme } from '../theme';
@@ -69,6 +71,7 @@ type Dossier = {
   mc?: Assessment | null;
   strat?: StrategyScore[];
   tf?: TimeframesResp | null;
+  chk?: ChecklistResp | null;
 };
 
 // Announcement subjects that carry management commentary / primary documents.
@@ -154,6 +157,7 @@ export default function AnalysisScreen() {
     // folded into the exported dossier PDF.
     add(api.strategyScores(s).then((r) => patch(s, { strat: r && !r.error ? r.strategies : [] })));
     add(api.timeframes(s).then((r) => patch(s, { tf: r && !r.error ? r : null })));
+    add(api.checklist(s).then((r) => patch(s, { chk: r && (r.items || []).length ? r : null })));
     // Upside-probability model (Monte-Carlo + historical frequency over 5y).
     add(
       api.history(s, '5y', '1d').then((h) => {
@@ -314,6 +318,10 @@ export default function AnalysisScreen() {
 
             {/* Strategy scorecard — same scoring shown in every popup */}
             <Card><StrategyScores symbol={d.sym} /></Card>
+
+            {/* 10-point fundamental checklist */}
+            <SectionTitle>Fundamental checklist</SectionTitle>
+            <Card><ChecklistPanel symbol={d.sym} /></Card>
 
             {/* Business overview */}
             {about ? (
@@ -772,6 +780,21 @@ function dossierHtml(d: Dossier): string {
             .join(' &nbsp; ')}</p>`
         : '')
     : '';
+  // 10-point fundamental checklist.
+  const chkV = (v: string) => (v === 'good' ? green : v === 'ok' ? '#b7791f' : v === 'bad' ? red : '#999');
+  const chkMk = (v: string) => (v === 'good' ? '✓' : v === 'ok' ? '~' : v === 'bad' ? '✕' : '–');
+  const chkBlock = d.chk && d.chk.items?.length
+    ? `<h2>Fundamental checklist</h2>` +
+      `<p style="margin:0 0 4px">${d.chk.passed}/${d.chk.scored} strong${d.chk.ok ? ` · ${d.chk.ok} fair` : ''}${d.chk.score != null ? ` · overall ${d.chk.score}/100` : ''}.</p>` +
+      `<table>${d.chk.items
+        .map(
+          (it, i) =>
+            `<tr><td style="width:16px;text-align:center;color:${chkV(it.verdict)};font-weight:700">${chkMk(it.verdict)}</td>` +
+            `<td>${i + 1}. ${esc(it.label)}</td>` +
+            `<td style="text-align:right;color:${chkV(it.verdict)};font-weight:700">${esc(it.value ?? '—')}</td></tr>`,
+        )
+        .join('')}</table>`
+    : '';
   const flags = mb?.red_flags?.length ? `<h2>Red flags</h2><ul>${mb.red_flags.map((x) => `<li style="color:${red}">${esc(x)}</li>`).join('')}</ul>` : '';
   const strengths = mb?.strengths?.length ? `<h2>What works</h2><ul>${mb.strengths.map((x) => `<li style="color:${green}">${esc(x)}</li>`).join('')}</ul>` : '';
   const docLinks = docs.length ? `<h2>Management commentary & filings</h2><ul>${docs.slice(0, 10).map((a) => `<li>${a.attachment ? `<a href="${esc(a.attachment)}">${esc(a.subject)}</a>` : esc(a.subject)} <span style="color:#888">— ${esc(a.date)}</span></li>`).join('')}</ul>` : '';
@@ -803,6 +826,7 @@ ${mb ? `<div>${esc(mb.tier)} · multibagging potential (5x+ in 5–10y): <b styl
 <p>${esc(v.note)}</p>
 ${mb?.about || fund?.description ? `<h2>Business overview</h2><p>${esc(mb?.about || fund?.description)}</p>` : ''}
 ${stratBlock}
+${chkBlock}
 ${fundRows ? `<h2>Fundamentals & valuation</h2><table>${fundRows}</table>` : ''}
 ${plRows}${qRows}${bsRows}
 ${techRows ? `<h2>In-depth technicals</h2><table>${techRows}</table>` : ''}

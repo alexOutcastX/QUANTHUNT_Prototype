@@ -370,6 +370,17 @@ export type TimeframeRead = {
   supports?: number[]; resistances?: number[];
   fib?: Record<string, number>; swing_hi?: number; swing_lo?: number;
 };
+// 10-point fundamental checklist (/checklist).
+export type ChecklistItem = {
+  key: string; label: string; value: string | null;
+  verdict: 'good' | 'ok' | 'bad' | 'na';
+};
+export type ChecklistResp = {
+  symbol?: string; items: ChecklistItem[];
+  passed?: number; ok?: number; scored?: number; total?: number;
+  score?: number | null; error?: string;
+};
+
 export type HorizonRead = { key: string; label: string; score: number | null; bias: string; from?: string[] };
 export type OverallRead = { score: number | null; bias: string; rating: string };
 export type TimeframesResp = {
@@ -898,6 +909,8 @@ export const api = {
     getJson<ReportResp>('/report?symbol=' + encodeURIComponent(symbol), 60000),
   timeframes: (symbol: string) =>
     getJson<TimeframesResp>('/timeframes?symbol=' + encodeURIComponent(symbol), 60000),
+  checklist: (symbol: string) =>
+    getJson<ChecklistResp>('/checklist?symbol=' + encodeURIComponent(symbol), 60000),
   screenerFinancials: (symbol: string) =>
     getJson<ScreenerFinancials>('/screener-financials?symbol=' + encodeURIComponent(symbol), 20000),
   strategyScores: (symbol: string) =>
