@@ -11,7 +11,7 @@
 // native. HTML-embedded views (charts/graphs) live in their own document and
 // can't see the page variables, so they read resolved hex via getPalette().
 import { useEffect, useState } from 'react';
-import { Platform } from 'react-native';
+import { Platform, TextStyle } from 'react-native';
 
 type ColorKey =
   | 'bg' | 'surface' | 'surface2' | 'surface3' | 'card' | 'border' | 'border2'
@@ -179,9 +179,9 @@ const motion = { fast: 120, base: 200, gentle: 300, data: 400 };
 // Tabular figures for every column of numbers — without this, table cells
 // shimmy as values tick because proportional digits differ in width. Apply to
 // any Text that column-aligns numbers (alongside theme.mono).
-const numCell = Platform.OS === 'web'
-  ? ({ fontFamily: MONO, fontVariant: ['tabular-nums'] } as const)
-  : ({ fontFamily: MONO } as const);
+const numCell: TextStyle = Platform.OS === 'web'
+  ? { fontFamily: MONO, fontVariant: ['tabular-nums'] }
+  : { fontFamily: MONO };
 
 export const theme = {
   ...colors,
