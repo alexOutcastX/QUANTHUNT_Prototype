@@ -10,7 +10,7 @@
 // alert notification deep-links to that symbol's analysis.
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_BASE } from './api';
-import { navigate } from './navIntent';
+import { openStock } from './navIntent';
 
 // Push delivery needs a configured Firebase project (google-services.json + FCM
 // credentials in the Android build). Until that ships, calling
@@ -44,7 +44,7 @@ async function uploadToken(token: string): Promise<void> {
 
 function onTap(data: Record<string, unknown> | undefined): void {
   const sym = data && (data.symbol as string);
-  if (sym) navigate('analysis', { sub: 'mb', symbol: String(sym) });
+  if (sym) openStock(String(sym));
   // (DM taps could deep-link into the thread once chat is a routable page.)
 }
 

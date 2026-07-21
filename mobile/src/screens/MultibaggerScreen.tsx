@@ -9,7 +9,7 @@ import SymbolInput from '../components/SymbolInput';
 import ChecklistPanel from '../components/ChecklistPanel';
 import { Row, sortRows } from '../screener';
 import { capBand } from '../marketcap';
-import { navigate, takeSector, takeSymbol } from '../navIntent';
+import { navigate, openStock, takeSector, takeSymbol } from '../navIntent';
 import { mergeSectors } from '../sectors';
 import { ACTIONS_W, COLS, Col, DEFAULT_HIDDEN, cellFlex, loadNames } from './ScreenerScreen';
 import { TrackDir, TrackEntry, addTrack, loadTrack, removeTrack } from '../tracklist';
@@ -656,6 +656,7 @@ function MbList({
         <Text style={styles.menuTitle}>{analyseMenu}</Text>
         <Text style={styles.menuLabel}>ANALYSE AS</Text>
         {[
+          { icon: '◆', label: 'Symbol overview', hint: 'Price, technicals, fundamentals & patterns on one page', run: () => openStock(analyseMenu) },
           { icon: '🚀', label: 'Multibagger', hint: '5x-potential score + fundamental checklist', run: () => onAnalyse(analyseMenu) },
           { icon: '⚡', label: 'Momentum', hint: 'Multi-timeframe trade rating, S/R, momentum', run: () => navigate('analysis', { sub: 'momentum', symbol: analyseMenu }) },
           { icon: '🏛', label: 'Institutional dossier', hint: 'Full company report — financials, ownership, filings', run: () => navigate('analysis', { sub: 'inst', symbol: analyseMenu }) },

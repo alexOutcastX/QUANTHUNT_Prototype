@@ -5,7 +5,7 @@ import { SwingRec, api } from '../api';
 import StockDetail from '../components/StockDetail';
 import StrategyScores from '../components/StrategyScores';
 import { Row } from '../screener';
-import { navigate } from '../navIntent';
+import { navigate, openStock } from '../navIntent';
 import { addSymbol, loadWatchlist, normSymbol } from '../watchlist';
 import { LocalAlert, addLocalAlert, hasLocalAlert, loadLocalAlerts } from '../localalerts';
 import { loadNames } from './ScreenerScreen';
@@ -393,7 +393,7 @@ export default function ShortTermScreen() {
   };
   const onAnalyse = (r: SwingRec) => {
     setOpen(null);
-    navigate('analysis', { sub: 'mb', symbol: r.symbol });
+    openStock(r.symbol);
   };
   const onPattern = (r: SwingRec) => {
     setOpen(null);

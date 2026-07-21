@@ -7,7 +7,7 @@ import SymbolInput from '../components/SymbolInput';
 import TradeVerdict from '../components/TradeVerdict';
 import { Row } from '../screener';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { navigate, peekNav, subscribeNav, takeSector } from '../navIntent';
+import { navigate, openStock, peekNav, subscribeNav, takeSector } from '../navIntent';
 import { mergeSectors } from '../sectors';
 import { addSymbol, loadWatchlist, normSymbol } from '../watchlist';
 import { LocalAlert, addLocalAlert, hasLocalAlert, loadLocalAlerts } from '../localalerts';
@@ -554,7 +554,7 @@ function LongTermRecs() {
     toast(`Alert set for ${r.symbol} → ${money(r.target)} (${signPct(r.upside_pct)} upside)`);
   }, [alerts]);
   const onChart = (r: Recommendation) => setDetail({ sym: r.symbol, price: r.price } as Row);
-  const onAnalyse = (r: Recommendation) => navigate('analysis', { sub: 'mb', symbol: r.symbol });
+  const onAnalyse = (r: Recommendation) => openStock(r.symbol);
   const onPattern = (r: Recommendation) => navigate('analysis', { sub: 'patterns', symbol: r.symbol });
   const onPaper = useCallback(async (r: Recommendation) => {
     setPaper(

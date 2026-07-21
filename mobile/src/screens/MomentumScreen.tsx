@@ -13,7 +13,7 @@ import { MOMENTUM_INFO } from '../tabInfo';
 import StrategyScores from '../components/StrategyScores';
 import TimeframePanel from '../components/TimeframePanel';
 import SymbolInput from '../components/SymbolInput';
-import { navigate, takeSector, takeSymbol } from '../navIntent';
+import { navigate, openStock, takeSector, takeSymbol } from '../navIntent';
 import { mergeSectors } from '../sectors';
 import { theme } from '../theme';
 
@@ -978,7 +978,7 @@ export default function MomentumScreen() {
           onChart={() => { const h = sel; setSel(null); openChart(h); }}
           onAlert={() => onAlert(sel)}
           onWatch={() => toggleWatch(sel.symbol)}
-          onAnalyse={() => { const s = sel.symbol; setSel(null); navigate('analysis', { sub: 'mb', symbol: s }); }}
+          onAnalyse={() => { const s = sel.symbol; setSel(null); openStock(s); }}
           onPattern={() => { const s = sel.symbol; setSel(null); navigate('analysis', { sub: 'patterns', symbol: s }); }}
           onDossier={() => { const s = sel.symbol; setSel(null); navigate('analysis', { sub: 'inst', symbol: s }); }}
         />

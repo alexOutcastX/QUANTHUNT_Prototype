@@ -15,7 +15,7 @@ import HtmlView from '../components/HtmlView';
 import SymbolInput from '../components/SymbolInput';
 import StrategyScores from '../components/StrategyScores';
 import { Sheet } from '../ui';
-import { navigate } from '../navIntent';
+import { navigate, openStock } from '../navIntent';
 import { getPalette, theme, useThemeMode } from '../theme';
 
 // Self-contained Terminal workspace: d3-force relationship graph + a floating,
@@ -1558,6 +1558,17 @@ export default function TerminalScreen() {
             <StrategyScores symbol={centre} compact />
 
             <Text style={styles.dossLabel}>OPEN AS</Text>
+            <TouchableOpacity
+              style={styles.dossAct}
+              activeOpacity={0.8}
+              onPress={() => {
+                setDossierOpen(false);
+                openStock(centre);
+              }}
+            >
+              <Text style={styles.dossActTxt}>Symbol overview</Text>
+              <Text style={styles.dossActSub}>Price, technicals, fundamentals &amp; patterns on one page</Text>
+            </TouchableOpacity>
             <TouchableOpacity
               style={styles.dossAct}
               activeOpacity={0.8}
