@@ -127,12 +127,22 @@ _TTL = 24 * 3600          # re-fetch the classification once a day
 # Bump when the set of classification SOURCES (or how they're fetched) changes so
 # a redeploy discards a cache built by older code and re-pulls everything.
 # (2 = adds BSE scrip master; 3 = hardened BSE fetch; 4 = NSE per-symbol quote
-# classifier; 5 = bundled sector_map.csv is the authoritative base.) Without this,
-# a still-fresh cache from the prior deploy shadows the new bundle.
-CACHE_VERSION = 5
+# classifier; 5 = bundled sector_map.csv is the authoritative base; 6 = bundle
+# gains the two finer levels — industry + basic industry.) Without this, a
+# still-fresh cache from the prior deploy shadows the new bundle.
+CACHE_VERSION = 6
 _lock = threading.Lock()
-# symbol(upper) -> canonical NSE sector.
+# symbol(upper) -> canonical NSE macro sector (~22). This is THE app-wide sector
+# every screener speaks; sector_of() reads it.
 _map = {}
+# Finer levels of the same NSE hierarchy, from the bundled classification only
+# (BSE ComHeadernew IGroup / ISubGroup). Used solely by the heatmap's level
+# toggle — the screeners still filter by the 22 macro sectors. Missing entries
+# fall back to the coarser level so nothing is ever dropped.
+#   symbol(upper) -> industry (~65, e.g. "Banks", "IT - Software")
+_industry = {}
+#   symbol(upper) -> basic industry (~200, e.g. "Private Sector Bank")
+_basic = {}
 _fetched_ts = 0
 # Last refresh's per-source contribution (for /sectors diagnostics).
 _diag = {}
@@ -260,23 +270,35 @@ _static_count = 0
 
 def _load_static():
     """Load the bundled symbol→sector CSV (the committed authoritative base).
-    Canonicalises every label to the 22 macro sectors. This gives the heatmap
-    full NSE+BSE coverage with zero runtime network — the runtime refresh only
-    tops up newly-listed scrips the bundle predates."""
+    Canonicalises the macro column to the 22 macro sectors and captures the two
+    finer NSE levels (industry, basic industry) when present. This gives the
+    heatmap full NSE+BSE coverage with zero runtime network — the runtime refresh
+    only tops up newly-listed scrips the bundle predates.
+
+    Accepts both the 4-column format `symbol,macro,industry,basic` and the legacy
+    2-column `symbol,sector` (industry/basic simply stay empty)."""
     global _static_count
     try:
         with open(_STATIC_FILE, newline="") as f:
             reader = csv.reader(f)
-            header = next(reader, None)  # skip "symbol,sector"
+            header = next(reader, None)  # skip the header row
             n = 0
             for row in reader:
                 if len(row) < 2:
                     continue
                 sym = (row[0] or "").strip().upper()
                 sec = _canon(row[1])
-                if sym and sec:
-                    _map.setdefault(sym, sec)
-                    n += 1
+                if not (sym and sec):
+                    continue
+                _map.setdefault(sym, sec)
+                if len(row) >= 4:
+                    ind = " ".join((row[2] or "").split())
+                    basic = " ".join((row[3] or "").split())
+                    if ind:
+                        _industry.setdefault(sym, ind)
+                    if basic:
+                        _basic.setdefault(sym, basic)
+                n += 1
             _static_count = n
     except FileNotFoundError:
         pass
@@ -436,6 +458,40 @@ def map_size() -> int:
         return len(_map)
 
 
+# Heatmap classification levels: the three tiers of the NSE hierarchy the bundle
+# carries. Screeners always use "macro"; the heatmap's toggle can drill finer.
+LEVELS = ("macro", "industry", "basic")
+
+
+def label_at(symbol, level="macro", gics=None):
+    """Return (label, macro) for a symbol at the requested heatmap level.
+
+    macro is always the 22-sector bucket (for screen routing); label is the
+    display bucket at `level`, falling back to the coarser level when the finer
+    one is unknown so a symbol is never dropped from the map."""
+    macro = sector_of(symbol, gics)
+    if not macro:
+        return "", ""
+    sym = str(symbol).strip().upper()
+    if level == "industry":
+        return (_industry.get(sym) or macro), macro
+    if level == "basic":
+        return (_basic.get(sym) or _industry.get(sym) or macro), macro
+    return macro, macro
+
+
+def level_counts() -> dict:
+    """Distinct-bucket counts per level (diagnostics)."""
+    with _lock:
+        return {
+            "macro": len(set(_map.values())),
+            "industry": len(set(_industry.values())),
+            "basic": len(set(_basic.values())),
+            "industry_symbols": len(_industry),
+            "basic_symbols": len(_basic),
+        }
+
+
 # ── Heatmap aggregate ────────────────────────────────────────────────────────
 def _acc(acc: dict, sector: str, chg, weight) -> None:
     """Fold one scrip into the per-sector accumulator (in place). Value-weights
@@ -452,28 +508,37 @@ def _acc(acc: dict, sector: str, chg, weight) -> None:
         a["chg_den"] += d
 
 
-def sectors_from_acc(acc: dict) -> list:
-    """Reduce the accumulator to display rows: one per sector with its count,
+def sectors_from_acc(acc: dict, parents: dict = None) -> list:
+    """Reduce the accumulator to display rows: one per bucket with its count,
     total traded value and value-weighted average day change. Biggest count
-    first. Pure — unit-tested with no data deps."""
+    first. `parents` maps each bucket to its macro sector (for screen routing at
+    finer levels). Pure — unit-tested with no data deps."""
     out = []
     for sec, a in acc.items():
-        out.append({
+        row = {
             "sector": sec,
             "count": a["count"],
             "market_cap_cr": round(a["weight"], 2) if a["weight"] else None,
             "chg": round(a["chg_w"] / a["chg_den"], 2) if a["chg_den"] else None,
-        })
+        }
+        if parents:
+            row["parent"] = parents.get(sec, sec)
+        out.append(row)
     out.sort(key=lambda x: -x["count"])
     return out
 
 
-def build_heatmap(universe: list) -> dict:
-    """Aggregate the full NSE+BSE universe into NSE macro sectors. Each universe
-    item may carry: symbol, chg (day %), turnover (traded value, the weight) and
-    an optional Yahoo `sector` hint for the fallback classification. Pure over
-    the current in-memory classification map."""
+def build_heatmap(universe: list, level: str = "macro") -> dict:
+    """Aggregate the full NSE+BSE universe at the requested classification level
+    (macro / industry / basic — see LEVELS). Each universe item may carry:
+    symbol, chg (day %), turnover (traded value, the weight) and an optional
+    Yahoo `sector` hint for the fallback classification. Every bucket also carries
+    its `parent` macro sector so a finer-level tile can still route into the
+    macro-sector screeners. Pure over the current in-memory classification map."""
+    if level not in LEVELS:
+        level = "macro"
     acc = {}
+    parents = {}
     mapped = 0
     total = 0
     for it in (universe or []):
@@ -481,13 +546,15 @@ def build_heatmap(universe: list) -> dict:
         if not sym:
             continue
         total += 1
-        sec = sector_of(sym, it.get("sector"))
-        if not sec:
+        label, macro = label_at(sym, level, it.get("sector"))
+        if not label:
             continue
         mapped += 1
-        _acc(acc, sec, it.get("chg"), it.get("turnover"))
+        parents.setdefault(label, macro)
+        _acc(acc, label, it.get("chg"), it.get("turnover"))
     return {
         "universe": total,
         "mapped": mapped,
-        "sectors": sectors_from_acc(acc),
+        "level": level,
+        "sectors": sectors_from_acc(acc, parents),
     }
