@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { MomentumHit, api } from '../api';
+import { MomentumHit, StrategyScoresResp, TimeframesResp, api } from '../api';
+import { openPdfPreview } from '../pdf';
 import StockDetail from '../components/StockDetail';
 import { useResponsive } from '../responsive';
 import { Row } from '../screener';
@@ -245,6 +246,72 @@ function MomDetail({
 
 // Analyser sub-tab: type/search any symbol and read its momentum across every
 // timeframe (5-min → weekly) — trade rating, S/R and Fibonacci levels per
+// ── Momentum PDF report ──────────────────────────────────────────────────────
+// Builds a self-contained "Momentum analysis" report from the per-timeframe read
+// (+ overall score) and the strategy scorecard, then hands it to the shared PDF
+// preview (professionalShell adds the A4 research chrome incl. the .tf-card grid).
+const _esc = (v: unknown): string =>
+  String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+const _money = (n?: number | null) =>
+  n == null || !isFinite(n) ? '—' : '₹' + n.toLocaleString('en-IN', { maximumFractionDigits: 2 });
+const _pctS = (n?: number | null) => (n == null || !isFinite(n) ? '—' : (n >= 0 ? '+' : '') + n.toFixed(2) + '%');
+const _scoreHex = (n?: number | null) => (n == null ? '#111' : n >= 60 ? '#0b7a53' : n <= 40 ? '#c92a2a' : '#b7791f');
+const _biasCls = (b?: string) => (/bull/i.test(b || '') ? 'g' : /bear/i.test(b || '') ? 'r' : 'a');
+
+function momentumReportHtml(sym: string, tf: TimeframesResp | null, strat: StrategyScoresResp | null): string {
+  const ov = tf?.overall;
+  const levels = (a?: number[]) => (a && a.length ? a.map((x) => _money(x)).join(' · ') : '—');
+  const fib = (f?: Record<string, number>) =>
+    f && Object.keys(f).length
+      ? Object.entries(f).map(([k, v]) => `${k} ${_money(v)}`).join(' · ')
+      : '';
+  const tfCard = (t: TimeframesResp['timeframes'][number]) =>
+    `<div class="tf-card">` +
+    `<div class="tf-top"><span class="tf-tf">${_esc(t.label)}</span>` +
+    `<span class="pill ${_biasCls(t.bias)}">${_esc(t.rating || t.bias)}</span></div>` +
+    `<div class="tf-top"><span class="tf-score" style="color:${_scoreHex(t.score)}">${t.score != null ? t.score : '—'}` +
+    `<span class="tf-of"> /100</span></span></div>` +
+    `<div class="tf-row"><span>Price</span><b>${t.price != null ? _esc(_money(t.price)) : '—'}</b></div>` +
+    `<div class="tf-row"><span>RSI</span><b>${t.rsi != null ? t.rsi.toFixed(0) : '—'}</b></div>` +
+    `<div class="tf-row"><span>vs EMA20</span><b style="color:${(t.vs_ema20 ?? 0) >= 0 ? '#0b7a53' : '#c92a2a'}">${_pctS(t.vs_ema20)}</b></div>` +
+    `<div class="tf-row"><span>vs EMA50</span><b style="color:${(t.vs_ema50 ?? 0) >= 0 ? '#0b7a53' : '#c92a2a'}">${_pctS(t.vs_ema50)}</b></div>` +
+    `<div class="tf-row"><span>Resistance</span><b>${_esc(levels(t.resistances))}</b></div>` +
+    `<div class="tf-row"><span>Support</span><b>${_esc(levels(t.supports))}</b></div>` +
+    (fib(t.fib) ? `<div class="tf-row" style="display:block"><span>Fib</span> <b style="font-weight:600">${_esc(fib(t.fib))}</b></div>` : '') +
+    `</div>`;
+  const tfBlock = tf?.timeframes?.length
+    ? `<h2>Technical setup · by timeframe</h2><div class="tf-grid">${tf.timeframes.map(tfCard).join('')}</div>` +
+      (tf.horizons?.length
+        ? `<p style="margin:8px 0 0"><b>Horizon read</b> &nbsp; ${tf.horizons
+            .map((h) => `${_esc(h.label)} <span class="pill ${_biasCls(h.bias)}">${_esc(h.bias)}${h.score != null ? ` ${h.score}` : ''}</span>`)
+            .join(' &nbsp; ')}</p>`
+        : '')
+    : '<p>No timeframe data was available at export time (intraday feeds can be rate-limited).</p>';
+  const stratRows = strat?.strategies?.length
+    ? `<h2>Strategy scorecard</h2><p style="margin:0 0 4px">How well ${_esc(sym)} fits each screening strategy right now — 0–100, ✓ qualifies (≥70).</p>` +
+      `<table><tr><td><b>Strategy</b></td><td style="text-align:right"><b>Score</b></td><td style="text-align:center"><b>Fit</b></td></tr>` +
+      [...strat.strategies]
+        .sort((a, b) => (b.score ?? -1) - (a.score ?? -1))
+        .map(
+          (s) =>
+            `<tr><td>${_esc(s.name)}${s.note ? ` <span style="color:#888;font-size:10px">— ${_esc(s.note)}</span>` : ''}</td>` +
+            `<td style="text-align:right;color:${_scoreHex(s.score)};font-weight:700">${s.score != null ? s.score : '—'}</td>` +
+            `<td style="text-align:center">${s.pass ? '<span style="color:#0b7a53;font-weight:700">✓</span>' : '<span style="color:#bbb">—</span>'}</td></tr>`,
+        )
+        .join('') +
+      `</table>`
+    : '';
+  const ovBlock = ov
+    ? `<div class="big" style="color:${_scoreHex(ov.score)}">${_esc(ov.rating || ov.bias)}${ov.score != null ? ` · ${ov.score}/100` : ''}</div>` +
+      `<p>Weighted across every timeframe (higher timeframes count more). Overall bias: <b>${_esc(ov.bias)}</b>.</p>`
+    : '';
+  return `<html><head><title>TaurEye — Momentum analysis — ${_esc(sym)}</title></head><body>` +
+    `<h1>${_esc(sym)} <span class="sub">Momentum analysis</span></h1>` +
+    ovBlock + tfBlock + stratRows +
+    `<p style="color:#999;font-size:10px;margin-top:14px">Multi-timeframe momentum from live price/volume and quantitative models. Educational only — not investment advice.</p>` +
+    `</body></html>`;
+}
+
 // timeframe + an overall score. Same predictive search as the other pages.
 function MomAnalyser({
   initialSymbol,
@@ -271,6 +338,26 @@ function MomAnalyser({
     setRecent((prev) => [q, ...prev.filter((x) => x !== q)].slice(0, 8));
   };
   const isWatched = (s: string) => watch.includes(normSymbol(s));
+
+  const [exporting, setExporting] = useState(false);
+  const onExport = async () => {
+    if (!active || exporting) return;
+    setExporting(true);
+    try {
+      // Pull the same two feeds the panels show, then build the report.
+      const [tf, strat] = await Promise.all([
+        api.timeframes(active).catch(() => null),
+        api.strategyScores(active).catch(() => null),
+      ]);
+      openPdfPreview(momentumReportHtml(active, tf, strat), {
+        docType: 'Momentum analysis',
+        fileName: `TaurEye-momentum-${active}`,
+      });
+    } finally {
+      setExporting(false);
+    }
+  };
+
   return (
     <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: theme.sp.xl }}>
       <View style={styles.anaInputRow}>
@@ -306,6 +393,9 @@ function MomAnalyser({
           <View style={styles.anaHead}>
             <Text style={styles.anaSym}>{active}</Text>
             <View style={styles.anaHeadActions}>
+              <TouchableOpacity style={styles.aBtn} onPress={onExport} activeOpacity={0.75} disabled={exporting}>
+                <Text style={styles.aTxt}>{exporting ? '…' : '⤓ Export PDF'}</Text>
+              </TouchableOpacity>
               <TouchableOpacity style={styles.aBtn} onPress={() => onChartSym(active)} activeOpacity={0.75}>
                 <Text style={styles.aTxt}>▤ Chart</Text>
               </TouchableOpacity>
@@ -839,9 +929,9 @@ const styles = StyleSheet.create({
   },
   recentTxt: { color: theme.muted2, fontFamily: theme.mono, fontSize: theme.fs.sm },
   anaBody: { paddingHorizontal: theme.sp.lg, paddingTop: theme.sp.md, gap: theme.sp.sm },
-  anaHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: theme.sp.xs },
-  anaSym: { color: theme.accent, fontFamily: theme.mono, fontWeight: '800', fontSize: theme.fs.xl },
-  anaHeadActions: { flexDirection: 'row', gap: theme.sp.sm },
+  anaHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: theme.sp.sm, marginBottom: theme.sp.xs },
+  anaSym: { color: theme.accent, fontFamily: theme.mono, fontWeight: '800', fontSize: theme.fs.xl, flexShrink: 1 },
+  anaHeadActions: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-end', gap: theme.sp.sm, flexShrink: 1 },
   chipsRow: { paddingBottom: theme.sp.xs, paddingTop: theme.sp.sm },
   infoInline: { alignSelf: 'center', marginRight: theme.sp.sm },
   chipsInner: { paddingHorizontal: theme.sp.lg, gap: theme.sp.sm, alignItems: 'center' },
