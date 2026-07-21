@@ -150,16 +150,26 @@ def analyse(symbol, suffix=".NS"):
     except Exception:
         return {"symbol": symbol, "timeframes": [], "horizons": [], "error": "engine unavailable"}
 
-    tfs = []
-    for interval, period, label in TIMEFRAMES:
+    # Fetch the five intervals concurrently, not one-after-another: sequential
+    # yfinance calls made this endpoint hold a request thread for tens of seconds
+    # (a big contributor to worker-pool saturation). Bounded per-call timeout so
+    # a slow interval can't wedge the request.
+    from concurrent.futures import ThreadPoolExecutor
+
+    def _fetch(spec):
+        interval, period, label = spec
         row = None
         try:
-            df = yf.Ticker(f"{symbol}{suffix}").history(period=period, interval=interval, auto_adjust=True)
+            df = yf.Ticker(f"{symbol}{suffix}").history(
+                period=period, interval=interval, auto_adjust=True, timeout=12)
             if df is not None and not df.empty:
                 row = _read(df)
         except Exception as e:
             log.debug("timeframe %s %s failed: %s", symbol, interval, e)
-        tfs.append({"tf": interval, "label": label, **(row or {"score": None, "bias": "n/a"})})
+        return {"tf": interval, "label": label, **(row or {"score": None, "bias": "n/a"})}
+
+    with ThreadPoolExecutor(max_workers=len(TIMEFRAMES)) as pool:
+        tfs = list(pool.map(_fetch, TIMEFRAMES))
 
     by_tf = {t["tf"]: t for t in tfs}
 

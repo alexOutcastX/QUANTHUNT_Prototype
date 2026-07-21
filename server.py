@@ -352,6 +352,52 @@ def get_universe():
         return _universe_cache
 
 
+# ── Non-blocking universe access ─────────────────────────────────────────────
+# get_universe() blocks the calling request thread on a cold bhavcopy fetch
+# (several seconds of network). On a gthread worker a handful of such requests
+# arriving together saturate the thread pool and hang the whole site. Endpoints
+# that only need "whatever's cached, don't wait" (the heatmap) use this instead:
+# it warms the universe in a background thread and returns immediately with the
+# current cache (possibly empty/stale). The caller reports `running` so the UI
+# keeps polling until the tiles fill in.
+_universe_warm_lock = threading.Lock()
+_universe_warming = False
+
+
+def _warm_universe_async():
+    """Kick a one-shot background universe refresh (idempotent)."""
+    global _universe_warming
+    with _universe_warm_lock:
+        if _universe_warming:
+            return
+        _universe_warming = True
+
+    def _run():
+        global _universe_warming
+        try:
+            get_universe()
+        except Exception as e:
+            log.warning("background universe warm failed: %s", e)
+        finally:
+            with _universe_warm_lock:
+                _universe_warming = False
+
+    threading.Thread(target=_run, daemon=True).start()
+
+
+def get_universe_nonblocking():
+    """Return the cached universe without ever blocking on the network. If the
+    cache is warm, serve it; otherwise trigger a background warm and return
+    whatever we currently hold (stale or empty) plus a `warming` flag."""
+    with _universe_lock:
+        cache = _universe_cache
+        fresh = bool(cache) and (time.time() - _universe_ts) < _UNIVERSE_TTL
+    if fresh:
+        return cache, False
+    _warm_universe_async()
+    return cache, True
+
+
 # ── Sector classification (NSE index Industry files → sectors.py) ────────────
 _sector_refresh_lock = threading.Lock()
 _sector_refresh_thread = None
@@ -1702,14 +1748,19 @@ def sectors_aggregate():
     few hundred a rate-limited .info sweep could resolve. ?refresh=1 re-pulls
     the NSE classification."""
     _ensure_sector_classification(force=request.args.get("refresh") == "1")
-    universe = get_universe()
+    # Never block the worker thread on a cold bhavcopy fetch — serve whatever
+    # universe is cached and warm the rest in the background (see
+    # get_universe_nonblocking). A cold heatmap comes back empty with
+    # `running`, and the tiles fill in on the next poll.
+    universe, warming = get_universe_nonblocking()
     agg = _sectors.build_heatmap(universe)
     with _universe_lock:
         asof = int(_universe_ts)
-    # While the NSE classification is still downloading (cold cache), report
-    # `running` so the heatmap keeps polling and the tiles fill in as more of
-    # the universe gets classified — then settle to `done`.
-    refreshing = _sector_refresh_running()
+    # While the NSE classification is still downloading (cold cache) or the
+    # universe is still warming, report `running` so the heatmap keeps polling
+    # and the tiles fill in as more of the universe gets classified — then
+    # settle to `done`.
+    refreshing = _sector_refresh_running() or warming
     return jsonify({
         "status": "running" if refreshing else "done",
         "refreshing": refreshing,
