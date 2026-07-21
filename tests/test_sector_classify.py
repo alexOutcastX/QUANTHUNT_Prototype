@@ -71,6 +71,21 @@ class TestSectorOfAndRecord(unittest.TestCase):
         sectors.record("XYZ", "")
         self.assertNotIn("XYZ", sectors._map)
 
+    def test_set_sector_exact_gap_fill_and_overwrite(self):
+        # NSE per-symbol industryInfo → canonical macro sector, gap-fill
+        self.assertTrue(sectors.set_sector("ABC", "Financial Services"))
+        self.assertEqual(sectors._map["ABC"], "Financial Services")
+        # gap-fill won't clobber
+        self.assertFalse(sectors.set_sector("ABC", "Healthcare"))
+        self.assertEqual(sectors._map["ABC"], "Financial Services")
+        # explicit overwrite does
+        self.assertTrue(sectors.set_sector("ABC", "Healthcare", overwrite=True))
+        self.assertEqual(sectors._map["ABC"], "Healthcare")
+
+    def test_set_sector_ignores_blanks(self):
+        self.assertFalse(sectors.set_sector("", "Healthcare"))
+        self.assertFalse(sectors.set_sector("ZZZ", ""))
+
 
 class TestParseIndexCsv(unittest.TestCase):
     def test_parses_symbol_and_industry(self):
