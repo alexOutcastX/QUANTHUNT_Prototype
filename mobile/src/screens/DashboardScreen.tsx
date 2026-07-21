@@ -15,74 +15,108 @@ const pct = (v: number | null | undefined) =>
 const colorOf = (v: number | null | undefined) =>
   v == null ? theme.muted : v >= 0 ? theme.green : theme.red;
 
+// Last-known dashboard snapshot, kept for the app session. Re-entering Today
+// paints this instantly (stale-while-revalidate) instead of a page of spinners
+// while every card refetches from scratch.
+const dash: {
+  indices?: IndexQuote[] | null;
+  market?: HolidaysResp | null;
+  movers?: Mover[] | null;
+  mv?: MoversResp | null;
+  watch?: { symbol: string; q?: Quote }[] | null;
+  news?: NewsItem[] | null;
+  sim?: SimState | null;
+  simPrices?: Record<string, number>;
+} = {};
+
 export default function DashboardScreen({ onNavigate }: { onNavigate?: (page: string) => void }) {
-  const [indices, setIndices] = useState<IndexQuote[] | null>(null);
-  const [market, setMarket] = useState<HolidaysResp | null>(null);
-  const [movers, setMovers] = useState<Mover[] | null>(null);
+  const [indices, setIndices] = useState<IndexQuote[] | null>(dash.indices ?? null);
+  const [market, setMarket] = useState<HolidaysResp | null>(dash.market ?? null);
+  const [movers, setMovers] = useState<Mover[] | null>(dash.movers ?? null);
   // Breadth + gainers/losers now come pre-computed from the server (/movers),
   // which stays populated even when NSE falls back to the symbols-only CSV.
-  const [mv, setMv] = useState<MoversResp | null>(null);
-  const [watch, setWatch] = useState<{ symbol: string; q?: Quote }[] | null>(null);
-  const [news, setNews] = useState<NewsItem[] | null>(null);
+  const [mv, setMv] = useState<MoversResp | null>(dash.mv ?? null);
+  const [watch, setWatch] = useState<{ symbol: string; q?: Quote }[] | null>(dash.watch ?? null);
+  const [news, setNews] = useState<NewsItem[] | null>(dash.news ?? null);
   // Paper-trading simulator snapshot: virtual account equity + all-time P&L,
   // marked against live prices for the open positions.
-  const [sim, setSim] = useState<SimState | null>(null);
-  const [simPrices, setSimPrices] = useState<Record<string, number>>({});
+  const [sim, setSim] = useState<SimState | null>(dash.sim ?? null);
+  const [simPrices, setSimPrices] = useState<Record<string, number>>(dash.simPrices ?? {});
   const [refreshing, setRefreshing] = useState(false);
 
+  // Every card loads independently and in parallel — the old flow awaited
+  // watchlist quotes, then news, then the simulator in sequence, so the tail
+  // cards waited on whichever earlier call was slow.
   const load = useCallback(async () => {
-    api.indices().then((d) => setIndices(d.indices)).catch(() => setIndices([]));
-    api.holidays().then(setMarket).catch(() => {});
+    api.indices().then((d) => { dash.indices = d.indices; setIndices(d.indices); }).catch(() => setIndices((v) => v ?? []));
+    api.holidays().then((d) => { dash.market = d; setMarket(d); }).catch(() => {});
     api
       .indexConstituents('NIFTY 50')
       .then((idx) => {
         const rows = (idx.data || []).filter((r) => r.chg != null);
         rows.sort((a, b) => (b.chg as number) - (a.chg as number));
-        setMovers([...rows.slice(0, 4), ...rows.slice(-4)]);
+        const m = [...rows.slice(0, 4), ...rows.slice(-4)];
+        dash.movers = m;
+        setMovers(m);
       })
-      .catch(() => setMovers([]));
+      .catch(() => setMovers((v) => v ?? []));
     // Breadth + top gainers/losers, computed server-side over NIFTY 500 (with a
     // resilient quote backfill), so this never blanks on the NSE CSV fallback.
     api
       .movers('NIFTY 500', 6)
-      .then(setMv)
-      .catch(() => setMv(null));
-    try {
-      const wl = await loadWatchlist();
-      const syms = wl.slice(0, 8);
-      if (!syms.length) setWatch([]);
-      else {
-        const q = await api.ltp(syms);
-        setWatch(syms.map((symbol) => ({ symbol, q: q[symbol] })));
-      }
-    } catch {
-      setWatch([]);
-    }
-    try {
-      const r = await fetch(API_BASE + '/news');
-      const d = await r.json();
-      setNews(((d.items || []) as NewsItem[]).slice(0, 6));
-    } catch {
-      setNews([]);
-    }
-    try {
-      const s = await loadSim();
-      setSim(s);
-      const syms = s.positions.map((p) => p.symbol);
-      if (syms.length) {
-        const q = await api.ltp(syms);
-        const px: Record<string, number> = {};
-        for (const sym of syms) {
-          const p = q[sym]?.price;
-          if (p != null) px[sym] = p;
+      .then((d) => { dash.mv = d; setMv(d); })
+      .catch(() => {});
+    (async () => {
+      try {
+        const wl = await loadWatchlist();
+        const syms = wl.slice(0, 8);
+        if (!syms.length) {
+          dash.watch = [];
+          setWatch([]);
+        } else {
+          const q = await api.ltp(syms);
+          const w = syms.map((symbol) => ({ symbol, q: q[symbol] }));
+          dash.watch = w;
+          setWatch(w);
         }
-        setSimPrices(px);
-      } else {
-        setSimPrices({});
+      } catch {
+        setWatch((v) => v ?? []);
       }
-    } catch {
-      /* simulator card just shows starting state on failure */
-    }
+    })();
+    (async () => {
+      try {
+        const r = await fetch(API_BASE + '/news');
+        const d = await r.json();
+        const n = ((d.items || []) as NewsItem[]).slice(0, 6);
+        dash.news = n;
+        setNews(n);
+      } catch {
+        setNews((v) => v ?? []);
+      }
+    })();
+    (async () => {
+      try {
+        const s = await loadSim();
+        dash.sim = s;
+        setSim(s);
+        const syms = s.positions.map((p) => p.symbol);
+        if (syms.length) {
+          const q = await api.ltp(syms);
+          const px: Record<string, number> = {};
+          for (const sym of syms) {
+            const p = q[sym]?.price;
+            if (p != null) px[sym] = p;
+          }
+          dash.simPrices = px;
+          setSimPrices(px);
+        } else {
+          dash.simPrices = {};
+          setSimPrices({});
+        }
+      } catch {
+        /* simulator card just shows starting state on failure */
+      }
+    })();
   }, []);
 
   useEffect(() => {
