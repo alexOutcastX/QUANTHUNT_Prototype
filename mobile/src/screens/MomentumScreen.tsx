@@ -156,6 +156,23 @@ function MomDetail({
   onDossier: () => void;
 }) {
   const c = setupColor(h.setup);
+  const [exporting, setExporting] = useState(false);
+  const onExport = async () => {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      const [tf, strat] = await Promise.all([
+        api.timeframes(h.symbol).catch(() => null),
+        api.strategyScores(h.symbol).catch(() => null),
+      ]);
+      openPdfPreview(momentumReportHtml(h.symbol, tf, strat, h), {
+        docType: 'Momentum analysis',
+        fileName: `TaurEye-momentum-${h.symbol}`,
+      });
+    } finally {
+      setExporting(false);
+    }
+  };
   const stat = (label: string, value: React.ReactNode) => (
     <View style={styles.dCell}>
       <Text style={styles.dCellLbl}>{label}</Text>
@@ -224,6 +241,9 @@ function MomDetail({
           <TouchableOpacity style={styles.dActBtn} onPress={onDossier} activeOpacity={0.75}>
             <Text style={styles.dActTxt}>🏛 Dossier</Text>
           </TouchableOpacity>
+          <TouchableOpacity style={styles.dActBtn} onPress={onExport} activeOpacity={0.75} disabled={exporting}>
+            <Text style={styles.dActTxt}>{exporting ? '… Exporting' : '⤓ Export PDF'}</Text>
+          </TouchableOpacity>
           <TouchableOpacity style={styles.dActBtn} onPress={onWatch} activeOpacity={0.75}>
             <Text style={[styles.dActTxt, watched && { color: theme.green }]}>{watched ? '★ Watching' : '☆ Watchlist'}</Text>
           </TouchableOpacity>
@@ -258,8 +278,33 @@ const _pctS = (n?: number | null) => (n == null || !isFinite(n) ? '—' : (n >= 
 const _scoreHex = (n?: number | null) => (n == null ? '#111' : n >= 60 ? '#0b7a53' : n <= 40 ? '#c92a2a' : '#b7791f');
 const _biasCls = (b?: string) => (/bull/i.test(b || '') ? 'g' : /bear/i.test(b || '') ? 'r' : 'a');
 
-function momentumReportHtml(sym: string, tf: TimeframesResp | null, strat: StrategyScoresResp | null): string {
+function momentumReportHtml(
+  sym: string,
+  tf: TimeframesResp | null,
+  strat: StrategyScoresResp | null,
+  hit?: MomentumHit | null,
+): string {
   const ov = tf?.overall;
+  // When opened from a radar card, lead with the live momentum snapshot the
+  // card shows (setup, score, probability + the key stats grid).
+  const cell = (label: string, value: string) =>
+    `<tr><td style="color:#64748b">${_esc(label)}</td><td style="text-align:right"><b>${value}</b></td></tr>`;
+  const hitBlock = hit
+    ? `<div class="big" style="color:${_scoreHex(hit.score)}">${_esc(SETUP_LABEL[hit.setup])} · ${hit.score}/100` +
+      `<span class="sub"> · ${hit.probability}% prob</span></div>` +
+      `<h2>Momentum snapshot</h2><table>` +
+      cell('LTP', hit.price != null ? _money(hit.price) : '—') +
+      cell('Day change', _pctS(hit.chg)) +
+      cell('RSI', hit.rsi != null ? hit.rsi.toFixed(0) : '—') +
+      cell('Relative volume', hit.relvol != null ? hit.relvol.toFixed(2) + 'x' : '—') +
+      cell('vs 200-DMA', _pctS(hit.d200)) +
+      cell('From 52-week high', _pctS(hit.pct_from_high)) +
+      cell('Upside to target', hit.upside_pct != null ? _pctS(hit.upside_pct) : '—') +
+      (hit.target != null ? cell('Target', _money(hit.target)) : '') +
+      `</table>` +
+      (hit.signals?.length ? `<p style="margin:6px 0 0"><b>Signals</b> — ${hit.signals.map(_esc).join(' · ')}</p>` : '') +
+      (hit.cautions?.length ? `<p style="margin:2px 0 0;color:#c92a2a"><b>Cautions</b> — ${hit.cautions.map(_esc).join(' · ')}</p>` : '')
+    : '';
   const levels = (a?: number[]) => (a && a.length ? a.map((x) => _money(x)).join(' · ') : '—');
   const fib = (f?: Record<string, number>) =>
     f && Object.keys(f).length
@@ -301,13 +346,18 @@ function momentumReportHtml(sym: string, tf: TimeframesResp | null, strat: Strat
         .join('') +
       `</table>`
     : '';
+  // The overall multi-timeframe read. Show the big headline only when there's no
+  // radar-card headline above it (avoid two big numbers); otherwise fold it into
+  // a line above the timeframe grid.
   const ovBlock = ov
-    ? `<div class="big" style="color:${_scoreHex(ov.score)}">${_esc(ov.rating || ov.bias)}${ov.score != null ? ` · ${ov.score}/100` : ''}</div>` +
-      `<p>Weighted across every timeframe (higher timeframes count more). Overall bias: <b>${_esc(ov.bias)}</b>.</p>`
+    ? (hit
+        ? `<p style="margin:10px 0 0"><b>Overall timeframe read</b> — <b style="color:${_scoreHex(ov.score)}">${_esc(ov.rating || ov.bias)}${ov.score != null ? ` · ${ov.score}/100` : ''}</b> (higher timeframes weighted more)</p>`
+        : `<div class="big" style="color:${_scoreHex(ov.score)}">${_esc(ov.rating || ov.bias)}${ov.score != null ? ` · ${ov.score}/100` : ''}</div>` +
+          `<p>Weighted across every timeframe (higher timeframes count more). Overall bias: <b>${_esc(ov.bias)}</b>.</p>`)
     : '';
   return `<html><head><title>TaurEye — Momentum analysis — ${_esc(sym)}</title></head><body>` +
-    `<h1>${_esc(sym)} <span class="sub">Momentum analysis</span></h1>` +
-    ovBlock + tfBlock + stratRows +
+    `<h1>${_esc(sym)}${hit?.name ? ` <span class="sub">${_esc(hit.name)}</span>` : ' <span class="sub">Momentum analysis</span>'}</h1>` +
+    hitBlock + ovBlock + tfBlock + stratRows +
     `<p style="color:#999;font-size:10px;margin-top:14px">Multi-timeframe momentum from live price/volume and quantitative models. Educational only — not investment advice.</p>` +
     `</body></html>`;
 }
