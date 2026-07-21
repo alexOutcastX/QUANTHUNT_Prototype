@@ -7,8 +7,12 @@
 //
 // Usage:  <Icon name="watch" size={16} color={theme.muted2} />
 // Filled variants exist where an "active" state needs weight (watchFilled…).
+// NOTE: rendered with plain React.createElement, NOT react-native-web's
+// unstable_createElement — RNW's prop pipeline silently drops nested SVG
+// children (the <path> never reached the DOM, leaving every icon blank).
+// The app always renders through react-dom, so raw DOM elements are safe.
 import React from 'react';
-import { unstable_createElement as h } from 'react-native-web';
+const h = React.createElement;
 
 export type IconName =
   | 'search' | 'close' | 'back' | 'chevronDown' | 'chevronRight' | 'check'

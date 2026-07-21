@@ -462,10 +462,13 @@ export default function WatchlistScreen() {
           <Btn label="Add" onPress={onAdd} />
         </View>
 
-        {/* toolbar */}
+        {/* toolbar — flexGrow:0 stops the horizontal ScrollView absorbing the
+            page's spare height (RNW default flexGrow:1 stretched the buttons
+            into tall cards whenever the list below was empty) */}
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
+          style={styles.toolScroll}
           contentContainerStyle={styles.toolbar}
         >
           <TouchableOpacity style={styles.toolBtn} onPress={() => setColMenu(true)} activeOpacity={0.75}>
@@ -828,7 +831,8 @@ const styles = StyleSheet.create({
     fontSize: theme.fs.sm + 1,
   },
   // toolbar
-  toolbar: { gap: theme.sp.sm, paddingBottom: theme.sp.sm },
+  toolScroll: { flexGrow: 0 },
+  toolbar: { gap: theme.sp.sm, paddingBottom: theme.sp.sm, alignItems: 'center' },
   toolBtn: {
     backgroundColor: theme.surface2,
     borderColor: theme.border2,
