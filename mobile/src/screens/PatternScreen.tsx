@@ -9,8 +9,9 @@ import SymbolInput from '../components/SymbolInput';
 import { Row } from '../screener';
 import { navigate, takeSymbol } from '../navIntent';
 import { addSymbol, loadWatchlist, normSymbol } from '../watchlist';
-import { Btn, Card, EmptyState, InfoButton, Loading, SectionTitle } from '../ui';
+import { Btn, Card, EmptyState, InfoButton, Loading, SectionTitle, Sheet } from '../ui';
 import { PATTERN_INFO } from '../tabInfo';
+import { describePattern } from '../patternInfo';
 import { useResponsive } from '../responsive';
 import { theme } from '../theme';
 
@@ -99,6 +100,32 @@ type CardActions = {
 
 function CurrentCard({ p, actions }: { p: ChartPattern; actions: CardActions }) {
   const c = biasColor(p.bias);
+  const [explain, setExplain] = useState(false);
+  const desc = describePattern(p.label);
+  const bearish = p.bias === 'bearish';
+  // Approximate resolution window: a measured move typically plays out over
+  // roughly the pattern's own formation span. For a still-active pattern we
+  // project from the last bar; a completed one shows its actual end.
+  const spanSec = Math.max(0, p.end_ts - p.start_ts);
+  const projTs = p.end_ts + spanSec;
+  // Support / resistance zones from the pattern's own geometry: the key level
+  // (neckline / breakout) is the pivotal band; the measured-move target is the
+  // objective. Roles flip with bias. Render each as a small ±0.6% band.
+  const band = (v: number) => {
+    const d = v * 0.006;
+    return `₹${(v - d).toLocaleString('en-IN', { maximumFractionDigits: 2 })} – ₹${(v + d).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
+  };
+  const zoneRow = (role: string, sub: string, v: number | null | undefined, hot: boolean) =>
+    v == null ? null : (
+      <View style={styles.zoneRow} key={role}>
+        <View style={[styles.zoneDot, { backgroundColor: hot ? theme.red : theme.green }]} />
+        <View style={{ flex: 1 }}>
+          <Text style={styles.zoneRole}>{role}</Text>
+          <Text style={styles.zoneSub}>{sub}</Text>
+        </View>
+        <Text style={styles.zoneVal}>{band(v)}</Text>
+      </View>
+    );
   const Stat = ({ label, value, color }: { label: string; value: string; color?: string }) => (
     <View style={styles.cStat}>
       <Text style={styles.cStatLabel}>{label}</Text>
@@ -106,6 +133,7 @@ function CurrentCard({ p, actions }: { p: ChartPattern; actions: CardActions }) 
     </View>
   );
   return (
+    <>{/* fragment so the explain popup can sit beside the card */}
     <Card style={StyleSheet.flatten([styles.curCard, { borderColor: c }])}>
       <View style={styles.curHead}>
         <Text style={styles.curKicker}>CURRENT PATTERN</Text>
@@ -148,6 +176,9 @@ function CurrentCard({ p, actions }: { p: ChartPattern; actions: CardActions }) 
       </View>
 
       <View style={styles.actionsRow}>
+        <TouchableOpacity style={[styles.actBtn, styles.explainBtn]} onPress={() => setExplain(true)} activeOpacity={0.75}>
+          <Text style={[styles.actTxt, { color: c }]}>ⓘ Explain pattern</Text>
+        </TouchableOpacity>
         <TouchableOpacity style={styles.actBtn} onPress={actions.onChart} activeOpacity={0.75}>
           <Text style={styles.actTxt}>▤ Chart</Text>
         </TouchableOpacity>
@@ -167,6 +198,76 @@ function CurrentCard({ p, actions }: { p: ChartPattern; actions: CardActions }) 
         </TouchableOpacity>
       </View>
     </Card>
+
+    {explain ? (
+      <Sheet onClose={() => setExplain(false)} maxHeight="88%">
+        <ScrollView showsVerticalScrollIndicator={false}>
+          <View style={styles.exHead}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.exTitle}>{p.label}</Text>
+              <View style={[styles.biasChip, { borderColor: c, alignSelf: 'flex-start', marginHorizontal: 0, marginTop: 4 }]}>
+                <Text style={[styles.biasTxt, { color: c }]}>{p.bias.toUpperCase()} · {p.category} · {p.status}</Text>
+              </View>
+            </View>
+            <TouchableOpacity onPress={() => setExplain(false)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+              <Text style={styles.exX}>✕</Text>
+            </TouchableOpacity>
+          </View>
+
+          <Text style={styles.exSecTitle}>WHAT IT IS</Text>
+          <Text style={styles.exBody}>{desc.what}</Text>
+          <Text style={[styles.exBody, { marginTop: 6 }]}>{desc.implies}</Text>
+
+          <Text style={styles.exSecTitle}>PROBABILITY</Text>
+          <Text style={styles.exBody}>
+            <Text style={{ color: theme.accent, fontWeight: '800' }}>{p.confidence}% shape match</Text> — how cleanly the
+            price action fits an ideal {p.label.toLowerCase()}. Higher means a more textbook, reliable formation.
+          </Text>
+          <Text style={[styles.exBody, { marginTop: 6 }]}>
+            <Text style={{ color: c, fontWeight: '800' }}>{p.continuation}% follow-through</Text> — the indicative
+            historical odds the measured move plays out once the pattern confirms (a close beyond the key level).
+            {p.expansion_pct ? ` The textbook target is a ${signPct(p.expansion_pct)} move from here.` : ''}
+          </Text>
+
+          <Text style={styles.exSecTitle}>TIMING</Text>
+          <Text style={styles.exBody}>
+            Formed from <Text style={styles.exStrong}>{fmtDate(p.start_ts)}</Text>
+            {p.active
+              ? <> and is <Text style={{ color: c, fontWeight: '700' }}>still in play</Text> as of the latest bar.</>
+              : <> to <Text style={styles.exStrong}>{fmtDate(p.end_ts)}</Text>.</>}
+          </Text>
+          {p.active ? (
+            <Text style={[styles.exBody, { marginTop: 6 }]}>
+              A measured move typically resolves over roughly the pattern's own span, so this one would be expected to
+              play out by approximately <Text style={styles.exStrong}>{fmtDate(projTs)}</Text> — an estimate, not a
+              deadline. It confirms only on a decisive close beyond the key level; until then it can still fail.
+            </Text>
+          ) : null}
+
+          <Text style={styles.exSecTitle}>SUPPORT & RESISTANCE ZONES</Text>
+          {bearish ? (
+            <>
+              {zoneRow('Resistance / key level', 'Neckline the price must hold below — a break above invalidates the setup', p.level, true)}
+              {zoneRow('Support target', 'Measured-move objective on a confirmed breakdown', p.target, false)}
+            </>
+          ) : (
+            <>
+              {zoneRow('Resistance target', 'Measured-move objective on a confirmed breakout', p.target, true)}
+              {zoneRow('Support / key level', 'Breakout base the price must hold above — a break below invalidates the setup', p.level, false)}
+            </>
+          )}
+          {p.level == null && p.target == null ? (
+            <Text style={styles.exBody}>Level data isn't available for this formation yet.</Text>
+          ) : null}
+
+          <Text style={styles.exDisc}>
+            Chart patterns are probabilistic, not guarantees — confirmation, volume and broader context matter.
+            Educational only, not investment advice.
+          </Text>
+        </ScrollView>
+      </Sheet>
+    ) : null}
+    </>
   );
 }
 
@@ -464,6 +565,20 @@ const styles = StyleSheet.create({
     paddingVertical: theme.sp.sm,
   },
   actTxt: { color: theme.text, fontSize: theme.fs.sm, fontWeight: '700' },
+  explainBtn: { borderColor: theme.border2 },
+  // explain-pattern popup
+  exHead: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: theme.sp.sm },
+  exTitle: { color: theme.text, fontSize: theme.fs.xl, fontWeight: '800' },
+  exX: { color: theme.muted, fontSize: 18, paddingHorizontal: 4 },
+  exSecTitle: { color: theme.muted, fontSize: theme.fs.xs, fontWeight: '800', letterSpacing: 1.2, marginTop: theme.sp.lg, marginBottom: theme.sp.xs },
+  exBody: { color: theme.text, fontSize: theme.fs.sm + 1, lineHeight: 20 },
+  exStrong: { color: theme.text, fontWeight: '700', fontFamily: theme.mono },
+  exDisc: { color: theme.muted, fontSize: theme.fs.xs + 1, lineHeight: 16, marginTop: theme.sp.lg, marginBottom: theme.sp.md },
+  zoneRow: { flexDirection: 'row', alignItems: 'center', gap: theme.sp.sm, paddingVertical: theme.sp.sm, borderBottomColor: theme.border, borderBottomWidth: 1 },
+  zoneDot: { width: 8, height: 8, borderRadius: 4 },
+  zoneRole: { color: theme.text, fontSize: theme.fs.sm + 1, fontWeight: '700' },
+  zoneSub: { color: theme.muted, fontSize: theme.fs.xs + 1, lineHeight: 15, marginTop: 1 },
+  zoneVal: { color: theme.text, fontSize: theme.fs.sm, fontWeight: '700', fontFamily: theme.mono, marginLeft: theme.sp.sm },
   toast: {
     position: 'absolute',
     bottom: theme.sp.xl,

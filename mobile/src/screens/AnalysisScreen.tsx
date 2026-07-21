@@ -215,6 +215,15 @@ export default function AnalysisScreen() {
   const rep = d?.rep;
   const bal = rep?.balance_sheet;
   const cflow = rep?.cash_flow;
+  // screener.in balance figures (borrowings / reserves / equity capital) — real
+  // Indian data that's often present for small-caps when Yahoo's balance sheet
+  // is empty, so the balance-sheet section still renders.
+  const scrBal = scr && typeof scr === 'object' ? scr.balance : null;
+  const hasScrBal = !!(scrBal && (scrBal.borrowings != null || scrBal.reserves != null || scrBal.equity_capital != null || scrBal.total_liabilities != null));
+  // screener.in annual P&L — the fallback when Yahoo's /report has no P&L series
+  // (common for Indian micro-caps), so the dossier still shows revenue/PAT/EPS.
+  const scrPl = scr && typeof scr === 'object' && Array.isArray(scr.pl) ? scr.pl : [];
+  const showScrPl = !(rep?.fin_years && rep.fin_years.length) && scrPl.length > 0;
   const m = (mb?.metrics || {}) as Record<string, number | null>;
   const name = mb?.name || fund?.longName || fund?.name || d?.sym || '';
   const sector = mb?.sector || fund?.sector || null;
@@ -323,6 +332,25 @@ export default function AnalysisScreen() {
             <SectionTitle>Fundamental checklist</SectionTitle>
             <Card><ChecklistPanel symbol={d.sym} /></Card>
 
+            {/* Quality checklist — sits directly below the fundamental checklist */}
+            {mb?.checklist?.length ? (
+              <>
+                <SectionTitle>Quality checklist</SectionTitle>
+                <Card>
+                  <View style={styles.checkWrap}>
+                    {mb.checklist.map((c) => (
+                      <View key={c.label} style={styles.checkItem}>
+                        <Text style={[styles.checkMark, { color: c.state === 'pass' ? theme.green : c.state === 'fail' ? theme.red : theme.muted }]}>
+                          {c.state === 'pass' ? '✓' : c.state === 'fail' ? '✗' : '?'}
+                        </Text>
+                        <Text style={styles.checkLabel}>{c.label}</Text>
+                      </View>
+                    ))}
+                  </View>
+                </Card>
+              </>
+            ) : null}
+
             {/* Business overview */}
             {about ? (
               <>
@@ -389,6 +417,29 @@ export default function AnalysisScreen() {
               </>
             ) : null}
 
+            {/* Profit & loss — screener.in fallback (when Yahoo has no series) */}
+            {showScrPl ? (
+              <>
+                <SectionTitle>Profit &amp; loss · annual · screener.in</SectionTitle>
+                <Card>
+                  <View style={styles.finHead}>
+                    <Text style={[styles.finHc, styles.finPeriod]}>YEAR</Text>
+                    <Text style={[styles.finHc, styles.finNum]}>REVENUE</Text>
+                    <Text style={[styles.finHc, styles.finNum]}>NET PROFIT</Text>
+                    <Text style={[styles.finHc, styles.finNum]}>EPS</Text>
+                  </View>
+                  {scrPl.map((y, i) => (
+                    <View key={i} style={styles.finRow}>
+                      <Text style={[styles.finV, styles.finPeriod]}>{y.year}</Text>
+                      <Text style={[styles.finV, styles.finNum]}>{fmtCr(y.revenue)}</Text>
+                      <Text style={[styles.finV, styles.finNum, { color: dirColor(y.net_profit) }]}>{fmtCr(y.net_profit)}</Text>
+                      <Text style={[styles.finV, styles.finNum]}>{y.eps != null ? `₹${y.eps}` : '—'}</Text>
+                    </View>
+                  ))}
+                </Card>
+              </>
+            ) : null}
+
             {/* Profit & loss — quarterly */}
             {rep?.fin_quarters && rep.fin_quarters.length ? (
               <>
@@ -412,19 +463,23 @@ export default function AnalysisScreen() {
               </>
             ) : null}
 
-            {/* Balance sheet */}
-            {bal && (bal.total_debt != null || bal.equity != null || bal.total_assets != null) ? (
+            {/* Balance sheet — Yahoo report, supplemented by (or falling back to)
+                screener.in's real Indian borrowings / reserves / equity capital. */}
+            {(bal && (bal.total_debt != null || bal.equity != null || bal.total_assets != null)) || hasScrBal ? (
               <>
                 <SectionTitle>Balance sheet</SectionTitle>
                 <Card>
-                  <KV k="Total debt / borrowings" v={fmtCr(bal.total_debt ?? m.total_debt_cr)} color={(bal.total_debt ?? 0) > 0 ? theme.text : undefined} />
-                  {bal.long_term_debt != null ? <KV k="Long-term borrowings" v={fmtCr(bal.long_term_debt)} /> : null}
-                  {bal.current_debt != null ? <KV k="Short-term borrowings" v={fmtCr(bal.current_debt)} /> : null}
-                  <KV k="Cash & equivalents" v={fmtCr(bal.cash)} color={theme.green} />
-                  <KV k="Shareholders' equity / net worth" v={fmtCr(bal.equity)} />
-                  <KV k="Total assets" v={fmtCr(bal.total_assets)} />
-                  {bal.inventory != null ? <KV k="Inventory" v={fmtCr(bal.inventory)} /> : null}
-                  {bal.receivables != null ? <KV k="Receivables" v={fmtCr(bal.receivables)} /> : null}
+                  <KV k="Total debt / borrowings" v={fmtCr(bal?.total_debt ?? m.total_debt_cr ?? (scrBal ? scrBal.borrowings : null))} color={(bal?.total_debt ?? scrBal?.borrowings ?? 0) > 0 ? theme.text : undefined} />
+                  {bal?.long_term_debt != null ? <KV k="Long-term borrowings" v={fmtCr(bal.long_term_debt)} /> : null}
+                  {bal?.current_debt != null ? <KV k="Short-term borrowings" v={fmtCr(bal.current_debt)} /> : null}
+                  {bal?.cash != null ? <KV k="Cash & equivalents" v={fmtCr(bal.cash)} color={theme.green} /> : null}
+                  <KV k="Shareholders' equity / net worth" v={fmtCr(bal?.equity ?? (scrBal && scrBal.reserves != null ? (scrBal.reserves + (scrBal.equity_capital ?? 0)) : null))} />
+                  {scrBal?.equity_capital != null ? <KV k="Equity capital · screener.in" v={fmtCr(scrBal.equity_capital)} /> : null}
+                  {scrBal?.reserves != null ? <KV k="Reserves · screener.in" v={fmtCr(scrBal.reserves)} /> : null}
+                  {bal?.total_assets != null ? <KV k="Total assets" v={fmtCr(bal.total_assets)} /> : null}
+                  {scrBal?.total_liabilities != null ? <KV k="Total liabilities · screener.in" v={fmtCr(scrBal.total_liabilities)} /> : null}
+                  {bal?.inventory != null ? <KV k="Inventory" v={fmtCr(bal.inventory)} /> : null}
+                  {bal?.receivables != null ? <KV k="Receivables" v={fmtCr(bal.receivables)} /> : null}
                 </Card>
               </>
             ) : null}
@@ -655,24 +710,6 @@ export default function AnalysisScreen() {
               <>
                 <SectionTitle>What works</SectionTitle>
                 <Card><Bullets items={mb.strengths} color={theme.green} glyph="▲" /></Card>
-              </>
-            ) : null}
-
-            {mb?.checklist?.length ? (
-              <>
-                <SectionTitle>Quality checklist</SectionTitle>
-                <Card>
-                  <View style={styles.checkWrap}>
-                    {mb.checklist.map((c) => (
-                      <View key={c.label} style={styles.checkItem}>
-                        <Text style={[styles.checkMark, { color: c.state === 'pass' ? theme.green : c.state === 'fail' ? theme.red : theme.muted }]}>
-                          {c.state === 'pass' ? '✓' : c.state === 'fail' ? '✗' : '?'}
-                        </Text>
-                        <Text style={styles.checkLabel}>{c.label}</Text>
-                      </View>
-                    ))}
-                  </View>
-                </Card>
               </>
             ) : null}
 

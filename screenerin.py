@@ -89,6 +89,49 @@ def parse_balance(html):
     return out
 
 
+def parse_pl(html, years=6):
+    """Annual profit & loss series from the 'profit-loss' section: revenue/sales,
+    net profit and EPS per year (most recent `years`). Returns a list of
+    {year, revenue, net_profit, eps} oldest→newest. Empty when the section or
+    table is missing (banks label revenue 'Revenue', others 'Sales')."""
+    section = _section(html, "profit-loss")
+    rows = _first_table_rows(section)
+    if not rows:
+        return []
+    # Header row → column years (skip the leading blank label cell).
+    head = re.findall(r"<th[^>]*>(.*?)</th>", rows[0], re.S)
+    cols = [_clean(h) for h in head]
+    cols = [c for c in cols if c]  # drop the empty top-left corner
+    if not cols:
+        return []
+    series = {}  # metric -> list aligned to cols
+    for row in rows[1:]:
+        cells = re.findall(r"<td[^>]*>(.*?)</td>", row, re.S)
+        if len(cells) < 2:
+            continue
+        label = _clean(cells[0]).lower()
+        vals = [_clean(c) for c in cells[1:]]
+        key = None
+        if label.startswith("sales") or label.startswith("revenue"):
+            key = "revenue"
+        elif label.startswith("net profit"):
+            key = "net_profit"
+        elif label.startswith("eps"):
+            key = "eps"
+        if key and key not in series:
+            series[key] = vals
+    out = []
+    n = len(cols)
+    for i in range(n):
+        rev = _cr(series.get("revenue", [None] * n)[i]) if i < len(series.get("revenue", [])) else None
+        npf = _cr(series.get("net_profit", [None] * n)[i]) if i < len(series.get("net_profit", [])) else None
+        eps = _cr(series.get("eps", [None] * n)[i]) if i < len(series.get("eps", [])) else None
+        if rev is None and npf is None and eps is None:
+            continue
+        out.append({"year": cols[i], "revenue": rev, "net_profit": npf, "eps": eps})
+    return out[-years:]
+
+
 def _fetch(symbol):
     import requests
     sym = re.sub(r"[^A-Z0-9&-]", "", (symbol or "").upper().strip())
@@ -117,10 +160,11 @@ def financials(symbol):
             "symbol": symbol,
             "shareholding": parse_shareholding(html),
             "balance": parse_balance(html),
+            "pl": parse_pl(html),
             "source": "screener.in",
             "url": _URL.format(sym=re.sub(r"[^A-Z0-9&-]", "", symbol.upper())),
             "ok": True,
         }
     except Exception as e:
         log.error("screener.in financials %s: %s", symbol, e)
-        return {"symbol": symbol, "shareholding": {}, "balance": {}, "error": str(e), "ok": False}
+        return {"symbol": symbol, "shareholding": {}, "balance": {}, "pl": [], "error": str(e), "ok": False}
