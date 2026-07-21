@@ -61,6 +61,7 @@ NSE_SECTORS = [
     "Services",
     "Telecommunication",
     "Textiles",
+    "Utilities",
 ]
 
 # Nearest NSE macro sector for each of Yahoo's 11 GICS sectors — used ONLY as a
@@ -91,10 +92,13 @@ _ALIASES = {
     "automobile and auto components": "Automobile and Auto Components",
     "automobile": "Automobile and Auto Components",
     "oil gas & consumable fuels": "Oil Gas & Consumable Fuels",
+    "oil, gas & consumable fuels": "Oil Gas & Consumable Fuels",  # BSE spelling
     "oil & gas": "Oil Gas & Consumable Fuels",
     "metals & mining": "Metals & Mining",
     "media entertainment & publication": "Media Entertainment & Publication",
+    "media, entertainment & publication": "Media Entertainment & Publication",  # BSE spelling
     "media": "Media Entertainment & Publication",
+    "utilities": "Utilities",
     "telecommunication": "Telecommunication",
     "telecom": "Telecommunication",
     "capital goods": "Capital Goods",
@@ -113,14 +117,19 @@ _ALIASES = {
     "diversified": "Diversified",
 }
 
-_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sectors_cache.json")
+_DIR = os.path.dirname(os.path.abspath(__file__))
+_FILE = os.path.join(_DIR, "sectors_cache.json")
+# Bundled, committed classification harvested from BSE's scrip master
+# (IndustryNew) + NSE's index Industry files — the authoritative base covering
+# the whole NSE+BSE universe, so classification needs no runtime network call.
+_STATIC_FILE = os.path.join(_DIR, "sector_map.csv")
 _TTL = 24 * 3600          # re-fetch the classification once a day
 # Bump when the set of classification SOURCES (or how they're fetched) changes so
 # a redeploy discards a cache built by older code and re-pulls everything.
 # (2 = adds BSE scrip master; 3 = hardened BSE fetch; 4 = NSE per-symbol quote
-# classifier for the NSE tail the index files miss.) Without this, a still-fresh
-# cache from the prior deploy blocks the new pass from running until its 24h TTL.
-CACHE_VERSION = 4
+# classifier; 5 = bundled sector_map.csv is the authoritative base.) Without this,
+# a still-fresh cache from the prior deploy shadows the new bundle.
+CACHE_VERSION = 5
 _lock = threading.Lock()
 # symbol(upper) -> canonical NSE sector.
 _map = {}
@@ -246,7 +255,42 @@ def _load_disk():
         pass
 
 
+_static_count = 0
+
+
+def _load_static():
+    """Load the bundled symbol→sector CSV (the committed authoritative base).
+    Canonicalises every label to the 22 macro sectors. This gives the heatmap
+    full NSE+BSE coverage with zero runtime network — the runtime refresh only
+    tops up newly-listed scrips the bundle predates."""
+    global _static_count
+    try:
+        with open(_STATIC_FILE, newline="") as f:
+            reader = csv.reader(f)
+            header = next(reader, None)  # skip "symbol,sector"
+            n = 0
+            for row in reader:
+                if len(row) < 2:
+                    continue
+                sym = (row[0] or "").strip().upper()
+                sec = _canon(row[1])
+                if sym and sec:
+                    _map.setdefault(sym, sec)
+                    n += 1
+            _static_count = n
+    except FileNotFoundError:
+        pass
+    except Exception:
+        pass
+
+
+# Runtime cache first (freshest), then the bundled base fills every gap.
 _load_disk()
+_load_static()
+
+
+def static_count() -> int:
+    return _static_count
 
 
 def _save_disk():
