@@ -30,6 +30,19 @@ SAMPLE = """
     </tbody>
   </table>
 </section>
+<section id="profit-loss" class="card">
+  <table class="data-table">
+    <thead><tr><th></th><th>Mar 2024</th><th>Mar 2025</th><th>Mar 2026</th></tr></thead>
+    <tbody>
+      <tr><td class="text">Sales<button>+</button></td><td>1,000</td><td>1,250</td><td>1,600</td></tr>
+      <tr><td class="text">Expenses<button>+</button></td><td>800</td><td>980</td><td>1,230</td></tr>
+      <tr><td class="text">Operating Profit</td><td>200</td><td>270</td><td>370</td></tr>
+      <tr><td class="text">Profit before tax</td><td>180</td><td>245</td><td>340</td></tr>
+      <tr><td class="text">Net Profit<button>+</button></td><td>135</td><td>184</td><td>255</td></tr>
+      <tr><td class="text">EPS in Rs</td><td>12.50</td><td>17.00</td><td>23.60</td></tr>
+    </tbody>
+  </table>
+</section>
 """
 
 
@@ -56,6 +69,24 @@ class BalanceParseTest(unittest.TestCase):
 
     def test_empty_html_safe(self):
         self.assertEqual(sc.parse_balance(""), {})
+
+
+class ProfitLossParseTest(unittest.TestCase):
+    def test_series_parsed_oldest_to_newest(self):
+        pl = sc.parse_pl(SAMPLE)
+        self.assertEqual(len(pl), 3)
+        self.assertEqual(pl[0]["year"], "Mar 2024")
+        self.assertEqual(pl[-1]["year"], "Mar 2026")
+        self.assertEqual(pl[-1]["revenue"], 1600.0)
+        self.assertEqual(pl[-1]["net_profit"], 255.0)
+        self.assertEqual(pl[-1]["eps"], 23.60)
+
+    def test_years_limit(self):
+        self.assertEqual(len(sc.parse_pl(SAMPLE, years=2)), 2)
+
+    def test_empty_html_safe(self):
+        self.assertEqual(sc.parse_pl(""), [])
+        self.assertEqual(sc.parse_pl("<html></html>"), [])
 
 
 class FinancialsShapeTest(unittest.TestCase):

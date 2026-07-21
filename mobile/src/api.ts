@@ -394,10 +394,12 @@ export type StrategyScoresResp = { symbol: string; strategies: StrategyScore[]; 
 
 // On-demand screener.in scrape (/screener-financials) — real Indian promoter /
 // FII / DII shareholding + borrowings that Yahoo/NSE don't reliably give.
+export type ScreenerPL = { year: string; revenue: number | null; net_profit: number | null; eps: number | null };
 export type ScreenerFinancials = {
   symbol: string;
   shareholding?: { promoter?: number; fii?: number; dii?: number; government?: number; public?: number };
   balance?: { borrowings?: number; reserves?: number; equity_capital?: number; total_liabilities?: number };
+  pl?: ScreenerPL[];
   source?: string; url?: string; ok?: boolean; error?: string;
 };
 
