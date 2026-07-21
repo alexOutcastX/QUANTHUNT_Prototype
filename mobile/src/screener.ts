@@ -229,19 +229,18 @@ const FUND_SORT = new Set([
   'debt_equity', 'current_ratio', 'market_cap_cr',
 ]);
 
-export function getSortVal(s: Row, col: string): number | string {
+export function getSortVal(s: Row, col: string): number | string | null {
   if (col === 'signal' || col === 'strength') return SIGNAL_ORDER[calcSignal(s)];
   if (col === 'sym') return s.sym;
   if (col === 'name') return s.name || s.sym;
   if (col === 'exchange') return s.exchange || '';
-  if (col === 'relvol') return s.avgvol && s.volume ? s.volume / s.avgvol : 0;
+  if (col === 'relvol') return s.avgvol && s.volume ? s.volume / s.avgvol : null;
   if (FUND_SORT.has(col)) {
     const v = s._fund ? (s._fund as Record<string, unknown>)[col] : null;
-    // missing fundamentals sort to the bottom either way (large finite sentinel)
-    return typeof v === 'number' && isFinite(v) ? v : -1e15;
+    return typeof v === 'number' && isFinite(v) ? v : null;
   }
   const v = (s as unknown as Record<string, unknown>)[col];
-  return typeof v === 'number' && isFinite(v) ? v : 0;
+  return typeof v === 'number' && isFinite(v) ? v : null;
 }
 
 export function sortRows(rows: Row[], col: string, dir: 1 | -1): Row[] {
@@ -249,8 +248,15 @@ export function sortRows(rows: Row[], col: string, dir: 1 | -1): Row[] {
     const va = getSortVal(a, col);
     const vb = getSortVal(b, col);
     if (typeof va === 'string' || typeof vb === 'string') {
-      return String(va).localeCompare(String(vb)) * dir;
+      return String(va ?? '').localeCompare(String(vb ?? '')) * dir;
     }
+    // Rows missing the value (fundamentals still streaming in, thin symbols)
+    // always sort LAST regardless of direction. The old -1e15 sentinel only
+    // worked descending — ascending put every blank row on top, which read as
+    // "sorting is broken" (especially market cap while caps were loading).
+    if (va === null && vb === null) return 0;
+    if (va === null) return 1;
+    if (vb === null) return -1;
     return (va - vb) * dir;
   });
 }

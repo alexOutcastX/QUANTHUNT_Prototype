@@ -618,37 +618,6 @@ export default function MomentumScreen() {
         momCache = snap.results;
         momNote = meta;
         momAsof = snap.asof;
-        // Enrich each hit with sector + market cap (the radar carries neither).
-        // Best-effort: a failed/partial fetch just leaves those tags blank.
-        // Market cap + sector warm in the background server-side, so poll a few
-        // rounds until `pending` drains — otherwise most caps are null and Cap
-        // sorting has nothing to sort on. Merge progressively so tags fill in.
-        const syms = snap.results.map((h) => h.symbol);
-        if (syms.length) {
-          const merged: Record<string, Enrich> = {};
-          for (let round = 0; round < 8 && !cancelled; round++) {
-            let res: Awaited<ReturnType<typeof api.fundamentalsBulk>>;
-            try {
-              res = await api.fundamentalsBulk(syms);
-            } catch {
-              break;
-            }
-            if (cancelled) return;
-            if (res.data) {
-              Object.entries(res.data).forEach(([sym, f]) => {
-                const rec = f as Record<string, unknown>;
-                merged[sym] = {
-                  sector: (rec.sector as string) ?? merged[sym]?.sector ?? null,
-                  mcap: typeof rec.market_cap_cr === 'number' ? rec.market_cap_cr : (merged[sym]?.mcap ?? null),
-                };
-              });
-              momEnrichCache = { ...merged };
-              setEnrich({ ...merged });
-            }
-            if (!res.pending || !res.pending.length) break;
-            await new Promise((r) => setTimeout(r, 3000));
-          }
-        }
       } catch (e) {
         if (!cancelled) {
           setNote(e instanceof Error ? e.message : 'Failed to load the radar');
@@ -660,6 +629,48 @@ export default function MomentumScreen() {
       cancelled = true;
     };
   }, [tick]);
+
+  // Enrich hits with sector + market cap (the radar carries neither). A
+  // separate effect keyed on the hit list, NOT part of the radar fetch: the
+  // radar effect early-returns when its module cache is warm, so enrichment
+  // bundled inside it never resumed after a remount — leaving caps null and
+  // Cap-sorting inert ("sorting sometimes doesn't work"). Caps warm in the
+  // background server-side; poll until `pending` drains, merging progressively
+  // so tags and sorting fill in as data arrives.
+  useEffect(() => {
+    if (!hits.length) return;
+    const syms = hits.map((h) => h.symbol);
+    if (!syms.some((s) => momEnrichCache[s]?.mcap == null)) return;
+    let cancelled = false;
+    (async () => {
+      for (let round = 0; round < 8 && !cancelled; round++) {
+        let res: Awaited<ReturnType<typeof api.fundamentalsBulk>>;
+        try {
+          res = await api.fundamentalsBulk(syms);
+        } catch {
+          break;
+        }
+        if (cancelled) return;
+        if (res.data) {
+          const merged = { ...momEnrichCache };
+          Object.entries(res.data).forEach(([sym, f]) => {
+            const rec = f as Record<string, unknown>;
+            merged[sym] = {
+              sector: (rec.sector as string) ?? merged[sym]?.sector ?? null,
+              mcap: typeof rec.market_cap_cr === 'number' ? rec.market_cap_cr : (merged[sym]?.mcap ?? null),
+            };
+          });
+          momEnrichCache = merged;
+          setEnrich(merged);
+        }
+        if (!res.pending || !res.pending.length) break;
+        await new Promise((r) => setTimeout(r, 3000));
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [hits]);
 
   // Tap-to-sort columns (default: score, best first). Numeric columns sort
   // desc first; text columns (symbol/name/exch/setup) asc first.
