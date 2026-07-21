@@ -3,27 +3,20 @@ import { Linking, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'r
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { API_BASE, api } from './api';
+import { marketState } from './format';
+import { Icon, IconName } from './icons';
 import { useResponsive } from './responsive';
-import AnalysisScreen from './screens/AnalysisScreen';
-import BacktestScreen from './screens/BacktestScreen';
-import CalculatorScreen from './screens/CalculatorScreen';
-import ChartScreen from './screens/ChartScreen';
-import { AnalysisHome, ChartsHome, ListsHome, MoreScreen, ToolsHome } from './screens/Hosts';
+import { AnalysisHome, ChartsHome, DeskHub, ListsHome, MoreScreen, ScreensHub, ToolsHome } from './screens/Hosts';
 import DashboardScreen from './screens/DashboardScreen';
-import PortfolioScreen from './screens/PortfolioScreen';
 import ScreenerScreen from './screens/ScreenerScreen';
+import StockScreen from './screens/StockScreen';
 import TerminalScreen from './screens/TerminalScreen';
-import TradingViewScreen from './screens/TradingViewScreen';
-import WatchlistScreen from './screens/WatchlistScreen';
-import HolidaysScreen from './screens/HolidaysScreen';
-import IndicesScreen from './screens/IndicesScreen';
 import HeatmapScreen from './screens/HeatmapScreen';
 import TickerStrip from './components/TickerStrip';
 import PdfPreview from './components/PdfPreview';
-import { peekNav, subscribeNav } from './navIntent';
+import { navigate, peekNav, subscribeNav } from './navIntent';
+import { isClassicNav, navModeReady, subscribeNavMode } from './navMode';
 import { theme, toggleThemeMode, useThemeMode } from './theme';
-
-type Screen = () => React.ReactElement;
 
 // Light/dark switch — glyph shows the mode you'll switch TO. Present in both the
 // desktop brand bar and the mobile header.
@@ -41,8 +34,197 @@ function ThemeToggle({ style }: { style?: object }) {
   );
 }
 
-// Desktop exposes every destination flat in the sidebar (there's room);
-// mobile groups them into 5 bottom tabs (Analysis/Charts sub-toggle, More menu).
+// NSE session state where the version string used to sit — a professional
+// glances at "is the market open" far more often than a build number (the
+// version now lives at the bottom of Desk → More).
+function MarketChip() {
+  const [st, setSt] = useState(() => marketState());
+  useEffect(() => {
+    const id = setInterval(() => setSt(marketState()), 30000);
+    return () => clearInterval(id);
+  }, []);
+  return (
+    <View style={styles.mktChip}>
+      <View style={[styles.mktDot, { backgroundColor: st.open ? theme.green : theme.muted }]} />
+      <Text style={styles.mktTxt}>{st.label}</Text>
+    </View>
+  );
+}
+
+function Brand({ version, big }: { version?: string; big?: boolean }) {
+  return (
+    <Text style={{ color: theme.text, fontSize: big ? 20 : 17, fontWeight: '800' }}>
+      Taur<Text style={{ color: theme.accent }}>Eye</Text>
+      {version ? <Text style={{ color: theme.muted, fontSize: 11, fontWeight: '600' }}>{'  v' + version}</Text> : null}
+    </Text>
+  );
+}
+
+function useVersion() {
+  const [version, setVersion] = useState('');
+  useEffect(() => {
+    api.version().then((v) => setVersion(v.version)).catch(() => {});
+  }, []);
+  return version;
+}
+
+// ═════════════════════════ Redesigned shell (default) ════════════════════════
+// Five destinations, one atom (see the UI/UX review §3.3): Today (dashboard),
+// Screens (everything that finds stocks), Symbol (ONE page per stock), Desk
+// (the user's own workspace) and Terminal. Every legacy navigate() key still
+// resolves — mapTarget translates old page names to their new home, and the
+// hubs reuse the legacy sub-tab keys verbatim.
+const NAV: { k: string; label: string; icon: IconName; render: (nav: (k: string) => void) => React.ReactElement }[] = [
+  { k: 'today', label: 'Today', icon: 'home', render: (nav) => <DashboardScreen onNavigate={nav} /> },
+  { k: 'screens', label: 'Screens', icon: 'screens', render: () => <ScreensHub /> },
+  { k: 'stock', label: 'Symbol', icon: 'stock', render: () => <StockScreen /> },
+  { k: 'desk', label: 'Desk', icon: 'desk', render: () => <DeskHub /> },
+  { k: 'terminal', label: 'Terminal', icon: 'terminal', render: () => <TerminalScreen /> },
+];
+
+// Analysis sub-tabs that moved into the Desk hub; the rest went to Screens.
+const DESK_ANALYSIS_SUBS = new Set(['inst', 'shareholders', 'paper', 'risk', 'bt']);
+
+function mapTarget(page: string, sub?: string): string {
+  switch (page) {
+    case 'today':
+    case 'dashboard':
+      return 'today';
+    case 'stock':
+      return 'stock';
+    case 'terminal':
+      return 'terminal';
+    case 'screens':
+    case 'screener':
+    case 'heatmap':
+      return 'screens';
+    case 'desk':
+    case 'lists':
+    case 'tools':
+    case 'charts':
+    case 'more':
+      return 'desk';
+    case 'analysis':
+      return sub && DESK_ANALYSIS_SUBS.has(sub) ? 'desk' : 'screens';
+    default:
+      return 'today';
+  }
+}
+
+// Dashboard quick-links pass bare legacy page keys with no sub; re-issue them
+// as full intents so the right hub AND sub-tab open.
+function legacyNav(k: string, setActive: (k: string) => void) {
+  if (k === 'screener') navigate('screens', { sub: 'screener' });
+  else if (k === 'lists') navigate('desk', { sub: 'watchlist' });
+  else if (k === 'tools') navigate('desk', { sub: 'more' });
+  else setActive(mapTarget(k));
+}
+
+function NewDesktopShell() {
+  const [active, setActive] = useState('today');
+  const cur = NAV.find((t) => t.k === active) || NAV[0];
+  useEffect(
+    () =>
+      subscribeNav(() => {
+        const p = peekNav();
+        if (p) setActive(mapTarget(p.page, p.sub));
+      }),
+    [],
+  );
+  return (
+    <View style={styles.desktop}>
+      <View style={styles.brandBar}>
+        <Brand big />
+        <MarketChip />
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.navScroll}
+          contentContainerStyle={styles.pagesRow}
+        >
+          {NAV.map((it) => {
+            const on = active === it.k;
+            return (
+              <TouchableOpacity
+                key={it.k}
+                style={[styles.pageItem, on && styles.pageItemOn]}
+                onPress={() => setActive(it.k)}
+              >
+                <Icon name={it.icon} size={15} color={on ? theme.accent : theme.muted2} />
+                <Text style={[styles.pageLabel, on && styles.pageTextOn]}>{it.label}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+        <ThemeToggle style={styles.themeBtnDesktop} />
+        <TouchableOpacity
+          style={styles.legalBtn}
+          onPress={() => Linking.openURL((API_BASE || '') + '/legal.html').catch(() => {})}
+        >
+          <Text style={styles.legalTxt}>DISCLAIMER</Text>
+        </TouchableOpacity>
+      </View>
+      <TickerStrip />
+      <View style={styles.main}>{cur.render((k) => legacyNav(k, setActive))}</View>
+    </View>
+  );
+}
+
+function NewMobileShell() {
+  const insets = useSafeAreaInsets();
+  const [active, setActive] = useState('today');
+  const [hydrated, setHydrated] = useState(false);
+  const tab = NAV.find((t) => t.k === active) || NAV[0];
+  // Restore the last tab so backgrounding the app and returning doesn't dump
+  // you back on Today. (Separate key from the classic shell's.)
+  useEffect(() => {
+    AsyncStorage.getItem('taureye.nav.tab2')
+      .then((v) => {
+        if (v && NAV.some((t) => t.k === v)) setActive(v);
+      })
+      .finally(() => setHydrated(true));
+  }, []);
+  useEffect(() => {
+    if (hydrated) AsyncStorage.setItem('taureye.nav.tab2', active).catch(() => {});
+  }, [active, hydrated]);
+  useEffect(
+    () =>
+      subscribeNav(() => {
+        const p = peekNav();
+        if (p) setActive(mapTarget(p.page, p.sub));
+      }),
+    [],
+  );
+  return (
+    <View style={styles.mobile}>
+      <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
+        <Brand />
+        <View style={styles.headerRight}>
+          <MarketChip />
+          <ThemeToggle />
+        </View>
+      </View>
+      <View style={styles.mobileBody}>{tab.render((k) => legacyNav(k, setActive))}</View>
+      <View style={[styles.tabBar, { paddingBottom: insets.bottom || 8 }]}>
+        {NAV.map((t) => {
+          const on = active === t.k;
+          return (
+            <TouchableOpacity key={t.k} style={styles.tab} onPress={() => setActive(t.k)} activeOpacity={0.7}>
+              <View style={[styles.tabPill, on && styles.tabPillOn]}>
+                <Icon name={t.icon} size={19} color={on ? theme.brand : theme.muted} strokeWidth={on ? 2 : 1.75} />
+              </View>
+              <Text style={[styles.tabLabel, { color: on ? theme.brand : theme.muted, fontWeight: on ? '700' : '500' }]}>{t.label}</Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
+// ═══════════════════════ Classic shell (opt-in fallback) ═════════════════════
+// The pre-redesign navigation, kept behind Desk → More → "Navigation layout"
+// while the new shell beds in.
 const SCREEN_BY_KEY: Record<string, (nav: (k: string) => void) => React.ReactElement> = {
   dashboard: (nav) => <DashboardScreen onNavigate={nav} />,
   screener: () => <ScreenerScreen />,
@@ -54,7 +236,6 @@ const SCREEN_BY_KEY: Record<string, (nav: (k: string) => void) => React.ReactEle
   tools: () => <ToolsHome />,
 };
 
-// Desktop pages bar: eight grouped destinations (see DESIGN.md).
 const PAGES: { k: string; label: string }[] = [
   { k: 'dashboard', label: 'Dashboard' },
   { k: 'screener', label: 'Screener' },
@@ -74,29 +255,10 @@ const TABS: { k: string; label: string; glyph: string; render: (nav: (k: string)
   { k: 'more', label: 'More', glyph: '•••', render: () => <MoreScreen /> },
 ];
 
-function Brand({ version, big }: { version: string; big?: boolean }) {
-  return (
-    <Text style={{ color: theme.text, fontSize: big ? 20 : 17, fontWeight: '800' }}>
-      Taur<Text style={{ color: theme.accent }}>Eye</Text>
-      {version ? <Text style={{ color: theme.muted, fontSize: 11, fontWeight: '600' }}>{'  v' + version}</Text> : null}
-    </Text>
-  );
-}
-
-function useVersion() {
-  const [version, setVersion] = useState('');
-  useEffect(() => {
-    api.version().then((v) => setVersion(v.version)).catch(() => {});
-  }, []);
-  return version;
-}
-
-// ── Desktop: branding bar on top, pages bar below it, full-width content ─────
 function DesktopShell({ version }: { version: string }) {
   const [active, setActive] = useState('dashboard');
   const nav = (k: string) => setActive(SCREEN_BY_KEY[k] ? k : 'dashboard');
   const cur = SCREEN_BY_KEY[active] || SCREEN_BY_KEY.dashboard;
-  // Honor cross-screen navigation requests (e.g. "Analyse this stock").
   useEffect(
     () =>
       subscribeNav(() => {
@@ -145,15 +307,12 @@ function DesktopShell({ version }: { version: string }) {
   );
 }
 
-// ── Mobile / tablet-portrait: top header + bottom tab bar ────────────────────
 function MobileShell({ version }: { version: string }) {
   const insets = useSafeAreaInsets();
   const [active, setActive] = useState('dashboard');
   const [hydrated, setHydrated] = useState(false);
   const nav = (k: string) => setActive(TABS.some((t) => t.k === k) ? k : 'more');
   const tab = TABS.find((t) => t.k === active) || TABS[0];
-  // Restore the last tab so backgrounding the app (switching to WhatsApp etc.)
-  // and returning doesn't dump you back on the Dashboard.
   useEffect(() => {
     AsyncStorage.getItem('taureye.nav.tab')
       .then((v) => {
@@ -164,8 +323,6 @@ function MobileShell({ version }: { version: string }) {
   useEffect(() => {
     if (hydrated) AsyncStorage.setItem('taureye.nav.tab', active).catch(() => {});
   }, [active, hydrated]);
-  // A cross-screen jump targets a top-level tab when it maps to one (Analysis
-  // is a bottom tab), otherwise it falls through to the More menu.
   useEffect(
     () =>
       subscribeNav(() => {
@@ -201,6 +358,17 @@ function MobileShell({ version }: { version: string }) {
 export default function Shell() {
   const { isDesktop } = useResponsive();
   const version = useVersion();
+  // Wait for the persisted nav-mode flag so a classic-mode user never sees the
+  // new shell flash in; re-render live when the toggle flips.
+  const [modeReady, setModeReady] = useState(false);
+  const [classic, setClassic] = useState(false);
+  useEffect(() => {
+    navModeReady().then(() => {
+      setClassic(isClassicNav());
+      setModeReady(true);
+    });
+    return subscribeNavMode(() => setClassic(isClassicNav()));
+  }, []);
   // Web: clamp browser pinch-zoom. Page-level zoom trapped users inside the
   // Terminal graph (page zoom + graph zoom stacked with no way back) — the
   // graph has its own pinch/wheel zoom with an always-visible ⛶ FIT reset.
@@ -212,9 +380,13 @@ export default function Shell() {
     // the WebView edge-to-edge behind a transparent status bar.
     if (m) m.setAttribute('content', 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover');
   }, []);
+  if (!modeReady) return <View style={styles.mobile} />;
+  const shell = classic
+    ? (isDesktop ? <DesktopShell version={version} /> : <MobileShell version={version} />)
+    : (isDesktop ? <NewDesktopShell /> : <NewMobileShell />);
   return (
     <>
-      {isDesktop ? <DesktopShell version={version} /> : <MobileShell version={version} />}
+      {shell}
       {/* Global PDF export preview — any screen's Export button opens it here. */}
       <PdfPreview />
     </>
@@ -241,7 +413,9 @@ const styles = StyleSheet.create({
   navScroll: { flexGrow: 0, marginLeft: 10 },
   pagesRow: { gap: 2, alignItems: 'center' },
   pageItem: {
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: 7,
     paddingVertical: 13,
     paddingHorizontal: 16,
     borderBottomWidth: 2,
@@ -263,6 +437,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingBottom: 12,
   },
+  headerRight: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   mobileBody: { flex: 1 },
   tabBar: { flexDirection: 'row', backgroundColor: theme.surface, borderTopColor: theme.border, borderTopWidth: 1, paddingTop: 8 },
   tab: { flex: 1, alignItems: 'center', gap: 3 },
@@ -270,6 +445,20 @@ const styles = StyleSheet.create({
   tabPillOn: { backgroundColor: theme.brandSoft },
   tabGlyph: { fontSize: 16, fontWeight: '700', lineHeight: 20 },
   tabLabel: { fontSize: 10, letterSpacing: 0.2 },
+
+  mktChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: theme.surface2,
+    borderColor: theme.border,
+    borderWidth: 1,
+    borderRadius: theme.radius.pill,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  mktDot: { width: 6, height: 6, borderRadius: 999 },
+  mktTxt: { color: theme.muted2, fontSize: 10, fontFamily: theme.mono, letterSpacing: 0.4 },
 
   themeBtn: {
     width: 34,
