@@ -192,6 +192,8 @@ export type ScanRow = {
   cam_break_down?: boolean | null;
   // Minervini Trend Template + relative strength
   dma200_rising?: boolean | null;
+  ret_1w?: number | null;
+  ret_1m?: number | null;
   ret_6m?: number | null;
   minervini?: boolean | null;
   minervini_rules?: number | null;

@@ -4,7 +4,7 @@ import { SmcRec, StrategyHit, api } from '../api';
 import StockDetail from '../components/StockDetail';
 import StrategyScores from '../components/StrategyScores';
 import { Row } from '../screener';
-import { navigate } from '../navIntent';
+import { navigate, openStock } from '../navIntent';
 import { addSymbol, loadWatchlist, normSymbol } from '../watchlist';
 import { LocalAlert, addLocalAlert, hasLocalAlert, loadLocalAlerts } from '../localalerts';
 import { loadNames } from './ScreenerScreen';
@@ -231,13 +231,13 @@ function SmcDetail({
               <Text style={styles.aTxt}>▤ Chart</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.aBtn} onPress={onAnalyse} activeOpacity={0.75}>
-              <Text style={[styles.aTxt, { color: theme.accent }]}>⚡ Analyse</Text>
+              <Text style={[styles.aTxt, { color: theme.accent }]}>Analyse</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.aBtn} onPress={onPattern} activeOpacity={0.75}>
-              <Text style={styles.aTxt}>📈 Pattern</Text>
+              <Text style={styles.aTxt}>Pattern</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.aBtn} onPress={() => navigate('analysis', { sub: 'inst', symbol: r.symbol })} activeOpacity={0.75}>
-              <Text style={styles.aTxt}>🏛 Dossier</Text>
+              <Text style={styles.aTxt}>Dossier</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.aBtn} onPress={onPaper} activeOpacity={0.75}>
               <Text style={[styles.aTxt, papered && { color: theme.green }]}>{papered ? '✓ Papered' : '✎ Paper trade'}</Text>
@@ -246,7 +246,7 @@ function SmcDetail({
               <Text style={[styles.aTxt, watched && { color: theme.green }]}>{watched ? '★ Watching' : '☆ Watchlist'}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.aBtn} onPress={onAlert} activeOpacity={0.75}>
-              <Text style={[styles.aTxt, alerted && { color: GOLD }]}>{alerted ? '🔔 Alerted' : '🔔 Alert'}</Text>
+              <Text style={[styles.aTxt, alerted && { color: GOLD }]}>{alerted ? 'Alerted' : 'Alert'}</Text>
             </TouchableOpacity>
           </View>
 
@@ -442,7 +442,7 @@ export default function SmcScreen() {
   };
   const onAnalyse = (r: SmcRec) => {
     setOpen(null);
-    navigate('analysis', { sub: 'mb', symbol: r.symbol });
+    openStock(r.symbol);
   };
   const onPattern = (r: SmcRec) => {
     setOpen(null);

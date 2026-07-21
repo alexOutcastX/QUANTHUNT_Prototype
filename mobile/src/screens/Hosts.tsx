@@ -1,9 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { api } from '../api';
 import { peekNav, subscribeNav } from '../navIntent';
+import { isClassicNav, setClassicNav, subscribeNavMode } from '../navMode';
 import { useResponsive } from '../responsive';
 import { theme } from '../theme';
+import ScreenerScreen from './ScreenerScreen';
 import AnalysisScreen from './AnalysisScreen';
 import BacktestScreen from './BacktestScreen';
 import CalculatorScreen from './CalculatorScreen';
@@ -81,19 +84,38 @@ function SubTabs({ tabs, persistKey }: { tabs: SubTab[]; persistKey?: string }) 
   return (
     <View style={styles.host}>
       {isDesktop ? (
+        // Wide groups (the Desk hub) scroll horizontally with fixed-width pills;
+        // small groups keep the classic equal-width segmented row.
         <View style={styles.subBarWrap}>
-          <View style={styles.subBar}>
-            {tabs.map((t) => (
-              <TouchableOpacity
-                key={t.key}
-                style={[styles.subBtn, active === t.key && styles.subBtnOn]}
-                onPress={() => setActive(t.key)}
-                activeOpacity={0.75}
-              >
-                <Text style={[styles.subTxt, active === t.key && styles.subTxtOn]}>{t.label}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
+          {tabs.length > 6 ? (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+              <View style={styles.subBar}>
+                {tabs.map((t) => (
+                  <TouchableOpacity
+                    key={t.key}
+                    style={[styles.subBtn, styles.subBtnFixed, active === t.key && styles.subBtnOn]}
+                    onPress={() => setActive(t.key)}
+                    activeOpacity={0.75}
+                  >
+                    <Text style={[styles.subTxt, active === t.key && styles.subTxtOn]}>{t.label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </ScrollView>
+          ) : (
+            <View style={styles.subBar}>
+              {tabs.map((t) => (
+                <TouchableOpacity
+                  key={t.key}
+                  style={[styles.subBtn, active === t.key && styles.subBtnOn]}
+                  onPress={() => setActive(t.key)}
+                  activeOpacity={0.75}
+                >
+                  <Text style={[styles.subTxt, active === t.key && styles.subTxtOn]}>{t.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
         </View>
       ) : (
         // Mobile: a hamburger button showing the current section; tap for a
@@ -189,6 +211,50 @@ export function ToolsHome() {
   );
 }
 
+// ── Redesigned shell hubs ────────────────────────────────────────────────────
+// Screens = every list that FINDS stocks (report §3.3: one place to generate
+// candidates). Sub-tab keys deliberately match the legacy analysis/* keys so
+// every existing navigate() intent lands unchanged.
+export function ScreensHub() {
+  return (
+    <SubTabs
+      persistKey="screens"
+      tabs={[
+        { key: 'screener', label: 'Screener', hint: 'Filter NSE / BSE by technicals & fundamentals — the raw scan', render: () => <ScreenerScreen /> },
+        { key: 'reco', label: 'Recommendations', hint: 'Ranked buy setups from the Multibagger candidates', render: () => <RecommendationsScreen /> },
+        { key: 'mb', label: 'Multibagger', hint: 'Fixed-screen candidates + one-click potential analyser', render: () => <MultibaggerScreen /> },
+        { key: 'momentum', label: 'Momentum', hint: 'Trend & thrust radar with upside-remaining', render: () => <MomentumScreen /> },
+        { key: 'patterns', label: 'Patterns', hint: 'Classic chart-pattern scanner with confidence & targets', render: () => <PatternScreen /> },
+        { key: 'heatmap', label: 'Heatmap', hint: 'NSE + BSE sector map · tap a sector to screen it', render: () => <HeatmapScreen /> },
+        { key: 'universe', label: 'Universe', hint: 'Index constituents · mcap segments', render: () => <UniverseScreen /> },
+      ]}
+    />
+  );
+}
+
+// Desk = the user's own workspace: positions, lists, alerts, deep research and
+// utilities. Everything that used to live under Lists / Tools / the rest of
+// Analysis, plus the More list so no destination is lost.
+export function DeskHub() {
+  return (
+    <SubTabs
+      persistKey="desk"
+      tabs={[
+        { key: 'watchlist', label: 'Watchlist', hint: 'Symbols with entry price + since-add move · live quotes', render: () => <WatchlistScreen /> },
+        { key: 'portfolio', label: 'Portfolio', hint: 'Holdings with live P&L · broker sync', render: () => <PortfolioScreen /> },
+        { key: 'paper', label: 'Paper trades', hint: 'Simulated outcomes of your logged setups · win-rate', render: () => <PaperTradeScreen /> },
+        { key: 'alerts', label: 'Alerts', hint: 'Price / % / RSI alerts', render: () => <AlertsScreen /> },
+        { key: 'inst', label: 'Dossier', hint: 'Full company dossier · fundamentals, valuation, ownership, filings', render: () => <AnalysisScreen /> },
+        { key: 'shareholders', label: 'Shareholders', hint: 'Institutions, promoters & political funding · every link cited', render: () => <EntityGraphScreen /> },
+        { key: 'risk', label: 'Risk', hint: 'Portfolio VaR · volatility · beta · drawdown · correlation', render: () => <RiskScreen /> },
+        { key: 'bt', label: 'Backtest', hint: 'Test a strategy against historical data before risking capital', render: () => <BacktestScreen /> },
+        { key: 'calc', label: 'Calculator', hint: 'Position size · SIP · CAGR', render: () => <CalculatorScreen /> },
+        { key: 'more', label: 'More', hint: 'Charts, community, corporate data, indices & settings', render: () => <MoreScreen /> },
+      ]}
+    />
+  );
+}
+
 export function ChartsHome() {
   return (
     <SubTabs
@@ -224,6 +290,12 @@ const MORE_ITEMS: { key: string; label: string; hint: string; render: () => Reac
 
 export function MoreScreen() {
   const [sel, setSel] = useState<string | null>(null);
+  const [classic, setClassic] = useState(isClassicNav());
+  const [version, setVersion] = useState('');
+  useEffect(() => subscribeNavMode(() => setClassic(isClassicNav())), []);
+  useEffect(() => {
+    api.version().then((v) => setVersion(v.version)).catch(() => {});
+  }, []);
   const item = MORE_ITEMS.find((i) => i.key === sel);
 
   if (item) {
@@ -257,6 +329,24 @@ export function MoreScreen() {
           <Text style={styles.menuChevron}>›</Text>
         </TouchableOpacity>
       ))}
+      <TouchableOpacity
+        style={styles.menuRow}
+        onPress={() => setClassicNav(!classic)}
+        activeOpacity={0.75}
+      >
+        <View style={{ flex: 1 }}>
+          <Text style={styles.menuLabel}>Navigation layout</Text>
+          <Text style={styles.menuHint}>
+            {classic
+              ? 'Classic — tap to switch to the new Today / Screens / Symbol / Desk / Terminal layout'
+              : 'New 5-tab layout — tap to switch back to the classic navigation'}
+          </Text>
+        </View>
+        <View style={[styles.navToggle, !classic && styles.navToggleOn]}>
+          <View style={[styles.navKnob, !classic && styles.navKnobOn]} />
+        </View>
+      </TouchableOpacity>
+      {version ? <Text style={styles.versionFoot}>TaurEye v{version}</Text> : null}
     </ScrollView>
   );
 }
@@ -274,6 +364,7 @@ const styles = StyleSheet.create({
     padding: 3,
   },
   subBtn: { flex: 1, borderRadius: 999, paddingVertical: 8, alignItems: 'center' },
+  subBtnFixed: { flex: 0, paddingHorizontal: 18 },
   subBtnOn: { backgroundColor: theme.accent },
   subTxt: { color: theme.muted2, fontSize: theme.fs.sm },
   subTxtOn: { color: theme.onAccent, fontWeight: '700' },
@@ -347,4 +438,24 @@ const styles = StyleSheet.create({
   menuLabel: { color: theme.text, fontSize: theme.fs.md, fontWeight: '700' },
   menuHint: { color: theme.muted, fontSize: theme.fs.sm, marginTop: 3 },
   menuChevron: { color: theme.muted2, fontSize: 22 },
+  navToggle: {
+    width: 44,
+    height: 26,
+    borderRadius: 999,
+    backgroundColor: theme.surface3,
+    borderColor: theme.border2,
+    borderWidth: 1,
+    padding: 2,
+    justifyContent: 'center',
+  },
+  navToggleOn: { backgroundColor: theme.brandSoft, borderColor: theme.brand },
+  navKnob: { width: 20, height: 20, borderRadius: 999, backgroundColor: theme.muted2 },
+  navKnobOn: { backgroundColor: theme.brand, alignSelf: 'flex-end' },
+  versionFoot: {
+    color: theme.muted,
+    fontSize: theme.fs.xs + 1,
+    fontFamily: theme.mono,
+    textAlign: 'center',
+    marginTop: theme.sp.md,
+  },
 });

@@ -16,7 +16,7 @@ import { Quote, api } from '../api';
 import { exportCsvRows, exportExcelRows } from '../csv';
 import StockDetail from '../components/StockDetail';
 import { Row } from '../screener';
-import { navigate } from '../navIntent';
+import { openStock } from '../navIntent';
 import { EntryMap, dropEntry, loadEntries, saveEntries, syncTrackList, withEntry } from '../watchentry';
 import { loadTrack, removeTrack } from '../tracklist';
 import { theme } from '../theme';
@@ -289,7 +289,7 @@ export default function WatchlistScreen() {
     setDetail({ sym, price: q?.price ?? null, chg: q?.chg ?? null } as Row);
   }, []);
   const onAnalyse = useCallback((sym: string) => {
-    navigate('analysis', { sub: 'mb', symbol: sym });
+    openStock(sym);
   }, []);
 
   const onSelectList = useCallback(async (id: string) => {
@@ -491,7 +491,7 @@ export default function WatchlistScreen() {
             disabled={!active}
             activeOpacity={0.75}
           >
-            <Text style={[styles.toolTxt, styles.toolTxtDanger]}>🗑 Delete</Text>
+            <Text style={[styles.toolTxt, styles.toolTxtDanger]}>Delete</Text>
           </TouchableOpacity>
         </ScrollView>
 

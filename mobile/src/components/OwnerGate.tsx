@@ -33,7 +33,7 @@ export default function OwnerGate({ title, children }: { title: string; children
   if (!status.configured) {
     return (
       <EmptyState
-        icon="🔒"
+        icon="◈"
         title={`${title} is owner-only`}
         hint="Set APP_PASSWORD on the server to enable owner features."
       />

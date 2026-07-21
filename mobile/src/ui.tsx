@@ -17,6 +17,8 @@ import {
 import { theme } from './theme';
 import { useResponsive } from './responsive';
 import { RiskInput, tradeRisk } from './risk';
+import { Icon, IconName } from './icons';
+import { asofRel, asofTier } from './format';
 
 // Compact risk pill for a trade card: coloured dot + level (+ optional score).
 export function RiskBadge({ input, showScore = true, style }: { input: RiskInput; showScore?: boolean; style?: ViewStyle }) {
@@ -60,7 +62,7 @@ export function Dropdown<T extends string | number>({
       <TouchableOpacity style={[s.ddBtn, style]} onPress={() => setOpen(true)} activeOpacity={0.75}>
         {label ? <Text style={s.ddLbl}>{label}</Text> : null}
         <Text style={s.ddVal} numberOfLines={1}>{cur?.label ?? String(value)}</Text>
-        <Text style={s.ddCaret}>▾</Text>
+        <Icon name="chevronDown" size={12} color={theme.muted2} />
       </TouchableOpacity>
       <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
         <View style={s.ddBackdrop}>
@@ -81,7 +83,7 @@ export function Dropdown<T extends string | number>({
                     activeOpacity={0.75}
                   >
                     <Text style={[s.ddItemTxt, on && s.ddItemTxtOn]}>{o.label}</Text>
-                    {on ? <Text style={s.ddCheck}>✓</Text> : null}
+                    {on ? <Icon name="check" size={15} color={theme.brand} /> : null}
                   </TouchableOpacity>
                 );
               })}
@@ -225,7 +227,7 @@ export function InfoButton({ title, content, style }: { title: string; content: 
         activeOpacity={0.7}
         accessibilityLabel={'About ' + title}
       >
-        <Text style={s.infoGlyph}>ⓘ</Text>
+        <Icon name="info" size={15} color={theme.brand} />
       </TouchableOpacity>
       <InfoModal open={open} onClose={() => setOpen(false)} title={title} content={content} />
     </>
@@ -479,6 +481,236 @@ export function Loading({ label }: { label?: string }) {
 }
 
 export const dataText: TextStyle = { fontFamily: theme.mono, color: theme.text, fontSize: theme.fs.sm };
+
+// ── Skeletons — shaped shimmer placeholders replacing text-only loaders ──────
+// A loading screen should look like the screen it becomes. Variants mirror the
+// app's three loading shapes: table rows, a stat-tile grid, and a card block.
+function Shimmer({ style }: { style?: ViewStyle }) {
+  const a = React.useRef(new Animated.Value(0.45)).current;
+  React.useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(a, { toValue: 1, duration: 700, useNativeDriver: true }),
+        Animated.timing(a, { toValue: 0.45, duration: 700, useNativeDriver: true }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [a]);
+  return <Animated.View style={[sk.bone, { opacity: a }, style]} />;
+}
+
+export function Skeleton({
+  variant = 'rows',
+  rows = 6,
+  style,
+}: {
+  variant?: 'rows' | 'card' | 'tiles';
+  rows?: number;
+  style?: ViewStyle;
+}) {
+  if (variant === 'card') {
+    return (
+      <View style={[sk.wrap, style]}>
+        <Shimmer style={{ width: '45%', height: 16 }} />
+        <Shimmer style={{ width: '100%', height: 64, borderRadius: theme.radius.md }} />
+        <Shimmer style={{ width: '80%', height: 12 }} />
+        <Shimmer style={{ width: '60%', height: 12 }} />
+      </View>
+    );
+  }
+  if (variant === 'tiles') {
+    return (
+      <View style={[sk.tileRow, style]}>
+        {Array.from({ length: 4 }).map((_, i) => (
+          <Shimmer key={i} style={{ flexGrow: 1, minWidth: 120, height: 62, borderRadius: theme.radius.md }} />
+        ))}
+      </View>
+    );
+  }
+  return (
+    <View style={[sk.wrap, style]}>
+      {Array.from({ length: rows }).map((_, i) => (
+        <View key={i} style={sk.row}>
+          <Shimmer style={{ width: 64, height: 12 }} />
+          <Shimmer style={{ flex: 1, height: 12 }} />
+          <Shimmer style={{ width: 48, height: 12 }} />
+        </View>
+      ))}
+    </View>
+  );
+}
+
+const sk = StyleSheet.create({
+  wrap: { gap: theme.sp.md, paddingVertical: theme.sp.sm },
+  row: { flexDirection: 'row', alignItems: 'center', gap: theme.sp.md },
+  tileRow: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.sp.sm },
+  bone: { backgroundColor: theme.surface3, borderRadius: 4, height: 12 },
+});
+
+// ── Data-freshness chip — every price surface says when it's from ────────────
+export function AsOfChip({ ts, source, style }: { ts?: number | null; source?: string; style?: ViewStyle }) {
+  const tier = asofTier(ts ?? null);
+  const color = tier === 'fresh' ? theme.muted : tier === 'stale' ? '#b7791f' : theme.red;
+  return (
+    <View style={[ac.chip, style]}>
+      <Icon name="clock" size={11} color={color} />
+      <Text style={[ac.txt, { color }]}>
+        {asofRel(ts ?? null)}
+        {source ? ` · ${source}` : ''}
+      </Text>
+    </View>
+  );
+}
+
+const ac = StyleSheet.create({
+  chip: { flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start' },
+  txt: { fontFamily: theme.mono, fontSize: theme.fs.xs },
+});
+
+// ── Error state with agency: what failed, and a way forward ──────────────────
+export function ErrorState({
+  title,
+  detail,
+  onRetry,
+}: {
+  title: string;
+  detail?: string;
+  onRetry?: () => void;
+}) {
+  return (
+    <View style={es.wrap}>
+      <Icon name="warning" size={22} color={theme.red} />
+      <Text style={es.title}>{title}</Text>
+      {detail ? <Text style={es.detail}>{detail}</Text> : null}
+      {onRetry ? (
+        <TouchableOpacity style={es.retry} onPress={onRetry} activeOpacity={0.8}>
+          <Icon name="refresh" size={14} color={theme.text} />
+          <Text style={es.retryTxt}>Retry</Text>
+        </TouchableOpacity>
+      ) : null}
+    </View>
+  );
+}
+
+const es = StyleSheet.create({
+  wrap: { alignItems: 'center', paddingVertical: 28, paddingHorizontal: 24, gap: 8 },
+  title: { color: theme.text, fontSize: theme.fs.md, fontWeight: '700', textAlign: 'center' },
+  detail: { color: theme.muted, fontSize: theme.fs.sm, textAlign: 'center', lineHeight: 18 },
+  retry: {
+    flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4,
+    borderColor: theme.border2, borderWidth: 1, borderRadius: theme.radius.md,
+    paddingHorizontal: theme.sp.lg, paddingVertical: theme.sp.sm,
+  },
+  retryTxt: { color: theme.text, fontSize: theme.fs.sm, fontWeight: '700' },
+});
+
+// ── SlidingTabs — top-tab bar with an animated underline ─────────────────────
+// The terminal-grade replacement for pill Segmented on primary sub-navigation:
+// tabs sit on a hairline, the active indicator slides between them (base
+// tempo), and content is expected to cross-fade behind it.
+export function SlidingTabs<T extends string>({
+  items,
+  value,
+  onChange,
+  style,
+}: {
+  items: { key: T; label: string }[];
+  value: T;
+  onChange: (k: T) => void;
+  style?: ViewStyle;
+}) {
+  const [metrics, setMetrics] = React.useState<Record<string, { x: number; w: number }>>({});
+  const x = React.useRef(new Animated.Value(0)).current;
+  const w = React.useRef(new Animated.Value(0)).current;
+  const m = metrics[value];
+  React.useEffect(() => {
+    if (!m) return;
+    Animated.parallel([
+      Animated.timing(x, { toValue: m.x, duration: theme.motion.base, useNativeDriver: false }),
+      Animated.timing(w, { toValue: m.w, duration: theme.motion.base, useNativeDriver: false }),
+    ]).start();
+  }, [m, x, w]);
+  return (
+    <View style={[st.wrap, style]}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={st.row}>
+        {items.map((it) => {
+          const on = it.key === value;
+          return (
+            <TouchableOpacity
+              key={it.key}
+              style={st.tab}
+              onPress={() => onChange(it.key)}
+              activeOpacity={0.75}
+              onLayout={(e) => {
+                const { x: lx, width } = e.nativeEvent.layout;
+                setMetrics((p) => ({ ...p, [it.key]: { x: lx, w: width } }));
+              }}
+            >
+              <Text style={[st.txt, on && st.txtOn]}>{it.label}</Text>
+            </TouchableOpacity>
+          );
+        })}
+        <Animated.View style={[st.indicator, { left: x, width: w }]} />
+      </ScrollView>
+    </View>
+  );
+}
+
+const st = StyleSheet.create({
+  wrap: { borderBottomColor: theme.border, borderBottomWidth: 1 },
+  row: { flexDirection: 'row', paddingHorizontal: theme.sp.md, position: 'relative' },
+  tab: { paddingHorizontal: theme.sp.md, paddingVertical: theme.sp.md - 2 },
+  txt: { color: theme.muted, fontSize: theme.fs.sm + 1, fontWeight: '600', letterSpacing: 0.2 },
+  txtOn: { color: theme.text, fontWeight: '800' },
+  indicator: { position: 'absolute', bottom: 0, height: 2, borderRadius: 1, backgroundColor: theme.brand },
+});
+
+// ── IconChip — THE action-row unit (replaces per-screen emoji buttons) ───────
+// Every card / popup action row composes these so watch/alert/chart/export look
+// and behave identically everywhere.
+export function IconChip({
+  icon,
+  label,
+  onPress,
+  color,
+  on,
+  disabled,
+  style,
+}: {
+  icon: IconName;
+  label?: string;
+  onPress: () => void;
+  color?: string;
+  on?: boolean;
+  disabled?: boolean;
+  style?: ViewStyle;
+}) {
+  const c = color || (on ? theme.brand : theme.muted2);
+  return (
+    <TouchableOpacity
+      style={[ic.chip, on && ic.chipOn, disabled && { opacity: 0.5 }, style]}
+      onPress={onPress}
+      disabled={disabled}
+      activeOpacity={0.75}
+      accessibilityLabel={label || icon}
+    >
+      <Icon name={icon} size={14} color={c} />
+      {label ? <Text style={[ic.txt, { color: c }]}>{label}</Text> : null}
+    </TouchableOpacity>
+  );
+}
+
+const ic = StyleSheet.create({
+  chip: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    borderColor: theme.border2, borderWidth: 1, borderRadius: theme.radius.sm + 2,
+    paddingHorizontal: theme.sp.md, paddingVertical: theme.sp.sm,
+    backgroundColor: theme.surface2,
+  },
+  chipOn: { borderColor: theme.brand, backgroundColor: theme.brandSoft },
+  txt: { fontSize: theme.fs.sm, fontWeight: '700' },
+});
 
 const s = StyleSheet.create({
   card: {

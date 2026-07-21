@@ -25,6 +25,13 @@ export function navigate(page: string, opts: { sub?: string; symbol?: string; se
   });
 }
 
+// The one gesture for "tell me about this stock": every row, card and palette
+// hit routes here. Shell maps page 'stock' to the Symbol tab; StockScreen
+// consumes the symbol via takeSymbol('stock').
+export function openStock(symbol: string, sector?: string): void {
+  navigate('stock', { sub: 'stock', symbol, sector });
+}
+
 export function subscribeNav(l: () => void): () => void {
   listeners.add(l);
   return () => {

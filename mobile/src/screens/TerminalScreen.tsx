@@ -15,7 +15,7 @@ import HtmlView from '../components/HtmlView';
 import SymbolInput from '../components/SymbolInput';
 import StrategyScores from '../components/StrategyScores';
 import { Sheet } from '../ui';
-import { navigate } from '../navIntent';
+import { navigate, openStock } from '../navIntent';
 import { getPalette, theme, useThemeMode } from '../theme';
 
 // Self-contained Terminal workspace: d3-force relationship graph + a floating,
@@ -1563,10 +1563,21 @@ export default function TerminalScreen() {
               activeOpacity={0.8}
               onPress={() => {
                 setDossierOpen(false);
+                openStock(centre);
+              }}
+            >
+              <Text style={styles.dossActTxt}>Symbol overview</Text>
+              <Text style={styles.dossActSub}>Price, technicals, fundamentals &amp; patterns on one page</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.dossAct}
+              activeOpacity={0.8}
+              onPress={() => {
+                setDossierOpen(false);
                 navigate('analysis', { sub: 'inst', symbol: centre });
               }}
             >
-              <Text style={styles.dossActTxt}>📄 Full Dossier &amp; Export</Text>
+              <Text style={styles.dossActTxt}>Full Dossier &amp; Export</Text>
               <Text style={styles.dossActSub}>Institutional deep report · PDF export</Text>
             </TouchableOpacity>
             <TouchableOpacity
@@ -1577,7 +1588,7 @@ export default function TerminalScreen() {
                 navigate('analysis', { sub: 'mb', symbol: centre });
               }}
             >
-              <Text style={styles.dossActTxt}>🚀 Analyse as Multibagger</Text>
+              <Text style={styles.dossActTxt}>Analyse as Multibagger</Text>
               <Text style={styles.dossActSub}>Long-term wealth-compounding potential</Text>
             </TouchableOpacity>
             <TouchableOpacity
@@ -1588,7 +1599,7 @@ export default function TerminalScreen() {
                 navigate('analysis', { sub: 'patterns', symbol: centre });
               }}
             >
-              <Text style={styles.dossActTxt}>⚡ Trade / Momentum reco</Text>
+              <Text style={styles.dossActTxt}>Trade / Momentum reco</Text>
               <Text style={styles.dossActSub}>Patterns + multi-timeframe swing read</Text>
             </TouchableOpacity>
             <TouchableOpacity
@@ -1599,7 +1610,7 @@ export default function TerminalScreen() {
                 navigate('analysis', { sub: 'inst', symbol: centre });
               }}
             >
-              <Text style={styles.dossActTxt}>💼 Investment reco</Text>
+              <Text style={styles.dossActTxt}>Investment reco</Text>
               <Text style={styles.dossActSub}>Fundamentals, financials &amp; verdict</Text>
             </TouchableOpacity>
           </ScrollView>

@@ -13,7 +13,7 @@ import { MOMENTUM_INFO } from '../tabInfo';
 import StrategyScores from '../components/StrategyScores';
 import TimeframePanel from '../components/TimeframePanel';
 import SymbolInput from '../components/SymbolInput';
-import { navigate, takeSector, takeSymbol } from '../navIntent';
+import { navigate, openStock, takeSector, takeSymbol } from '../navIntent';
 import { mergeSectors } from '../sectors';
 import { theme } from '../theme';
 
@@ -31,8 +31,8 @@ const SETUP_LABEL: Record<SetupKind, string> = {
 };
 const SETUP_FILTERS: { key: 'all' | SetupKind; label: string }[] = [
   { key: 'all', label: 'All setups' },
-  { key: 'breakout', label: '⚡ Breakout watch' },
-  { key: 'fired', label: '🔥 Breakout fired' },
+  { key: 'breakout', label: 'Breakout watch' },
+  { key: 'fired', label: 'Breakout fired' },
   { key: 'pullback', label: '↩ Pullback reversal' },
 ];
 
@@ -282,13 +282,13 @@ function MomDetail({
             <Text style={styles.dActTxt}>▤ Chart</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.dActBtn} onPress={onAnalyse} activeOpacity={0.75}>
-            <Text style={[styles.dActTxt, { color: theme.accent }]}>🚀 Multibagger</Text>
+            <Text style={[styles.dActTxt, { color: theme.accent }]}>Multibagger</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.dActBtn} onPress={onPattern} activeOpacity={0.75}>
-            <Text style={styles.dActTxt}>📈 Pattern</Text>
+            <Text style={styles.dActTxt}>Pattern</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.dActBtn} onPress={onDossier} activeOpacity={0.75}>
-            <Text style={styles.dActTxt}>🏛 Dossier</Text>
+            <Text style={styles.dActTxt}>Dossier</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.dActBtn} onPress={onExport} activeOpacity={0.75} disabled={exporting}>
             <Text style={styles.dActTxt}>{exporting ? '… Exporting' : '⤓ Export PDF'}</Text>
@@ -297,7 +297,7 @@ function MomDetail({
             <Text style={[styles.dActTxt, watched && { color: theme.green }]}>{watched ? '★ Watching' : '☆ Watchlist'}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.dActBtn} onPress={onAlert} activeOpacity={0.75}>
-            <Text style={[styles.dActTxt, alerted && { color: GOLD }]}>{alerted ? '🔔 Alerted' : '🔔 Alert'}</Text>
+            <Text style={[styles.dActTxt, alerted && { color: GOLD }]}>{alerted ? 'Alerted' : 'Alert'}</Text>
           </TouchableOpacity>
         </View>
 
@@ -469,7 +469,7 @@ function MomAnalyser({
           inputStyle={styles.anaInput}
           containerStyle={{ flex: 1 }}
         />
-        <Btn label="⚡ Analyse" onPress={() => run()} disabled={!sym.trim()} />
+        <Btn label="Analyse" onPress={() => run()} disabled={!sym.trim()} />
       </View>
       {recent.length ? (
         <View style={styles.recentRow}>
@@ -483,7 +483,7 @@ function MomAnalyser({
       ) : null}
       {!active ? (
         <EmptyState
-          icon="⚡"
+          icon="◎"
           title="Analyse any stock's momentum"
           hint="Search a symbol to see its trade rating, support/resistance and Fibonacci levels on every timeframe from 5-minute to weekly, plus an overall score."
         />
@@ -507,13 +507,13 @@ function MomAnalyser({
           <StrategyScores symbol={active} />
           <View style={styles.dActions}>
             <TouchableOpacity style={styles.dActBtn} onPress={() => navigate('analysis', { sub: 'mb', symbol: active })} activeOpacity={0.75}>
-              <Text style={[styles.dActTxt, { color: theme.accent }]}>🚀 Multibagger</Text>
+              <Text style={[styles.dActTxt, { color: theme.accent }]}>Multibagger</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.dActBtn} onPress={() => navigate('analysis', { sub: 'patterns', symbol: active })} activeOpacity={0.75}>
-              <Text style={styles.dActTxt}>📈 Pattern</Text>
+              <Text style={styles.dActTxt}>Pattern</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.dActBtn} onPress={() => navigate('analysis', { sub: 'inst', symbol: active })} activeOpacity={0.75}>
-              <Text style={styles.dActTxt}>🏛 Dossier</Text>
+              <Text style={styles.dActTxt}>Dossier</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -737,7 +737,7 @@ export default function MomentumScreen() {
               onPress={() => setView(v)}
               activeOpacity={0.75}
             >
-              <Text style={[styles.segTxt, view === v && styles.segTxtOn]}>{v === 'radar' ? '◎ Radar' : '⚡ Analyser'}</Text>
+              <Text style={[styles.segTxt, view === v && styles.segTxtOn]}>{v === 'radar' ? 'Radar' : 'Analyser'}</Text>
             </TouchableOpacity>
           ))}
         </View>
@@ -874,7 +874,7 @@ export default function MomentumScreen() {
                           <Text style={styles.aTxt}>Chart</Text>
                         </TouchableOpacity>
                         <TouchableOpacity style={styles.aBtn} onPress={() => onAlert(h)} activeOpacity={0.75}>
-                          <Text style={[styles.aTxt, isAlerted(h.symbol) && { color: GOLD }]}>{isAlerted(h.symbol) ? '🔔' : 'Alert'}</Text>
+                          <Text style={[styles.aTxt, isAlerted(h.symbol) && { color: GOLD }]}>{isAlerted(h.symbol) ? 'Alerted' : 'Alert'}</Text>
                         </TouchableOpacity>
                         <TouchableOpacity style={styles.aBtn} onPress={() => toggleWatch(h.symbol)} activeOpacity={0.75}>
                           <Text style={[styles.aTxt, isWatched(h.symbol) && { color: theme.green }]}>{isWatched(h.symbol) ? '★' : '☆'}</Text>
@@ -933,7 +933,7 @@ export default function MomentumScreen() {
                       </TouchableOpacity>
                       <TouchableOpacity style={styles.aBtn} onPress={() => onAlert(h)} activeOpacity={0.75}>
                         <Text style={[styles.aTxt, isAlerted(h.symbol) && { color: GOLD }]}>
-                          {isAlerted(h.symbol) ? '🔔 Alerted' : '🔔 Alert'}
+                          {isAlerted(h.symbol) ? 'Alerted' : 'Alert'}
                         </Text>
                       </TouchableOpacity>
                       <TouchableOpacity style={styles.aBtn} onPress={() => toggleWatch(h.symbol)} activeOpacity={0.75}>
@@ -978,7 +978,7 @@ export default function MomentumScreen() {
           onChart={() => { const h = sel; setSel(null); openChart(h); }}
           onAlert={() => onAlert(sel)}
           onWatch={() => toggleWatch(sel.symbol)}
-          onAnalyse={() => { const s = sel.symbol; setSel(null); navigate('analysis', { sub: 'mb', symbol: s }); }}
+          onAnalyse={() => { const s = sel.symbol; setSel(null); openStock(s); }}
           onPattern={() => { const s = sel.symbol; setSel(null); navigate('analysis', { sub: 'patterns', symbol: s }); }}
           onDossier={() => { const s = sel.symbol; setSel(null); navigate('analysis', { sub: 'inst', symbol: s }); }}
         />

@@ -113,7 +113,7 @@ function ConvList({
   const Row = ({ c }: { c: Conversation }) => (
     <TouchableOpacity style={styles.row} onPress={() => onOpen(c)} activeOpacity={0.7}>
       <View style={[styles.avatar, c.kind === 'dm' && { backgroundColor: theme.brandSoft }]}>
-        <Text style={styles.avatarTxt}>{c.kind === 'global' ? '🌐' : c.kind === 'dm' ? '@' : '#'}</Text>
+        <Text style={styles.avatarTxt}>{c.kind === 'global' ? '◎' : c.kind === 'dm' ? '@' : '#'}</Text>
       </View>
       <View style={{ flex: 1 }}>
         <Text style={styles.rowName} numberOfLines={1}>{c.name}</Text>
@@ -277,7 +277,7 @@ function Thread({ me, conv, onBack }: { me: ChatUser; conv: Conversation; onBack
           data={msgs}
           keyExtractor={(m) => String(m.id)}
           contentContainerStyle={styles.threadPad}
-          ListEmptyComponent={<EmptyState icon="✎" title="No messages yet" hint="Say hello 👋" />}
+          ListEmptyComponent={<EmptyState icon="✎" title="No messages yet" hint="Say hello." />}
           renderItem={({ item }) => {
             const mine = item.user_id === me.user_id;
             return (
