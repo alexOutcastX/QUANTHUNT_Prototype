@@ -612,6 +612,14 @@ def _no_cache(response):
     response.headers["Expires"] = "0"
     return response
 
+
+def _immutable(response):
+    # Content-hashed build artefacts never change under the same name — let the
+    # browser keep them for a year. index.html stays no-store, so a deploy still
+    # takes effect immediately (it references the new hashes).
+    response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+    return response
+
 # Exported React Native web build (Expo). When present it becomes the live UI;
 # the legacy single-file HTML stays available at /legacy and as a fallback.
 WEB_DIR = os.path.join(_BASE_DIR, "mobile", "dist")
@@ -634,6 +642,12 @@ def legacy_ui():
 def static_files(fname):
     # 1) Prefer the RN-web bundle (index.html SPA shell, _expo/*, assets/*, favicon)
     if os.path.isfile(os.path.join(WEB_DIR, fname)):
+        # The Expo export puts every JS/asset under a content-hashed name in
+        # _expo/ and assets/. Serving those no-store forced the browser to
+        # re-download the whole ~1.4 MB bundle on every visit — the single
+        # biggest cause of slow website startup.
+        if fname.startswith(("_expo/", "assets/")):
+            return _immutable(send_from_directory(WEB_DIR, fname))
         return _no_cache(send_from_directory(WEB_DIR, fname))
     # 2) Fall back to repo-root files (StockScreenPro.html, VERSION, legacy assets)
     if os.path.isfile(os.path.join(_BASE_DIR, fname)):
@@ -2288,16 +2302,49 @@ def indices_live():
     entry = _indices_cache.get(category)
     cached = entry is not None and entry["data"] is not None and (now - entry["ts"]) < _INDICES_TTL
     if not cached:
-        rows = []
-        for key, name, yf_sym in _INDEX_LISTS[category]:
+        # Stale-while-revalidate: 12 serial 1-year yfinance fetches took
+        # 10-25 s and the dashboard's index strip blocked on them every time
+        # the 5-min TTL lapsed. If we hold ANY previous snapshot, return it
+        # immediately and refresh in a background thread (single-flight);
+        # only a truly cold process pays the fetch — and pays it in parallel.
+        if entry is not None and entry["data"]:
+            if not _indices_refreshing.get(category):
+                _indices_refreshing[category] = True
+                threading.Thread(
+                    target=_refresh_indices, args=(category,), daemon=True
+                ).start()
+            stale = dict(entry)
+            return jsonify({"indices": stale["data"], "asof": int(time.time()),
+                            "cached": True, "stale": True})
+        _refresh_indices(category)
+        entry = _indices_cache[category]
+    return jsonify({"indices": entry["data"],
+                    "asof": int(time.time()), "cached": cached})
+
+
+_indices_refreshing = {}   # category -> bool (single-flight guard)
+
+
+def _refresh_indices(category):
+    """Fetch every index in a category in parallel and swap the cache."""
+    from concurrent.futures import ThreadPoolExecutor
+    try:
+        items = _INDEX_LISTS[category]
+
+        def one(args):
+            key, name, yf_sym = args
             try:
                 row = _fetch_index_row(key, name, yf_sym)
                 row["category"] = category
-                rows.append(row)
+                return row
             except Exception as e:
                 log.debug("Index fetch failed for %s: %s", yf_sym, e)
-        entry = {"ts": now, "data": rows}
-        _indices_cache[category] = entry
+                return None
+
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            rows = [r for r in pool.map(one, items) if r is not None]
+        now = time.time()
+        _indices_cache[category] = {"ts": now, "data": rows}
         # Persist a daily history point per index (domestic only, throttled to
         # once/hour) so the app builds a real long-run series over time.
         if category == "domestic":
@@ -2309,8 +2356,8 @@ def indices_live():
                     _store.kv_set("indices_snap_ts", int(now))
             except Exception as e:
                 log.debug("index snapshot failed: %s", e)
-    return jsonify({"indices": entry["data"],
-                    "asof": int(time.time()), "cached": cached})
+    finally:
+        _indices_refreshing[category] = False
 
 
 # ── corporate / institutional data (NSE public feeds, injected fetch) ──

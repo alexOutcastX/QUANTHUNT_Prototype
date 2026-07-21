@@ -48,10 +48,10 @@ export default function UpdateGate({ children }: { children: React.ReactNode }) 
       setSettled(true);
       // Hold the "up to date" state briefly, then fade the gate away.
       setTimeout(() => {
-        Animated.timing(fade, { toValue: 0, duration: 340, useNativeDriver: true }).start(() =>
+        Animated.timing(fade, { toValue: 0, duration: 260, useNativeDriver: true }).start(() =>
           setReady(true),
         );
-      }, 550);
+      }, 300);
     };
 
     (async () => {
@@ -100,10 +100,12 @@ export default function UpdateGate({ children }: { children: React.ReactNode }) 
     })();
 
     // If no download has begun shortly after boot, we're already current (or
-    // offline) — reveal the app rather than waiting on an event that won't come.
+    // offline) — reveal the app rather than waiting on an event that won't
+    // come. 2.2 s, not 5 s: the no-update case is by far the common one and
+    // this timeout was most of the perceived app-startup time.
     const t1 = setTimeout(() => {
       if (!started.flag) finish("You're on the latest version");
-    }, 5000);
+    }, 2200);
     // Hard ceiling so a stuck download never traps the user on the splash.
     const t2 = setTimeout(() => finish(), 25000);
 
