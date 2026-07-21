@@ -812,7 +812,11 @@ const styles = StyleSheet.create({
   segTxt: { color: theme.muted2, fontSize: theme.fs.sm, fontWeight: '700' },
   segTxtOn: { color: theme.brand, fontWeight: '800' },
   // analyser sub-tab
-  anaInputRow: { flexDirection: 'row', alignItems: 'center', gap: theme.sp.sm, paddingHorizontal: theme.sp.lg, paddingTop: theme.sp.sm },
+  // zIndex lifts the whole row (and its absolutely-positioned autocomplete
+  // dropdown) above the analyser result body, which renders as a later sibling
+  // in the ScrollView — without it the dropdown paints *behind* the result and
+  // the suggestion rows collide with the ticker underneath (RN-web stacking).
+  anaInputRow: { flexDirection: 'row', alignItems: 'center', gap: theme.sp.sm, paddingHorizontal: theme.sp.lg, paddingTop: theme.sp.sm, zIndex: 50 },
   anaInput: {
     backgroundColor: theme.surface2,
     borderColor: theme.border2,
