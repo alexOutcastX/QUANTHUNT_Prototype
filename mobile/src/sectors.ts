@@ -30,6 +30,7 @@ export const CANONICAL_SECTORS: string[] = [
   'Services',
   'Telecommunication',
   'Textiles',
+  'Utilities',
 ];
 
 // Short display + heat-tile label for each canonical sector (keeps tiles
@@ -56,6 +57,7 @@ export const SECTOR_SHORT: Record<string, string> = {
   Services: 'Services',
   Telecommunication: 'Telecom',
   Textiles: 'Textiles',
+  Utilities: 'Utilities',
 };
 
 // The exhaustive, de-duplicated, sorted sector list: the canonical set unioned
