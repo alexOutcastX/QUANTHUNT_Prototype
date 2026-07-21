@@ -169,10 +169,26 @@ const shadow = {
   none: { shadowColor: 'transparent', shadowOpacity: 0, shadowRadius: 0, shadowOffset: { width: 0, height: 0 } },
 };
 
+// Motion tokens — every animation in the app picks one of these durations so
+// the whole product moves at one tempo. fast: press/hover feedback · base:
+// sheets, tab indicators · gentle: screen-level entrances, skeleton cross-fade
+// · data: number rolls, bar fills. (Transform/opacity only; nothing animates
+// during scroll; reduced-motion collapses all to instant.)
+const motion = { fast: 120, base: 200, gentle: 300, data: 400 };
+
+// Tabular figures for every column of numbers — without this, table cells
+// shimmy as values tick because proportional digits differ in width. Apply to
+// any Text that column-aligns numbers (alongside theme.mono).
+const numCell = Platform.OS === 'web'
+  ? ({ fontFamily: MONO, fontVariant: ['tabular-nums'] } as const)
+  : ({ fontFamily: MONO } as const);
+
 export const theme = {
   ...colors,
   mono: MONO,
   shadow,
+  motion,
+  numCell,
   fs: { xs: 10, sm: 12, md: 14, lg: 16, xl: 20, xxl: 24, h1: 28 },
   sp: { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32 },
   radius: { sm: 6, md: 10, lg: 14, xl: 20, pill: 999 },
