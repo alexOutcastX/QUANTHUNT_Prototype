@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { IndexQuote, ScanRow, api } from '../api';
+import { IndexQuote, ScanRow, SectorLevel, api } from '../api';
 import StockDetail from '../components/StockDetail';
 import { Row } from '../screener';
 import { EmptyState, Loading, ScreenTitle, Sheet } from '../ui';
@@ -236,8 +236,19 @@ export default function HeatmapScreen() {
 // with that sector pre-filtered and the scan auto-running. Data is the server's
 // full NSE+BSE sector aggregate (/sectors) — computed as a by-product of the
 // multibagger universe sweep, so the whole listed market is covered.
-type SecRow = { sector: string; count: number; mcap: number | null; chg: number | null };
-let sectorCache: { rows: SecRow[]; asof: number; universe: number; mapped: number } | null = null;
+type SecRow = { sector: string; count: number; mcap: number | null; chg: number | null; parent?: string };
+type SecSnap = { rows: SecRow[]; asof: number; universe: number; mapped: number };
+// Cache one snapshot per classification level so flipping the toggle back is instant.
+const sectorCache: Partial<Record<SectorLevel, SecSnap>> = {};
+
+// The heatmap's classification-depth toggle. Screeners only understand the 22
+// macro sectors; the finer levels are for exploration and route via the tile's
+// parent macro sector.
+const LEVELS: { key: SectorLevel; label: string }[] = [
+  { key: 'macro', label: 'Sector' },
+  { key: 'industry', label: 'Industry' },
+  { key: 'basic', label: 'Sub-industry' },
+];
 
 const SCREEN_ROUTES: { sub: string; label: string; icon: string; hint: string }[] = [
   { sub: 'reco', label: 'Recommendations', icon: '💼', hint: 'Long-term buy setups in this sector' },
@@ -246,35 +257,51 @@ const SCREEN_ROUTES: { sub: string; label: string; icon: string; hint: string }[
 ];
 
 function SectorMap() {
-  const [rows, setRows] = useState<SecRow[]>(sectorCache?.rows || []);
+  const [level, setLevel] = useState<SectorLevel>('macro');
+  const [rows, setRows] = useState<SecRow[]>(sectorCache.macro?.rows || []);
   const [meta, setMeta] = useState<{ asof: number; universe: number; mapped: number }>({
-    asof: sectorCache?.asof || 0,
-    universe: sectorCache?.universe || 0,
-    mapped: sectorCache?.mapped || 0,
+    asof: sectorCache.macro?.asof || 0,
+    universe: sectorCache.macro?.universe || 0,
+    mapped: sectorCache.macro?.mapped || 0,
   });
-  const [loading, setLoading] = useState(!sectorCache);
+  const [loading, setLoading] = useState(!sectorCache.macro);
   const [note, setNote] = useState('');
   const [err, setErr] = useState('');
   const [gridW, setGridW] = useState(0);
-  const [pick, setPick] = useState<string | null>(null);
+  const [pick, setPick] = useState<SecRow | null>(null);
   const token = useRef(0);
 
   useEffect(() => {
     const my = ++token.current;
     let cancelled = false;
+    const cached = sectorCache[level];
+    // Flip to whatever is cached for this level immediately; still refetch so
+    // day-changes stay live.
+    setErr('');
+    if (cached) {
+      setRows(cached.rows);
+      setMeta({ asof: cached.asof, universe: cached.universe, mapped: cached.mapped });
+      setLoading(false);
+    } else {
+      setRows([]);
+      setLoading(true);
+    }
     (async () => {
       try {
-        let snap = await api.sectors();
+        let snap = await api.sectors(level);
         if (cancelled || token.current !== my) return;
         // The aggregate is a by-product of the universe sweep: while it runs,
         // poll so tiles fill in; serve whatever is mapped so far immediately.
-        const apply = (s: typeof snap) => {
-          const rs: SecRow[] = (s.sectors || []).map((x) => ({
+        const toRows = (s: typeof snap): SecRow[] =>
+          (s.sectors || []).map((x) => ({
             sector: x.sector,
             count: x.count,
             mcap: x.market_cap_cr ?? null,
             chg: x.chg ?? null,
+            parent: x.parent,
           }));
+        const apply = (s: typeof snap) => {
+          const rs = toRows(s);
           setRows(rs);
           setMeta({ asof: s.asof, universe: s.universe, mapped: s.mapped });
           if (rs.length) setLoading(false);
@@ -285,7 +312,7 @@ function SectorMap() {
           setNote(`Sweeping the market… ${snap.progress || ''}`);
           await new Promise((r) => setTimeout(r, 4000));
           if (cancelled || token.current !== my) return;
-          snap = await api.sectors();
+          snap = await api.sectors(level);
           apply(snap);
           guard++;
         }
@@ -295,10 +322,8 @@ function SectorMap() {
         if (snap.status === 'error' && !snap.sectors?.length) {
           setErr(snap.error || 'Sector sweep failed — try again shortly.');
         } else {
-          sectorCache = {
-            rows: (snap.sectors || []).map((x) => ({
-              sector: x.sector, count: x.count, mcap: x.market_cap_cr ?? null, chg: x.chg ?? null,
-            })),
+          sectorCache[level] = {
+            rows: toRows(snap),
             asof: snap.asof,
             universe: snap.universe,
             mapped: snap.mapped,
@@ -314,24 +339,25 @@ function SectorMap() {
       cancelled = true;
       token.current++;
     };
-  }, []);
+  }, [level]);
 
-  // Canonical order (biggest count first), but always show sectors the server
-  // actually returned. The picker reads day-change straight off the row.
+  // Biggest count first, always showing whatever buckets the server returned.
   const sectorRows = useMemo(
     () => [...rows].filter((r) => r.count > 0).sort((a, b) => b.count - a.count),
     [rows],
   );
-  const rowFor = (s: string | null) => sectorRows.find((r) => r.sector === s) || null;
 
   const cols = gridW ? Math.max(2, Math.min(5, Math.floor(gridW / 150))) : 2;
   const gap = 8;
   const tileW = gridW ? (gridW - gap * (cols - 1)) / cols : 0;
 
+  // At the macro level the label IS the macro sector; at finer levels route via
+  // the tile's parent macro sector (the only thing the screeners understand).
   const route = (sub: string) => {
-    const s = pick;
+    const p = pick;
     setPick(null);
-    if (s) navigate('analysis', { sub, sector: s });
+    const macro = p?.parent || p?.sector;
+    if (macro) navigate('analysis', { sub, sector: macro });
   };
 
   return (
@@ -341,23 +367,39 @@ function SectorMap() {
         {!loading && err ? <EmptyState icon="⚠" title="Couldn't build sector map" hint={err} /> : null}
         {!loading && !err ? (
           <>
+            <View style={styles.levelRow}>
+              {LEVELS.map((l) => (
+                <TouchableOpacity
+                  key={l.key}
+                  style={[styles.levelChip, level === l.key && styles.levelChipOn]}
+                  onPress={() => setLevel(l.key)}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[styles.levelTxt, level === l.key && styles.levelTxtOn]}>{l.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
             <Text style={styles.drillNote}>
-              Full NSE + BSE · {meta.mapped.toLocaleString('en-IN')} stocks mapped across{' '}
-              {sectorRows.length} sectors · tiles coloured by value-weighted day change
-              {note ? ` · ${note}` : ''}
+              Full NSE + BSE · {meta.mapped.toLocaleString('en-IN')} stocks across{' '}
+              {sectorRows.length} {level === 'macro' ? 'sectors' : level === 'industry' ? 'industries' : 'sub-industries'} ·
+              tiles coloured by value-weighted day change{note ? ` · ${note}` : ''}
             </Text>
-            <Text style={styles.secHint}>Tap a sector to screen it — Recommendations, Momentum or Multibagger.</Text>
+            <Text style={styles.secHint}>
+              {level === 'macro'
+                ? 'Tap a sector to screen it — Recommendations, Momentum or Multibagger.'
+                : 'Tap any tile to screen its parent sector — Recommendations, Momentum or Multibagger.'}
+            </Text>
             <View style={styles.grid} onLayout={(e) => setGridW(e.nativeEvent.layout.width)}>
               {gridW && sectorRows.length
                 ? sectorRows.map((r) => (
                     <TouchableOpacity
                       key={r.sector}
                       style={[styles.secTile, { width: tileW, backgroundColor: heatColor(r.chg) }]}
-                      onPress={() => setPick(r.sector)}
+                      onPress={() => setPick(r)}
                       activeOpacity={0.85}
                     >
                       <Text style={[styles.secTileName, { color: inkFor(r.chg) }]} numberOfLines={2}>
-                        {shortSector(r.sector)}
+                        {level === 'macro' ? shortSector(r.sector) : r.sector}
                       </Text>
                       <Text style={[styles.secTileChg, { color: inkFor(r.chg) }]}>{pct(r.chg)}</Text>
                       <Text style={[styles.secTileMeta, { color: inkFor(r.chg) }]}>{r.count} stocks</Text>
@@ -376,16 +418,19 @@ function SectorMap() {
         <Sheet onClose={() => setPick(null)} maxHeight="70%">
           <View style={styles.pickHead}>
             <View style={{ flex: 1 }}>
-              <Text style={styles.pickTitle}>{pick}</Text>
+              <Text style={styles.pickTitle}>{pick.sector}</Text>
               <Text style={styles.pickSub}>
-                {rowFor(pick)?.count || 0} stocks · avg {pct(rowFor(pick)?.chg ?? null)} today
+                {pick.count} stocks · avg {pct(pick.chg)} today
+                {level !== 'macro' && pick.parent ? ` · in ${pick.parent}` : ''}
               </Text>
             </View>
             <TouchableOpacity onPress={() => setPick(null)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
               <Text style={styles.pickX}>✕</Text>
             </TouchableOpacity>
           </View>
-          <Text style={styles.pickLabel}>SCREEN THIS SECTOR VIA</Text>
+          <Text style={styles.pickLabel}>
+            {level === 'macro' ? 'SCREEN THIS SECTOR VIA' : `SCREEN ${(pick.parent || pick.sector).toUpperCase()} VIA`}
+          </Text>
           {SCREEN_ROUTES.map((s) => (
             <TouchableOpacity key={s.sub} style={styles.pickAct} activeOpacity={0.8} onPress={() => route(s.sub)}>
               <Text style={styles.pickActTxt}>{s.icon}  {s.label}</Text>
@@ -393,8 +438,9 @@ function SectorMap() {
             </TouchableOpacity>
           ))}
           <Text style={styles.pickDisc}>
-            Opens the chosen screener with the {pick} sector filter applied and its scan auto-running.
-            Sector map spans the full listed NSE + BSE universe. Educational only — not investment advice.
+            Opens the chosen screener with the {pick.parent || pick.sector} sector filter applied and its scan
+            auto-running.{level !== 'macro' ? ` Screeners filter by the 22 macro sectors, so "${pick.sector}" screens under ${pick.parent || pick.sector}.` : ''}
+            {' '}Educational only — not investment advice.
           </Text>
         </Sheet>
       ) : null}
@@ -667,6 +713,18 @@ const styles = StyleSheet.create({
   legendTxt: { color: theme.muted, fontSize: theme.fs.xs + 1, fontFamily: theme.mono },
   legendSwatch: { width: 22, height: 12, borderRadius: 2 },
   // sectoral heatmap
+  levelRow: { flexDirection: 'row', gap: theme.sp.sm, alignSelf: 'flex-start' },
+  levelChip: {
+    borderColor: theme.border2,
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: theme.sp.md,
+    paddingVertical: 5,
+    backgroundColor: theme.surface2,
+  },
+  levelChipOn: { backgroundColor: theme.accent, borderColor: theme.accent },
+  levelTxt: { color: theme.muted2, fontSize: theme.fs.sm },
+  levelTxtOn: { color: theme.onAccent, fontWeight: '700' },
   secHint: { color: theme.muted2, fontSize: theme.fs.sm },
   secTile: {
     borderRadius: theme.radius.sm + 2,
