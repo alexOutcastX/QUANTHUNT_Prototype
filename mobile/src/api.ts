@@ -727,6 +727,8 @@ export type MomentumHit = {
   relvol: number | null;
   d200: number | null;
   pct_from_high: number | null;
+  ret_1w: number | null;      // trailing 1-week % return (higher-timeframe momentum)
+  ret_1m: number | null;      // trailing 1-month % return
   target: number | null;      // nearest overhead target (52w high / pivot)
   upside_pct: number | null;  // % upside remaining to that target
   setup: 'breakout' | 'fired' | 'pullback';

@@ -321,6 +321,7 @@ def _run(universe_fn):
                            "price": price, "chg": t.get("chg"), "rsi": t.get("rsi"),
                            "relvol": t.get("relvol"), "d200": t.get("d200"),
                            "pct_from_high": t.get("pct_from_high"),
+                           "ret_1w": t.get("ret_1w"), "ret_1m": t.get("ret_1m"),
                            "target": target, "upside_pct": upside_pct, **read}
             except Exception:
                 pass
