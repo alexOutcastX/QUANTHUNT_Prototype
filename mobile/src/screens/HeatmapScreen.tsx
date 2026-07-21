@@ -251,9 +251,9 @@ const LEVELS: { key: SectorLevel; label: string }[] = [
 ];
 
 const SCREEN_ROUTES: { sub: string; label: string; icon: string; hint: string }[] = [
-  { sub: 'reco', label: 'Recommendations', icon: '💼', hint: 'Long-term buy setups in this sector' },
-  { sub: 'momentum', label: 'Momentum', icon: '⚡', hint: 'Breakout & trend radar in this sector' },
-  { sub: 'mb', label: 'Multibagger', icon: '🚀', hint: 'Multibagger candidates in this sector' },
+  { sub: 'reco', label: 'Recommendations', icon: '◆', hint: 'Long-term buy setups in this sector' },
+  { sub: 'momentum', label: 'Momentum', icon: '▲', hint: 'Breakout & trend radar in this sector' },
+  { sub: 'mb', label: 'Multibagger', icon: '◈', hint: 'Multibagger candidates in this sector' },
 ];
 
 function SectorMap() {

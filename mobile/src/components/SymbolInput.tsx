@@ -17,7 +17,7 @@ import { theme } from '../theme';
 // failure the promise is cleared (so a later focus can retry) and the input
 // behaves as a plain TextInput with autocomplete silently off.
 let universePromise: Promise<UniverseSymbol[]> | null = null;
-function loadUniverse(): Promise<UniverseSymbol[]> {
+export function loadUniverse(): Promise<UniverseSymbol[]> {
   if (!universePromise) {
     universePromise = api
       .universe()
