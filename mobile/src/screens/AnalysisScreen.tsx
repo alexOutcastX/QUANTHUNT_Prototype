@@ -194,6 +194,14 @@ export default function AnalysisScreen() {
     api.screenerFinancials(d.sym).then((r) => setScr(r)).catch(() => setScr({ symbol: d.sym, ok: false }));
   };
 
+  // The screener.in scrape (real Indian shareholding + borrowings + P&L, and the
+  // dossier's balance-sheet / P&L fallback) is now part of every dossier — fetch
+  // it automatically as soon as the symbol resolves, no manual tap.
+  useEffect(() => {
+    if (d?.sym && scr === null) fetchScreener();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [d?.sym]);
+
   const exportPdf = () => {
     if (!d) return;
     try {
@@ -578,18 +586,15 @@ export default function AnalysisScreen() {
               </>
             ) : null}
 
-            {/* Real shareholding + borrowings — on-demand scrape from screener.in */}
+            {/* Real shareholding + borrowings — screener.in, fetched automatically
+                as part of every dossier. */}
             <SectionTitle>Shareholding & borrowings · screener.in</SectionTitle>
             <Card>
-              {scr === null ? (
-                <>
-                  <Text style={styles.small}>Pull the real promoter / FII / DII split and borrowings from screener.in on demand.</Text>
-                  <TouchableOpacity style={styles.scrBtn} onPress={fetchScreener} activeOpacity={0.8}>
-                    <Text style={styles.scrBtnTxt}>↻ Fetch from screener.in</Text>
-                  </TouchableOpacity>
-                </>
-              ) : scr === 'loading' ? (
-                <ActivityIndicator color={theme.accent} />
+              {scr === null || scr === 'loading' ? (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.sp.sm }}>
+                  <ActivityIndicator color={theme.accent} />
+                  <Text style={styles.small}>Reading real promoter / FII / DII split & borrowings from screener.in…</Text>
+                </View>
               ) : scr && scr.ok && scr.shareholding && Object.keys(scr.shareholding).length ? (
                 <>
                   <KV k="Promoters" v={num(scr.shareholding.promoter ?? null, 2, '%')} />

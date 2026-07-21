@@ -39,6 +39,54 @@ const SETUP_FILTERS: { key: 'all' | SetupKind; label: string }[] = [
 const setupColor = (s: SetupKind) =>
   s === 'fired' ? theme.green : s === 'breakout' ? GOLD : theme.accent;
 
+// Momentum selection strategies — composite filters over the radar hits, on top
+// of the setup chips + sector. Each is a predicate on a MomentumHit using the
+// fields the radar already carries: daily strength (chg / rsi / setup) and the
+// higher-timeframe trend (d200 = vs 200-DMA, pct_from_high = distance below the
+// 52-week high). "Daily strong · weekly/monthly weak" is the divergence screen:
+// a stock thrusting today while still under its longer-term trend.
+type MomStrategy = {
+  key: string;
+  label: string;
+  hint: string;
+  match: (h: MomentumHit) => boolean;
+};
+const MOM_STRATEGIES: MomStrategy[] = [
+  { key: 'all', label: 'All strategies', hint: 'Every qualifying setup.', match: () => true },
+  {
+    key: 'leaders',
+    label: 'Trend leaders (near highs)',
+    hint: 'Above the 200-DMA and within ~12% of the 52-week high — strongest trends.',
+    match: (h) => (h.d200 ?? -1) > 0 && (h.pct_from_high ?? -100) > -12,
+  },
+  {
+    key: 'breakout',
+    label: 'Breakout momentum',
+    hint: 'Breakout / breakout-fired setups that are trend-aligned (at/above the 200-DMA).',
+    match: (h) => (h.setup === 'breakout' || h.setup === 'fired') && (h.d200 == null || h.d200 >= 0),
+  },
+  {
+    key: 'pullback',
+    label: 'Pullback in uptrend',
+    hint: 'Orderly dips inside an intact uptrend — buy-the-dip candidates.',
+    match: (h) => h.setup === 'pullback' && (h.d200 == null || h.d200 > 0),
+  },
+  {
+    key: 'volume',
+    label: 'Volume thrust (≥2× RVOL)',
+    hint: 'Relative volume 2× or more — institutional participation behind the move.',
+    match: (h) => (h.relvol ?? 0) >= 2,
+  },
+  {
+    key: 'divergence',
+    label: 'Daily strong · weekly/monthly weak',
+    hint: 'Thrusting today (up day / RSI ≥ 55 / fresh breakout) but still below the longer-term trend (under the 200-DMA or ≥20% below the 52-week high). A counter-trend / mean-reversion screen — higher risk.',
+    match: (h) =>
+      ((h.chg ?? 0) >= 1 || (h.rsi ?? 0) >= 55 || h.setup === 'fired') &&
+      ((h.d200 != null && h.d200 < 0) || (h.pct_from_high != null && h.pct_from_high <= -20)),
+  },
+];
+
 // Desktop table columns (fixed widths → header + rows share one width so they
 // stay aligned inside the horizontal scroll). `text` = left aligned.
 // 'sector' / 'cap' aren't fields on MomentumHit — they come from the enrichment
@@ -487,6 +535,7 @@ export default function MomentumScreen() {
   const [tick, setTick] = useState(0);
   const [view, setView] = useState<'radar' | 'analyse'>('radar');
   const [setupFilter, setSetupFilter] = useState<'all' | SetupKind>('all');
+  const [strategy, setStrategy] = useState('all');
   const [enrich, setEnrich] = useState<Record<string, Enrich>>(momEnrichCache);
   const [sector, setSector] = useState('');
   const [sel, setSel] = useState<MomentumHit | null>(null);
@@ -635,11 +684,13 @@ export default function MomentumScreen() {
     () => mergeSectors(hits.map((h) => enrich[h.symbol]?.sector)),
     [hits, enrich],
   );
+  const stratDef = MOM_STRATEGIES.find((s) => s.key === strategy) || MOM_STRATEGIES[0];
   const shown = useMemo(() => {
     const filtered = hits.filter(
       (h) =>
         (setupFilter === 'all' || h.setup === setupFilter) &&
-        (sector === '' || enrich[h.symbol]?.sector === sector),
+        (sector === '' || enrich[h.symbol]?.sector === sector) &&
+        stratDef.match(h),
     );
     return [...filtered].sort((a, b) => {
       const va = sortVal(a, sortCol);
@@ -656,7 +707,7 @@ export default function MomentumScreen() {
       if (nb === null) return -1;
       return (na - nb) * sortDir;
     });
-  }, [hits, enrich, setupFilter, sector, sortCol, sortDir]);
+  }, [hits, enrich, setupFilter, sector, strategy, sortCol, sortDir]);
   const arrow = (col: ColKey) => (sortCol === col ? (sortDir === 1 ? ' ↑' : ' ↓') : '');
   const counts = useMemo(() => {
     const c: Record<string, number> = { breakout: 0, fired: 0, pullback: 0 };
@@ -725,15 +776,28 @@ export default function MomentumScreen() {
       </View>
       {asof ? <Text style={styles.lastUpd}>Setups last updated {fmtAsof(asof)}</Text> : null}
 
-      {!loading && sectors.length ? (
-        <View style={styles.secRow}>
-          <Dropdown
-            label="Sector"
-            value={sector}
-            options={[{ key: '', label: 'All sectors' }, ...sectors.map((sn) => ({ key: sn, label: sn }))]}
-            onChange={setSector}
-          />
-        </View>
+      {!loading ? (
+        <>
+          <View style={styles.secRow}>
+            <Dropdown
+              label="Strategy"
+              value={strategy}
+              options={MOM_STRATEGIES.map((s) => ({ key: s.key, label: s.label }))}
+              onChange={setStrategy}
+            />
+            {sectors.length ? (
+              <Dropdown
+                label="Sector"
+                value={sector}
+                options={[{ key: '', label: 'All sectors' }, ...sectors.map((sn) => ({ key: sn, label: sn }))]}
+                onChange={setSector}
+              />
+            ) : null}
+          </View>
+          {strategy !== 'all' ? (
+            <Text style={styles.stratHint}>{stratDef.hint}</Text>
+          ) : null}
+        </>
       ) : null}
 
       <ScrollView style={{ flex: 1 }}>
@@ -1012,7 +1076,8 @@ const styles = StyleSheet.create({
   // greedily filling the column (which left a large blank gap and vertically-
   // centred the chips).
   secScroll: { flexGrow: 0, flexShrink: 0 },
-  secRow: { flexDirection: 'row', paddingHorizontal: theme.sp.md, paddingBottom: theme.sp.sm, alignItems: 'center' },
+  secRow: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.sp.sm, paddingHorizontal: theme.sp.md, paddingBottom: theme.sp.sm, alignItems: 'center' },
+  stratHint: { color: theme.muted, fontSize: theme.fs.xs + 1, lineHeight: 15, paddingHorizontal: theme.sp.lg, paddingBottom: theme.sp.sm },
   secChip: {
     borderColor: theme.border2,
     borderWidth: 1,
