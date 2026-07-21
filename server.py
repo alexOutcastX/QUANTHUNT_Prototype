@@ -3096,6 +3096,32 @@ def strategy_scores_route():
         return jsonify({"error": f"Couldn't score {sym} right now — try again shortly."}), 503
 
 
+_CHK_CACHE = {}
+_CHK_TTL = 6 * 3600  # financials change quarterly — cache for hours
+
+
+@app.route("/checklist")
+def checklist_route():
+    """10-point fundamental checklist for one symbol (3-yr sales/PAT/EPS CAGR,
+    EPS growth, P/E, PEG, operating cash flow, OCF/PAT, debt, interest coverage)
+    — shown in the dossier + multibagger analyser."""
+    sym = request.args.get("symbol", "").strip().upper().replace("NSE:", "").replace("BSE:", "")
+    if not sym:
+        return jsonify({"error": "symbol required"}), 400
+    cached = _CHK_CACHE.get(sym)
+    if cached and time.time() - cached[0] < _CHK_TTL:
+        return jsonify(cached[1])
+    try:
+        import checklist as _cl
+        payload = _cl.analyse(sym)
+        if payload.get("items"):
+            _CHK_CACHE[sym] = (time.time(), payload)
+        return jsonify(payload)
+    except Exception as e:
+        log.error("checklist error %s: %s", sym, e)
+        return jsonify({"error": f"Couldn't build the checklist for {sym} — try again shortly."}), 503
+
+
 _SCR_CACHE = {}
 _SCR_TTL = 6 * 3600  # shareholding/balance change quarterly — cache for hours
 
