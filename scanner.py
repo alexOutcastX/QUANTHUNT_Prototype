@@ -216,6 +216,18 @@ def _compute_row(sym, idx_ret, suffix=".NS"):
     pct_from_high = round((price - high52) / high52 * 100, 2) if high52 else None
     pct_from_low = round((price - low52) / low52 * 100, 2) if low52 else None
 
+    # Trailing % returns over a trading week (~5 bars) and month (~21 bars) — the
+    # true higher-timeframe momentum, so the radar can screen "daily strong but
+    # weekly/monthly weak" exactly rather than by a 200-DMA proxy.
+    def _ret_n(n):
+        if len(close) > n:
+            base = float(close.iloc[-(n + 1)])
+            return round((price / base - 1) * 100, 2) if base else None
+        return None
+
+    ret_1w = _ret_n(5)
+    ret_1m = _ret_n(21)
+
     # TTM squeeze: BB(20,2) inside Keltner(20, 1.5*ATR)
     sqz_on = sqz_fire = None
     sqz_mom = None
@@ -355,6 +367,8 @@ def _compute_row(sym, idx_ret, suffix=".NS"):
         "low52": round(low52, 2) if low52 else None,
         "pct_from_high": pct_from_high,
         "pct_from_low": pct_from_low,
+        "ret_1w": ret_1w,
+        "ret_1m": ret_1m,
         "beta": _beta(close, idx_ret),
         "sqzOn": sqz_on,
         "sqzFire": sqz_fire,

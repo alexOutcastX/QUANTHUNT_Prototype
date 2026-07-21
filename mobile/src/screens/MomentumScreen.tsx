@@ -80,10 +80,9 @@ const MOM_STRATEGIES: MomStrategy[] = [
   {
     key: 'divergence',
     label: 'Daily strong · weekly/monthly weak',
-    hint: 'Thrusting today (up day / RSI ≥ 55 / fresh breakout) but still below the longer-term trend (under the 200-DMA or ≥20% below the 52-week high). A counter-trend / mean-reversion screen — higher risk.',
-    match: (h) =>
-      ((h.chg ?? 0) >= 1 || (h.rsi ?? 0) >= 55 || h.setup === 'fired') &&
-      ((h.d200 != null && h.d200 < 0) || (h.pct_from_high != null && h.pct_from_high <= -20)),
+    hint: 'Up today but down over both the trailing week and month — a real timeframe divergence (mean-reversion bounce). Uses actual 1-week & 1-month returns. Higher risk / counter-trend.',
+    // Exact: positive today, negative over the trailing week AND month.
+    match: (h) => (h.chg ?? 0) > 0 && (h.ret_1w ?? 0) < 0 && (h.ret_1m ?? 0) < 0,
   },
 ];
 
@@ -263,6 +262,8 @@ function MomDetail({
           {stat('RSI', h.rsi != null ? h.rsi.toFixed(0) : '—')}
           {stat('REL VOL', h.relvol != null ? h.relvol.toFixed(2) + 'x' : '—')}
           {stat('VS 200DMA', <Text style={{ color: (h.d200 ?? 0) >= 0 ? theme.green : theme.red }}>{pct(h.d200)}</Text>)}
+          {stat('1W RET', <Text style={{ color: (h.ret_1w ?? 0) >= 0 ? theme.green : theme.red }}>{pct(h.ret_1w)}</Text>)}
+          {stat('1M RET', <Text style={{ color: (h.ret_1m ?? 0) >= 0 ? theme.green : theme.red }}>{pct(h.ret_1m)}</Text>)}
           {stat('52W HIGH', <Text style={{ color: theme.red }}>{pct(h.pct_from_high)}</Text>)}
           {stat('UPSIDE', <Text style={{ color: (h.upside_pct ?? 0) > 0 ? theme.green : theme.muted }}>{h.upside_pct != null ? '+' + h.upside_pct.toFixed(1) + '%' : '—'}</Text>)}
           {h.target != null ? stat('TARGET', `₹${fmtIN(h.target)}`) : null}
