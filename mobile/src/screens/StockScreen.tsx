@@ -99,11 +99,30 @@ export default function StockScreen() {
       AsyncStorage.setItem(RECENT_KEY, JSON.stringify(next)).catch(() => {});
       return next;
     });
+    // Fast quote first (sub-second), full technical row on top — so the spine
+    // shows a live price even when the scan feed is slow or rate-limited.
+    api
+      .ltp([q])
+      .then((r) => {
+        if (token.current !== my) return;
+        const qt = r[q];
+        if (qt?.price == null) return;
+        setScan((prev) =>
+          prev?.price != null ? prev : { ...(prev || {}), price: qt.price, prevClose: qt.prevClose, chg: qt.chg },
+        );
+        setScanTs(Math.floor(Date.now() / 1000));
+        setSpineLoading(false);
+      })
+      .catch(() => {});
     api
       .scan([q])
       .then((r) => {
         if (token.current !== my) return;
-        setScan(r.data[q] || null);
+        const row = r.data[q] || null;
+        // Keep the quote's price if the scan row came back without one.
+        setScan((prev) =>
+          row ? { ...row, price: row.price ?? prev?.price, chg: row.chg ?? prev?.chg, prevClose: row.prevClose ?? prev?.prevClose } : prev,
+        );
         setScanTs(Math.floor(Date.now() / 1000));
       })
       .catch(() => {})
@@ -246,7 +265,7 @@ export default function StockScreen() {
               <IconChip icon={watched ? 'watchFilled' : 'watch'} label={watched ? 'Watching' : 'Watch'} on={watched} onPress={toggleWatch} />
               <IconChip icon="chart" label="Chart" onPress={() => setDetail({ sym: active, name: meta.name || active, price: scan?.price ?? null, chg } as Row)} />
               <IconChip icon="landmark" label="Dossier" onPress={() => navigate('analysis', { sub: 'inst', symbol: active })} />
-              <IconChip icon="export" label={exporting ? 'Exporting…' : 'Export PDF'} onPress={onExport} disabled={exporting} />
+              <IconChip icon="export" label={exporting ? 'Exporting…' : 'PDF'} onPress={onExport} disabled={exporting} />
             </View>
           </View>
 
