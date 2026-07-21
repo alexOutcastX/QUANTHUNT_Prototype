@@ -502,15 +502,10 @@ def _ensure_sector_classification(force=False):
                     bse_rows = []
                 n = _sectors.refresh_classification(_nse_archive_text, bse_rows=bse_rows, force=force)
                 log.info("Sector classification refreshed: %d symbols mapped", n)
-                # NSE index files cap at ~751; the BSE API is Akamai-blocked from
-                # the VM. Close the NSE tail with the per-symbol quote API, which
-                # is reliably reachable — this is what carries NSE toward ~2,000.
-                try:
-                    added = _nse_classify_universe(get_universe())
-                    log.info("NSE per-symbol classify added %d; total mapped %d",
-                             added, _sectors.map_size())
-                except Exception as e:
-                    log.warning("NSE per-symbol classify failed: %s", e)
+                # The bundled sector_map.csv already gives whole-universe coverage,
+                # so the light NSE index top-up above is enough to catch newly
+                # listed scrips. (The heavy per-symbol NSE sweep is retired — it
+                # hammered NSE for names the bundle already covers.)
             except Exception as e:
                 log.warning("Sector classification refresh failed: %s", e)
             finally:
@@ -1726,6 +1721,7 @@ def sectors_aggregate():
         # Per-source classification breakdown — helps diagnose coverage: how many
         # symbols the BSE scrip master vs the NSE index files each contributed.
         "diag": {"classify": _sectors.diag(), "bse": _bse_diag,
+                 "static": _sectors.static_count(),
                  "classified_symbols": _sectors.map_size()},
         "error": None,
     })
