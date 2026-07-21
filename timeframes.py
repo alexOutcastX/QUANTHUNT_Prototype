@@ -50,6 +50,55 @@ def score_read(price, ema20, ema50, rsi, macd):
     return score, bias
 
 
+def rating_of(score):
+    """Map a 0-100 timeframe score to a trade rating label. Pure/unit-tested."""
+    if score is None:
+        return "n/a"
+    if score >= 80:
+        return "Strong Buy"
+    if score >= 60:
+        return "Buy"
+    if score > 40:
+        return "Neutral"
+    if score > 20:
+        return "Weak"
+    return "Avoid"
+
+
+def _levels(highs, lows, price):
+    """Swing-pivot support/resistance + Fibonacci retracement for one interval.
+    Pure over plain lists (unit-tested). `highs`/`lows` are the interval's bar
+    highs/lows, `price` the last close. Returns supports (nearest-first, below
+    price), resistances (above), fib retracement levels of the swing, and the
+    swing hi/lo."""
+    n = min(len(highs), len(lows))
+    if n < 10 or price is None:
+        return {}
+    k = 3  # fractal half-window
+    piv_hi, piv_lo = [], []
+    for i in range(k, n - k):
+        if highs[i] == max(highs[i - k:i + k + 1]):
+            piv_hi.append(highs[i])
+        if lows[i] == min(lows[i - k:i + k + 1]):
+            piv_lo.append(lows[i])
+    pivots = piv_hi + piv_lo
+    below = sorted({round(p, 2) for p in pivots if p < price}, key=lambda x: price - x)[:3]
+    above = sorted({round(p, 2) for p in pivots if p > price}, key=lambda x: x - price)[:3]
+    hi, lo = max(highs[:n]), min(lows[:n])
+    rng = hi - lo
+    fib = {}
+    if rng > 0:
+        for r in (0.236, 0.382, 0.5, 0.618, 0.786):
+            fib[str(r)] = round(hi - r * rng, 2)   # retracement down from swing high
+    return {
+        "supports": below,
+        "resistances": above,
+        "fib": fib,
+        "swing_hi": round(hi, 2),
+        "swing_lo": round(lo, 2),
+    }
+
+
 def _read(df):
     """Compute the score inputs for one interval's OHLC frame (needs pandas/ta)."""
     try:
@@ -76,6 +125,10 @@ def _read(df):
     except Exception:
         macd = None
     score, bias = score_read(price, ema20, ema50, rsi, macd)
+    try:
+        levels = _levels(df["High"].dropna().tolist(), df["Low"].dropna().tolist(), price)
+    except Exception:
+        levels = {}
     return {
         "price": round(price, 2),
         "rsi": round(rsi, 1) if rsi is not None else None,
@@ -84,6 +137,8 @@ def _read(df):
         "vs_ema50": round((price / ema50 - 1) * 100, 2) if ema50 else None,
         "score": score,
         "bias": bias,
+        "rating": rating_of(score),
+        **levels,
     }
 
 
@@ -119,4 +174,18 @@ def analyse(symbol, suffix=".NS"):
         horizons.append({"key": key, "label": label, "score": sc, "bias": bias,
                          "from": [by_tf[k]["label"] for k in keys if by_tf.get(k)]})
 
-    return {"symbol": symbol, "timeframes": tfs, "horizons": horizons}
+    # Overall: all timeframes count, but weight the higher (less noisy) ones more.
+    weights = {"5m": 1, "15m": 1, "60m": 2, "1d": 3, "1wk": 3}
+    num = den = 0
+    for t in tfs:
+        s = t.get("score")
+        if s is not None:
+            w = weights.get(t["tf"], 1)
+            num += s * w
+            den += w
+    overall = round(num / den) if den else None
+    overall_bias = ("n/a" if overall is None else "bullish" if overall >= 60
+                    else "bearish" if overall <= 40 else "neutral")
+
+    return {"symbol": symbol, "timeframes": tfs, "horizons": horizons,
+            "overall": {"score": overall, "bias": overall_bias, "rating": rating_of(overall)}}

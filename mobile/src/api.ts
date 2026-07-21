@@ -366,9 +366,16 @@ export type TimeframeRead = {
   tf: string; label: string; price?: number | null; rsi?: number | null;
   macd?: number | null; vs_ema20?: number | null; vs_ema50?: number | null;
   score: number | null; bias: string;
+  rating?: string;
+  supports?: number[]; resistances?: number[];
+  fib?: Record<string, number>; swing_hi?: number; swing_lo?: number;
 };
 export type HorizonRead = { key: string; label: string; score: number | null; bias: string; from?: string[] };
-export type TimeframesResp = { symbol: string; timeframes: TimeframeRead[]; horizons: HorizonRead[]; error?: string };
+export type OverallRead = { score: number | null; bias: string; rating: string };
+export type TimeframesResp = {
+  symbol: string; timeframes: TimeframeRead[]; horizons: HorizonRead[];
+  overall?: OverallRead; error?: string;
+};
 
 // Per-strategy scorecard (/strategy-scores) — shown in every detail popup.
 export type StrategyScore = { id: string; name: string; score: number | null; pass: boolean; note: string };

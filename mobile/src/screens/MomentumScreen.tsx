@@ -7,10 +7,12 @@ import { Row } from '../screener';
 import { addSymbol, loadWatchlist, normSymbol, removeSymbol } from '../watchlist';
 import { LocalAlert, addLocalAlert, hasLocalAlert, loadLocalAlerts } from '../localalerts';
 import { capBand } from '../marketcap';
-import { EmptyState, InfoButton, Loading, Sheet } from '../ui';
+import { Btn, Dropdown, EmptyState, InfoButton, Loading, Sheet } from '../ui';
 import { MOMENTUM_INFO } from '../tabInfo';
 import StrategyScores from '../components/StrategyScores';
-import { navigate, takeSector } from '../navIntent';
+import TimeframePanel from '../components/TimeframePanel';
+import SymbolInput from '../components/SymbolInput';
+import { navigate, takeSector, takeSymbol } from '../navIntent';
 import { mergeSectors } from '../sectors';
 import { theme } from '../theme';
 
@@ -85,6 +87,13 @@ const fmtAsof = (epoch: number) =>
   new Date(epoch * 1000).toLocaleString('en-IN', {
     day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit',
   });
+// Compact market cap (input in ₹ crore): 123456 → "₹1.23L Cr", 12345 → "₹12.3K Cr".
+const fmtCap = (cr?: number | null) => {
+  if (cr == null || !isFinite(cr)) return null;
+  if (cr >= 100000) return '₹' + (cr / 100000).toFixed(2) + 'L Cr';
+  if (cr >= 1000) return '₹' + (cr / 1000).toFixed(1) + 'K Cr';
+  return '₹' + Math.round(cr).toLocaleString('en-IN') + ' Cr';
+};
 
 // Market-cap band chip (LARGE / MID / SMALL / MICRO) — shared by table + cards.
 function capTag(mcapCr?: number | null) {
@@ -196,6 +205,9 @@ function MomDetail({
         <Text style={styles.dSecTitle}>TECHNICAL READ</Text>
         <ReadBox h={h} c={c} />
 
+        <Text style={styles.dSecTitle}>MULTI-TIMEFRAME · S/R · FIBONACCI</Text>
+        <TimeframePanel symbol={h.symbol} />
+
         <StrategyScores symbol={h.symbol} />
 
         <View style={styles.dActions}>
@@ -231,6 +243,96 @@ function MomDetail({
   );
 }
 
+// Analyser sub-tab: type/search any symbol and read its momentum across every
+// timeframe (5-min → weekly) — trade rating, S/R and Fibonacci levels per
+// timeframe + an overall score. Same predictive search as the other pages.
+function MomAnalyser({
+  initialSymbol,
+  watch,
+  onToggleWatch,
+  onChartSym,
+}: {
+  initialSymbol: string;
+  watch: string[];
+  onToggleWatch: (sym: string) => void;
+  onChartSym: (sym: string) => void;
+}) {
+  const [sym, setSym] = useState('');
+  const [active, setActive] = useState(initialSymbol);
+  const [recent, setRecent] = useState<string[]>([]);
+  useEffect(() => {
+    if (initialSymbol) setActive(initialSymbol);
+  }, [initialSymbol]);
+  const run = (s?: string) => {
+    const q = (s ?? sym).trim().toUpperCase().replace(/^[A-Z]+:/, '');
+    if (!q) return;
+    setActive(q);
+    setSym(q);
+    setRecent((prev) => [q, ...prev.filter((x) => x !== q)].slice(0, 8));
+  };
+  const isWatched = (s: string) => watch.includes(normSymbol(s));
+  return (
+    <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: theme.sp.xl }}>
+      <View style={styles.anaInputRow}>
+        <SymbolInput
+          value={sym}
+          onChangeText={setSym}
+          onSelect={(s) => run(s)}
+          onSubmit={() => run()}
+          placeholder="Any NSE/BSE symbol — momentum on every timeframe…"
+          inputStyle={styles.anaInput}
+          containerStyle={{ flex: 1 }}
+        />
+        <Btn label="⚡ Analyse" onPress={() => run()} disabled={!sym.trim()} />
+      </View>
+      {recent.length ? (
+        <View style={styles.recentRow}>
+          <Text style={styles.recentLabel}>RECENT</Text>
+          {recent.map((s) => (
+            <TouchableOpacity key={s} style={styles.recentChip} onPress={() => run(s)} activeOpacity={0.75}>
+              <Text style={styles.recentTxt}>{s}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      ) : null}
+      {!active ? (
+        <EmptyState
+          icon="⚡"
+          title="Analyse any stock's momentum"
+          hint="Search a symbol to see its trade rating, support/resistance and Fibonacci levels on every timeframe from 5-minute to weekly, plus an overall score."
+        />
+      ) : (
+        <View style={styles.anaBody}>
+          <View style={styles.anaHead}>
+            <Text style={styles.anaSym}>{active}</Text>
+            <View style={styles.anaHeadActions}>
+              <TouchableOpacity style={styles.aBtn} onPress={() => onChartSym(active)} activeOpacity={0.75}>
+                <Text style={styles.aTxt}>▤ Chart</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.aBtn} onPress={() => onToggleWatch(active)} activeOpacity={0.75}>
+                <Text style={[styles.aTxt, isWatched(active) && { color: theme.green }]}>{isWatched(active) ? '★' : '☆'}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+          <TimeframePanel symbol={active} />
+          <StrategyScores symbol={active} />
+          <View style={styles.dActions}>
+            <TouchableOpacity style={styles.dActBtn} onPress={() => navigate('analysis', { sub: 'mb', symbol: active })} activeOpacity={0.75}>
+              <Text style={[styles.dActTxt, { color: theme.accent }]}>🚀 Multibagger</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.dActBtn} onPress={() => navigate('analysis', { sub: 'patterns', symbol: active })} activeOpacity={0.75}>
+              <Text style={styles.dActTxt}>📈 Pattern</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.dActBtn} onPress={() => navigate('analysis', { sub: 'inst', symbol: active })} activeOpacity={0.75}>
+              <Text style={styles.dActTxt}>🏛 Dossier</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+    </ScrollView>
+  );
+}
+
 // Session caches — switching tabs doesn't refetch.
 let momCache: MomentumHit[] | null = null;
 let momNote = '';
@@ -243,6 +345,7 @@ export default function MomentumScreen() {
   const [loading, setLoading] = useState(!momCache);
   const [asof, setAsof] = useState(momAsof);
   const [tick, setTick] = useState(0);
+  const [view, setView] = useState<'radar' | 'analyse'>('radar');
   const [setupFilter, setSetupFilter] = useState<'all' | SetupKind>('all');
   const [enrich, setEnrich] = useState<Record<string, Enrich>>(momEnrichCache);
   const [sector, setSector] = useState('');
@@ -254,11 +357,18 @@ export default function MomentumScreen() {
   const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { isDesktop } = useResponsive();
 
+  const [anaInitial, setAnaInitial] = useState('');
   useEffect(() => {
     loadWatchlist().then(setWatch);
     loadLocalAlerts().then(setAlerts);
     const s = takeSector('momentum');
     if (s) setSector(s);
+    // A symbol handed off from another screen opens the analyser directly.
+    const sym = takeSymbol('momentum');
+    if (sym) {
+      setAnaInitial(sym);
+      setView('analyse');
+    }
   }, []);
 
   const toast = (m: string) => {
@@ -320,24 +430,33 @@ export default function MomentumScreen() {
         momAsof = snap.asof;
         // Enrich each hit with sector + market cap (the radar carries neither).
         // Best-effort: a failed/partial fetch just leaves those tags blank.
+        // Market cap + sector warm in the background server-side, so poll a few
+        // rounds until `pending` drains — otherwise most caps are null and Cap
+        // sorting has nothing to sort on. Merge progressively so tags fill in.
         const syms = snap.results.map((h) => h.symbol);
         if (syms.length) {
-          try {
-            const res = await api.fundamentalsBulk(syms);
-            if (!cancelled && res.data) {
-              const map: Record<string, Enrich> = {};
+          const merged: Record<string, Enrich> = {};
+          for (let round = 0; round < 8 && !cancelled; round++) {
+            let res: Awaited<ReturnType<typeof api.fundamentalsBulk>>;
+            try {
+              res = await api.fundamentalsBulk(syms);
+            } catch {
+              break;
+            }
+            if (cancelled) return;
+            if (res.data) {
               Object.entries(res.data).forEach(([sym, f]) => {
                 const rec = f as Record<string, unknown>;
-                map[sym] = {
-                  sector: (rec.sector as string) ?? null,
-                  mcap: typeof rec.market_cap_cr === 'number' ? rec.market_cap_cr : null,
+                merged[sym] = {
+                  sector: (rec.sector as string) ?? merged[sym]?.sector ?? null,
+                  mcap: typeof rec.market_cap_cr === 'number' ? rec.market_cap_cr : (merged[sym]?.mcap ?? null),
                 };
               });
-              momEnrichCache = map;
-              setEnrich(map);
+              momEnrichCache = { ...merged };
+              setEnrich({ ...merged });
             }
-          } catch {
-            /* tags stay blank — non-fatal */
+            if (!res.pending || !res.pending.length) break;
+            await new Promise((r) => setTimeout(r, 3000));
           }
         }
       } catch (e) {
@@ -388,8 +507,13 @@ export default function MomentumScreen() {
       if (typeof va === 'string' || typeof vb === 'string') {
         return String(va ?? '').localeCompare(String(vb ?? '')) * sortDir;
       }
-      const na = typeof va === 'number' && isFinite(va) ? va : -Infinity;
-      const nb = typeof vb === 'number' && isFinite(vb) ? vb : -Infinity;
+      // Unknown values (e.g. a market cap that hasn't loaded) always sort last,
+      // regardless of direction — so Cap sorting surfaces real caps, not blanks.
+      const na = typeof va === 'number' && isFinite(va) ? va : null;
+      const nb = typeof vb === 'number' && isFinite(vb) ? vb : null;
+      if (na === null && nb === null) return 0;
+      if (na === null) return 1;
+      if (nb === null) return -1;
       return (na - nb) * sortDir;
     });
   }, [hits, enrich, setupFilter, sector, sortCol, sortDir]);
@@ -407,12 +531,31 @@ export default function MomentumScreen() {
   };
   const openChart = (h: MomentumHit) =>
     setDetail({ sym: h.symbol, name: h.name, exchange: h.exchange, price: h.price, chg: h.chg });
+  const openChartSym = (sym: string) =>
+    setDetail({ sym, name: sym, exchange: 'NSE', price: null });
 
   return (
     <View style={styles.container}>
+      <View style={styles.segRow}>
+        <View style={styles.seg}>
+          {(['radar', 'analyse'] as const).map((v) => (
+            <TouchableOpacity
+              key={v}
+              style={[styles.segBtn, view === v && styles.segBtnOn]}
+              onPress={() => setView(v)}
+              activeOpacity={0.75}
+            >
+              <Text style={[styles.segTxt, view === v && styles.segTxtOn]}>{v === 'radar' ? '◎ Radar' : '⚡ Analyser'}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+        <InfoButton title="Momentum radar" content={MOMENTUM_INFO} />
+      </View>
+
+      {view === 'radar' ? (
+        <>
       <View style={styles.chipsRow}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipsInner}>
-          <InfoButton title="Momentum radar" content={MOMENTUM_INFO} style={styles.infoInline} />
           {SETUP_FILTERS.map((f) => {
             const count =
               f.key === 'all' ? counts.breakout + counts.fired + counts.pullback : counts[f.key] || 0;
@@ -443,25 +586,14 @@ export default function MomentumScreen() {
       {asof ? <Text style={styles.lastUpd}>Setups last updated {fmtAsof(asof)}</Text> : null}
 
       {!loading && sectors.length ? (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.secScroll} contentContainerStyle={styles.secRow}>
-          <TouchableOpacity
-            style={[styles.secChip, sector === '' && styles.secChipOn]}
-            onPress={() => setSector('')}
-            activeOpacity={0.75}
-          >
-            <Text style={[styles.secChipTxt, sector === '' && styles.secChipTxtOn]}>All sectors</Text>
-          </TouchableOpacity>
-          {sectors.map((s) => (
-            <TouchableOpacity
-              key={s}
-              style={[styles.secChip, sector === s && styles.secChipOn]}
-              onPress={() => setSector((cur) => (cur === s ? '' : s))}
-              activeOpacity={0.75}
-            >
-              <Text style={[styles.secChipTxt, sector === s && styles.secChipTxtOn]}>{s}</Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
+        <View style={styles.secRow}>
+          <Dropdown
+            label="Sector"
+            value={sector}
+            options={[{ key: '', label: 'All sectors' }, ...sectors.map((sn) => ({ key: sn, label: sn }))]}
+            onChange={setSector}
+          />
+        </View>
       ) : null}
 
       <ScrollView style={{ flex: 1 }}>
@@ -578,6 +710,9 @@ export default function MomentumScreen() {
                     <View style={styles.cardStats}>
                       <Text style={styles.cardStat}>₹{fmtIN(h.price)}</Text>
                       <Text style={[styles.cardStat, { color: (h.chg ?? 0) >= 0 ? theme.green : theme.red }]}>{pct(h.chg, 2)}</Text>
+                      {fmtCap(enrich[h.symbol]?.mcap) ? (
+                        <Text style={[styles.cardStat, { color: theme.muted2 }]}>{fmtCap(enrich[h.symbol]?.mcap)}</Text>
+                      ) : null}
                       <Text style={styles.cardStat}>RSI {h.rsi != null ? h.rsi.toFixed(0) : '—'}</Text>
                       <Text style={styles.cardStat}>{h.relvol != null ? h.relvol.toFixed(2) + 'x' : '—'}</Text>
                       <Text style={[styles.cardStat, { color: (h.d200 ?? 0) >= 0 ? theme.green : theme.red }]}>200DMA {pct(h.d200)}</Text>
@@ -618,6 +753,15 @@ export default function MomentumScreen() {
           </Text>
         ) : null}
       </ScrollView>
+        </>
+      ) : (
+        <MomAnalyser
+          initialSymbol={anaInitial}
+          watch={watch}
+          onToggleWatch={(s) => toggleWatch(s)}
+          onChartSym={openChartSym}
+        />
+      )}
 
       {sel ? (
         <MomDetail
@@ -646,6 +790,54 @@ export default function MomentumScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.bg },
+  // Radar ⇄ Analyser segmented toggle.
+  segRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: theme.sp.lg,
+    paddingTop: theme.sp.md,
+    paddingBottom: theme.sp.sm,
+  },
+  seg: { flexDirection: 'row', gap: theme.sp.xs },
+  segBtn: {
+    backgroundColor: theme.surface2,
+    borderColor: theme.border2,
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: theme.sp.md,
+    paddingVertical: 7,
+  },
+  segBtnOn: { backgroundColor: theme.brandSoft, borderColor: theme.brand },
+  segTxt: { color: theme.muted2, fontSize: theme.fs.sm, fontWeight: '700' },
+  segTxtOn: { color: theme.brand, fontWeight: '800' },
+  // analyser sub-tab
+  anaInputRow: { flexDirection: 'row', alignItems: 'center', gap: theme.sp.sm, paddingHorizontal: theme.sp.lg, paddingTop: theme.sp.sm },
+  anaInput: {
+    backgroundColor: theme.surface2,
+    borderColor: theme.border2,
+    borderWidth: 1,
+    borderRadius: theme.radius.md,
+    color: theme.text,
+    paddingHorizontal: theme.sp.md,
+    paddingVertical: theme.sp.sm + 2,
+    fontSize: theme.fs.md,
+  },
+  recentRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: theme.sp.sm, paddingHorizontal: theme.sp.lg, paddingTop: theme.sp.sm },
+  recentLabel: { color: theme.muted, fontSize: theme.fs.xs, fontWeight: '700', letterSpacing: 1 },
+  recentChip: {
+    backgroundColor: theme.surface2,
+    borderColor: theme.border2,
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: theme.sp.md,
+    paddingVertical: 4,
+  },
+  recentTxt: { color: theme.muted2, fontFamily: theme.mono, fontSize: theme.fs.sm },
+  anaBody: { paddingHorizontal: theme.sp.lg, paddingTop: theme.sp.md, gap: theme.sp.sm },
+  anaHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: theme.sp.xs },
+  anaSym: { color: theme.accent, fontFamily: theme.mono, fontWeight: '800', fontSize: theme.fs.xl },
+  anaHeadActions: { flexDirection: 'row', gap: theme.sp.sm },
   chipsRow: { paddingBottom: theme.sp.xs, paddingTop: theme.sp.sm },
   infoInline: { alignSelf: 'center', marginRight: theme.sp.sm },
   chipsInner: { paddingHorizontal: theme.sp.lg, gap: theme.sp.sm, alignItems: 'center' },
@@ -676,7 +868,7 @@ const styles = StyleSheet.create({
   // greedily filling the column (which left a large blank gap and vertically-
   // centred the chips).
   secScroll: { flexGrow: 0, flexShrink: 0 },
-  secRow: { gap: 6, paddingHorizontal: theme.sp.md, paddingBottom: theme.sp.sm, alignItems: 'center' },
+  secRow: { flexDirection: 'row', paddingHorizontal: theme.sp.md, paddingBottom: theme.sp.sm, alignItems: 'center' },
   secChip: {
     borderColor: theme.border2,
     borderWidth: 1,
