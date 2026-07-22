@@ -23,11 +23,14 @@ log = logging.getLogger("pattern_screen")
 
 _FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "pattern_screen.json")
 TTL = 3600            # a finished sweep stays fresh for an hour
+TTL_PARTIAL = 600     # a rate-limited (partial) sweep retries much sooner
 WORKERS = 6
+RETRY_WORKERS = 2     # gentler second pass for symbols the feed refused
 MIN_CONF = 55         # confidence floor for a hit
-RECENT_BARS = 12      # formation must reach within the last N daily bars
+RECENT_BARS = 15      # formation must reach within the last N daily bars (~3 weeks)
 MAX_SYMBOLS = 260     # hard cap per sweep (NIFTY 500 would hammer the feed)
 PERIOD = "1y"
+PARTIAL_FRACTION = 0.4  # >40% of symbols without data => sweep marked partial
 
 _lock = threading.Lock()
 _threads: dict = {}    # index -> live worker thread
@@ -36,7 +39,8 @@ _states: dict = {}     # index -> state dict
 
 def _blank(index: str) -> dict:
     return {"status": "idle", "progress": "", "asof": 0, "index": index,
-            "universe": 0, "capped": False, "results": [], "error": None}
+            "universe": 0, "capped": False, "results": [], "error": None,
+            "scanned_ok": 0, "no_data": 0, "partial": False}
 
 
 def _load_disk() -> None:
@@ -72,7 +76,10 @@ def ensure(index: str, constituents_fn, load_ohlc, detect, force: bool = False) 
         if st is None:
             st = _blank(index)
             _states[index] = st
-        fresh = st["status"] == "done" and (time.time() - st["asof"]) < TTL
+        # A partial sweep (feed rate-limited most symbols away) goes stale much
+        # sooner, so the next visit automatically fills in the gaps.
+        ttl = TTL_PARTIAL if st.get("partial") else TTL
+        fresh = st["status"] == "done" and (time.time() - st["asof"]) < ttl
         if (fresh and not force) or _threads.get(index):
             return
         t = threading.Thread(
@@ -100,13 +107,18 @@ def _run(index: str, constituents_fn, load_ohlc, detect) -> None:
 
         results: list = []
         done = [0]
+        ok = [0]
+        nodata: list = []
 
-        def work(sym: str) -> None:
+        def work(sym: str) -> bool:
+            """Scan one symbol; returns True when price history was available."""
             hits = []
+            got_data = False
             try:
                 candles = load_ohlc(sym, PERIOD, "1d")
                 usable = [c for c in (candles or []) if c.get("c") is not None]
                 if len(usable) >= 20:
+                    got_data = True
                     px = usable[-1]["c"]
                     det = detect(usable)
                     last = len(usable) - 1
@@ -129,20 +141,44 @@ def _run(index: str, constituents_fn, load_ohlc, detect) -> None:
                 log.debug("pattern sweep failed for %s", sym, exc_info=True)
             with _lock:
                 done[0] += 1
+                if got_data:
+                    ok[0] += 1
                 if hits:
                     results.extend(hits)
                 st = _states[index]
                 st["progress"] = f"{done[0]}/{len(syms)} scanned · {len(results)} hits"
                 # live-publish, strongest first
                 st["results"] = sorted(results, key=lambda h: -h["confidence"])
+                st["scanned_ok"] = ok[0]
+            return got_data
 
-        with ThreadPoolExecutor(max_workers=WORKERS) as pool:
-            list(pool.map(work, syms))
+        def sweep(batch, workers):
+            missed = []
+            with ThreadPoolExecutor(max_workers=workers) as pool:
+                for sym, got in zip(batch, pool.map(work, batch)):
+                    if not got:
+                        missed.append(sym)
+            return missed
+
+        # First pass at full speed, then a gentler retry for every symbol the
+        # feed refused (usually a transient Yahoo rate-limit) — without this a
+        # throttled sweep finishes "done · 0 hits" and looks like the scanner
+        # is broken.
+        nodata = sweep(syms, WORKERS)
+        if nodata:
+            with _lock:
+                _states[index]["progress"] = (
+                    f"retrying {len(nodata)} rate-limited symbols…")
+            done[0] -= len(nodata)  # they re-count as the retry completes
+            nodata = sweep(nodata, RETRY_WORKERS)
 
         with _lock:
             st = _states[index]
+            partial = len(nodata) > len(syms) * PARTIAL_FRACTION
             st.update(status="done", asof=time.time(),
-                      progress=f"{len(syms)} scanned · {len(st['results'])} hits")
+                      scanned_ok=ok[0], no_data=len(nodata), partial=partial,
+                      progress=f"{ok[0]}/{len(syms)} scanned · {len(st['results'])} hits"
+                               + (f" · {len(nodata)} no data" if nodata else ""))
         _save_disk()
     except Exception as e:
         log.error("pattern screen failed for %s: %s", index, e)
@@ -165,6 +201,9 @@ def snapshot(index: str) -> dict:
             "index": index,
             "universe": st.get("universe", 0),
             "capped": st.get("capped", False),
+            "scanned_ok": st.get("scanned_ok", 0),
+            "no_data": st.get("no_data", 0),
+            "partial": st.get("partial", False),
             "matches": len(st.get("results", [])),
             "results": list(st.get("results", [])),
             "error": st.get("error"),

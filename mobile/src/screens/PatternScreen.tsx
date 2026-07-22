@@ -279,7 +279,27 @@ const SCREEN_INDICES = [
   'NIFTY 50', 'NIFTY 100', 'NIFTY 200', 'NIFTY BANK', 'NIFTY IT',
   'NIFTY MIDCAP 100', 'NIFTY SMALLCAP 100', 'NIFTY AUTO', 'NIFTY PHARMA',
 ];
-const BIAS_FILTERS = ['All', 'Bullish', 'Bearish'] as const;
+
+// Full recogniser vocabulary for the filter dropdown (mirrors patterns.py
+// _META), grouped by bias so the sheet doubles as a bullish/bearish filter.
+const PATTERN_GROUPS: { title: string; labels: string[] }[] = [
+  {
+    title: 'Bullish',
+    labels: ['Double Bottom', 'Triple Bottom', 'Inverse Head & Shoulders',
+      'Ascending Triangle', 'Falling Wedge', 'Ascending Channel', 'Bull Flag',
+      'Bull Pennant', 'Cup and Handle', 'Rounding Bottom', 'V-Bottom'],
+  },
+  {
+    title: 'Bearish',
+    labels: ['Double Top', 'Triple Top', 'Head and Shoulders',
+      'Descending Triangle', 'Rising Wedge', 'Descending Channel', 'Bear Flag',
+      'Bear Pennant', 'Rounding Top', 'V-Top'],
+  },
+  {
+    title: 'Bilateral',
+    labels: ['Symmetrical Triangle', 'Rectangle', 'Broadening Formation'],
+  },
+];
 
 const SCREEN_COLS: Col[] = [
   { key: 'symbol', label: 'SYMBOL', w: 118, align: 'left' },
@@ -297,8 +317,7 @@ function PatternIndexScreener({ onOpenSymbol }: { onOpenSymbol: (sym: string) =>
   const [index, setIndex] = useState('NIFTY 50');
   const [snap, setSnap] = useState<PatternScreenResp | null>(null);
   const [error, setError] = useState('');
-  const [bias, setBias] = useState<(typeof BIAS_FILTERS)[number]>('All');
-  const [patFilter, setPatFilter] = useState('');    // '' = all patterns
+  const [patFilter, setPatFilter] = useState('');    // '' = all patterns; 'Bullish'/'Bearish' = bias groups
   const [patOpen, setPatOpen] = useState(false);
   const [sweep, setSweep] = useState(0);             // bump to restart the poll loop
 
@@ -327,17 +346,23 @@ function PatternIndexScreener({ onOpenSymbol }: { onOpenSymbol: (sym: string) =>
   }, [index, sweep]);
 
   const hits = snap?.results || [];
-  const patLabels = [...new Set(hits.map((h) => h.label))].sort();
-  const shown = hits.filter(
-    (h) =>
-      (bias === 'All' || h.bias === bias.toLowerCase()) &&
-      (!patFilter || h.label === patFilter),
-  );
+  const biasGroup = patFilter === 'Bullish' || patFilter === 'Bearish';
+  const shown = hits.filter((h) => {
+    if (!patFilter) return true;
+    if (biasGroup) return h.bias === patFilter.toLowerCase();
+    return h.label === patFilter;
+  });
   const running = snap?.status === 'running' || snap?.refreshing;
+
+  const pickPat = (l: string) => {
+    setPatFilter(l);
+    setPatOpen(false);
+  };
 
   return (
     <ScrollView contentContainerStyle={styles.body}>
-      <View style={styles.idxWrap}>
+      {/* one scrolling line of index chips — no wrap clutter */}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.idxScroll} contentContainerStyle={styles.idxLine}>
         {SCREEN_INDICES.map((ix) => (
           <TouchableOpacity
             key={ix}
@@ -348,21 +373,12 @@ function PatternIndexScreener({ onOpenSymbol }: { onOpenSymbol: (sym: string) =>
             <Text style={[styles.perTxt, index === ix && styles.perTxtOn]}>{ix.replace('NIFTY ', '')}</Text>
           </TouchableOpacity>
         ))}
-      </View>
+      </ScrollView>
 
-      <View style={styles.idxWrap}>
-        {BIAS_FILTERS.map((b) => (
-          <TouchableOpacity
-            key={b}
-            style={[styles.perChip, bias === b && styles.perChipOn]}
-            onPress={() => setBias(b)}
-            activeOpacity={0.75}
-          >
-            <Text style={[styles.perTxt, bias === b && styles.perTxtOn]}>{b}</Text>
-          </TouchableOpacity>
-        ))}
+      {/* one control line: pattern dropdown (default All) + rescan */}
+      <View style={styles.ctlLine}>
         <TouchableOpacity style={[styles.perChip, !!patFilter && styles.perChipOn]} onPress={() => setPatOpen(true)} activeOpacity={0.75}>
-          <Text style={[styles.perTxt, !!patFilter && styles.perTxtOn]}>{patFilter || 'Any pattern'} ▾</Text>
+          <Text style={[styles.perTxt, !!patFilter && styles.perTxtOn]}>{patFilter || 'All patterns'} ▾</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.perChip}
@@ -378,23 +394,25 @@ function PatternIndexScreener({ onOpenSymbol }: { onOpenSymbol: (sym: string) =>
       </View>
 
       {patOpen ? (
-        <Sheet onClose={() => setPatOpen(false)} maxHeight="70%">
+        <Sheet onClose={() => setPatOpen(false)} maxHeight="80%">
           <ScrollView bounces={false}>
             <SectionTitle>Filter by pattern</SectionTitle>
-            {['', ...patLabels].map((l) => (
-              <TouchableOpacity
-                key={l || 'all'}
-                style={styles.patOpt}
-                onPress={() => {
-                  setPatFilter(l);
-                  setPatOpen(false);
-                }}
-                activeOpacity={0.75}
-              >
+            {['', 'Bullish', 'Bearish'].map((l) => (
+              <TouchableOpacity key={l || 'all'} style={styles.patOpt} onPress={() => pickPat(l)} activeOpacity={0.75}>
                 <Text style={[styles.patOptTxt, patFilter === l && { color: theme.brand, fontWeight: '700' }]}>
-                  {l || 'Any pattern'}
+                  {l ? `All ${l.toLowerCase()} patterns` : 'All patterns'}
                 </Text>
               </TouchableOpacity>
+            ))}
+            {PATTERN_GROUPS.map((g) => (
+              <View key={g.title}>
+                <Text style={styles.patGroup}>{g.title.toUpperCase()}</Text>
+                {g.labels.map((l) => (
+                  <TouchableOpacity key={l} style={styles.patOpt} onPress={() => pickPat(l)} activeOpacity={0.75}>
+                    <Text style={[styles.patOptTxt, patFilter === l && { color: theme.brand, fontWeight: '700' }]}>{l}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
             ))}
           </ScrollView>
         </Sheet>
@@ -409,6 +427,12 @@ function PatternIndexScreener({ onOpenSymbol }: { onOpenSymbol: (sym: string) =>
             {running ? ` · sweeping… ${snap.progress || ''}` : snap.asof ? ` · as of ${fmtDate(snap.asof)}` : ''}
             {snap.capped ? ' · first 260 constituents' : ''}
           </SectionTitle>
+          {!running && snap.partial ? (
+            <Text style={styles.partialNote}>
+              The data feed rate-limited this sweep — only {snap.scanned_ok}/{snap.universe} stocks had price
+              history. It retries automatically in a few minutes, or tap Rescan.
+            </Text>
+          ) : null}
           {snap.status === 'error' && !hits.length ? (
             <EmptyState icon="⚠" title="Sweep failed" hint={snap.error || 'Retry shortly.'} />
           ) : null}
@@ -430,8 +454,14 @@ function PatternIndexScreener({ onOpenSymbol }: { onOpenSymbol: (sym: string) =>
           ) : !running ? (
             <EmptyState
               icon="◇"
-              title="No fresh patterns"
-              hint="No constituent shows a confident formation reaching into the last two weeks. Try another index, or Rescan."
+              title={patFilter && hits.length ? `No ${patFilter} hits` : 'No fresh patterns'}
+              hint={
+                patFilter && hits.length
+                  ? 'Other patterns were found — switch the dropdown back to All patterns to see them.'
+                  : snap.partial
+                    ? 'Most of this sweep was rate-limited by the data feed — tap Rescan to fill in the gaps.'
+                    : 'No constituent shows a confident formation reaching into the last ~3 weeks. Try another index, or Rescan.'
+              }
             />
           ) : (
             <Loading label={`Sweeping ${index}… hits appear as they're found`} />
@@ -756,9 +786,13 @@ const styles = StyleSheet.create({
   recentTxt: { color: theme.muted2, fontSize: theme.fs.sm, fontFamily: theme.mono, fontWeight: '700' },
   body: { paddingHorizontal: theme.sp.lg, paddingBottom: theme.sp.xl, gap: theme.sp.md },
   // index screener
-  idxWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.sp.sm, alignItems: 'center' },
+  idxScroll: { flexGrow: 0 },
+  idxLine: { flexDirection: 'row', gap: theme.sp.sm, alignItems: 'center', paddingRight: theme.sp.lg },
+  ctlLine: { flexDirection: 'row', gap: theme.sp.sm, alignItems: 'center' },
   patOpt: { paddingVertical: theme.sp.sm },
   patOptTxt: { color: theme.text, fontSize: theme.fs.md },
+  patGroup: { color: theme.muted, fontSize: theme.fs.xs, fontWeight: '800', letterSpacing: 1, marginTop: theme.sp.md, marginBottom: 2 },
+  partialNote: { color: '#c9a45b', fontSize: theme.fs.sm, lineHeight: 18 },
   sym: { color: theme.text, fontSize: theme.fs.md, fontWeight: '800', fontFamily: theme.mono },
   priceSub: { color: theme.muted2, fontSize: theme.fs.xs + 1, fontFamily: theme.mono },
   cellLeft: { color: theme.muted2, fontSize: theme.fs.sm },
