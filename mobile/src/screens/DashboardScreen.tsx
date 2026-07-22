@@ -4,7 +4,7 @@ import { API_BASE, HolidaysResp, IndexConstituent, IndexQuote, MoversResp, Quote
 import { loadWatchlist } from '../watchlist';
 import { SimState, loadSim, metrics } from '../paperSim';
 import { navigate } from '../navIntent';
-import { Card, EmptyState, Loading, SectionTitle, StatTile } from '../ui';
+import { AsOfChip, Card, EmptyState, Loading, SectionTitle, StatTile } from '../ui';
 import { theme } from '../theme';
 
 type NewsItem = { title: string; link: string; source: string; ts: number };
@@ -31,6 +31,7 @@ const dash: {
 
 export default function DashboardScreen({ onNavigate }: { onNavigate?: (page: string) => void }) {
   const [indices, setIndices] = useState<IndexQuote[] | null>(dash.indices ?? null);
+  const [indicesAsof, setIndicesAsof] = useState<number | null>(null);
   const [market, setMarket] = useState<HolidaysResp | null>(dash.market ?? null);
   const [movers, setMovers] = useState<Mover[] | null>(dash.movers ?? null);
   // Breadth + gainers/losers now come pre-computed from the server (/movers),
@@ -48,7 +49,7 @@ export default function DashboardScreen({ onNavigate }: { onNavigate?: (page: st
   // watchlist quotes, then news, then the simulator in sequence, so the tail
   // cards waited on whichever earlier call was slow.
   const load = useCallback(async () => {
-    api.indices().then((d) => { dash.indices = d.indices; setIndices(d.indices); }).catch(() => setIndices((v) => v ?? []));
+    api.indices().then((d) => { dash.indices = d.indices; setIndices(d.indices); setIndicesAsof(d.asof ?? null); }).catch(() => setIndices((v) => v ?? []));
     api.holidays().then((d) => { dash.market = d; setMarket(d); }).catch(() => {});
     api
       .indexConstituents('NIFTY 50')
@@ -208,13 +209,19 @@ export default function DashboardScreen({ onNavigate }: { onNavigate?: (page: st
         ))}
       </View>
       {indices.length ? (
-        <TouchableOpacity onPress={() => go('tools')} activeOpacity={0.7}>
-          <Text style={styles.moreLink}>All indices ›</Text>
-        </TouchableOpacity>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+          <TouchableOpacity onPress={() => go('tools')} activeOpacity={0.7}>
+            <Text style={styles.moreLink}>All indices ›</Text>
+          </TouchableOpacity>
+          <AsOfChip ts={indicesAsof} source="delayed · Yahoo" />
+        </View>
       ) : null}
 
       <Card style={{ marginTop: theme.sp.lg }}>
-        <SectionTitle>Market breadth · NIFTY 500</SectionTitle>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+          <SectionTitle>Market breadth · NIFTY 500</SectionTitle>
+          {mv?.asof ? <AsOfChip ts={mv.asof} source="delayed · NSE" /> : null}
+        </View>
         {!mv ? (
           <Loading />
         ) : breadth ? (
