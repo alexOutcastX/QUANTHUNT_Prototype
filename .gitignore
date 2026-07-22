@@ -32,6 +32,7 @@ quanthunt.db-shm
 # Local throwaway static server used only for headless UI verification
 # fake_server.py is the committed E2E fixture (see e2e/smoke.js) — no longer ignored
 mb_screen.json
+pattern_screen.json
 mom_screen.json
 sectors_cache.json
 sectors_cache.json.tmp

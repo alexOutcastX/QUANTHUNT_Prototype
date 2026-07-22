@@ -24,6 +24,30 @@ class H(BaseHTTPRequestHandler):
             payload[k] = []
         self.wfile.write(json.dumps(payload).encode())
 
+    def _pattern_screen(self):
+        hits = [
+            {"symbol": "RELIANCE", "price": 2980.5, "type": "cup_and_handle",
+             "label": "Cup and Handle", "bias": "bullish", "category": "continuation",
+             "status": "confirmed", "confidence": 82, "continuation": 70,
+             "expansion_pct": 8.4, "target": 3230.0, "start_ts": 1750000000, "end_ts": 1752300000},
+            {"symbol": "TCS", "price": 4120.0, "type": "double_top",
+             "label": "Double Top", "bias": "bearish", "category": "reversal",
+             "status": "forming", "confidence": 64, "continuation": 65,
+             "expansion_pct": -5.2, "target": 3905.0, "start_ts": 1749000000, "end_ts": 1752200000},
+            {"symbol": "INFY", "price": 1550.2, "type": "ascending_triangle",
+             "label": "Ascending Triangle", "bias": "bullish", "category": "continuation",
+             "status": "confirmed", "confidence": 61, "continuation": 68,
+             "expansion_pct": 4.1, "target": 1614.0, "start_ts": 1748000000, "end_ts": 1752350000},
+        ]
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.end_headers()
+        self.wfile.write(json.dumps({
+            "status": "done", "refreshing": False, "progress": "50 scanned · 3 hits",
+            "asof": 1752350000, "index": "NIFTY 50", "universe": 50, "capped": False,
+            "matches": len(hits), "results": hits, "error": None,
+        }).encode())
+
     def _indices(self):
         from urllib.parse import urlparse, parse_qs
         cat = (parse_qs(urlparse(self.path).query).get("category", ["domestic"])[0]).lower()
@@ -430,6 +454,8 @@ class H(BaseHTTPRequestHandler):
             return self._mom_screen()
         if path == "/multibagger/screen":
             return self._mb_screen()
+        if path == "/patterns/screen":
+            return self._pattern_screen()
         if path == "/history":
             return self._history()
         if path == "/multibagger":

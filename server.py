@@ -2040,6 +2040,24 @@ def chart_patterns():
         return jsonify({"error": str(e), "symbol": sym, "patterns": []}), 503
 
 
+@app.route("/patterns/screen")
+def patterns_screen():
+    """Index-wide chart-pattern screener (background sweep; see
+    pattern_screen.py). ?index=NIFTY 50 picks the universe, ?refresh=1 forces
+    a re-sweep even when the cached one is still fresh. Hits stream into the
+    snapshot LIVE while the sweep runs; filter by pattern type client-side."""
+    import pattern_screen as ps
+    from patterns import detect_patterns as _detect_chart
+
+    name = request.args.get("index", "NIFTY 50").strip().upper()
+    if name not in NSE_INDEX_MAP:
+        return jsonify({"error": f"Unknown index '{name}'",
+                        "indices": sorted(NSE_INDEX_MAP)}), 400
+    ps.ensure(name, _get_constituents, _load_ohlc, _detect_chart,
+              force=request.args.get("refresh") == "1")
+    return jsonify(ps.snapshot(name))
+
+
 @app.route("/recommendation")
 def recommendation():
     """Full buy-recommendation for one symbol: blends the passed-in fundamental

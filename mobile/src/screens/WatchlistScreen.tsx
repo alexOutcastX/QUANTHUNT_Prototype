@@ -477,15 +477,8 @@ export default function WatchlistScreen() {
           <Btn label="Add" onPress={onAdd} />
         </View>
 
-        {/* toolbar — flexGrow:0 stops the horizontal ScrollView absorbing the
-            page's spare height (RNW default flexGrow:1 stretched the buttons
-            into tall cards whenever the list below was empty) */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.toolScroll}
-          contentContainerStyle={styles.toolbar}
-        >
+        {/* toolbar — wraps on phones instead of clipping buttons mid-way */}
+        <View style={styles.toolbar}>
           <TouchableOpacity style={styles.toolBtn} onPress={() => setColMenu(true)} activeOpacity={0.75}>
             <Text style={styles.toolTxt}>▤ Columns</Text>
           </TouchableOpacity>
@@ -511,7 +504,7 @@ export default function WatchlistScreen() {
           >
             <Text style={[styles.toolTxt, styles.toolTxtDanger]}>Delete</Text>
           </TouchableOpacity>
-        </ScrollView>
+        </View>
 
         {error ? <Text style={styles.error}>{error} — is the backend reachable?</Text> : null}
 
@@ -846,8 +839,7 @@ const styles = StyleSheet.create({
     fontSize: theme.fs.sm + 1,
   },
   // toolbar
-  toolScroll: { flexGrow: 0 },
-  toolbar: { gap: theme.sp.sm, paddingBottom: theme.sp.sm, alignItems: 'center' },
+  toolbar: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.sp.sm, paddingBottom: theme.sp.sm, alignItems: 'center' },
   toolBtn: {
     backgroundColor: theme.surface2,
     borderColor: theme.border2,
