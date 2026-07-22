@@ -4,7 +4,11 @@ import { Platform, Share } from 'react-native';
 import { Row, calcSignal } from './screener';
 import { printHtmlDocument } from './pdf';
 
-const FIELDS: { header: string; get: (r: Row) => unknown }[] = [
+// A column spec for exports: header + raw-value getter. `i` is the row's
+// 0-based position in the exported set (used by the serial column).
+export type ExportCol = { header: string; get: (r: Row, i: number) => unknown };
+
+const FIELDS: ExportCol[] = [
   { header: 'Symbol', get: (r) => r.sym },
   { header: 'Price', get: (r) => r.price },
   { header: 'PrevClose', get: (r) => r.prevClose },
@@ -74,9 +78,9 @@ const cell = (v: unknown): string => {
   return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
 };
 
-export function buildCsv(rows: Row[]): string {
-  const head = FIELDS.map((f) => f.header).join(',');
-  const body = rows.map((r) => FIELDS.map((f) => cell(f.get(r))).join(',')).join('\n');
+export function buildCsv(rows: Row[], cols: ExportCol[] = FIELDS): string {
+  const head = cols.map((f) => f.header).join(',');
+  const body = rows.map((r, i) => cols.map((f) => cell(f.get(r, i))).join(',')).join('\n');
   return head + '\n' + body + '\n';
 }
 
@@ -99,8 +103,8 @@ function webDownload(data: string, filename: string, mime: string): boolean {
   return true;
 }
 
-export async function exportCsv(rows: Row[], name: string): Promise<void> {
-  const csv = buildCsv(rows);
+export async function exportCsv(rows: Row[], name: string, cols?: ExportCol[]): Promise<void> {
+  const csv = buildCsv(rows, cols);
   const filename = `taureye-${slug(name)}.csv`;
   if (Platform.OS === 'web') {
     webDownload(csv, filename, 'text/csv');
@@ -117,15 +121,16 @@ const htmlEsc = (v: unknown): string => {
     .replace(/>/g, '&gt;');
 };
 
-function buildHtmlTable(rows: Row[], styled: boolean): string {
-  const th = FIELDS.map((f) => `<th>${htmlEsc(f.header)}</th>`).join('');
+function buildHtmlTable(rows: Row[], styled: boolean, cols: ExportCol[] = FIELDS): string {
+  const th = cols.map((f) => `<th>${htmlEsc(f.header)}</th>`).join('');
   const body = rows
-    .map((r) => '<tr>' + FIELDS.map((f) => `<td>${htmlEsc(f.get(r))}</td>`).join('') + '</tr>')
+    .map((r, i) => '<tr>' + cols.map((f) => `<td>${htmlEsc(f.get(r, i))}</td>`).join('') + '</tr>')
     .join('');
   const css = styled
-    ? '<style>body{font-family:Arial,Helvetica,sans-serif;color:#111}' +
-      'table{border-collapse:collapse;width:100%;font-size:11px}' +
-      'th,td{border:1px solid #ccc;padding:4px 6px;text-align:right;white-space:nowrap}' +
+    ? '<style>@page{size:A4 landscape;margin:12mm}' +
+      'body{font-family:Arial,Helvetica,sans-serif;color:#111}' +
+      'table{border-collapse:collapse;width:100%;font-size:10px}' +
+      'th,td{border:1px solid #ccc;padding:3px 5px;text-align:right;white-space:nowrap}' +
       'th{background:#f0f2f5;text-align:center}' +
       'td:first-child,th:first-child{text-align:left}</style>'
     : '';
@@ -134,16 +139,16 @@ function buildHtmlTable(rows: Row[], styled: boolean): string {
 
 // Excel: no xlsx dep — emit an HTML table Excel can open, downloaded as .xls
 // (web). On native, fall back to sharing the CSV text.
-export async function exportExcel(rows: Row[], name: string): Promise<void> {
+export async function exportExcel(rows: Row[], name: string, cols?: ExportCol[]): Promise<void> {
   const filename = `taureye-${slug(name)}.xls`;
   if (Platform.OS === 'web') {
     const html =
       '<html><head><meta charset="utf-8"></head><body>' +
-      buildHtmlTable(rows, false) +
+      buildHtmlTable(rows, false, cols) +
       '</body></html>';
     webDownload(html, filename, 'application/vnd.ms-excel');
   } else {
-    await Share.share({ title: `taureye-${slug(name)}.csv`, message: buildCsv(rows) });
+    await Share.share({ title: `taureye-${slug(name)}.csv`, message: buildCsv(rows, cols) });
   }
 }
 
@@ -192,17 +197,17 @@ export async function exportExcelRows(headers: string[], rows: string[][], name:
 // "Save as PDF" dialog, which downloads a real PDF on desktop AND inside the
 // Android WebView (see printHtmlDocument). A true native RN runtime with no DOM
 // shares the CSV text instead.
-export async function exportPdf(rows: Row[], name: string): Promise<void> {
+export async function exportPdf(rows: Row[], name: string, cols?: ExportCol[]): Promise<void> {
   const doc = (globalThis as { document?: any }).document;
   if (!doc?.body) {
-    await Share.share({ title: `taureye-${slug(name)}.csv`, message: buildCsv(rows) });
+    await Share.share({ title: `taureye-${slug(name)}.csv`, message: buildCsv(rows, cols) });
     return;
   }
   const title = `TaurEye — ${name}`;
   printHtmlDocument(
     `<html><head><title>${htmlEsc(title)}</title></head><body>` +
       `<h3 style="font-family:Arial,sans-serif">${htmlEsc(title)}</h3>` +
-      buildHtmlTable(rows, true) +
+      buildHtmlTable(rows, true, cols) +
       '</body></html>',
   );
 }

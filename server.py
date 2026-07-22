@@ -1432,6 +1432,40 @@ SENSEX_30 = [
 CUSTOM_GROUPS = ("BSE SENSEX", "SME EMERGE", "RECENT IPOS")
 
 
+_sme_names_cache: dict = {}
+
+
+def _sme_names():
+    """SYMBOL -> company name for the EMERGE platform, from NSE's official SME
+    master list (same archive host/session as EQUITY_L — no new source)."""
+    global _sme_names_cache
+    if _sme_names_cache:
+        return _sme_names_cache
+    try:
+        s = nse_session()
+        r = s.get(NSE_ARCHIVE + "/content/equities/SME_EQUITY_L.csv", timeout=20)
+        if r.status_code != 200:
+            return {}
+        reader = csv.DictReader(io.StringIO(r.text))
+        name_col = next((k for k in (reader.fieldnames or []) if "NAME OF COMPANY" in (k or "").upper()), None)
+        sym_col = next((k for k in (reader.fieldnames or []) if (k or "").strip().upper() == "SYMBOL"), None)
+        if not name_col or not sym_col:
+            return {}
+        names = {}
+        for row in reader:
+            sym = (row.get(sym_col) or "").strip()
+            nm = (row.get(name_col) or "").strip()
+            if sym and nm:
+                names[sym] = nm
+        if names:
+            _sme_names_cache = names
+            log.info("SME names loaded: %d", len(names))
+        return names
+    except Exception as e:
+        log.warning("SME name list fetch failed: %s", e)
+        return {}
+
+
 def _custom_group_rows(name):
     """Rows for the custom groups; (rows, source) or (None, None)."""
     if name == "BSE SENSEX":
@@ -1439,10 +1473,18 @@ def _custom_group_rows(name):
     if name == "SME EMERGE":
         if not _SME_LIST:
             get_universe_nonblocking()  # warms the bhavcopy → fills _SME_LIST
-        return list(_SME_LIST), ("bhavcopy" if _SME_LIST else "warming")
+        names = _sme_names()
+        rows = [dict(r, name=names.get(r["symbol"])) for r in _SME_LIST]
+        return rows, ("bhavcopy" if rows else "warming")
     if name == "RECENT IPOS":
         import mb_screen as mbs
         rows = mbs.recent_ipos()
+        if not rows:
+            # Self-heal: a pre-upgrade sweep cache carries no listing dates —
+            # kick a fresh universe sweep once so the group fills itself in.
+            with mbs._lock:
+                has_data = bool(mbs._state.get("recent_ipos"))
+            mbs.ensure_started(get_universe, force=not has_data)
         return rows, ("sweep" if rows else "pending")
     return None, None
 
