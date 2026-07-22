@@ -17,6 +17,7 @@ import CommandPalette from './components/CommandPalette';
 import PdfPreview from './components/PdfPreview';
 import { navigate, peekNav, subscribeNav } from './navIntent';
 import { isClassicNav, navModeReady, subscribeNavMode } from './navMode';
+import { refreshSession } from './session';
 import { theme, toggleThemeMode, useThemeMode } from './theme';
 
 // Light/dark switch — glyph shows the mode you'll switch TO. Present in both the
@@ -397,6 +398,8 @@ export default function Shell() {
       setClassic(isClassicNav());
       setModeReady(true);
     });
+    // Restore the user session (and pull cloud-synced state) on boot.
+    refreshSession();
     return subscribeNavMode(() => setClassic(isClassicNav()));
   }, []);
   // Web: clamp browser pinch-zoom. Page-level zoom trapped users inside the
