@@ -31,8 +31,35 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Pre-deploy gate: the exact bundle about to go live must pass the headless
+  # smoke suite (fake_server fixture) before rsync touches the VM. This is the
+  # staging step — production is only promoted after it goes green.
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.ref || github.sha }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - name: Install JS deps
+        working-directory: mobile
+        run: npm ci
+      - name: Install Chromium
+        working-directory: mobile
+        run: npx playwright-core install chromium
+      - name: Headless smoke against the shipping bundle
+        run: node e2e/smoke.js
+
   deploy:
     runs-on: ubuntu-latest
+    needs: smoke
     steps:
       - uses: actions/checkout@v4
         with:
