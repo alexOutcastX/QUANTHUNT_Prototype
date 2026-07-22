@@ -1,7 +1,31 @@
 // Self-contained lightweight-charts HTML for HtmlView (WebView on native,
 // iframe on web). Shared by the Chart screen and the stock-detail modal.
-import { Candle } from './api';
+import { API_BASE, Candle } from './api';
 import { getPalette } from './theme';
+
+// Chart/graph libraries are self-hosted under /vendor (mobile/public/vendor →
+// copied into dist by expo export). The CSP only allows same-origin scripts,
+// so a CDN-only load is blocked on web — and self-hosting is faster (immutable
+// cache + brotli) and immune to CDN outages anyway. The CDN stays as a
+// fallback via document.write for resilience if the local file ever 404s.
+export function vendorScript(file: string, cdn: string, globalName: string): string {
+  return (
+    `<script src="${API_BASE}/vendor/${file}"></script>` +
+    `<script>if(typeof ${globalName}==='undefined')` +
+    `document.write('<scr'+'ipt src="${cdn}"><\\/scr'+'ipt>');</script>`
+  );
+}
+
+export const LW_SCRIPT = vendorScript(
+  'lightweight-charts-4.1.3.js',
+  'https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js',
+  'LightweightCharts',
+);
+export const D3_SCRIPT = vendorScript(
+  'd3-7.9.0.min.js',
+  'https://unpkg.com/d3@7.9.0/dist/d3.min.js',
+  'd3',
+);
 
 // Chart candles use the web app's palette (colour is allowed for candles).
 export const UP = '#10b981';
@@ -30,7 +54,7 @@ export function chartHtml(candles: Candle[], barSec: number, maSet: number[] = D
   </head><body>
   <div id="msg">Loading chart library…</div>
   <div id="c"></div>
-  <script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
+  ${LW_SCRIPT}
   <script>
   (function(){
     var msg=document.getElementById('msg');
