@@ -7,7 +7,7 @@
 // "ticker stops" bug. A compositor-driven CSS animation never stops while the
 // element exists. The app always renders through react-dom, so raw DOM here is
 // safe (same approach as icons.tsx).
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { api } from '../api';
 import { getPalette, useThemeMode } from '../theme';
@@ -39,6 +39,14 @@ export default function TickerStrip() {
   const [quotes, setQuotes] = useState<Quote[]>([]);
   const mode = useThemeMode(); // re-render marquee colours on theme flip
   const alive = useRef(true);
+  // Copies of the item list per track half. The -50% keyframe wraps seamlessly
+  // only if each half is at least as wide as the strip; with a short list one
+  // copy can be narrower, which showed as a blank gap every loop. Measure and
+  // repeat the list until a half fills the viewport.
+  const [reps, setReps] = useState(1);
+  const [durS, setDurS] = useState(0); // 0 = not measured yet, use fallback
+  const wrapRef = useRef<HTMLDivElement | null>(null);
+  const halfRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     alive.current = true;
@@ -115,6 +123,28 @@ export default function TickerStrip() {
     };
   }, [cfg, refresh]);
 
+  // Measure after every content/size change: repeat the list until one track
+  // half covers the strip, and keep the scroll speed constant in px/s so short
+  // lists don't crawl and long ones don't blur.
+  useLayoutEffect(() => {
+    if (!WEB) return;
+    const measure = () => {
+      const wrap = wrapRef.current;
+      const half = halfRef.current;
+      if (!wrap || !half || !half.offsetWidth || !wrap.offsetWidth) return;
+      const base = half.offsetWidth / Math.max(1, reps); // width of ONE copy
+      const need = Math.max(1, Math.ceil(wrap.offsetWidth / base));
+      if (need !== reps) {
+        setReps(need);
+        return; // re-measure on the next layout with the new width
+      }
+      setDurS(Math.max(18, Math.round(half.offsetWidth / 55))); // ~55 px/s
+    };
+    measure();
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  });
+
   if (!cfg || !quotes.length) return null;
   const shown = quotes.filter((q) => q.value != null);
   if (!shown.length) return null;
@@ -154,25 +184,33 @@ export default function TickerStrip() {
     );
   }
 
-  // Scrolling: two copies back-to-back, compositor-driven, endless.
-  const durS = Math.max(24, shown.length * 4);
+  // Scrolling: two identical halves back-to-back, compositor-driven, endless.
+  // Each half repeats the list `reps` times so it always spans the strip and
+  // the -50% wrap point lands on identical pixels — no gap, no jump.
+  const copies = (prefix: string) => {
+    const out: React.ReactNode[] = [];
+    for (let r = 0; r < reps; r++) out.push(...shown.map((q, i) => cell(q, i, prefix + r + ':')));
+    return out;
+  };
+  const dur = durS || Math.max(24, shown.length * reps * 4);
   const track = h(
     'div',
     {
       style: {
         display: 'inline-flex',
-        animation: `te-ticker-scroll ${durS}s linear infinite`,
+        animation: `te-ticker-scroll ${dur}s linear infinite`,
         willChange: 'transform',
       },
     },
-    h('div', { style: { display: 'inline-flex' } }, shown.map((q, i) => cell(q, i, 'a'))),
-    h('div', { style: { display: 'inline-flex' } }, shown.map((q, i) => cell(q, i, 'b'))),
+    h('div', { ref: halfRef, style: { display: 'inline-flex' } }, copies('a')),
+    h('div', { style: { display: 'inline-flex' } }, copies('b')),
   );
   return (
     <View style={styles.strip} key={mode /* rebuild DOM colours on theme flip */}>
       {h(
         'div',
         {
+          ref: wrapRef,
           style: {
             overflow: 'hidden',
             whiteSpace: 'nowrap',
