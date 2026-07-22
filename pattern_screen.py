@@ -22,6 +22,7 @@ from concurrent.futures import ThreadPoolExecutor
 log = logging.getLogger("pattern_screen")
 
 _FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "pattern_screen.json")
+_SCHEMA = 2           # bump to invalidate persisted sweeps after detector/filter changes
 TTL = 3600            # a finished sweep stays fresh for an hour
 TTL_PARTIAL = 600     # a rate-limited (partial) sweep retries much sooner
 WORKERS = 6
@@ -48,8 +49,10 @@ def _load_disk() -> None:
     try:
         with open(_FILE) as f:
             data = json.load(f)
-        if isinstance(data, dict):
-            _states = data
+        if isinstance(data, dict) and data.get("_v") == _SCHEMA:
+            states = data.get("states")
+            if isinstance(states, dict):
+                _states = states
     except Exception:
         _states = {}
 
@@ -57,7 +60,7 @@ def _load_disk() -> None:
 def _save_disk() -> None:
     try:
         with _lock:
-            snap = json.dumps(_states)
+            snap = json.dumps({"_v": _SCHEMA, "states": _states})
         tmp = _FILE + ".tmp"
         with open(tmp, "w") as f:
             f.write(snap)
@@ -121,10 +124,13 @@ def _run(index: str, constituents_fn, load_ohlc, detect) -> None:
                     got_data = True
                     px = usable[-1]["c"]
                     det = detect(usable)
-                    last = len(usable) - 1
+                    # detect() strips bar indices from its output, so recency is
+                    # judged on end_ts: the formation must reach into the last
+                    # RECENT_BARS daily bars (cutoff = that bar's timestamp).
+                    cutoff = usable[max(0, len(usable) - 1 - RECENT_BARS)].get("t") or 0
                     for p in det.get("patterns", []):
                         if (p.get("confidence", 0) >= MIN_CONF
-                                and p.get("end_index", 0) >= last - RECENT_BARS):
+                                and (p.get("end_ts") or 0) >= cutoff):
                             hits.append({
                                 "symbol": sym,
                                 "price": round(float(px), 2) if px is not None else None,

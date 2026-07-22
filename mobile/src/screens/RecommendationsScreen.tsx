@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { MbScreenRow, Recommendation, api } from '../api';
+import { CapChip, Enrich, fmtCap, useEnrich } from '../enrich';
 import StockDetail from '../components/StockDetail';
 import StrategyScores from '../components/StrategyScores';
 import SymbolInput from '../components/SymbolInput';
@@ -170,8 +171,10 @@ function RecCard({
   onBacktest,
   onExport,
   hideHead,
+  enr,
 }: {
   r: Recommendation;
+  enr?: Enrich;
   watched: boolean;
   alerted: boolean;
   papered: boolean;
@@ -217,6 +220,8 @@ function RecCard({
 
       {/* trade setup — 4-across on desktop, 2×2 grid on mobile */}
       <View style={[styles.setup, compact && styles.setupCompact]}>
+        <SetupCell label="CMP" value={money(r.price)} compact={compact} />
+        <SetupCell label="MKT CAP" value={fmtCap(enr?.mcap) ?? '—'} compact={compact} />
         <SetupCell label={L.entry} value={money(r.entry)} compact={compact} />
         <SetupCell label={L.stop} value={money(r.stop)} sub={signPct(r.stop_pct)} color={theme.red} compact={compact} />
         <SetupCell label={L.target} value={money(r.target)} sub={signPct(r.upside_pct)} color={theme.green} compact={compact} />
@@ -325,7 +330,7 @@ function RecCard({
 
 // Compact list row for the Long-term tab — mirrors the Institutional/HFT list
 // UX: a tight card you tap to open the full report in a popup.
-function LongRow({ r, onOpen }: { r: Recommendation; onOpen: () => void }) {
+function LongRow({ r, enr, onOpen }: { r: Recommendation; enr?: Enrich; onOpen: () => void }) {
   const adv = useAdvisory();
   const c = actionColor(r.action);
   return (
@@ -333,11 +338,16 @@ function LongRow({ r, onOpen }: { r: Recommendation; onOpen: () => void }) {
       <View style={styles.lrowLeft}>
         <View style={styles.lrowTop}>
           <Text style={styles.lrowSym}>{r.symbol}</Text>
+          <CapChip mcapCr={enr?.mcap} />
           <View style={[styles.actionPill, { backgroundColor: c }]}>
             <Text style={styles.actionTxt}>{r.action}</Text>
           </View>
         </View>
         {r.name ? <Text style={styles.name} numberOfLines={1}>{r.name}</Text> : null}
+        <Text style={styles.cmpLine} numberOfLines={1}>
+          CMP {money(r.price)}
+          {fmtCap(enr?.mcap) ? <Text style={{ color: theme.muted2 }}> · {fmtCap(enr?.mcap)}</Text> : null}
+        </Text>
         <Text style={styles.lrowSetup} numberOfLines={1}>
           entry {money(r.entry)} · SL {money(r.stop)} · tgt {money(r.target)} ({signPct(r.upside_pct)})
           {r.rr != null ? ` · ${r.rr.toFixed(1)}:1` : ''}
@@ -605,6 +615,7 @@ function LongTermRecs() {
     });
     return base;
   }, [recs, stratDef, sortKey, sector, secMap]);
+  const enrich = useEnrich(React.useMemo(() => shown.map((r) => r.symbol), [shown]));
 
   return (
     <View style={styles.container}>
@@ -712,7 +723,7 @@ function LongTermRecs() {
             <View key={r.symbol} style={isDesktop ? styles.gridCell : undefined}>
               <FadeSlideIn index={i}>
                 <Card style={{ padding: 0 }}>
-                  <LongRow r={r} onOpen={() => setOpen(r)} />
+                  <LongRow r={r} enr={enrich[r.symbol]} onOpen={() => setOpen(r)} />
                 </Card>
               </FadeSlideIn>
             </View>
@@ -737,6 +748,7 @@ function LongTermRecs() {
               <View style={{ flex: 1 }}>
                 <View style={styles.symRow}>
                   <Text style={styles.sym}>{open.symbol}</Text>
+                  <CapChip mcapCr={enrich[open.symbol]?.mcap} value />
                   <View style={[styles.actionPill, { backgroundColor: actionColor(open.action) }]}>
                     <Text style={styles.actionTxt}>{open.action}</Text>
                   </View>
@@ -754,6 +766,7 @@ function LongTermRecs() {
             <View style={{ padding: theme.sp.md }}>
             <RecCard
               r={open}
+              enr={enrich[open.symbol]}
               hideHead
               compact={!isDesktop}
               watched={isWatched(open.symbol)}
@@ -963,6 +976,7 @@ const styles = StyleSheet.create({
   lrowTop: { flexDirection: 'row', alignItems: 'center', gap: theme.sp.sm, flexWrap: 'wrap' },
   lrowSym: { color: theme.text, fontFamily: theme.mono, fontWeight: '800', fontSize: theme.fs.md + 1 },
   lrowSetup: { color: theme.muted, fontSize: theme.fs.xs + 1, fontFamily: theme.mono },
+  cmpLine: { color: theme.text, fontSize: theme.fs.xs + 2, fontFamily: theme.mono, fontWeight: '700' },
   lrowRight: { alignItems: 'flex-end', minWidth: 84 },
   lrowConf: { fontFamily: theme.mono, fontWeight: '800', fontSize: 22, lineHeight: 24 },
   lrowConfLbl: { color: theme.muted, fontSize: theme.fs.xs, marginTop: -1 },
