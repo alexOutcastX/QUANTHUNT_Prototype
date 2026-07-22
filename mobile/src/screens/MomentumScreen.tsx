@@ -14,6 +14,7 @@ import StrategyScores from '../components/StrategyScores';
 import TimeframePanel from '../components/TimeframePanel';
 import SymbolInput from '../components/SymbolInput';
 import { navigate, openStock, takeSector, takeSymbol } from '../navIntent';
+import { useAdvisory } from '../flags';
 import { mergeSectors } from '../sectors';
 import { theme } from '../theme';
 
@@ -202,6 +203,7 @@ function MomDetail({
   onPattern: () => void;
   onDossier: () => void;
 }) {
+  const adv = useAdvisory();
   const c = setupColor(h.setup);
   const [exporting, setExporting] = useState(false);
   const onExport = async () => {
@@ -265,8 +267,8 @@ function MomDetail({
           {stat('1W RET', <Text style={{ color: (h.ret_1w ?? 0) >= 0 ? theme.green : theme.red }}>{pct(h.ret_1w)}</Text>)}
           {stat('1M RET', <Text style={{ color: (h.ret_1m ?? 0) >= 0 ? theme.green : theme.red }}>{pct(h.ret_1m)}</Text>)}
           {stat('52W HIGH', <Text style={{ color: theme.red }}>{pct(h.pct_from_high)}</Text>)}
-          {stat('UPSIDE', <Text style={{ color: (h.upside_pct ?? 0) > 0 ? theme.green : theme.muted }}>{h.upside_pct != null ? '+' + h.upside_pct.toFixed(1) + '%' : '—'}</Text>)}
-          {h.target != null ? stat('TARGET', `₹${fmtIN(h.target)}`) : null}
+          {stat(adv ? 'UPSIDE' : 'TO RESISTANCE', <Text style={{ color: (h.upside_pct ?? 0) > 0 ? theme.green : theme.muted }}>{h.upside_pct != null ? '+' + h.upside_pct.toFixed(1) + '%' : '—'}</Text>)}
+          {h.target != null ? stat(adv ? 'TARGET' : 'RESISTANCE', `₹${fmtIN(h.target)}`) : null}
         </View>
 
         <Text style={styles.dSecTitle}>TECHNICAL READ</Text>

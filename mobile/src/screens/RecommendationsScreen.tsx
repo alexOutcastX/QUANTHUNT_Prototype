@@ -8,6 +8,7 @@ import TradeVerdict from '../components/TradeVerdict';
 import { Row } from '../screener';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { navigate, openStock, peekNav, subscribeNav, takeSector } from '../navIntent';
+import { advisoryOn, lvlLabels, useAdvisory } from '../flags';
 import { mergeSectors } from '../sectors';
 import { addSymbol, loadWatchlist, normSymbol } from '../watchlist';
 import { LocalAlert, addLocalAlert, hasLocalAlert, loadLocalAlerts } from '../localalerts';
@@ -184,6 +185,8 @@ function RecCard({
   onBacktest: () => void;
   onExport?: () => void;
 }) {
+  const adv = useAdvisory();
+  const L = lvlLabels(adv);
   const c = actionColor(r.action);
   return (
     <Card style={styles.card}>
@@ -192,15 +195,15 @@ function RecCard({
           <View style={{ flex: 1 }}>
             <View style={styles.symRow}>
               <Text style={styles.sym}>{r.symbol}</Text>
-              <View style={[styles.actionPill, { backgroundColor: c }]}>
-                <Text style={styles.actionTxt}>{r.action}</Text>
-              </View>
+              {adv ? <View style={[styles.actionPill, { backgroundColor: c }]}>
+                <Text style={styles.actionTxt}>{adv ? r.action : 'SETUP'}</Text>
+              </View> : null}
             </View>
             {r.name ? <Text style={styles.name} numberOfLines={1}>{r.name}</Text> : null}
           </View>
           <View style={styles.confBox}>
             <Text style={[styles.confVal, compact && styles.confValCompact, { color: c }]}>{r.confidence}</Text>
-            <Text style={styles.confLbl}>confidence</Text>
+            <Text style={styles.confLbl}>{adv ? 'confidence' : 'score'}</Text>
           </View>
         </View>
       )}
@@ -213,9 +216,9 @@ function RecCard({
 
       {/* trade setup — 4-across on desktop, 2×2 grid on mobile */}
       <View style={[styles.setup, compact && styles.setupCompact]}>
-        <SetupCell label="ENTRY" value={money(r.entry)} compact={compact} />
-        <SetupCell label="STOP" value={money(r.stop)} sub={signPct(r.stop_pct)} color={theme.red} compact={compact} />
-        <SetupCell label="TARGET" value={money(r.target)} sub={signPct(r.upside_pct)} color={theme.green} compact={compact} />
+        <SetupCell label={L.entry} value={money(r.entry)} compact={compact} />
+        <SetupCell label={L.stop} value={money(r.stop)} sub={signPct(r.stop_pct)} color={theme.red} compact={compact} />
+        <SetupCell label={L.target} value={money(r.target)} sub={signPct(r.upside_pct)} color={theme.green} compact={compact} />
         <SetupCell label="R : R" value={r.rr != null ? `${r.rr.toFixed(1)}:1` : '—'} compact={compact} />
       </View>
 
@@ -248,9 +251,9 @@ function RecCard({
         <View style={styles.metaPill}>
           <Text style={styles.metaTxt}><Text style={styles.metaK}>RSI </Text>{r.rsi}</Text>
         </View>
-        {r.eta ? (
+        {adv && r.eta ? (
           <View style={styles.metaPill}>
-            <Text style={styles.metaTxt}><Text style={styles.metaK}>⏱ </Text>{r.eta} to target</Text>
+            <Text style={styles.metaTxt}>{r.eta} to target</Text>
           </View>
         ) : null}
         <RiskBadge input={{ rr: r.rr, stop_pct: r.stop_pct, score: r.confidence }} />
@@ -309,7 +312,7 @@ function RecCard({
         <TouchableOpacity style={styles.aBtn} onPress={onBacktest} activeOpacity={0.75}>
           <Text style={styles.aTxt}>⏱ Backtest</Text>
         </TouchableOpacity>
-        {onExport ? (
+        {adv && onExport ? (
           <TouchableOpacity style={styles.aBtn} onPress={onExport} activeOpacity={0.75}>
             <Text style={styles.aTxt}>⤓ Export PDF</Text>
           </TouchableOpacity>
@@ -322,6 +325,7 @@ function RecCard({
 // Compact list row for the Long-term tab — mirrors the Institutional/HFT list
 // UX: a tight card you tap to open the full report in a popup.
 function LongRow({ r, onOpen }: { r: Recommendation; onOpen: () => void }) {
+  const adv = useAdvisory();
   const c = actionColor(r.action);
   return (
     <TouchableOpacity style={styles.lrow} onPress={onOpen} activeOpacity={0.7}>
@@ -335,12 +339,12 @@ function LongRow({ r, onOpen }: { r: Recommendation; onOpen: () => void }) {
         {r.name ? <Text style={styles.name} numberOfLines={1}>{r.name}</Text> : null}
         <Text style={styles.lrowSetup} numberOfLines={1}>
           entry {money(r.entry)} · SL {money(r.stop)} · tgt {money(r.target)} ({signPct(r.upside_pct)})
-          {r.rr != null ? ` · ${r.rr.toFixed(1)}:1` : ''}{r.eta ? ` · ⏱ ${r.eta}` : ''}
+          {r.rr != null ? ` · ${r.rr.toFixed(1)}:1` : ''}
         </Text>
       </View>
       <View style={styles.lrowRight}>
         <Text style={[styles.lrowConf, { color: c }]}>{r.confidence}</Text>
-        <Text style={styles.lrowConfLbl}>confidence</Text>
+        <Text style={styles.lrowConfLbl}>{adv ? 'confidence' : 'score'}</Text>
         <Text style={styles.lrowUpside}>▲ {signPct(r.upside_pct)}</Text>
       </View>
       <Text style={styles.lrowChev}>›</Text>
@@ -373,6 +377,7 @@ function LongTermRecs() {
   const [open, setOpen] = useState<Recommendation | null>(null);
   const [strat, setStrat] = useState('balanced');
   const [sortKey, setSortKey] = useState<RecSortKey>('confidence');
+  const advMain = useAdvisory();
   const [sector, setSector] = useState('');
   const [secMap, setSecMap] = useState<Record<string, string | null>>({});
   const [flash, setFlash] = useState('');
@@ -575,8 +580,10 @@ function LongTermRecs() {
     await AsyncStorage.setItem('taureye.backtest.prefill', r.symbol).catch(() => {});
     navigate('analysis', { sub: 'bt' });
   };
-  const onExport = (r: Recommendation) =>
+  const onExport = (r: Recommendation) => {
+    if (!advisoryOn()) return;
     exportRecommendationsPdf([r], `${r.symbol} · ${r.action} · confidence ${r.confidence}`).catch(() => {});
+  };
 
   // Selected strategy re-ranks / filters the candidate pool (default = balanced);
   // the Sort dropdown then orders whatever the strategy returned.
@@ -628,7 +635,7 @@ function LongTermRecs() {
           options={DEPTH_OPTIONS.map((n) => ({ key: n, label: String(n) }))}
           onChange={onDepth}
         />
-        <TouchableOpacity
+        {advMain ? <TouchableOpacity
           style={[styles.updBtn, (scanning || !recs.length) && { opacity: 0.5 }]}
           onPress={() => {
             if (!recs.length) return;
@@ -638,7 +645,7 @@ function LongTermRecs() {
           activeOpacity={0.75}
         >
           <Text style={styles.updTxt}>⤓ PDF</Text>
-        </TouchableOpacity>
+        </TouchableOpacity> : null}
         <TouchableOpacity style={[styles.updBtn, styles.updBtnPrimary, scanning && { opacity: 0.5 }]} onPress={runScan} disabled={scanning} activeOpacity={0.75}>
           <Text style={[styles.updTxt, { color: theme.onAccent }]}>{scanning ? '… Scanning' : '⟳ Update'}</Text>
         </TouchableOpacity>
