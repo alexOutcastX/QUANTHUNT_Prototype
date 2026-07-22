@@ -13,7 +13,7 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { api } from '../api';
 import StockDetail from '../components/StockDetail';
-import { exportCsv, exportExcel, exportPdf } from '../csv';
+import { ExportCol, exportCsv, exportExcel, exportPdf } from '../csv';
 import { parseNL } from '../nlScreen';
 import { PRESETS, Preset } from '../presets';
 import {
@@ -363,7 +363,7 @@ export default function ScreenerScreen() {
       if (seq !== loadSeq.current) return;
       // Union of every selected universe, deduped by symbol (first wins).
       const seen = new Set<string>();
-      const cons: { symbol: string; price?: number | null; prevClose?: number | null; chg?: number | null; absChg?: number | null; volume?: number | null }[] = [];
+      const cons: { symbol: string; name?: string | null; price?: number | null; prevClose?: number | null; chg?: number | null; absChg?: number | null; volume?: number | null }[] = [];
       for (const idx of idxes) {
         for (const c of idx.data || []) {
           if (c.symbol && !seen.has(c.symbol)) {
@@ -380,7 +380,9 @@ export default function ScreenerScreen() {
       // 1) The index feed already carries live NSE quotes — show them instantly.
       const seeded: Row[] = cons.map((c) => ({
         sym: c.symbol,
-        name: names[c.symbol.toUpperCase()]?.name,
+        // Universe master list first; SME/IPO groups carry their own names
+        // (those symbols aren't in the main-board master list).
+        name: names[c.symbol.toUpperCase()]?.name || c.name || undefined,
         exchange: names[c.symbol.toUpperCase()]?.exchange || 'NSE',
         price: c.price,
         prevClose: c.prevClose,
@@ -769,7 +771,7 @@ export default function ScreenerScreen() {
                     style={styles.exportItem}
                     onPress={() => {
                       setExportOpen(false);
-                      fn(sorted, indexName).catch(() => {});
+                      fn(sorted, indexName, exportColsOf(visibleCols)).catch(() => {});
                     }}
                     activeOpacity={0.75}
                   >
@@ -1084,6 +1086,41 @@ const OP_ITEMS: SelItem[] = [
   { v: 'eq', label: '=' },
 ];
 const OP_LABEL: Record<string, string> = { gt: '>', lt: '<', between: 'between', eq: '=', is: 'is true', has: 'is' };
+
+// Raw export value per column key — mirrors what each table cell renders, so
+// CSV/Excel/PDF contain exactly the columns the user has toggled visible.
+const fundVal = (r: Row, k: string): unknown => (r._fund as Record<string, unknown> | null | undefined)?.[k] ?? '';
+const EXPORT_GET: Record<string, (r: Row, i: number) => unknown> = {
+  sno: (_r, i) => i + 1,
+  sym: (r) => r.sym,
+  name: (r) => r.name ?? '',
+  exchange: (r) => r.exchange || 'NSE',
+  price: (r) => r.price,
+  chg: (r) => r.chg,
+  volume: (r) => r.volume,
+  relvol: (r) => r.relvol,
+  rsi: (r) => r.rsi,
+  d50: (r) => r.d50,
+  pct_from_high: (r) => r.pct_from_high,
+  market_cap_cr: (r) => fundVal(r, 'market_cap_cr'),
+  signal: (r) => calcSignal(r).toUpperCase(),
+  d20: (r) => r.d20,
+  d200: (r) => r.d200,
+  willr: (r) => r.willr,
+  bollb: (r) => r.bollb,
+  beta: (r) => r.beta,
+  sqzMom: (r) => (r.sqzFire ? 'FIRE' : r.sqzOn ? 'ON' : r.sqzOn === false ? 'off' : ''),
+  s1: (r) => r.s1,
+  r1: (r) => r.r1,
+  pe: (r) => fundVal(r, 'pe'),
+  pb: (r) => fundVal(r, 'pb'),
+  roe: (r) => fundVal(r, 'roe'),
+  roce: (r) => fundVal(r, 'roce'),
+  debt_equity: (r) => fundVal(r, 'debt_equity'),
+  dividend_yield: (r) => fundVal(r, 'dividend_yield'),
+};
+const exportColsOf = (cols: Col[]): ExportCol[] =>
+  cols.map((c) => ({ header: c.label, get: EXPORT_GET[c.key] ?? (() => '') }));
 
 // One tiny line describing the active filter rows for the mobile summary
 // ("Minervini Trend Template · Price > 100 · RSI < 30").
