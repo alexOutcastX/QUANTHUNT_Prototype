@@ -10,3 +10,5 @@ google-auth
 # tvDatafeed is not on PyPI anymore; install from GitHub:
 tvdatafeed @ git+https://github.com/rongardF/tvdatafeed.git
 sentry-sdk  # backend error tracking — active only when SENTRY_DSN is set
+# Precompressed (.br) static web assets — ~4x smaller JS bundle on first load
+Brotli

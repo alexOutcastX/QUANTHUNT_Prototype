@@ -8,10 +8,14 @@ import { Icon, IconName } from './icons';
 import { useResponsive } from './responsive';
 import { AnalysisHome, ChartsHome, DeskHub, ListsHome, MoreScreen, ScreensHub, ToolsHome } from './screens/Hosts';
 import DashboardScreen from './screens/DashboardScreen';
-import ScreenerScreen from './screens/ScreenerScreen';
-import StockScreen from './screens/StockScreen';
-import TerminalScreen from './screens/TerminalScreen';
-import HeatmapScreen from './screens/HeatmapScreen';
+import { lazyScreen } from './lazyScreen';
+
+// Dashboard (the landing tab) stays in the main bundle; every other tab is a
+// lazy chunk fetched on first open — see lazyScreen.tsx.
+const ScreenerScreen = lazyScreen(() => import('./screens/ScreenerScreen'));
+const StockScreen = lazyScreen(() => import('./screens/StockScreen'));
+const TerminalScreen = lazyScreen(() => import('./screens/TerminalScreen'));
+const HeatmapScreen = lazyScreen(() => import('./screens/HeatmapScreen'));
 import TickerStrip from './components/TickerStrip';
 import CommandPalette from './components/CommandPalette';
 import TickerSettings from './components/TickerSettings';

@@ -6,34 +6,39 @@ import { peekNav, subscribeNav } from '../navIntent';
 import { isClassicNav, setClassicNav, subscribeNavMode } from '../navMode';
 import { useResponsive } from '../responsive';
 import { theme } from '../theme';
-import ScreenerScreen from './ScreenerScreen';
-import AnalysisScreen from './AnalysisScreen';
-import BacktestScreen from './BacktestScreen';
-import CalculatorScreen from './CalculatorScreen';
-import AnnouncementsScreen from './AnnouncementsScreen';
-import ChatScreen from './ChatScreen';
-import ChartScreen from './ChartScreen';
-import PortfolioScreen from './PortfolioScreen';
-import TradingViewScreen from './TradingViewScreen';
-import WatchlistScreen from './WatchlistScreen';
-import UniverseScreen from './UniverseScreen';
-import HolidaysScreen from './HolidaysScreen';
-import IndicesScreen from './IndicesScreen';
-import HeatmapScreen from './HeatmapScreen';
-import CorporateScreen from './CorporateScreen';
-import DerivativesScreen from './DerivativesScreen';
-import MomentumScreen from './MomentumScreen';
-import MultibaggerScreen from './MultibaggerScreen';
-import PatternScreen from './PatternScreen';
-import RecommendationsScreen from './RecommendationsScreen';
-import RiskScreen from './RiskScreen';
-import EntityGraphScreen from './EntityGraphScreen';
-import PaperTradeScreen from './PaperTradeScreen';
-import AlertsScreen from './AlertsScreen';
-import AccountScreen from './AccountScreen';
-import CalibrationScreen from './CalibrationScreen';
-import MethodologyScreen from './MethodologyScreen';
-import DeveloperScreen from './DeveloperScreen';
+import { lazyScreen } from '../lazyScreen';
+
+// Every hosted screen is a lazy chunk: Metro splits each import() into its own
+// web bundle, fetched the first time the user opens that screen. First paint
+// only parses the shell + Dashboard instead of the whole app.
+const ScreenerScreen = lazyScreen(() => import('./ScreenerScreen'));
+const AnalysisScreen = lazyScreen(() => import('./AnalysisScreen'));
+const BacktestScreen = lazyScreen(() => import('./BacktestScreen'));
+const CalculatorScreen = lazyScreen(() => import('./CalculatorScreen'));
+const AnnouncementsScreen = lazyScreen(() => import('./AnnouncementsScreen'));
+const ChatScreen = lazyScreen(() => import('./ChatScreen'));
+const ChartScreen = lazyScreen(() => import('./ChartScreen'));
+const PortfolioScreen = lazyScreen(() => import('./PortfolioScreen'));
+const TradingViewScreen = lazyScreen(() => import('./TradingViewScreen'));
+const WatchlistScreen = lazyScreen(() => import('./WatchlistScreen'));
+const UniverseScreen = lazyScreen(() => import('./UniverseScreen'));
+const HolidaysScreen = lazyScreen(() => import('./HolidaysScreen'));
+const IndicesScreen = lazyScreen(() => import('./IndicesScreen'));
+const HeatmapScreen = lazyScreen(() => import('./HeatmapScreen'));
+const CorporateScreen = lazyScreen(() => import('./CorporateScreen'));
+const DerivativesScreen = lazyScreen(() => import('./DerivativesScreen'));
+const MomentumScreen = lazyScreen(() => import('./MomentumScreen'));
+const MultibaggerScreen = lazyScreen(() => import('./MultibaggerScreen'));
+const PatternScreen = lazyScreen(() => import('./PatternScreen'));
+const RecommendationsScreen = lazyScreen(() => import('./RecommendationsScreen'));
+const RiskScreen = lazyScreen(() => import('./RiskScreen'));
+const EntityGraphScreen = lazyScreen(() => import('./EntityGraphScreen'));
+const PaperTradeScreen = lazyScreen(() => import('./PaperTradeScreen'));
+const AlertsScreen = lazyScreen(() => import('./AlertsScreen'));
+const AccountScreen = lazyScreen(() => import('./AccountScreen'));
+const CalibrationScreen = lazyScreen(() => import('./CalibrationScreen'));
+const MethodologyScreen = lazyScreen(() => import('./MethodologyScreen'));
+const DeveloperScreen = lazyScreen(() => import('./DeveloperScreen'));
 
 type SubTab = { key: string; label: string; hint?: string; render: () => React.ReactElement };
 
