@@ -30,6 +30,7 @@ import RiskScreen from './RiskScreen';
 import EntityGraphScreen from './EntityGraphScreen';
 import PaperTradeScreen from './PaperTradeScreen';
 import AlertsScreen from './AlertsScreen';
+import AccountScreen from './AccountScreen';
 import DeveloperScreen from './DeveloperScreen';
 
 type SubTab = { key: string; label: string; hint?: string; render: () => React.ReactElement };
@@ -249,6 +250,7 @@ export function DeskHub() {
         { key: 'risk', label: 'Risk', hint: 'Portfolio VaR · volatility · beta · drawdown · correlation', render: () => <RiskScreen /> },
         { key: 'bt', label: 'Backtest', hint: 'Test a strategy against historical data before risking capital', render: () => <BacktestScreen /> },
         { key: 'calc', label: 'Calculator', hint: 'Position size · SIP · CAGR', render: () => <CalculatorScreen /> },
+        { key: 'account', label: 'Account', hint: 'Sign in · cloud sync across devices', render: () => <AccountScreen /> },
         { key: 'more', label: 'More', hint: 'Charts, community, corporate data, indices & settings', render: () => <MoreScreen /> },
       ]}
     />
@@ -270,6 +272,7 @@ export function ChartsHome() {
 // "More" menu: a list of secondary tools; tapping opens one full-screen with a
 // back header. Keeps the bottom tab bar to five primary destinations.
 const MORE_ITEMS: { key: string; label: string; hint: string; render: () => React.ReactElement }[] = [
+  { key: 'account', label: 'Account', hint: 'Sign in · cloud sync across devices', render: () => <AccountScreen /> },
   { key: 'community', label: 'Community chat', hint: 'Global room, topic channels & direct messages with other traders', render: () => <ChatScreen /> },
   { key: 'announcements', label: 'Announcements', hint: 'Updates & notices from the team', render: () => <AnnouncementsScreen /> },
   { key: 'heatmap', label: 'Heatmap', hint: 'Sector & index day-change map · drill into constituents', render: () => <HeatmapScreen /> },

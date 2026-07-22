@@ -713,9 +713,49 @@ _METRICS = {"requests": 0, "errors": 0, "by_status": {}, "slow": 0}
 _METRICS_LOCK = threading.Lock()
 
 
+# Global per-identity limiter (token bucket): a signed-in user gets their own
+# bucket, anonymous traffic shares one per IP. Generous enough for the app's
+# real bursts (a dashboard load fires ~10 calls, screener polls stream), tight
+# enough that one client can't monopolise the single worker. Static assets are
+# exempt — they're immutable-cached anyway.
+_BUCKETS = {}
+_BUCKETS_LOCK = threading.Lock()
+_BUCKET_RATE = 6.0      # tokens/second (≈360 req/min sustained)
+_BUCKET_BURST = 150.0
+
+
+def _identity():
+    try:
+        uid = current_user_id()
+        if uid is not None:
+            return f"u:{uid}"
+    except Exception:
+        pass
+    return "ip:" + (request.headers.get("X-Real-IP") or request.remote_addr or "?")
+
+
 @app.before_request
 def _req_start():
     request._t0 = time.time()
+    p = request.path
+    if p == "/" or p.startswith(("/_expo/", "/assets/", "/favicon", "/legal", "/status")):
+        return None
+    ident = _identity()
+    now = time.time()
+    with _BUCKETS_LOCK:
+        tokens, ts = _BUCKETS.get(ident, (_BUCKET_BURST, now))
+        tokens = min(_BUCKET_BURST, tokens + (now - ts) * _BUCKET_RATE)
+        if tokens < 1.0:
+            _BUCKETS[ident] = (tokens, now)
+            return jsonify({"error": "rate-limited",
+                            "detail": "Too many requests — slow down a little."}), 429
+        _BUCKETS[ident] = (tokens - 1.0, now)
+        # keep the table from growing unbounded
+        if len(_BUCKETS) > 5000:
+            cutoff = now - 600
+            for k in [k for k, (_, t) in _BUCKETS.items() if t < cutoff][:2500]:
+                _BUCKETS.pop(k, None)
+    return None
 
 
 # CSP for served HTML. Pragmatic, not maximal: react-native-web injects inline
@@ -824,9 +864,124 @@ def auth_login():
 
 @app.route("/auth/logout", methods=["POST"])
 def auth_logout():
-    resp = jsonify({"owner": False})
+    resp = jsonify({"owner": False, "user": None})
     resp.delete_cookie(_auth.COOKIE)
+    resp.delete_cookie(_USER_COOKIE)
     return resp
+
+
+# ── user accounts (email + OTP) — the multi-tenant foundation ────────────────
+import users as _users
+
+_USER_COOKIE = "te_user"
+
+
+def current_user_id():
+    return _users.session_user_id(request.cookies.get(_USER_COOKIE, ""))
+
+
+def require_user(fn):
+    import functools
+
+    @functools.wraps(fn)
+    def wrapper(*a, **kw):
+        uid = current_user_id()
+        if uid is None:
+            return jsonify({"error": "not-signed-in"}), 401
+        request.user_id = uid
+        return fn(*a, **kw)
+    return wrapper
+
+
+@app.route("/auth/otp/request", methods=["POST"])
+@rate_limit("otp-request", 6, 600)
+def auth_otp_request():
+    if not _users.enabled():
+        return jsonify({"error": "accounts-disabled",
+                        "detail": "Accounts need AUTH_SECRET (or APP_PASSWORD) set on the server."}), 503
+    body = request.get_json(silent=True) or {}
+    email = (body.get("email") or "").strip().lower()
+    if not _users.valid_email(email):
+        return jsonify({"error": "bad-email"}), 400
+    code = _users.issue_otp(email)
+    try:
+        sent = _users.send_otp_email(email, code)
+    except Exception as e:
+        log.warning("OTP email send failed for %s: %s", email, e)
+        return jsonify({"error": "email-failed",
+                        "detail": "Could not send the code — try again shortly."}), 502
+    if sent:
+        return jsonify({"sent": True})
+    # No SMTP configured. Only in explicit dev mode does the code come back in
+    # the response (so the flow can be tested without a mail server).
+    if os.environ.get("DEV_ECHO_OTP") == "1":
+        return jsonify({"sent": False, "dev_code": code})
+    return jsonify({"error": "email-not-configured",
+                    "detail": "Sign-in emails aren't configured on this server yet."}), 503
+
+
+@app.route("/auth/otp/verify", methods=["POST"])
+@rate_limit("otp-verify", 12, 600)
+def auth_otp_verify():
+    if not _users.enabled():
+        return jsonify({"error": "accounts-disabled"}), 503
+    body = request.get_json(silent=True) or {}
+    email = (body.get("email") or "").strip().lower()
+    if not _users.valid_email(email):
+        return jsonify({"error": "bad-email"}), 400
+    if not _users.verify_otp(email, body.get("code", "")):
+        return jsonify({"error": "bad-code",
+                        "detail": "Wrong or expired code."}), 401
+    user, created = _users.get_or_create_user(email, consent=bool(body.get("consent")))
+    if user is None:
+        # brand-new address without the consent checkbox ticked
+        return jsonify({"error": "consent-required",
+                        "detail": "Accept the Terms & Privacy Policy to create the account."}), 428
+    resp = jsonify({"user": {"email": user["email"]}, "created": created})
+    resp.set_cookie(_USER_COOKIE, _users.make_session_cookie(user["id"]),
+                    max_age=_users.SESSION_TTL, httponly=True, samesite="Lax",
+                    secure=request.headers.get("X-Forwarded-Proto") == "https")
+    return resp
+
+
+@app.route("/auth/me")
+def auth_me():
+    uid = current_user_id()
+    if uid is None:
+        return jsonify({"user": None})
+    u = _users.get_user(uid)
+    return jsonify({"user": {"email": u["email"]} if u else None})
+
+
+@app.route("/auth/account", methods=["DELETE"])
+@require_user
+def auth_account_delete():
+    """DPDP-style deletion: purges the account and every stored document."""
+    _users.delete_user(request.user_id)
+    resp = jsonify({"deleted": True})
+    resp.delete_cookie(_USER_COOKIE)
+    return resp
+
+
+@app.route("/user/data/<kind>", methods=["GET", "PUT"])
+@require_user
+def user_data(kind):
+    if kind not in _users.DATA_KINDS:
+        return jsonify({"error": "unknown-kind"}), 400
+    if request.method == "GET":
+        doc = _users.data_get(request.user_id, kind)
+        return jsonify(doc or {"v": None, "ts": 0})
+    body = request.get_json(silent=True) or {}
+    if "v" not in body:
+        return jsonify({"error": "missing-value"}), 400
+    ts = int(body.get("ts") or time.time())
+    # Last-write-wins guarded by timestamp so a stale device can't clobber a
+    # newer copy that another device already pushed.
+    cur = _users.data_get(request.user_id, kind)
+    if cur and cur["ts"] > ts:
+        return jsonify({"stored": False, "server_newer": True, "v": cur["v"], "ts": cur["ts"]})
+    _users.data_put(request.user_id, kind, body["v"], ts)
+    return jsonify({"stored": True, "ts": ts})
 
 
 @app.route("/ping")
