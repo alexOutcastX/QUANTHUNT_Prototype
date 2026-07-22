@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Candle, ChartPattern, ChartPatternsResp, api } from '../api';
+import { Candle, ChartPattern, ChartPatternsResp, PatternScreenHit, PatternScreenResp, api } from '../api';
 import { chartHtml } from '../chartHtml';
 import HtmlView from '../components/HtmlView';
 import StockDetail from '../components/StockDetail';
@@ -9,7 +9,7 @@ import SymbolInput from '../components/SymbolInput';
 import { Row } from '../screener';
 import { navigate, takeSymbol } from '../navIntent';
 import { addSymbol, loadWatchlist, normSymbol } from '../watchlist';
-import { Btn, Card, EmptyState, InfoButton, Loading, SectionTitle, Sheet } from '../ui';
+import { Btn, Card, EmptyState, InfoButton, Loading, SectionTitle, Segmented, Sheet } from '../ui';
 import { PATTERN_INFO } from '../tabInfo';
 import { describePattern } from '../patternInfo';
 import { useResponsive } from '../responsive';
@@ -271,7 +271,212 @@ function CurrentCard({ p, actions }: { p: ChartPattern; actions: CardActions }) 
   );
 }
 
+// ── Index-wide pattern screener ──────────────────────────────────────────────
+// The inverse question to the single-stock recogniser: "which stocks in this
+// index are showing a pattern right now?". The backend sweeps the index in the
+// background and streams hits into the snapshot; we poll while it runs.
+const SCREEN_INDICES = [
+  'NIFTY 50', 'NIFTY 100', 'NIFTY 200', 'NIFTY BANK', 'NIFTY IT',
+  'NIFTY MIDCAP 100', 'NIFTY SMALLCAP 100', 'NIFTY AUTO', 'NIFTY PHARMA',
+];
+const BIAS_FILTERS = ['All', 'Bullish', 'Bearish'] as const;
+
+const SCREEN_COLS: Col[] = [
+  { key: 'symbol', label: 'SYMBOL', w: 118, align: 'left' },
+  { key: 'pattern', label: 'PATTERN', w: 178, align: 'left' },
+  { key: 'bias', label: 'BIAS', w: 78, align: 'left' },
+  { key: 'status', label: 'STATUS', w: 92, align: 'left' },
+  { key: 'conf', label: 'PROBABILITY', w: 104, align: 'right' },
+  { key: 'cont', label: 'CONTINUATION', w: 112, align: 'right' },
+  { key: 'exp', label: 'TARGET %', w: 88, align: 'right' },
+  { key: 'ended', label: 'DETECTED', w: 92, align: 'right' },
+];
+const SCREEN_TABLE_W = SCREEN_COLS.reduce((a, c) => a + c.w, 0);
+
+function PatternIndexScreener({ onOpenSymbol }: { onOpenSymbol: (sym: string) => void }) {
+  const [index, setIndex] = useState('NIFTY 50');
+  const [snap, setSnap] = useState<PatternScreenResp | null>(null);
+  const [error, setError] = useState('');
+  const [bias, setBias] = useState<(typeof BIAS_FILTERS)[number]>('All');
+  const [patFilter, setPatFilter] = useState('');    // '' = all patterns
+  const [patOpen, setPatOpen] = useState(false);
+  const [sweep, setSweep] = useState(0);             // bump to restart the poll loop
+
+  // Poll the sweep: immediately on index change / rescan, then every 4 s while
+  // the backend is still sweeping.
+  useEffect(() => {
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    setError('');
+    const tick = async () => {
+      try {
+        const s = await api.patternsScreen(index);
+        if (cancelled) return;
+        setSnap(s);
+        if (s.status === 'running' || s.refreshing) timer = setTimeout(tick, 4000);
+      } catch (e) {
+        if (!cancelled) setError(e instanceof Error ? e.message : 'Screen failed');
+      }
+    };
+    setSnap(null);
+    tick();
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, [index, sweep]);
+
+  const hits = snap?.results || [];
+  const patLabels = [...new Set(hits.map((h) => h.label))].sort();
+  const shown = hits.filter(
+    (h) =>
+      (bias === 'All' || h.bias === bias.toLowerCase()) &&
+      (!patFilter || h.label === patFilter),
+  );
+  const running = snap?.status === 'running' || snap?.refreshing;
+
+  return (
+    <ScrollView contentContainerStyle={styles.body}>
+      <View style={styles.idxWrap}>
+        {SCREEN_INDICES.map((ix) => (
+          <TouchableOpacity
+            key={ix}
+            style={[styles.perChip, index === ix && styles.perChipOn]}
+            onPress={() => setIndex(ix)}
+            activeOpacity={0.75}
+          >
+            <Text style={[styles.perTxt, index === ix && styles.perTxtOn]}>{ix.replace('NIFTY ', '')}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      <View style={styles.idxWrap}>
+        {BIAS_FILTERS.map((b) => (
+          <TouchableOpacity
+            key={b}
+            style={[styles.perChip, bias === b && styles.perChipOn]}
+            onPress={() => setBias(b)}
+            activeOpacity={0.75}
+          >
+            <Text style={[styles.perTxt, bias === b && styles.perTxtOn]}>{b}</Text>
+          </TouchableOpacity>
+        ))}
+        <TouchableOpacity style={[styles.perChip, !!patFilter && styles.perChipOn]} onPress={() => setPatOpen(true)} activeOpacity={0.75}>
+          <Text style={[styles.perTxt, !!patFilter && styles.perTxtOn]}>{patFilter || 'Any pattern'} ▾</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.perChip}
+          onPress={() => {
+            // Force a fresh sweep server-side, then restart the poll loop.
+            api.patternsScreen(index, true).catch(() => {});
+            setSweep((n) => n + 1);
+          }}
+          activeOpacity={0.75}
+        >
+          <Text style={styles.perTxt}>⟳ Rescan</Text>
+        </TouchableOpacity>
+      </View>
+
+      {patOpen ? (
+        <Sheet onClose={() => setPatOpen(false)} maxHeight="70%">
+          <ScrollView bounces={false}>
+            <SectionTitle>Filter by pattern</SectionTitle>
+            {['', ...patLabels].map((l) => (
+              <TouchableOpacity
+                key={l || 'all'}
+                style={styles.patOpt}
+                onPress={() => {
+                  setPatFilter(l);
+                  setPatOpen(false);
+                }}
+                activeOpacity={0.75}
+              >
+                <Text style={[styles.patOptTxt, patFilter === l && { color: theme.brand, fontWeight: '700' }]}>
+                  {l || 'Any pattern'}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </Sheet>
+      ) : null}
+
+      {error ? <EmptyState icon="⚠" title="Couldn't screen" hint={error} /> : null}
+      {!error && !snap ? <Loading label={`Loading ${index} pattern screen…`} /> : null}
+      {snap ? (
+        <>
+          <SectionTitle>
+            {shown.length} hit{shown.length === 1 ? '' : 's'} · {index}
+            {running ? ` · sweeping… ${snap.progress || ''}` : snap.asof ? ` · as of ${fmtDate(snap.asof)}` : ''}
+            {snap.capped ? ' · first 260 constituents' : ''}
+          </SectionTitle>
+          {snap.status === 'error' && !hits.length ? (
+            <EmptyState icon="⚠" title="Sweep failed" hint={snap.error || 'Retry shortly.'} />
+          ) : null}
+          {shown.length ? (
+            <ScrollView horizontal showsHorizontalScrollIndicator contentContainerStyle={{ minWidth: '100%' }}>
+              <View style={{ minWidth: SCREEN_TABLE_W }}>
+                <View style={styles.headerRow}>
+                  {SCREEN_COLS.map((c) => (
+                    <Text key={c.key} style={[styles.th, { width: c.w, textAlign: c.align === 'left' ? 'left' : 'right' }]}>
+                      {c.label}
+                    </Text>
+                  ))}
+                </View>
+                {shown.map((h, i) => (
+                  <ScreenHitRow key={`${h.symbol}-${h.type}-${i}`} h={h} top={i === 0} onPress={() => onOpenSymbol(h.symbol)} />
+                ))}
+              </View>
+            </ScrollView>
+          ) : !running ? (
+            <EmptyState
+              icon="◇"
+              title="No fresh patterns"
+              hint="No constituent shows a confident formation reaching into the last two weeks. Try another index, or Rescan."
+            />
+          ) : (
+            <Loading label={`Sweeping ${index}… hits appear as they're found`} />
+          )}
+          <Text style={styles.method}>
+            Every constituent's last year of daily bars is scanned with the same geometric recogniser as the
+            single-stock tab. Only formations reaching into the last ~2 weeks with probability ≥ 55 count as
+            hits. Tap a row for the full chart. Indicative and educational only — not investment advice.
+          </Text>
+        </>
+      ) : null}
+    </ScrollView>
+  );
+}
+
+function ScreenHitRow({ h, top, onPress }: { h: PatternScreenHit; top?: boolean; onPress: () => void }) {
+  const c = biasColor(h.bias);
+  return (
+    <TouchableOpacity style={[styles.dataRow, top && { borderTopWidth: 0 }]} onPress={onPress} activeOpacity={0.75}>
+      <View style={{ width: 118 }}>
+        <Text style={styles.sym}>{h.symbol}</Text>
+        {h.price != null ? <Text style={styles.priceSub}>₹{h.price.toLocaleString('en-IN')}</Text> : null}
+      </View>
+      <Text style={[styles.cellLeft, { width: 178 }]} numberOfLines={2}>{h.label}</Text>
+      <Text style={[styles.cellLeft, { width: 78, color: c, fontWeight: '700' }]}>
+        {h.bias === 'bullish' ? '▲ Bull' : h.bias === 'bearish' ? '▼ Bear' : '— Neut'}
+      </Text>
+      <Text style={[styles.cellLeft, { width: 92, color: h.status === 'confirmed' ? theme.green : theme.muted2 }]}>
+        {h.status === 'confirmed' ? 'Confirmed' : 'Forming'}
+      </Text>
+      <View style={{ width: 104, alignItems: 'flex-end' }}>
+        <Text style={styles.cellNum}>{h.confidence}%</Text>
+        <Bar pct={h.confidence} color={c} />
+      </View>
+      <Text style={[styles.cellNum, { width: 112 }]}>{h.continuation != null ? `${h.continuation}%` : '—'}</Text>
+      <Text style={[styles.cellNum, { width: 88, color: (h.expansion_pct ?? 0) >= 0 ? theme.green : theme.red }]}>
+        {signPct(h.expansion_pct)}
+      </Text>
+      <Text style={[styles.cellNum, { width: 92 }]}>{fmtDate(h.end_ts ?? undefined)}</Text>
+    </TouchableOpacity>
+  );
+}
+
 export default function PatternScreen() {
+  const [mode, setMode] = useState<'stock' | 'screen'>('stock');
   const [symbol, setSymbol] = useState('');
   const [period, setPeriod] = useState('2y');
   const [busy, setBusy] = useState(false);
@@ -366,6 +571,21 @@ export default function PatternScreen() {
 
   return (
     <View style={styles.container}>
+      <View style={styles.modeRow}>
+        <Segmented
+          items={[
+            { key: 'stock', label: 'One stock' },
+            { key: 'screen', label: 'Index screener' },
+          ]}
+          value={mode}
+          onChange={(k) => setMode(k as 'stock' | 'screen')}
+        />
+      </View>
+
+      {mode === 'screen' ? (
+        <PatternIndexScreener onOpenSymbol={(s) => setDetail({ sym: s } as Row)} />
+      ) : (
+      <>
       <View style={styles.inputRow}>
         <SymbolInput
           value={symbol}
@@ -482,6 +702,8 @@ export default function PatternScreen() {
           </>
         ) : null}
       </ScrollView>
+      </>
+      )}
 
       {detail ? <StockDetail row={detail} onClose={() => setDetail(null)} /> : null}
       {flash ? (
@@ -495,6 +717,7 @@ export default function PatternScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.bg },
+  modeRow: { paddingHorizontal: theme.sp.lg, paddingTop: theme.sp.sm, paddingBottom: theme.sp.xs },
   inputRow: { flexDirection: 'row', alignItems: 'center', gap: theme.sp.sm, paddingHorizontal: theme.sp.lg, paddingTop: theme.sp.sm, paddingBottom: theme.sp.sm, zIndex: 50 },
   infoInline: { alignSelf: 'center' },
   input: {
@@ -532,6 +755,14 @@ const styles = StyleSheet.create({
   },
   recentTxt: { color: theme.muted2, fontSize: theme.fs.sm, fontFamily: theme.mono, fontWeight: '700' },
   body: { paddingHorizontal: theme.sp.lg, paddingBottom: theme.sp.xl, gap: theme.sp.md },
+  // index screener
+  idxWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.sp.sm, alignItems: 'center' },
+  patOpt: { paddingVertical: theme.sp.sm },
+  patOptTxt: { color: theme.text, fontSize: theme.fs.md },
+  sym: { color: theme.text, fontSize: theme.fs.md, fontWeight: '800', fontFamily: theme.mono },
+  priceSub: { color: theme.muted2, fontSize: theme.fs.xs + 1, fontFamily: theme.mono },
+  cellLeft: { color: theme.muted2, fontSize: theme.fs.sm },
+  cellNum: { color: theme.text, fontSize: theme.fs.sm, fontFamily: theme.mono, textAlign: 'right' },
   chartCard: { height: 240, padding: 0, overflow: 'hidden', marginTop: theme.sp.sm },
   chart: { flex: 1 },
   // desktop two-column split (table | current-pattern card)

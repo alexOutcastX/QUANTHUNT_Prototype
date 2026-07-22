@@ -122,6 +122,101 @@ const MB_STRATEGIES: MbStrategy[] = [
         .filter((r) => r.minervini === true || (fnum(r.ret_6m) ?? -1) > 0)
         .sort(byDesc((r) => fnum(r.ret_6m))),
   },
+  {
+    id: 'magic',
+    name: 'Magic Formula (Greenblatt)',
+    info: {
+      about: "Joel Greenblatt's classic: buy good businesses (high return on capital) at cheap prices (high earnings yield). Each candidate is ranked on both and the two ranks are combined.",
+      sections: [{ heading: 'Method', bullets: ['Rank by earnings yield (1/PE), cheapest first', 'Rank by ROE, highest first', 'Sort by the combined rank — best of both worlds first'] }],
+      disclaimer: 'A screen, not a portfolio — Greenblatt held 20–30 names for a year+.',
+    },
+    apply: (rows) => {
+      const elig = rows.filter((r) => { const pe = fnum(fundOf(r).pe); return pe != null && pe > 0 && fnum(fundOf(r).roe) != null; });
+      const peRank = new Map([...elig].sort(byAsc((r) => fnum(fundOf(r).pe))).map((r, i) => [r.sym, i]));
+      const roeRank = new Map([...elig].sort(byDesc((r) => fnum(fundOf(r).roe))).map((r, i) => [r.sym, i]));
+      return [...elig].sort((a, b) =>
+        ((peRank.get(a.sym) ?? 0) + (roeRank.get(a.sym) ?? 0)) - ((peRank.get(b.sym) ?? 0) + (roeRank.get(b.sym) ?? 0)));
+    },
+  },
+  {
+    id: 'garp',
+    name: 'GARP / Peter Lynch (PEG ≤ 1.5)',
+    info: {
+      about: 'Growth At a Reasonable Price — the Lynch playbook. Pay a P/E no higher than the growth rate: PEG at or under ~1.5 (1 is the classic ideal).',
+      sections: [{ heading: 'Filter', bullets: ['PEG between 0 and 1.5 (falls back to P/E ≤ 25 with earnings growth ≥ 15% when PEG is unavailable)', 'Ranked by lowest PEG first'] }],
+      disclaimer: 'Growth estimates embedded in PEG can be stale — sanity-check the growth leg.',
+    },
+    apply: (rows) =>
+      rows
+        .filter((r) => {
+          const f = fundOf(r); const peg = fnum(f.peg);
+          if (peg != null) return peg > 0 && peg <= 1.5;
+          const pe = fnum(f.pe); const eg = fnum(f.earnings_growth_pct);
+          return pe != null && pe > 0 && pe <= 25 && (eg ?? 0) >= 15;
+        })
+        .sort(byAsc((r) => fnum(fundOf(r).peg) ?? fnum(fundOf(r).pe))),
+  },
+  {
+    id: 'coffeecan',
+    name: 'Coffee Can (quality growth, hold forever)',
+    info: {
+      about: 'The Saurabh Mukherjea-popularised Indian classic: consistent revenue growth with high return on equity, bought and left untouched.',
+      sections: [{ heading: 'Filter', bullets: ['Revenue growth ≥ 10%', 'ROE ≥ 15%', 'Ranked by ROE, highest first'] }],
+      disclaimer: 'The original rule demands 10 consecutive years — this uses the latest reported year.',
+    },
+    apply: (rows) =>
+      rows
+        .filter((r) => { const f = fundOf(r); return (fnum(f.revenue_growth_pct) ?? 0) >= 10 && (fnum(f.roe) ?? 0) >= 15; })
+        .sort(byDesc((r) => fnum(fundOf(r).roe))),
+  },
+  {
+    id: 'strength',
+    name: 'Fortress balance sheet (low debt · FCF)',
+    info: {
+      about: 'Piotroski-spirit financial strength: little leverage, real free cash flow and growing profits — the survivors that compound through cycles.',
+      sections: [{ heading: 'Filter', bullets: ['Debt/equity ≤ 0.5', 'Free cash flow positive', 'Earnings growth > 0', 'Ranked by analyser score'] }],
+      disclaimer: 'Balance-sheet data lags the price — re-check after results season.',
+    },
+    apply: (rows) =>
+      rows
+        .filter((r) => {
+          const f = fundOf(r);
+          return (fnum(f.debt_equity) ?? 99) <= 0.5 && (fnum(f.fcf_cr) ?? -1) > 0 && (fnum(f.earnings_growth_pct) ?? -1) > 0;
+        })
+        .sort(byDesc((r) => fnum(r.mbScore))),
+  },
+  {
+    id: 'turnaround',
+    name: 'Turnaround (deep drawdown, intact quality)',
+    info: {
+      about: 'Quality candidates trading far below their 52-week high — the contrarian entry where a recovery re-rates the stock hardest.',
+      sections: [{ heading: 'Filter', bullets: ['≥ 30% below the 52-week high', 'Analyser score still ≥ 60 (quality bar intact)', 'Ranked by deepest drawdown first'] }],
+      disclaimer: 'Falling knives exist — demand a reason the drawdown is temporary.',
+    },
+    apply: (rows) =>
+      rows
+        .filter((r) => {
+          const off = fnum(fundOf(r).pct_from_high_pct) ?? fnum(r.pct_from_high);
+          return off != null && off <= -30 && (fnum(r.mbScore) ?? 0) >= 60;
+        })
+        .sort(byAsc((r) => fnum(fundOf(r).pct_from_high_pct) ?? fnum(r.pct_from_high))),
+  },
+  {
+    id: 'dividend',
+    name: 'Dividend + value (yield ≥ 1.5%)',
+    info: {
+      about: 'Cheap companies that also pay you to wait — a dividend floor under a value re-rating.',
+      sections: [{ heading: 'Filter', bullets: ['Dividend yield ≥ 1.5%', 'P/E ≤ 25 (when known)', 'Ranked by yield, highest first'] }],
+      disclaimer: 'Yield data loads with the fundamentals pass — give the list a few seconds.',
+    },
+    apply: (rows) =>
+      rows
+        .filter((r) => {
+          const f = fundOf(r); const dy = fnum(f.dividend_yield); const pe = fnum(f.pe);
+          return dy != null && dy >= 1.5 && (pe == null || pe <= 25);
+        })
+        .sort(byDesc((r) => fnum(fundOf(r).dividend_yield))),
+  },
 ];
 
 const tierColor = (score: number) =>
@@ -300,7 +395,23 @@ function MbList({
             pct_from_high: c.pct_from_high,
             mbScore: c.score,
             mbProb: c.probability_pct,
-            _fund: { market_cap_cr: c.market_cap_cr, roe: c.roe, debt_equity: c.debt_equity, sector: c.sector } as Row['_fund'],
+            // Seed the strategy-filter fundamentals straight from the analyser
+            // metrics the screen already carries — P/E, P/B, PEG, growth, FCF —
+            // so Deep value & co. work immediately instead of waiting on (or
+            // silently losing) the separate fundamentals fetch.
+            _fund: {
+              market_cap_cr: c.market_cap_cr,
+              roe: c.roe,
+              debt_equity: c.debt_equity,
+              sector: c.sector,
+              pe: c.metrics?.pe ?? null,
+              pb: c.metrics?.pb ?? null,
+              peg: c.metrics?.peg ?? null,
+              revenue_growth_pct: c.metrics?.revenue_growth_pct ?? null,
+              earnings_growth_pct: c.metrics?.earnings_growth_pct ?? null,
+              fcf_cr: c.metrics?.fcf_cr ?? null,
+              pct_from_high_pct: c.metrics?.pct_from_high_pct ?? null,
+            } as Row['_fund'],
           }));
         // 1) Poll the server-side full-universe screen. Matches stream in
         //    LIVE while the background job runs, so render partials as they land.

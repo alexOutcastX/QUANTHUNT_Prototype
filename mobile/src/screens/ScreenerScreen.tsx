@@ -695,12 +695,7 @@ export default function ScreenerScreen() {
           <Text style={{ color: theme.red }}>{stats.sell}▼</Text>{'  '}
           <Text style={{ color: theme.muted2 }}>{stats.neutral}—</Text>
         </Text>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.actionsScroll}
-          contentContainerStyle={styles.actionsScrollInner}
-        >
+        <View style={styles.actionsWrap}>
           <TouchableOpacity style={styles.filterBtn} onPress={() => setColMenu(true)} activeOpacity={0.75}>
             <Text style={styles.filterTxt}>⚙ Columns {COLS.length - colHidden.length}</Text>
           </TouchableOpacity>
@@ -755,7 +750,7 @@ export default function ScreenerScreen() {
           >
             <Text style={styles.pageBtnTxt}>Next ›</Text>
           </TouchableOpacity>
-        </ScrollView>
+        </View>
       </View>
 
       <Text style={styles.note} numberOfLines={1}>
@@ -1412,6 +1407,7 @@ const styles = StyleSheet.create({
   statsRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexWrap: 'wrap', // actions drop to their own line on phones
     paddingHorizontal: theme.sp.md,
     paddingVertical: theme.sp.sm,
     gap: theme.sp.md,
@@ -1426,6 +1422,7 @@ const styles = StyleSheet.create({
   ctrlRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexWrap: 'wrap', // phones: Share/Save wrap below instead of clipping
     gap: theme.sp.sm,
     paddingHorizontal: theme.sp.lg,
     paddingTop: theme.sp.sm,
@@ -1530,8 +1527,17 @@ const styles = StyleSheet.create({
   },
   aBtnTxt: { color: theme.muted2, fontSize: theme.fs.xs + 1, fontWeight: '700' },
   starOn: { color: theme.green },
-  actionsScroll: { marginLeft: 'auto', flexGrow: 0 },
-  actionsScrollInner: { gap: theme.sp.sm, alignItems: 'center' },
+  // Wrapping row (was a horizontal ScrollView, which clipped buttons mid-way
+  // on phones with no visible affordance).
+  actionsWrap: {
+    marginLeft: 'auto',
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    flexShrink: 1, // without this a row parent lets the content define width → clip
+    minWidth: 0,
+    alignItems: 'center',
+    gap: theme.sp.sm,
+  },
   // pagination
   pageLabel: {
     color: theme.muted,
@@ -1751,6 +1757,7 @@ const styles = StyleSheet.create({
   exprRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexWrap: 'wrap', // metric/op/value controls flow onto extra lines on phones
     gap: theme.sp.sm,
     paddingVertical: 5,
   },
