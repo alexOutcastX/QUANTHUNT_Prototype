@@ -68,6 +68,12 @@ const INDEX_GROUPS: { title: string; items: string[] }[] = [
 const INDICES = INDEX_GROUPS.flatMap((g) => g.items);
 const shortIdx = (n: string) => n.replace('NIFTY ', '').replace('BSE ', '');
 
+// Multiple universes can be selected at once (the scan runs over their union).
+const selLabel = (sel: string[]) =>
+  sel.length >= INDICES.length ? 'ALL' : sel.length === 1 ? shortIdx(sel[0]) : `${shortIdx(sel[0])} +${sel.length - 1}`;
+const selName = (sel: string[]) =>
+  sel.length >= INDICES.length ? 'ALL MARKETS' : sel.map(shortIdx).join(' + ');
+
 const pct = (v: number | null | undefined, d = 2) =>
   v == null || !isFinite(v) ? '—' : (v >= 0 ? '+' : '') + v.toFixed(d) + '%';
 const colorOf = (v: number | null | undefined) =>
@@ -217,7 +223,9 @@ export default function ScreenerScreen() {
   const { isDesktop } = useResponsive();
   // Mobile: the filter builder lives in a popup so it never buries the table.
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const [indexName, setIndexName] = useState('NIFTY 50');
+  // One or more universes; the scan runs over their deduped union.
+  const [indexSel, setIndexSel] = useState<string[]>(['NIFTY 50']);
+  const indexName = selName(indexSel);
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -262,7 +270,8 @@ export default function ScreenerScreen() {
       try {
         const shared = readSharedScreen();
         if (shared) {
-          if (INDICES.includes(shared.indexName)) setIndexName(shared.indexName);
+          const sharedSel = String(shared.indexName || '').split(',').filter((n) => INDICES.includes(n));
+          if (sharedSel.length) setIndexSel(sharedSel);
           setExpr(shared.expr?.length ? shared.expr : filtersToExpr(shared.active));
           setSortCol(shared.sortCol);
           setSortDir(shared.sortDir);
@@ -282,7 +291,16 @@ export default function ScreenerScreen() {
             const parsed = JSON.parse(f);
             if (parsed && typeof parsed === 'object') setExpr(filtersToExpr(parsed));
           }
-          if (idx && INDICES.includes(idx)) setIndexName(idx);
+          if (idx) {
+            let sel: string[] = [];
+            try {
+              const p = JSON.parse(idx);
+              if (Array.isArray(p)) sel = p.filter((n) => INDICES.includes(n));
+            } catch {
+              sel = idx.split(',').filter((n) => INDICES.includes(n));
+            }
+            if (sel.length) setIndexSel(sel);
+          }
         }
       } catch {
         /* fresh start */
@@ -327,23 +345,36 @@ export default function ScreenerScreen() {
 
   useEffect(() => {
     if (!restored) return;
-    AsyncStorage.setItem(INDEX_KEY, indexName).catch(() => {});
-  }, [indexName, restored]);
+    AsyncStorage.setItem(INDEX_KEY, JSON.stringify(indexSel)).catch(() => {});
+  }, [indexSel, restored]);
 
   // Monotonic token so a stale in-flight scan can't write into a newer index's rows.
   const loadSeq = React.useRef(0);
 
-  const load = useCallback(async (name: string) => {
+  const load = useCallback(async (sel: string[]) => {
     const seq = ++loadSeq.current;
     setError(null);
     setNote('');
     try {
-      const [idx, names] = await Promise.all([api.indexConstituents(name), loadNames()]);
+      const [idxes, names] = await Promise.all([
+        Promise.all(sel.map((n) => api.indexConstituents(n).catch(() => ({ data: [], error: undefined as string | undefined })))),
+        loadNames(),
+      ]);
       if (seq !== loadSeq.current) return;
-      const cons = (idx.data || []).filter((c) => c.symbol);
+      // Union of every selected universe, deduped by symbol (first wins).
+      const seen = new Set<string>();
+      const cons: { symbol: string; price?: number | null; prevClose?: number | null; chg?: number | null; absChg?: number | null; volume?: number | null }[] = [];
+      for (const idx of idxes) {
+        for (const c of idx.data || []) {
+          if (c.symbol && !seen.has(c.symbol)) {
+            seen.add(c.symbol);
+            cons.push(c);
+          }
+        }
+      }
       if (!cons.length) {
         setRows([]);
-        setNote(idx.error || 'No constituents returned.');
+        setNote(idxes.map((i) => (i as { error?: string; note?: string }).error || (i as { note?: string }).note).filter(Boolean)[0] || 'No constituents returned.');
         return;
       }
       // 1) The index feed already carries live NSE quotes — show them instantly.
@@ -410,8 +441,8 @@ export default function ScreenerScreen() {
   useEffect(() => {
     if (!restored) return;
     setLoading(true);
-    load(indexName);
-  }, [indexName, load, restored]);
+    load(indexSel);
+  }, [indexSel, load, restored]);
 
   useEffect(() => {
     loadTrack().then(setTrack);
@@ -474,8 +505,8 @@ export default function ScreenerScreen() {
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
-    load(indexName);
-  }, [indexName, load]);
+    load(indexSel);
+  }, [indexSel, load]);
 
   const filtered = useMemo(() => applyExpr(rows, expr), [rows, expr]);
   const sorted = useMemo(() => sortRows(filtered, sortCol, sortDir), [filtered, sortCol, sortDir]);
@@ -573,7 +604,7 @@ export default function ScreenerScreen() {
   // 6-month chart) as the fallback.
   const onChart = (r: Row) => setDetail(r);
 
-  const curState = (): ScreenState => ({ indexName, active: {}, expr, sortCol, sortDir });
+  const curState = (): ScreenState => ({ indexName: indexSel.join(','), active: {}, expr, sortCol, sortDir });
 
   const onShare = async () => {
     const enc = encodeScreen(curState());
@@ -607,7 +638,8 @@ export default function ScreenerScreen() {
     setSaved(await deleteScreen(saved, name));
   };
   const applySaved = (s: SavedScreen) => {
-    if (INDICES.includes(s.indexName)) setIndexName(s.indexName);
+    const sel = String(s.indexName || '').split(',').filter((n) => INDICES.includes(n));
+    if (sel.length) setIndexSel(sel);
     setExpr(s.expr?.length ? s.expr : filtersToExpr(s.active));
     setSortCol(s.sortCol);
     setSortDir(s.sortDir);
@@ -684,7 +716,7 @@ export default function ScreenerScreen() {
       <View style={styles.topBar}>
         <TouchableOpacity style={styles.idxDrop} onPress={() => setIdxOpen(true)} activeOpacity={0.75}>
           <Text style={styles.idxDropLabel}>UNIVERSE</Text>
-          <Text style={styles.idxDropTxt}>{shortIdx(indexName)} ▾</Text>
+          <Text style={styles.idxDropTxt}>{selLabel(indexSel)} ▾</Text>
         </TouchableOpacity>
         {!isDesktop ? (
           <>
@@ -815,39 +847,16 @@ export default function ScreenerScreen() {
         </View>
       </ScrollView>
 
-      {/* Universe picker */}
+      {/* Universe picker — multi-select: toggle any combination, or All. */}
       {idxOpen ? (
-        <Sheet onClose={() => setIdxOpen(false)} maxHeight="85%">
-          <View style={styles.sheetHead}>
-            <Text style={styles.sheetTitle}>Universe</Text>
-            <TouchableOpacity onPress={() => setIdxOpen(false)} hitSlop={12} activeOpacity={0.75}>
-              <Text style={styles.sheetClose}>✕ Close</Text>
-            </TouchableOpacity>
-          </View>
-          <ScrollView bounces={false}>
-            {INDEX_GROUPS.map((g) => (
-              <View key={g.title}>
-                <Text style={styles.idxGroupTitle}>{g.title.toUpperCase()}</Text>
-                {g.items.map((idx) => (
-                  <TouchableOpacity
-                    key={idx}
-                    style={styles.idxOpt}
-                    onPress={() => {
-                      setIndexName(idx);
-                      setIdxOpen(false);
-                    }}
-                    activeOpacity={0.75}
-                  >
-                    <Text style={[styles.idxOptTxt, idx === indexName && { color: theme.brand, fontWeight: '700' }]}>
-                      {idx}
-                      {idx === 'RECENT IPOS' ? '  · listed in the last year' : idx === 'SME EMERGE' ? '  · NSE SME platform' : ''}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            ))}
-          </ScrollView>
-        </Sheet>
+        <UniversePicker
+          selected={indexSel}
+          onApply={(sel) => {
+            setIndexSel(sel);
+            setIdxOpen(false);
+          }}
+          onClose={() => setIdxOpen(false)}
+        />
       ) : null}
 
       {/* Per-row Analyse menu */}
@@ -947,6 +956,71 @@ export default function ScreenerScreen() {
 // Lives in the page flow (not a modal) and edits `active` LIVE — every change
 // reflects immediately, exactly like presets. `shown` is the ordered list of
 // filter-key rows; emptying a value keeps its row, the × button removes it.
+// ── Universe picker (multi-select with an All toggle) ────────────────────────
+// Edits a draft and commits on Apply, so toggling five universes triggers ONE
+// reload of the union rather than five.
+function UniversePicker({
+  selected,
+  onApply,
+  onClose,
+}: {
+  selected: string[];
+  onApply: (sel: string[]) => void;
+  onClose: () => void;
+}) {
+  const [draft, setDraft] = useState<string[]>(selected);
+  const allOn = draft.length >= INDICES.length;
+  const toggle = (idx: string) =>
+    setDraft((d) => (d.includes(idx) ? d.filter((x) => x !== idx) : [...d, idx]));
+
+  return (
+    <Sheet onClose={onClose} fill>
+      <View style={styles.sheetHead}>
+        <Text style={styles.sheetTitle}>Universe</Text>
+        <TouchableOpacity onPress={onClose} hitSlop={12} activeOpacity={0.75}>
+          <Text style={styles.sheetClose}>✕ Close</Text>
+        </TouchableOpacity>
+      </View>
+      <ScrollView style={{ flex: 1 }} bounces={false}>
+        <TouchableOpacity
+          style={styles.idxOptRow}
+          onPress={() => setDraft(allOn ? ['NIFTY 50'] : [...INDICES])}
+          activeOpacity={0.75}
+        >
+          <Text style={[styles.idxCheck, allOn && styles.idxCheckOn]}>{allOn ? '☑' : '☐'}</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.idxOptTxt, allOn && { color: theme.brand, fontWeight: '700' }]}>All markets</Text>
+            <Text style={styles.idxOptHint}>Every universe below, deduped into one scan</Text>
+          </View>
+        </TouchableOpacity>
+        {INDEX_GROUPS.map((g) => (
+          <View key={g.title}>
+            <Text style={styles.idxGroupTitle}>{g.title.toUpperCase()}</Text>
+            {g.items.map((idx) => {
+              const on = draft.includes(idx);
+              return (
+                <TouchableOpacity key={idx} style={styles.idxOptRow} onPress={() => toggle(idx)} activeOpacity={0.75}>
+                  <Text style={[styles.idxCheck, on && styles.idxCheckOn]}>{on ? '☑' : '☐'}</Text>
+                  <Text style={[styles.idxOptTxt, on && { color: theme.brand, fontWeight: '700' }]}>
+                    {idx}
+                    {idx === 'RECENT IPOS' ? '  · listed in the last year' : idx === 'SME EMERGE' ? '  · NSE SME platform' : ''}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        ))}
+      </ScrollView>
+      <Btn
+        label={draft.length ? `Scan ${selName(draft)}` : 'Pick at least one universe'}
+        onPress={() => draft.length && onApply(draft)}
+        disabled={!draft.length}
+        style={styles.sheetApply}
+      />
+    </Sheet>
+  );
+}
+
 // ── Expression filter panel (TaurEye-style rows with AND/OR) ─────────────────
 // Dropdown select for the expression rows (RN-web has no native <select>).
 type SelItem = { v?: string; label: string; header?: boolean };
@@ -1580,6 +1654,9 @@ const styles = StyleSheet.create({
   idxDropTxt: { color: theme.text, fontSize: theme.fs.sm + 1, fontWeight: '800', fontFamily: theme.mono },
   idxGroupTitle: { color: theme.muted, fontSize: theme.fs.xs, fontWeight: '800', letterSpacing: 1, marginTop: theme.sp.md, marginBottom: 2 },
   idxOpt: { paddingVertical: theme.sp.sm },
+  idxOptRow: { flexDirection: 'row', alignItems: 'center', gap: theme.sp.md, paddingVertical: theme.sp.sm },
+  idxCheck: { color: theme.muted, fontSize: 18 },
+  idxCheckOn: { color: theme.brand },
   idxOptTxt: { color: theme.text, fontSize: theme.fs.md },
   idxOptHint: { color: theme.muted, fontSize: theme.fs.sm, marginTop: 1 },
   exportWrap: { position: 'relative', zIndex: 80 },
