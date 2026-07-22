@@ -136,6 +136,12 @@ export type Fundamentals = {
   debt_equity?: number | null;
   current_ratio?: number | null;
   market_cap_cr?: number | null;
+  // Analyser extras seeded from the multibagger screen's metrics dict.
+  peg?: number | null;
+  revenue_growth_pct?: number | null;
+  earnings_growth_pct?: number | null;
+  fcf_cr?: number | null;
+  pct_from_high_pct?: number | null;
   description?: string;
   error?: string;
 };
@@ -517,7 +523,39 @@ export type MbScreenRow = {
   roe: number | null;
   debt_equity: number | null;
   sector?: string | null;
+  // Full analyser metrics dict (pe, pb, roce_pct, peg, margins…) — carried so
+  // strategy filters work without a second fundamentals fetch.
+  metrics?: Record<string, number | string | null> | null;
 };
+// Index-wide chart-pattern screener (from /patterns/screen).
+export type PatternScreenHit = {
+  symbol: string;
+  price: number | null;
+  type: string;
+  label: string;
+  bias: 'bullish' | 'bearish' | 'neutral';
+  category: string;
+  status?: 'confirmed' | 'forming' | null;
+  confidence: number;
+  continuation?: number | null;
+  expansion_pct?: number | null;
+  target?: number | null;
+  start_ts?: number | null;
+  end_ts?: number | null;
+};
+export type PatternScreenResp = {
+  status: 'idle' | 'running' | 'done' | 'error';
+  refreshing?: boolean;
+  progress?: string;
+  asof: number;
+  index: string;
+  universe: number;
+  capped?: boolean;
+  matches: number;
+  results: PatternScreenHit[];
+  error?: string | null;
+};
+
 export type MbScreenResp = {
   status: 'idle' | 'running' | 'done' | 'error';
   refreshing?: boolean;
@@ -987,6 +1025,9 @@ export const api = {
     getJson<MomentumScreenResp>('/momentum/screen' + (refresh ? '?refresh=1' : ''), 30000),
   mbScreen: (refresh = false) =>
     getJson<MbScreenResp>('/multibagger/screen' + (refresh ? '?refresh=1' : ''), 30000),
+  patternsScreen: (index: string, refresh = false) =>
+    getJson<PatternScreenResp>(
+      `/patterns/screen?index=${encodeURIComponent(index)}` + (refresh ? '&refresh=1' : ''), 30000),
   sectors: (level: SectorLevel = 'macro', refresh = false) => {
     const qs = new URLSearchParams();
     if (level && level !== 'macro') qs.set('level', level);

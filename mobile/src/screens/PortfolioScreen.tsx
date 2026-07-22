@@ -767,7 +767,7 @@ const styles = StyleSheet.create({
     gap: theme.sp.sm,
     marginTop: theme.sp.sm,
   },
-  addBox: { flexDirection: 'row', gap: theme.sp.sm, marginTop: theme.sp.md, marginBottom: theme.sp.xs },
+  addBox: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.sp.sm, marginTop: theme.sp.md, marginBottom: theme.sp.xs },
   input: {
     backgroundColor: theme.surface2,
     borderColor: theme.border2,
@@ -779,11 +779,11 @@ const styles = StyleSheet.create({
     fontFamily: theme.mono,
     fontSize: theme.fs.sm + 1,
   },
-  iSym: { flex: 1 },
-  iNum: { width: 66 },
+  iSym: { flexGrow: 1, flexShrink: 1, flexBasis: 120, minWidth: 120 },
+  iNum: { width: 74 },
   error: { color: theme.red, fontSize: theme.fs.sm, marginTop: theme.sp.sm },
   // toolbar
-  toolbar: { flexDirection: 'row', gap: theme.sp.sm, marginTop: theme.sp.md, marginBottom: theme.sp.sm },
+  toolbar: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.sp.sm, marginTop: theme.sp.md, marginBottom: theme.sp.sm },
   toolBtn: {
     backgroundColor: theme.surface2,
     borderColor: theme.border2,
