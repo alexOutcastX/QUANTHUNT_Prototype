@@ -890,7 +890,37 @@ async function delJson<T>(path: string): Promise<T> {
   return data;
 }
 
+// ── user accounts (email + OTP) ──
+export type MeResp = { user: { email: string } | null };
+export type OtpRequestResp = { sent?: boolean; dev_code?: string; error?: string; detail?: string };
+export type OtpVerifyResp = { user?: { email: string }; created?: boolean; error?: string; detail?: string };
+export type UserDataResp = { v: unknown; ts: number };
+export type UserPutResp = { stored: boolean; ts?: number; server_newer?: boolean; v?: unknown };
+
 export const api = {
+  authMe: () => getJson<MeResp>('/auth/me'),
+  otpRequest: (email: string) => postJson<OtpRequestResp>('/auth/otp/request', { email }),
+  otpVerify: (email: string, code: string, consent: boolean) =>
+    postJson<OtpVerifyResp>('/auth/otp/verify', { email, code, consent }),
+  userLogout: () => postJson<{ user: null }>('/auth/logout', {}),
+  accountDelete: async (): Promise<{ deleted: boolean }> => {
+    const res = await fetch(API_BASE + '/auth/account', { method: 'DELETE', credentials: 'include' });
+    const d = (await res.json().catch(() => ({}))) as { deleted?: boolean; error?: string };
+    if (!res.ok) throw new Error(d.error || 'HTTP ' + res.status);
+    return { deleted: !!d.deleted };
+  },
+  userDataGet: (kind: string) => getJson<UserDataResp>('/user/data/' + encodeURIComponent(kind)),
+  userDataPut: async (kind: string, v: unknown, ts: number): Promise<UserPutResp> => {
+    const res = await fetch(API_BASE + '/user/data/' + encodeURIComponent(kind), {
+      method: 'PUT',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ v, ts }),
+    });
+    const d = (await res.json().catch(() => ({}))) as UserPutResp & { error?: string };
+    if (!res.ok) throw new Error(d.error || 'HTTP ' + res.status);
+    return d;
+  },
   alertsList: () => getJson<{ alerts: Alert[] }>('/alerts'),
   alertsCreate: (symbol: string, type: Alert['type'], value: number, note = '') =>
     postJson<{ alert: Alert }>('/alerts', { symbol, type, value, note }),
