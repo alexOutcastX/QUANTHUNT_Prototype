@@ -34,6 +34,8 @@ quanthunt.db-shm
 mb_screen.json
 pattern_screen.json
 mom_screen.json
+backtests.json
+backtests.json.tmp
 sectors_cache.json
 sectors_cache.json.tmp
 mobile/dist-precompressed/
