@@ -483,6 +483,108 @@ export type OptionChain = {
   error?: string;
 };
 
+// ── Backtest engine v2 (from /backtest/*) ────────────────────────────────────
+export type BtRule = {
+  ind: string;
+  period?: number;
+  op: 'gt' | 'lt' | 'cross_above' | 'cross_below';
+  target: string;
+  value?: number;
+};
+export type BtConfig = {
+  symbols?: string[];
+  index?: string;
+  period?: string;
+  capital?: number;
+  max_positions?: number;
+  execution?: 'next_open' | 'same_close';
+  strategy: { key: string; params?: Record<string, number>; buy?: BtRule[]; sell?: BtRule[] };
+  sizing?: { mode: 'equal' | 'fixed' | 'risk'; value?: number };
+  costs?: Record<string, number>;
+  risk?: {
+    sl_type?: 'none' | 'pct' | 'atr';
+    sl_val?: number;
+    tp_type?: 'none' | 'pct' | 'rr';
+    tp_val?: number;
+    trail_pct?: number;
+    max_hold_days?: number;
+  };
+};
+export type BtStrategyMeta = { key: string; label: string; params: Record<string, number>; blurb: string };
+export type BtStrategiesResp = {
+  strategies: BtStrategyMeta[];
+  default_costs: Record<string, number>;
+  max_symbols: number;
+};
+export type BtTrade = {
+  id: number;
+  symbol: string;
+  qty: number;
+  entry_date: string;
+  entry_ts: number;
+  entry_px: number;
+  exit_date: string;
+  exit_ts: number;
+  exit_px: number;
+  reason: string;
+  gross_pnl: number;
+  charges: number;
+  net_pnl: number;
+  ret_pct: number;
+  hold_days: number;
+  r_multiple: number | null;
+};
+export type BtStats = {
+  final_capital: number;
+  net_profit: number;
+  total_return_pct: number;
+  cagr_pct: number;
+  volatility_pct: number;
+  sharpe: number;
+  sortino: number;
+  calmar: number | null;
+  max_drawdown_pct: number;
+  max_drawdown_days: number;
+  exposure_pct: number;
+  turnover_x: number;
+  trades: number;
+  win_rate_pct: number;
+  profit_factor: number | null;
+  expectancy: number;
+  avg_win: number;
+  avg_loss: number;
+  payoff: number | null;
+  avg_hold_days: number;
+  total_charges: number;
+  best_trade: BtTrade | null;
+  worst_trade: BtTrade | null;
+  drawdown_curve: { t: number; dd: number }[];
+  monthly_returns: { year: number; months: (number | null)[]; total: number }[];
+  per_symbol: { symbol: string; trades: number; wins: number; net_pnl: number; charges: number }[];
+  rf_rate_pct: number;
+};
+export type BtResult = {
+  universe: string[];
+  skipped: string[];
+  period: string;
+  strategy: BtConfig['strategy'];
+  execution: string;
+  stats: BtStats;
+  equity_curve: { t: number; eq: number }[];
+  benchmark_curve: { t: number; eq: number }[];
+  trades: BtTrade[];
+  costs: Record<string, number>;
+  asof: number;
+};
+export type BtSnapshot = {
+  status: 'running' | 'done' | 'error' | 'unknown';
+  progress: string;
+  run_id: string;
+  error: string | null;
+  result: BtResult | null;
+};
+export type BtLastResp = { run_id: string | null; config?: BtConfig; result?: BtResult };
+
 // Portfolio risk report (from /risk/portfolio).
 // Multibagger-potential report (from /multibagger).
 export type MbPillar = { key: string; label: string; weight: number; score: number | null; note: string };
@@ -1127,4 +1229,9 @@ export const api = {
     }
     return { data: merged, count: Object.keys(merged).length, cached, computed };
   },
+  btStrategies: () => getJson<BtStrategiesResp>('/backtest/strategies'),
+  btRun: (cfg: BtConfig) => postJson<{ run_id: string }>('/backtest/run', cfg),
+  btStatus: (id: string) =>
+    getJson<BtSnapshot>('/backtest/status?id=' + encodeURIComponent(id), 40000),
+  btLast: () => getJson<BtLastResp>('/backtest/last'),
 };

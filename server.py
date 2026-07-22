@@ -2205,6 +2205,49 @@ def patterns_screen():
     return jsonify(ps.snapshot(name))
 
 
+@app.route("/backtest/strategies")
+def backtest_strategies():
+    """Strategy library for the backtester: key, label, editable params, blurb."""
+    import backtest_engine as bte
+    return jsonify({"strategies": bte.strategies_meta(),
+                    "default_costs": bte.DEFAULT_COSTS,
+                    "max_symbols": bte.MAX_SYMBOLS})
+
+
+@app.route("/backtest/run", methods=["POST"])
+def backtest_run():
+    """Launch a portfolio backtest as a background job (see backtest_engine.py).
+    Body = the full run config (universe, strategy, sizing, costs, risk).
+    Returns {run_id}; poll /backtest/status?id=<run_id> for progress + result."""
+    import backtest_engine as bte
+    cfg = request.get_json(silent=True) or {}
+    if cfg.get("index") and cfg["index"].strip().upper() not in NSE_INDEX_MAP:
+        return jsonify({"error": f"Unknown index '{cfg['index']}'"}), 400
+    run_id, err = bte.start(cfg, _get_constituents, _load_ohlc)
+    if err:
+        return jsonify({"error": err}), 400
+    return jsonify({"run_id": run_id})
+
+
+@app.route("/backtest/status")
+def backtest_status():
+    """Snapshot of a backtest job: status, live progress and (when done) the
+    full result — stats, equity/benchmark/drawdown curves and the trade log."""
+    import backtest_engine as bte
+    run_id = request.args.get("id", "").strip()
+    if not run_id:
+        return jsonify({"error": "id required"}), 400
+    return jsonify(bte.snapshot(run_id))
+
+
+@app.route("/backtest/last")
+def backtest_last():
+    """The most recent completed run (survives a server restart)."""
+    import backtest_engine as bte
+    data = bte.last_run()
+    return jsonify(data or {"run_id": None})
+
+
 @app.route("/recommendation")
 def recommendation():
     """Full buy-recommendation for one symbol: blends the passed-in fundamental
