@@ -43,6 +43,10 @@ class H(BaseHTTPRequestHandler):
                              ("NIKKEI225", "Nikkei 225", 39100.0, -0.44, 14.0)],
             "depository": [("INFY", "Infosys", 21.4, 0.9, None),
                           ("IBN", "ICICI Bank", 31.2, -0.3, 22.5)],
+            "currency": [("USDINR", "USD/INR", 83.42, 0.12, 1.8),
+                        ("EURINR", "EUR/INR", 90.15, -0.08, 2.4)],
+            "commodity": [("GOLD", "Gold", 2410.5, 0.55, 19.2),
+                         ("BRENT", "Brent Crude", 84.3, -1.02, 3.1)],
         }.get(cat, [])
         rows = [{"key": k, "name": n, "level": lv, "chg": c, "y1": y, "category": cat}
                 for (k, n, lv, c, y) in sample]
