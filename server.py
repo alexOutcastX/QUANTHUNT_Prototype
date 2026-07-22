@@ -1432,38 +1432,69 @@ SENSEX_30 = [
 CUSTOM_GROUPS = ("BSE SENSEX", "SME EMERGE", "RECENT IPOS")
 
 
-_sme_names_cache: dict = {}
+# NSE master lists (main board EQUITY_L + EMERGE SME_EQUITY_L) parsed into
+# SYMBOL -> {name, listed_ts}. Both carry the official DATE OF LISTING, which
+# makes RECENT IPOS exact and instant — no waiting on the universe sweep.
+_MASTER_TTL = 6 * 3600
+_master_cache: dict = {}   # path -> (fetched_at, {sym: {...}})
 
 
-def _sme_names():
-    """SYMBOL -> company name for the EMERGE platform, from NSE's official SME
-    master list (same archive host/session as EQUITY_L — no new source)."""
-    global _sme_names_cache
-    if _sme_names_cache:
-        return _sme_names_cache
+def _parse_listing_date(s):
+    s = (s or "").strip()
+    for fmt in ("%d-%b-%Y", "%d-%b-%y"):
+        try:
+            return int(datetime.datetime.strptime(s, fmt).timestamp())
+        except ValueError:
+            continue
+    return None
+
+
+def _master_list(path):
+    """SYMBOL -> {name, listed_ts} from an NSE master-list CSV (cached; serves
+    the last-good copy on fetch failure). Column names differ between the main
+    board (\"NAME OF COMPANY\") and SME (\"NAME_OF_COMPANY\") files, so match
+    on normalized headers."""
+    ts, data = _master_cache.get(path, (0.0, {}))
+    if data and (time.time() - ts) < _MASTER_TTL:
+        return data
     try:
         s = nse_session()
-        r = s.get(NSE_ARCHIVE + "/content/equities/SME_EQUITY_L.csv", timeout=20)
-        if r.status_code != 200:
-            return {}
+        r = s.get(NSE_ARCHIVE + path, timeout=20)
+        # The archive answers some bad paths with a tiny 200 stub — demand a
+        # real CSV header before trusting it.
+        if r.status_code != 200 or "SYMBOL" not in r.text[:300].upper():
+            return data
         reader = csv.DictReader(io.StringIO(r.text))
-        name_col = next((k for k in (reader.fieldnames or []) if "NAME OF COMPANY" in (k or "").upper()), None)
-        sym_col = next((k for k in (reader.fieldnames or []) if (k or "").strip().upper() == "SYMBOL"), None)
-        if not name_col or not sym_col:
-            return {}
-        names = {}
+        norm = {(k or "").strip().upper().replace("_", " "): k for k in (reader.fieldnames or [])}
+        sym_k = norm.get("SYMBOL")
+        name_k = next((v for n, v in norm.items() if "NAME" in n and "COMPANY" in n), None)
+        date_k = next((v for n, v in norm.items() if "DATE" in n and "LISTING" in n), None)
+        if not sym_k:
+            return data
+        out = {}
         for row in reader:
-            sym = (row.get(sym_col) or "").strip()
-            nm = (row.get(name_col) or "").strip()
-            if sym and nm:
-                names[sym] = nm
-        if names:
-            _sme_names_cache = names
-            log.info("SME names loaded: %d", len(names))
-        return names
+            sym = (row.get(sym_k) or "").strip()
+            if not sym:
+                continue
+            out[sym] = {
+                "name": ((row.get(name_k) or "").strip() or None) if name_k else None,
+                "listed_ts": _parse_listing_date(row.get(date_k)) if date_k else None,
+            }
+        if out:
+            _master_cache[path] = (time.time(), out)
+            log.info("Master list %s: %d symbols", path, len(out))
+            return out
     except Exception as e:
-        log.warning("SME name list fetch failed: %s", e)
-        return {}
+        log.warning("Master list %s failed: %s", path, e)
+    return data
+
+
+def _sme_master():
+    return _master_list("/emerge/corporates/content/SME_EQUITY_L.csv")
+
+
+def _main_master():
+    return _master_list("/content/equities/EQUITY_L.csv")
 
 
 def _custom_group_rows(name):
@@ -1473,19 +1504,41 @@ def _custom_group_rows(name):
     if name == "SME EMERGE":
         if not _SME_LIST:
             get_universe_nonblocking()  # warms the bhavcopy → fills _SME_LIST
-        names = _sme_names()
-        rows = [dict(r, name=names.get(r["symbol"])) for r in _SME_LIST]
-        return rows, ("bhavcopy" if rows else "warming")
+        master = _sme_master()
+        if _SME_LIST:
+            rows = [dict(r, name=(master.get(r["symbol"]) or {}).get("name"))
+                    for r in _SME_LIST]
+        else:
+            # Bhavcopy still warming — serve the master list itself (symbols +
+            # names; /scan backfills quotes) instead of an empty screen.
+            rows = [{"symbol": sym, "name": m.get("name")} for sym, m in master.items()]
+        return rows, ("bhavcopy" if _SME_LIST else "master" if rows else "warming")
     if name == "RECENT IPOS":
+        # Official listing dates from BOTH NSE master lists (main board +
+        # EMERGE): exact, instant, and each stock ages out one year after its
+        # first trading day. Prices come from feeds we already hold.
         import mb_screen as mbs
-        rows = mbs.recent_ipos()
-        if not rows:
-            # Self-heal: a pre-upgrade sweep cache carries no listing dates —
-            # kick a fresh universe sweep once so the group fills itself in.
-            with mbs._lock:
-                has_data = bool(mbs._state.get("recent_ipos"))
-            mbs.ensure_started(get_universe, force=not has_data)
-        return rows, ("sweep" if rows else "pending")
+        now = time.time()
+        sweep = {r["symbol"]: r for r in mbs.recent_ipos()}
+        sme_px = {r["symbol"]: r for r in _SME_LIST}
+        rows = []
+        for master in (_main_master(), _sme_master()):
+            for sym, m in master.items():
+                lts = m.get("listed_ts")
+                if lts and (now - lts) <= 365 * 86400:
+                    extra = sweep.get(sym) or sme_px.get(sym) or {}
+                    rows.append({"symbol": sym,
+                                 "name": m.get("name") or extra.get("name"),
+                                 "listed_ts": lts,
+                                 "price": extra.get("price"),
+                                 "chg": extra.get("chg")})
+        seen = set()
+        uniq = []
+        for r in sorted(rows, key=lambda x: -(x.get("listed_ts") or 0)):
+            if r["symbol"] not in seen:
+                seen.add(r["symbol"])
+                uniq.append(r)
+        return uniq, ("master" if uniq else "pending")
     return None, None
 
 
