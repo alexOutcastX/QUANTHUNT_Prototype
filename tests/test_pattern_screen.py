@@ -93,6 +93,29 @@ class PatternScreenTest(unittest.TestCase):
         self.assertEqual(snap["status"], "error")
         self.assertTrue(snap["error"])
 
+    def test_rate_limited_symbols_counted_and_marked_partial(self):
+        # Feed refuses every symbol → the sweep must say so (partial, no_data)
+        # instead of finishing as a clean "done · 0 hits".
+        rows = [{"symbol": s} for s in ("AAA", "BBB", "CCC")]
+        calls = []
+        def load(sym, p, i):
+            calls.append(sym)
+            return []
+        ps.ensure("NIFTY 50", lambda _n: (rows, "test"), load,
+                  lambda cs: {"patterns": []})
+        deadline = time.time() + 10
+        while time.time() < deadline:
+            snap = ps.snapshot("NIFTY 50")
+            if snap["status"] == "done" and not snap["refreshing"]:
+                break
+            time.sleep(0.05)
+        self.assertEqual(snap["status"], "done")
+        self.assertTrue(snap["partial"])
+        self.assertEqual(snap["no_data"], 3)
+        self.assertEqual(snap["scanned_ok"], 0)
+        # every symbol was retried once after the first refusal
+        self.assertEqual(len(calls), 6)
+
     def test_results_sorted_by_confidence(self):
         n = len(_candles())
         def detect(cs):

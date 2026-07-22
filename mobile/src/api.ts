@@ -551,6 +551,9 @@ export type PatternScreenResp = {
   index: string;
   universe: number;
   capped?: boolean;
+  scanned_ok?: number;
+  no_data?: number;
+  partial?: boolean;
   matches: number;
   results: PatternScreenHit[];
   error?: string | null;
