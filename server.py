@@ -717,7 +717,9 @@ def static_files(fname):
         # _expo/ and assets/. Serving those no-store forced the browser to
         # re-download the whole ~1.4 MB bundle on every visit — the single
         # biggest cause of slow website startup.
-        if fname.startswith(("_expo/", "assets/")):
+        # vendor/ files carry their version in the filename, so they're as
+        # good as content-hashed — cache like the build artefacts.
+        if fname.startswith(("_expo/", "assets/", "vendor/")):
             return _immutable(_send_web_file(fname))
         return _no_cache(_send_web_file(fname))
     # 2) Fall back to repo-root files (StockScreenPro.html, VERSION, legacy assets)
@@ -837,7 +839,10 @@ def _req_start():
 # base-tag hijack, forms only to self.
 _CSP = (
     "default-src 'self'; "
-    "script-src 'self' 'unsafe-inline' https://s3.tradingview.com https://*.tradingview.com; "
+    # unpkg.com is the CDN *fallback* for the self-hosted /vendor chart libs
+    # (lightweight-charts, d3) — the srcdoc chart iframes inherit this policy.
+    "script-src 'self' 'unsafe-inline' https://s3.tradingview.com https://*.tradingview.com "
+    "https://unpkg.com; "
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
     "font-src 'self' data: https://fonts.gstatic.com; "
     "img-src * data: blob:; "

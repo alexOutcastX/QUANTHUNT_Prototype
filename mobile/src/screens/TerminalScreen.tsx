@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_BASE, GraphResp, LtpResp, api } from '../api';
+import { D3_SCRIPT, LW_SCRIPT } from '../chartHtml';
 import { resolveIndex } from '../indices';
 import HtmlView from '../components/HtmlView';
 import SymbolInput from '../components/SymbolInput';
@@ -244,8 +245,8 @@ function graphHtml(data: GraphResp, quotes: LtpResp, centre: string, openIdx: st
   </div>
   <div id="panel"><div class="wmsg">Loading…</div></div>
 </div>
-<script src="https://unpkg.com/d3@7.9.0/dist/d3.min.js"></script>
-<script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
+${D3_SCRIPT}
+${LW_SCRIPT}
 <script>
 (function(){
   if (typeof d3 === 'undefined') { document.getElementById('panel').innerHTML = '<div class="wmsg">⚠ Graph library unavailable (no network).</div>'; return; }
