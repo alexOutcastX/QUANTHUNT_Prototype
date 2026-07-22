@@ -14,6 +14,7 @@ import TerminalScreen from './screens/TerminalScreen';
 import HeatmapScreen from './screens/HeatmapScreen';
 import TickerStrip from './components/TickerStrip';
 import CommandPalette from './components/CommandPalette';
+import TickerSettings from './components/TickerSettings';
 import PdfPreview from './components/PdfPreview';
 import { navigate, peekNav, subscribeNav } from './navIntent';
 import { isClassicNav, navModeReady, subscribeNavMode } from './navMode';
@@ -127,6 +128,7 @@ function legacyNav(k: string, setActive: (k: string) => void) {
 function NewDesktopShell() {
   const [active, setActive] = useState('today');
   const [palette, setPalette] = useState(false);
+  const [settings, setSettings] = useState(false);
   const cur = NAV.find((t) => t.k === active) || NAV[0];
   useEffect(
     () =>
@@ -178,7 +180,15 @@ function NewDesktopShell() {
             );
           })}
         </ScrollView>
-        <ThemeToggle style={styles.themeBtnDesktop} />
+        <TouchableOpacity
+          style={[styles.themeBtn, styles.themeBtnDesktop]}
+          onPress={() => setSettings(true)}
+          activeOpacity={0.75}
+          accessibilityLabel="Ticker settings"
+        >
+          <Icon name="settings" size={16} color={theme.muted2} />
+        </TouchableOpacity>
+        <ThemeToggle />
         <TouchableOpacity
           style={styles.legalBtn}
           onPress={() => Linking.openURL((API_BASE || '') + '/legal.html').catch(() => {})}
@@ -189,6 +199,7 @@ function NewDesktopShell() {
       <TickerStrip />
       <View style={styles.main}>{cur.render((k) => legacyNav(k, setActive))}</View>
       <CommandPalette open={palette} onClose={() => setPalette(false)} />
+      {settings ? <TickerSettings onClose={() => setSettings(false)} /> : null}
     </View>
   );
 }
@@ -197,6 +208,7 @@ function NewMobileShell() {
   const insets = useSafeAreaInsets();
   const [active, setActive] = useState('today');
   const [palette, setPalette] = useState(false);
+  const [settings, setSettings] = useState(false);
   const [hydrated, setHydrated] = useState(false);
   const tab = NAV.find((t) => t.k === active) || NAV[0];
   // Restore the last tab so backgrounding the app and returning doesn't dump
@@ -233,11 +245,21 @@ function NewMobileShell() {
           >
             <Icon name="search" size={16} color={theme.muted2} />
           </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.themeBtn}
+            onPress={() => setSettings(true)}
+            activeOpacity={0.75}
+            accessibilityLabel="Ticker settings"
+          >
+            <Icon name="settings" size={16} color={theme.muted2} />
+          </TouchableOpacity>
           <ThemeToggle />
         </View>
       </View>
+      <TickerStrip />
       <View style={styles.mobileBody}>{tab.render((k) => legacyNav(k, setActive))}</View>
       <CommandPalette open={palette} onClose={() => setPalette(false)} />
+      {settings ? <TickerSettings onClose={() => setSettings(false)} /> : null}
       <View style={[styles.tabBar, { paddingBottom: insets.bottom || 8 }]}>
         {NAV.map((t) => {
           const on = active === t.k;

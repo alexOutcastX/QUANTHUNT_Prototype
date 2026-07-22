@@ -20,6 +20,7 @@ const SYNC_KEYS: Record<string, string> = {
   'taureye.localalerts.v1': 'localalerts_v1',
   'taureye.papertrades.v1': 'papertrades_v1',
   'taureye.papersim.v1': 'papersim_v1',
+  'taureye.prefs.v1': 'prefs_v1',
 };
 const TS_PREFIX = 'taureye.sync.ts.';
 
