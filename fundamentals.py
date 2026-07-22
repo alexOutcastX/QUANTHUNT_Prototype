@@ -34,7 +34,7 @@ _FILE = os.path.join(_DIR, "fund_cache.json")
 _cache: dict = {}
 _inflight: set = set()
 _lock = threading.Lock()
-_pool = ThreadPoolExecutor(max_workers=4)   # bounded so we never hammer EODHD/yfinance
+_pool = ThreadPoolExecutor(max_workers=6)   # bounded so we never hammer the providers
 _dirty = False
 
 # The compact schema the screener's fundamental filters read.
