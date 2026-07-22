@@ -89,3 +89,26 @@ export function costFraction(buyVal: number, sellVal: number, m: CostModel): num
 function r2(x: number): number {
   return Math.round(x * 100) / 100;
 }
+
+
+// Net-of-costs risk:reward for a planned setup — the R:R a professional
+// actually compares against. Applies slippage to entry/exit fills and the
+// full charge schedule to both the win and loss legs (per-share notional;
+// ratios are scale-invariant for the bps-based components).
+export function netRR(
+  entry: number,
+  stop: number,
+  target: number,
+  m: CostModel = DEFAULT_COSTS,
+): number | null {
+  if (!isFinite(entry) || !isFinite(stop) || !isFinite(target)) return null;
+  const buy = slip(entry, 'buy', m);
+  const winSell = slip(target, 'sell', m);
+  const lossSell = slip(stop, 'sell', m);
+  const winCharge = tradeCharges(buy, winSell, m).total;
+  const lossCharge = tradeCharges(buy, lossSell, m).total;
+  const reward = winSell - buy - winCharge;
+  const risk = buy - lossSell + lossCharge;
+  if (risk <= 0) return null;
+  return reward / risk;
+}
