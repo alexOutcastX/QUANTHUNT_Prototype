@@ -466,7 +466,11 @@ export default function ScreenerScreen() {
     (async () => {
       let target = missing;
       const settled = new Set<string>();
-      for (let round = 0; round < 25 && target.length && !cancelled; round++) {
+      // Scale the polling window with the universe: a fresh 400+ symbol group
+      // (SME EMERGE, ALL) takes minutes to warm through screener.in/NSE — a
+      // fixed 75 s window marked everything still warming as unavailable.
+      const maxRounds = Math.min(90, 25 + Math.ceil(missing.length / 8));
+      for (let round = 0; round < maxRounds && target.length && !cancelled; round++) {
         try {
           const res = await api.fundamentalsBulk(target);
           if (cancelled) break;
