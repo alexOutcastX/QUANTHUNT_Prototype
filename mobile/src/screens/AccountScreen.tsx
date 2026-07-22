@@ -187,8 +187,12 @@ export default function AccountScreen() {
                 </View>
                 <Text style={s.consentTxt}>
                   I accept the{' '}
-                  <Text style={s.link} onPress={() => Linking.openURL((API_BASE || '') + '/legal.html').catch(() => {})}>
-                    Terms & Privacy Policy
+                  <Text style={s.link} onPress={() => Linking.openURL((API_BASE || '') + '/terms.html').catch(() => {})}>
+                    Terms of Use
+                  </Text>
+                  {' '}and{' '}
+                  <Text style={s.link} onPress={() => Linking.openURL((API_BASE || '') + '/privacy.html').catch(() => {})}>
+                    Privacy Policy
                   </Text>
                 </Text>
               </TouchableOpacity>

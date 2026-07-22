@@ -6,6 +6,7 @@ import StockDetail from '../components/StockDetail';
 import StrategyScores from '../components/StrategyScores';
 import { Row } from '../screener';
 import { navigate, openStock } from '../navIntent';
+import { lvlLabels, useAdvisory } from '../flags';
 import { addSymbol, loadWatchlist, normSymbol } from '../watchlist';
 import { LocalAlert, addLocalAlert, hasLocalAlert, loadLocalAlerts } from '../localalerts';
 import { loadNames } from './ScreenerScreen';
@@ -63,7 +64,7 @@ function SwingRow({ r, onOpen }: { r: SwingRec; onOpen: () => void }) {
         </View>
         {r.name ? <Text style={styles.name} numberOfLines={1}>{r.name}</Text> : null}
         <Text style={styles.setupLine} numberOfLines={1}>
-          {r.setup} · RSI {r.rsi} · entry {money(r.entry)} · SL {money(r.stop)} · tgt {money(r.target)} ({signPct(r.upside_pct)}){r.eta ? ` · ⏱ ${r.eta}` : ''}
+          {r.setup} · RSI {r.rsi} · piv {money(r.entry)} · S {money(r.stop)} · R {money(r.target)} ({signPct(r.upside_pct)})
         </Text>
       </View>
       <View style={styles.rowRight}>
@@ -105,6 +106,8 @@ function SwingDetail({
   onWatch: () => void;
   onAlert: () => void;
 }) {
+  const adv = useAdvisory();
+  const L = lvlLabels(adv);
   const Cell = ({ label, value, color, sub }: { label: string; value: string; color?: string; sub?: string }) => (
     <View style={styles.cell}>
       <Text style={styles.cellLbl}>{label}</Text>
@@ -121,7 +124,7 @@ function SwingDetail({
             <View style={{ flex: 1 }}>
               <View style={styles.rowTop}>
                 <Text style={styles.sheetSym}>{r.symbol}</Text>
-                <View style={styles.swingPill}><Text style={styles.swingTxt}>{r.action}</Text></View>
+                {adv ? <View style={styles.swingPill}><Text style={styles.swingTxt}>{r.action}</Text></View> : null}
               </View>
               {r.name ? <Text style={styles.name}>{r.name}</Text> : null}
               <Text style={styles.setupTag}>{r.setup}</Text>
@@ -129,7 +132,7 @@ function SwingDetail({
             </View>
             <View style={{ alignItems: 'flex-end' }}>
               <Text style={[styles.prob, { color: probColor(r.probability), fontSize: 28 }]}>{r.probability}</Text>
-              <Text style={styles.probLbl}>probability</Text>
+              <Text style={styles.probLbl}>{adv ? 'probability' : 'score'}</Text>
             </View>
           </View>
 
@@ -140,19 +143,19 @@ function SwingDetail({
           </View>
 
           <View style={styles.grid}>
-            <Cell label="ENTRY" value={money(r.entry)} />
-            <Cell label="STOP LOSS" value={money(r.stop)} sub={signPct(r.stop_pct)} color={theme.red} />
-            <Cell label="TARGET" value={money(r.target)} sub={signPct(r.upside_pct)} color={theme.green} />
+            <Cell label={L.entry} value={money(r.entry)} />
+            <Cell label={L.stop} value={money(r.stop)} sub={signPct(r.stop_pct)} color={theme.red} />
+            <Cell label={L.target} value={money(r.target)} sub={signPct(r.upside_pct)} color={theme.green} />
             <Cell label="R : R" value={r.rr != null ? `${r.rr.toFixed(1)}:1` : '—'} />
-            <Cell label="UPSIDE" value={signPct(r.upside_pct)} color={theme.green} />
+            <Cell label={L.upside} value={signPct(r.upside_pct)} color={theme.green} />
             <Cell label="MAX DD" value={signPct(r.max_dd)} color={theme.red} />
             <Cell label="SUPPORT" value={money(r.support)} />
             <Cell label="RESISTANCE" value={money(r.resistance)} />
           </View>
 
-          {r.eta ? (
+          {adv && r.eta ? (
             <View style={styles.etaBar}>
-              <Text style={styles.etaLbl}>⏱ Est. time to target</Text>
+              <Text style={styles.etaLbl}>Est. time to target</Text>
               <Text style={styles.etaVal}>{r.eta}</Text>
             </View>
           ) : null}

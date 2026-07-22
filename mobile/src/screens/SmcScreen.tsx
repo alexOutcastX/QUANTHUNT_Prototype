@@ -5,6 +5,7 @@ import StockDetail from '../components/StockDetail';
 import StrategyScores from '../components/StrategyScores';
 import { Row } from '../screener';
 import { navigate, openStock } from '../navIntent';
+import { lvlLabels, useAdvisory } from '../flags';
 import { addSymbol, loadWatchlist, normSymbol } from '../watchlist';
 import { LocalAlert, addLocalAlert, hasLocalAlert, loadLocalAlerts } from '../localalerts';
 import { loadNames } from './ScreenerScreen';
@@ -80,7 +81,7 @@ function SmcRow({ r, onOpen }: { r: SmcRec; onOpen: () => void }) {
         </View>
         {r.name ? <Text style={styles.name} numberOfLines={1}>{r.name}</Text> : null}
         <Text style={styles.setupLine} numberOfLines={1}>
-          {r.conf_count} confl · entry {money(r.entry)} · SL {money(r.stop)} · TP1 {money(r.target)} ({signPct(r.upside_pct)})
+          {r.conf_count} confl · piv {money(r.entry)} · S {money(r.stop)} · R1 {money(r.target)} ({signPct(r.upside_pct)})
           {r.rr != null ? ` · ${r.rr.toFixed(1)}:1` : ''}
         </Text>
       </View>
@@ -111,6 +112,8 @@ function SmcDetail({
   onWatch: () => void;
   onAlert: () => void;
 }) {
+  const adv = useAdvisory();
+  const L = lvlLabels(adv);
   const Cell = ({ label, value, color, sub }: { label: string; value: string; color?: string; sub?: string }) => (
     <View style={styles.cell}>
       <Text style={styles.cellLbl}>{label}</Text>
@@ -127,9 +130,9 @@ function SmcDetail({
             <View style={{ flex: 1 }}>
               <View style={styles.rowTop}>
                 <Text style={styles.sheetSym}>{r.symbol}</Text>
-                <View style={[styles.actionPill, { backgroundColor: r.action === 'LONG' ? theme.green : GOLD }]}>
+                {adv ? <View style={[styles.actionPill, { backgroundColor: r.action === 'LONG' ? theme.green : GOLD }]}>
                   <Text style={styles.actionTxt}>{r.action}</Text>
-                </View>
+                </View> : null}
                 <View style={[styles.zoneBadge, { borderColor: zoneColor(r.zone) }]}>
                   <Text style={[styles.zoneTxt, { color: zoneColor(r.zone) }]}>{r.zone}</Text>
                 </View>
@@ -182,7 +185,7 @@ function SmcDetail({
           </View>
 
           <View style={styles.grid}>
-            <Cell label="ENTRY" value={money(r.entry)} />
+            <Cell label={L.entry} value={money(r.entry)} />
             <Cell label="STOP (wick)" value={money(r.stop)} sub={signPct(r.stop_pct)} color={theme.red} />
             <Cell label="TP1 weak-high" value={money(r.target)} sub={signPct(r.upside_pct)} color={theme.green} />
             <Cell label="TP2 external" value={money(r.target2)} color={theme.green} />
@@ -192,9 +195,9 @@ function SmcDetail({
             <Cell label="WEAK HIGH" value={money(r.resistance)} sub="liquidity draw" />
           </View>
 
-          {r.eta ? (
+          {adv && r.eta ? (
             <View style={styles.etaBar}>
-              <Text style={styles.etaLbl}>⏱ Est. time to TP1</Text>
+              <Text style={styles.etaLbl}>Est. time to TP1</Text>
               <Text style={styles.etaVal}>{r.eta}</Text>
             </View>
           ) : null}

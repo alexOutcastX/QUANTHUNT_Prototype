@@ -7,6 +7,7 @@ import { Recommendation, TimeframesResp, api } from '../api';
 import { addPaperTrade } from '../paperTrades';
 import StrategyScores from './StrategyScores';
 import { Loading, RiskBadge } from '../ui';
+import { lvlLabels, useAdvisory } from '../flags';
 import { theme } from '../theme';
 
 const money = (v?: number | null) => (v == null || !isFinite(v) ? '—' : '₹' + v.toLocaleString('en-IN', { maximumFractionDigits: 2 }));
@@ -17,12 +18,21 @@ const scoreColor = (s: number | null | undefined) =>
   s == null ? theme.muted : s >= 60 ? theme.green : s <= 40 ? theme.red : '#e0a92e';
 
 type Verdict = { label: string; color: string; sub: string };
-function verdictFor(r: Recommendation): Verdict {
+// Two vocabularies for the same mechanical output: advisory framing is only
+// shown when the server's advisory_mode flag allows it (see flags.ts) — the
+// neutral variant describes rule alignment without telling anyone to trade.
+function verdictFor(r: Recommendation, advisory: boolean): Verdict {
   const c = r.confidence ?? 0;
-  if (r.action === 'BUY' && c >= 68) return { label: 'TAKE THIS TRADE', color: theme.green, sub: 'Setup + conviction line up. Enter near the level with the stop below.' };
-  if (r.action === 'BUY') return { label: 'TAKEABLE — SIZE DOWN', color: '#e0a92e', sub: 'A valid buy setup but conviction is moderate. Consider a smaller position.' };
-  if (r.action === 'WATCH') return { label: 'WAIT / WATCH', color: '#e0a92e', sub: 'Not a clean entry yet — put it on the watchlist and wait for confirmation.' };
-  return { label: 'AVOID FOR NOW', color: theme.red, sub: 'The setup or risk/reward does not justify a trade here.' };
+  if (advisory) {
+    if (r.action === 'BUY' && c >= 68) return { label: 'TAKE THIS TRADE', color: theme.green, sub: 'Setup + conviction line up. Enter near the level with the stop below.' };
+    if (r.action === 'BUY') return { label: 'TAKEABLE — SIZE DOWN', color: '#e0a92e', sub: 'A valid buy setup but conviction is moderate. Consider a smaller position.' };
+    if (r.action === 'WATCH') return { label: 'WAIT / WATCH', color: '#e0a92e', sub: 'Not a clean entry yet — put it on the watchlist and wait for confirmation.' };
+    return { label: 'AVOID FOR NOW', color: theme.red, sub: 'The setup or risk/reward does not justify a trade here.' };
+  }
+  if (r.action === 'BUY' && c >= 68) return { label: 'STRONG RULE ALIGNMENT', color: theme.green, sub: 'The quantitative screens align at this level. Analytics only — not advice.' };
+  if (r.action === 'BUY') return { label: 'MODERATE ALIGNMENT', color: '#e0a92e', sub: 'Some screens align; the aggregate score is middling. Analytics only — not advice.' };
+  if (r.action === 'WATCH') return { label: 'NO ALIGNMENT YET', color: '#e0a92e', sub: 'The screens have not lined up on this name at current prices.' };
+  return { label: 'WEAK ALIGNMENT', color: theme.red, sub: 'The screens score this setup poorly at current prices.' };
 }
 
 export default function TradeVerdict({ symbol, onClose }: { symbol: string; onClose: () => void }) {
@@ -58,7 +68,9 @@ export default function TradeVerdict({ symbol, onClose }: { symbol: string; onCl
     };
   }, [symbol]);
 
-  const v = rec ? verdictFor(rec) : null;
+  const adv = useAdvisory();
+  const L = lvlLabels(adv);
+  const v = rec ? verdictFor(rec, adv) : null;
 
   return (
     <Modal visible transparent animationType="slide" onRequestClose={onClose}>
@@ -121,19 +133,19 @@ export default function TradeVerdict({ symbol, onClose }: { symbol: string; onCl
 
               {rec.name ? <Text style={styles.name}>{rec.name}</Text> : null}
               <View style={styles.badges}>
-                <View style={styles.metaPill}><Text style={styles.metaLbl}>CONFIDENCE</Text><Text style={styles.metaVal}>{rec.confidence}</Text></View>
+                <View style={styles.metaPill}><Text style={styles.metaLbl}>{adv ? 'CONFIDENCE' : 'SCORE'}</Text><Text style={styles.metaVal}>{rec.confidence}</Text></View>
                 <RiskBadge input={{ rr: rec.rr, stop_pct: rec.stop_pct, score: rec.confidence }} />
               </View>
 
               <View style={styles.grid}>
-                <Cell k="Entry" v={money(rec.entry)} />
-                <Cell k="Stop" v={money(rec.stop)} s={pct(rec.stop_pct)} c={theme.red} />
-                <Cell k="Target" v={money(rec.target)} s={pct(rec.upside_pct)} c={theme.green} />
+                <Cell k={L.entry} v={money(rec.entry)} />
+                <Cell k={L.stop} v={money(rec.stop)} s={pct(rec.stop_pct)} c={theme.red} />
+                <Cell k={L.target} v={money(rec.target)} s={pct(rec.upside_pct)} c={theme.green} />
                 <Cell k="R : R" v={rec.rr != null ? `${rec.rr.toFixed(1)}:1` : '—'} />
                 <Cell k="Fundamental" v={rec.fundamental_score != null ? String(rec.fundamental_score) : '—'} />
                 <Cell k="Momentum" v={String(rec.momentum_score)} />
                 <Cell k="Pattern" v={String(rec.pattern_score)} />
-                <Cell k="ETA" v={rec.eta || '—'} />
+                {adv ? <Cell k="ETA" v={rec.eta || '—'} /> : null}
               </View>
 
               <StrategyScores symbol={symbol} />

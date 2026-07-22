@@ -11,6 +11,7 @@
 //     paperTrades.ts and paperSim.ts need no changes).
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { api } from './api';
+import { refreshFlags } from './flags';
 
 // local AsyncStorage key -> server document kind (users.py DATA_KINDS)
 const SYNC_KEYS: Record<string, string> = {
@@ -156,6 +157,7 @@ export function onSignedIn(userEmail: string) {
   state = 'syncing';
   emit();
   syncNow();
+  refreshFlags();
 }
 
 export async function signOut(): Promise<void> {
@@ -167,6 +169,7 @@ export async function signOut(): Promise<void> {
   email = null;
   state = 'off';
   emit();
+  refreshFlags();
 }
 
 export async function deleteAccount(): Promise<void> {
@@ -174,4 +177,5 @@ export async function deleteAccount(): Promise<void> {
   email = null;
   state = 'off';
   emit();
+  refreshFlags();
 }
