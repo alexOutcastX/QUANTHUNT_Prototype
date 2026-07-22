@@ -87,6 +87,9 @@ export function marketState(isHoliday = false): { open: boolean; label: string }
   const weekday = day >= 1 && day <= 5;
   const inSession = mins >= 9 * 60 + 15 && mins <= 15 * 60 + 30;
   const open = weekday && inSession && !isHoliday;
-  if (open) return { open, label: `LIVE · ${label}` };
+  // Deliberately session-state, NOT a data-freshness claim: quotes come from
+  // unentitled public feeds and may be delayed, so the chip never says LIVE.
+  // Per-surface AsOfChips carry the actual fetch age + source.
+  if (open) return { open, label: `MKT OPEN · ${label}` };
   return { open, label: `CLOSED · ${label}` };
 }

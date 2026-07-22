@@ -111,10 +111,19 @@ export function professionalShell(html: string, opts: { docType?: string; dateSt
   const footer =
     '<div class="rp-foot">TaurEye · ' + esc(docType) +
     ' · Confidential — aggregated from public data &amp; models · educational only, not investment advice</div>';
+  // Provenance block — every exported document states where its numbers came
+  // from, that they may be delayed, and how adjustments are handled. Rendered
+  // in the flowing body (not the print footer) so it survives PDF text copy.
+  const provenance =
+    '<div style="margin-top:16px;padding-top:8px;border-top:1px solid #e2e8f0;color:#94a3b8;font-size:8.5px;line-height:1.5">' +
+    'DATA PROVENANCE — Prices &amp; history: NSE public feeds / Yahoo Finance (may be delayed; adjustments per source policy). ' +
+    'Fundamentals: Yahoo Finance / screener.in (as filed, best-effort). Derived metrics computed by TaurEye’s published rules at generation time. ' +
+    'Values are not real-time exchange data and carry no warranty of accuracy. Generated ' + esc(dateStr || new Date().toISOString().slice(0, 10)) + '.' +
+    '</div>';
   // Wrap the report content in a padded body so the hero can sit flush at the top.
   return withCss
     .replace(/<body[^>]*>/i, (m) => m + hero + '<main class="rp-body">')
-    .replace(/<\/body>/i, '</main>' + footer + '</body>');
+    .replace(/<\/body>/i, provenance + '</main>' + footer + '</body>');
 }
 
 // ── Preview-modal intent store ───────────────────────────────────────────────
