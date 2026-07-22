@@ -718,11 +718,40 @@ def _req_start():
     request._t0 = time.time()
 
 
+# CSP for served HTML. Pragmatic, not maximal: react-native-web injects inline
+# <style>, the chart/graph/PDF views render in srcdoc iframes (which inherit
+# this policy) with inline <script>, and the TradingView widget pulls tv.js and
+# frames from tradingview hosts — so inline script/style must stay allowed.
+# What this still buys: no scripts from any other origin, no plugins, no
+# base-tag hijack, forms only to self.
+_CSP = (
+    "default-src 'self'; "
+    "script-src 'self' 'unsafe-inline' https://s3.tradingview.com https://*.tradingview.com; "
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+    "font-src 'self' data: https://fonts.gstatic.com; "
+    "img-src * data: blob:; "
+    "connect-src 'self' https: wss:; "
+    "frame-src 'self' blob: https://*.tradingview.com https://*.tradingview-widget.com; "
+    "object-src 'none'; base-uri 'self'; form-action 'self'"
+)
+
+
 @app.after_request
 def _security_headers(resp):
     resp.headers.setdefault("X-Content-Type-Options", "nosniff")
     resp.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
     resp.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    resp.headers.setdefault("Permissions-Policy",
+                            "camera=(), microphone=(), geolocation=(), payment=()")
+    ctype = (resp.headers.get("Content-Type") or "")
+    if ctype.startswith("text/html"):
+        resp.headers.setdefault("Content-Security-Policy", _CSP)
+    # HSTS only once the request actually arrived over TLS (nginx sets the
+    # forwarded proto after enable-https.sh) — emitting it on plain HTTP is a
+    # no-op at best and confusing at worst.
+    if request.headers.get("X-Forwarded-Proto", "").lower() == "https":
+        resp.headers.setdefault("Strict-Transport-Security",
+                                "max-age=31536000; includeSubDomains")
     try:
         dt = time.time() - getattr(request, "_t0", time.time())
         with _METRICS_LOCK:

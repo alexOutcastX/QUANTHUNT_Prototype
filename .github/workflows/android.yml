@@ -17,7 +17,9 @@ on:
       api_base:
         description: 'API base URL baked into the bundle'
         required: false
-        default: 'http://161.118.174.177'
+        # Blank = the TAUREYE_API_BASE repo variable (set it to the https
+        # domain once TLS is live — see docs/TLS-RUNBOOK.md), else the VM IP.
+        default: ''
       capgo_upload:
         description: 'Also publish an OTA bundle to Capgo'
         type: boolean
@@ -43,7 +45,7 @@ jobs:
       - name: Export web bundle
         run: npx expo export --platform web --output-dir dist
         env:
-          EXPO_PUBLIC_API_BASE: ${{ github.event.inputs.api_base }}
+          EXPO_PUBLIC_API_BASE: ${{ github.event.inputs.api_base || vars.TAUREYE_API_BASE || 'http://161.118.174.177' }}
       - run: npx cap sync android
       - name: Build debug APK
         run: cd android && ./gradlew assembleDebug --no-daemon
@@ -76,7 +78,7 @@ jobs:
       - name: Export web bundle (API base baked in)
         run: npx expo export --platform web --output-dir dist
         env:
-          EXPO_PUBLIC_API_BASE: http://161.118.174.177
+          EXPO_PUBLIC_API_BASE: ${{ vars.TAUREYE_API_BASE || 'http://161.118.174.177' }}
       - name: Publish OTA bundle to Capgo
         env:
           CAPGO_TOKEN: ${{ secrets.CAPGO_TOKEN }}

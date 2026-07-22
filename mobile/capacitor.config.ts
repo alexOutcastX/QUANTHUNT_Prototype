@@ -9,20 +9,24 @@ import type { CapacitorConfig } from '@capacitor/cli';
 // baked in (the WebView origin is capacitor://localhost, so same-origin fetches
 // would never reach the VM) — see `npm run cap:sync`:
 //   EXPO_PUBLIC_API_BASE=http://161.118.174.177 npx expo export -p web -o dist
+// Cleartext is derived from the API base the shell is built against: the
+// moment EXPO_PUBLIC_API_BASE points at an https domain (see
+// docs/TLS-RUNBOOK.md), the next APK build drops cleartext and mixed content
+// automatically. Until then the plain-HTTP VM IP still needs both.
+const apiBase = process.env.EXPO_PUBLIC_API_BASE || 'http://161.118.174.177';
+const plainHttp = apiBase.startsWith('http://');
+
 const config: CapacitorConfig = {
   // App ID + name match the Capgo app (TETerminal) so OTA bundles route to it.
   appId: 'com.taureye.terminal.app',
   appName: 'TETerminal',
   webDir: 'dist',
   android: {
-    // The VM API is plain HTTP for now, and Android blocks cleartext by
-    // default. Allow it until the backend is behind HTTPS (then remove this
-    // and switch EXPO_PUBLIC_API_BASE to the https domain).
-    allowMixedContent: true,
+    allowMixedContent: plainHttp,
   },
   server: {
     androidScheme: 'https',
-    cleartext: true,
+    cleartext: plainHttp,
   },
   plugins: {
     CapacitorUpdater: {
