@@ -371,7 +371,10 @@ const styles = StyleSheet.create({
     padding: 3,
   },
   subBtn: { flex: 1, borderRadius: 999, paddingVertical: 8, alignItems: 'center' },
-  subBtnFixed: { flex: 0, paddingHorizontal: 18 },
+  // Longhand on purpose: RNW maps `flex: 0` to CSS `flex: 0 1 0%`, whose 0%
+  // basis collapsed every pill to zero width (labels stacked on top of each
+  // other in the scrollable desktop bar).
+  subBtnFixed: { flexGrow: 0, flexShrink: 0, flexBasis: 'auto', paddingHorizontal: 18 },
   subBtnOn: { backgroundColor: theme.accent },
   subTxt: { color: theme.muted2, fontSize: theme.fs.sm },
   subTxtOn: { color: theme.onAccent, fontWeight: '700' },
