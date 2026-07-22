@@ -9,3 +9,4 @@ ta
 google-auth
 # tvDatafeed is not on PyPI anymore; install from GitHub:
 tvdatafeed @ git+https://github.com/rongardF/tvdatafeed.git
+sentry-sdk  # backend error tracking — active only when SENTRY_DSN is set

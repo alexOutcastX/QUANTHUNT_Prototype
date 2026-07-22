@@ -1036,6 +1036,63 @@ def health():
     })
 
 
+@app.route("/healthz")
+def healthz():
+    """Lean machine-readable liveness + feed staleness for the uptime monitor.
+
+    Always 200 when the process answers; `status` degrades to "degraded" when
+    the primary data caches look stale (feeds blocked/rate-limited), so the
+    monitor can distinguish 'down' from 'up but starving'."""
+    now = time.time()
+    idx = _indices_cache.get("domestic")
+    idx_age = int(now - idx["ts"]) if idx and idx.get("data") else None
+    feeds_ok = idx_age is not None and idx_age < 3600
+    db_ok = True
+    try:
+        _store.kv_get("__healthz__")
+    except Exception:
+        db_ok = False
+    status = "ok" if (db_ok and (feeds_ok or idx_age is None)) else "degraded"
+    if not db_ok:
+        status = "error"
+    return jsonify({
+        "status": status,
+        "version": _app_version(),
+        "uptime_s": int(now - _STARTED),
+        "db_ok": db_ok,
+        "indices_cache_age_s": idx_age,
+        "errors": _METRICS["errors"],
+        "requests": _METRICS["requests"],
+    })
+
+
+# Self-hosted client-side error capture: the app POSTs uncaught JS errors here
+# so crashes surface in the server log (and /metrics error count) even with no
+# external error-tracking vendor configured. SENTRY_DSN, when set (and
+# sentry-sdk installed), additionally initialises real Sentry server-side.
+@app.route("/client-error", methods=["POST"])
+@rate_limit("client-error", 20, 600)
+def client_error():
+    body = request.get_json(silent=True) or {}
+    msg = str(body.get("message", ""))[:400]
+    stack = str(body.get("stack", ""))[:1500]
+    ver = str(body.get("version", ""))[:40]
+    plat = str(body.get("platform", ""))[:40]
+    log.error("CLIENT-ERROR [%s %s] %s\n%s", plat, ver, msg, stack)
+    with _METRICS_LOCK:
+        _METRICS["client_errors"] = _METRICS.get("client_errors", 0) + 1
+    return jsonify({"logged": True})
+
+
+if os.environ.get("SENTRY_DSN"):
+    try:
+        import sentry_sdk
+        sentry_sdk.init(dsn=os.environ["SENTRY_DSN"], traces_sample_rate=0.05)
+        log.info("Sentry initialised")
+    except Exception as _e:  # missing package / bad DSN — never block startup
+        log.warning("Sentry init failed: %s", _e)
+
+
 @app.route("/metrics")
 @require_owner
 def metrics():

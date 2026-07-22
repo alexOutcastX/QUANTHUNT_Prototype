@@ -1,0 +1,47 @@
+name: Nightly DB backup
+
+# Pulls a consistent SQLite backup off the VM every night and stores it as a
+# workflow artifact (30-day retention) — a real offsite copy that survives the
+# VM. Restore procedure: deploy/restore-db.sh (rehearse it monthly).
+on:
+  schedule:
+    - cron: '30 21 * * *'   # 03:00 IST, after Indian market hours
+  workflow_dispatch:
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Configure SSH
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.VM_SSH_KEY }}" > ~/.ssh/id_deploy
+          chmod 600 ~/.ssh/id_deploy
+          ssh-keyscan -H "${{ secrets.VM_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Snapshot SQLite on the VM (consistent .backup, not a raw copy)
+        env:
+          U: ${{ secrets.VM_USER }}
+          H: ${{ secrets.VM_HOST }}
+        run: |
+          ssh -i ~/.ssh/id_deploy "$U@$H" '
+            set -e
+            cd /opt/quanthunt
+            if [ ! -f quanthunt.db ]; then echo "no DB yet"; exit 0; fi
+            sqlite3 quanthunt.db ".backup /tmp/quanthunt-backup.db" ||
+              python3 -c "import sqlite3; s=sqlite3.connect(\"quanthunt.db\"); d=sqlite3.connect(\"/tmp/quanthunt-backup.db\"); s.backup(d); d.close(); s.close()"
+            gzip -f /tmp/quanthunt-backup.db'
+
+      - name: Fetch the snapshot
+        env:
+          U: ${{ secrets.VM_USER }}
+          H: ${{ secrets.VM_HOST }}
+        run: |
+          scp -i ~/.ssh/id_deploy "$U@$H:/tmp/quanthunt-backup.db.gz" ./quanthunt-$(date +%Y%m%d).db.gz || echo "nothing to fetch"
+
+      - uses: actions/upload-artifact@v4
+        if: hashFiles('quanthunt-*.db.gz') != ''
+        with:
+          name: db-backup-${{ github.run_id }}
+          path: quanthunt-*.db.gz
+          retention-days: 30

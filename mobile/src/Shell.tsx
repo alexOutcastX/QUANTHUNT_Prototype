@@ -19,6 +19,7 @@ import { navigate, peekNav, subscribeNav } from './navIntent';
 import { isClassicNav, navModeReady, subscribeNavMode } from './navMode';
 import { refreshSession } from './session';
 import { refreshFlags } from './flags';
+import { installErrorReporting } from './errorReport';
 import { theme, toggleThemeMode, useThemeMode } from './theme';
 
 // Light/dark switch — glyph shows the mode you'll switch TO. Present in both the
@@ -403,6 +404,7 @@ export default function Shell() {
     // learn which feature flags (advisory mode) apply to this viewer.
     refreshSession();
     refreshFlags();
+    installErrorReporting();
     return subscribeNavMode(() => setClassic(isClassicNav()));
   }, []);
   // Web: clamp browser pinch-zoom. Page-level zoom trapped users inside the

@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TaurEye — Status</title>
+<style>
+  :root{--bg:#08090c;--s:#0e1116;--b:#1d232e;--t:#edf0f5;--m:#68748a;--g:#2bd39b;--r:#f5637f;--a:#f5c518}
+  html,body{margin:0;background:var(--bg);color:var(--t);font-family:ui-monospace,Menlo,Consolas,monospace}
+  main{max-width:560px;margin:8vh auto;padding:0 18px}
+  h1{font-size:18px;letter-spacing:1px}
+  .card{background:var(--s);border:1px solid var(--b);border-radius:10px;padding:16px 18px;margin-top:14px}
+  .row{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--b);font-size:13px}
+  .row:last-child{border-bottom:0}
+  .k{color:var(--m)} #dot{display:inline-block;width:10px;height:10px;border-radius:99px;margin-right:8px}
+  .note{color:var(--m);font-size:11px;margin-top:14px;line-height:1.6}
+  a{color:#7c9cff}
+</style></head><body>
+<main>
+<h1><span id="dot" style="background:var(--m)"></span>TaurEye status</h1>
+<div class="card" id="card">
+  <div class="row"><span class="k">Service</span><span id="st">checking…</span></div>
+  <div class="row"><span class="k">Version</span><span id="ver">—</span></div>
+  <div class="row"><span class="k">Uptime</span><span id="up">—</span></div>
+  <div class="row"><span class="k">Data cache age</span><span id="age">—</span></div>
+</div>
+<p class="note">This page probes the live service from your browser. If it does not load at all,
+the server is unreachable — outage records are kept as
+<a href="https://github.com/alexOutcastX/QUANTHUNT_Prototype/issues?q=label%3Aoutage">GitHub issues labelled “outage”</a>,
+which are opened and closed automatically by an external 5-minute probe.</p>
+</main>
+<script>
+(async () => {
+  const g = getComputedStyle(document.documentElement);
+  const set = (id, v) => document.getElementById(id).textContent = v;
+  try {
+    const d = await (await fetch('/healthz')).json();
+    const ok = d.status === 'ok';
+    document.getElementById('dot').style.background = ok ? g.getPropertyValue('--g') : g.getPropertyValue('--a');
+    set('st', d.status.toUpperCase());
+    set('ver', 'v' + (d.version || '?'));
+    const h = Math.floor((d.uptime_s || 0) / 3600), m = Math.floor(((d.uptime_s || 0) % 3600) / 60);
+    set('up', h + 'h ' + m + 'm');
+    set('age', d.indices_cache_age_s == null ? 'warming' : Math.round(d.indices_cache_age_s / 60) + 'm');
+  } catch {
+    document.getElementById('dot').style.background = g.getPropertyValue('--r');
+    set('st', 'UNREACHABLE');
+  }
+})();
+</script>
+</body></html>

@@ -1,0 +1,66 @@
+name: Uptime check
+
+# Polls production /healthz every 5 minutes. On failure (or a degraded data
+# layer) it opens a single 'outage' issue; on recovery it closes it. The issue
+# doubles as the out-of-band status record when the VM itself is down.
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+permissions:
+  issues: write
+
+concurrency:
+  group: uptime
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Probe /healthz
+        id: probe
+        run: |
+          set +e
+          BODY=$(curl -fsS --max-time 25 "http://161.118.174.177/healthz")
+          CODE=$?
+          echo "code=$CODE" >> "$GITHUB_OUTPUT"
+          if [ $CODE -ne 0 ]; then
+            echo "state=down" >> "$GITHUB_OUTPUT"
+            echo "detail=curl exit $CODE — server unreachable" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          STATUS=$(echo "$BODY" | python3 -c "import json,sys; print(json.load(sys.stdin).get('status','?'))" 2>/dev/null)
+          echo "state=$STATUS" >> "$GITHUB_OUTPUT"
+          echo "detail=$BODY" >> "$GITHUB_OUTPUT"
+
+      - name: Open / close the outage issue
+        uses: actions/github-script@v7
+        env:
+          STATE: ${{ steps.probe.outputs.state }}
+          DETAIL: ${{ steps.probe.outputs.detail }}
+        with:
+          script: |
+            const state = process.env.STATE || 'down';
+            const detail = (process.env.DETAIL || '').slice(0, 800);
+            const {data: open} = await github.rest.issues.listForRepo({
+              owner: context.repo.owner, repo: context.repo.repo,
+              state: 'open', labels: 'outage', per_page: 5});
+            const bad = state !== 'ok';
+            if (bad && open.length === 0) {
+              await github.rest.issues.create({
+                owner: context.repo.owner, repo: context.repo.repo,
+                title: `Production ${state === 'down' ? 'DOWN' : 'DEGRADED'} — uptime probe failing`,
+                labels: ['outage'],
+                body: `The /healthz probe reports **${state}** as of ${new Date().toISOString()}.\n\n\`\`\`\n${detail}\n\`\`\`\nThis issue closes automatically when the probe recovers.`});
+            } else if (!bad && open.length > 0) {
+              for (const i of open) {
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner, repo: context.repo.repo,
+                  issue_number: i.number, body: `Recovered — probe healthy at ${new Date().toISOString()}.`});
+                await github.rest.issues.update({
+                  owner: context.repo.owner, repo: context.repo.repo,
+                  issue_number: i.number, state: 'closed'});
+              }
+            }
