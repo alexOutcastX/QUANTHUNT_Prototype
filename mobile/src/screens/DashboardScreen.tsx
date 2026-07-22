@@ -37,6 +37,7 @@ export default function DashboardScreen({ onNavigate }: { onNavigate?: (page: st
   // Breadth + gainers/losers now come pre-computed from the server (/movers),
   // which stays populated even when NSE falls back to the symbols-only CSV.
   const [mv, setMv] = useState<MoversResp | null>(dash.mv ?? null);
+  const [mvFailed, setMvFailed] = useState(false);
   const [watch, setWatch] = useState<{ symbol: string; q?: Quote }[] | null>(dash.watch ?? null);
   const [news, setNews] = useState<NewsItem[] | null>(dash.news ?? null);
   // Paper-trading simulator snapshot: virtual account equity + all-time P&L,
@@ -63,10 +64,21 @@ export default function DashboardScreen({ onNavigate }: { onNavigate?: (page: st
       .catch(() => setMovers((v) => v ?? []));
     // Breadth + top gainers/losers, computed server-side over NIFTY 500 (with a
     // resilient quote backfill), so this never blanks on the NSE CSV fallback.
+    setMvFailed(false);
     api
       .movers('NIFTY 500', 6)
-      .then((d) => { dash.mv = d; setMv(d); })
-      .catch(() => {});
+      .then((d) => { dash.mv = d; setMv(d); setMvFailed(false); })
+      .catch(() => {
+        // Never leave the cards on an eternal spinner: mark failed (renders an
+        // honest message) and retry once after a short pause — feed hiccups
+        // are usually transient rate-limits.
+        setMvFailed(true);
+        setTimeout(() => {
+          api.movers('NIFTY 500', 6)
+            .then((d) => { dash.mv = d; setMv(d); setMvFailed(false); })
+            .catch(() => setMvFailed(true));
+        }, 12000);
+      });
     (async () => {
       try {
         const wl = await loadWatchlist();
@@ -223,7 +235,11 @@ export default function DashboardScreen({ onNavigate }: { onNavigate?: (page: st
           {mv?.asof ? <AsOfChip ts={mv.asof} source="delayed · NSE" /> : null}
         </View>
         {!mv ? (
-          <Loading />
+          mvFailed ? (
+            <EmptyState title="Breadth unavailable" hint="The data feed is busy — retrying automatically. Pull to refresh." />
+          ) : (
+            <Loading />
+          )
         ) : breadth ? (
           <View>
             <View style={styles.breadthNums}>
@@ -254,7 +270,11 @@ export default function DashboardScreen({ onNavigate }: { onNavigate?: (page: st
         <Card style={styles.col}>
           <SectionTitle>Top gainers</SectionTitle>
           {!mv ? (
-            <Loading />
+            mvFailed ? (
+              <EmptyState title="Unavailable" hint="Feed busy — retrying." />
+            ) : (
+              <Loading />
+            )
           ) : gainers.length ? (
             gainers.map((m, i) => (
               <TouchableOpacity
@@ -276,7 +296,11 @@ export default function DashboardScreen({ onNavigate }: { onNavigate?: (page: st
         <Card style={styles.col}>
           <SectionTitle>Top losers</SectionTitle>
           {!mv ? (
-            <Loading />
+            mvFailed ? (
+              <EmptyState title="Unavailable" hint="Feed busy — retrying." />
+            ) : (
+              <Loading />
+            )
           ) : losers.length ? (
             losers.map((m, i) => (
               <TouchableOpacity

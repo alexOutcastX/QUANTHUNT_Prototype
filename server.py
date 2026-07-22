@@ -1421,6 +1421,13 @@ def movers():
         if hit:
             stale = dict(hit[1]); stale["stale"] = True
             return jsonify(stale)
+        # In-memory cache is empty after every deploy/restart; fall back to the
+        # persisted last-good snapshot so the dashboard renders yesterday's
+        # breadth (marked stale) instead of 502ing while the feeds are blocked.
+        saved = _store.kv_get("movers." + name)
+        if saved:
+            saved = dict(saved); saved["stale"] = True
+            return jsonify(saved)
         return jsonify({"index": name, "breadth": None, "gainers": [], "losers": [],
                         "error": "movers unavailable"}), 502
 
@@ -1438,6 +1445,10 @@ def movers():
         "asof": int(now),
     }
     _movers_cache[name] = (now, payload)
+    try:
+        _store.kv_set("movers." + name, payload)   # survives restarts
+    except Exception:
+        pass
     return jsonify(payload)
 
 
