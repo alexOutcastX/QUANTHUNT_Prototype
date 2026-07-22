@@ -606,6 +606,72 @@ SYMBOL_ALIASES = {
 
 
 # ── Routes ───────────────────────────────────────────────────────────────────
+# Precompressed static assets. The web bundle is ~1.4 MB of JS; serving it
+# uncompressed is the single biggest cause of slow first load (and the app
+# can't assume the nginx in front has gzip configured). At startup a background
+# thread writes .br / .gz siblings next to every compressible file in the web
+# build; the static routes then serve the best encoding the client accepts.
+# Brotli gets the bundle to ~¼ the size, gzip to ~⅓.
+_COMPRESSIBLE = (".js", ".css", ".html", ".svg", ".json", ".txt", ".map")
+
+
+def _web_cache_dir():
+    # Kept OUTSIDE mobile/dist so the compressed variants never end up in git
+    # (dist is force-added on every build).
+    return os.path.join(_BASE_DIR, "mobile", "dist-precompressed")
+
+
+def _precompress_web_dir():
+    try:
+        import brotli  # optional — gzip alone still helps
+    except Exception:
+        brotli = None
+    import gzip as _gzip
+    cache = _web_cache_dir()
+    for root, _dirs, files in os.walk(WEB_DIR):
+        for name in files:
+            if not name.endswith(_COMPRESSIBLE):
+                continue
+            src = os.path.join(root, name)
+            rel = os.path.relpath(src, WEB_DIR)
+            dst_base = os.path.join(cache, rel)
+            try:
+                mtime = os.path.getmtime(src)
+                gz, br = dst_base + ".gz", dst_base + ".br"
+                gz_stale = not os.path.exists(gz) or os.path.getmtime(gz) < mtime
+                br_stale = brotli is not None and (
+                    not os.path.exists(br) or os.path.getmtime(br) < mtime)
+                if not gz_stale and not br_stale:
+                    continue
+                data = open(src, "rb").read()
+                os.makedirs(os.path.dirname(dst_base), exist_ok=True)
+                if gz_stale:
+                    with open(gz, "wb") as f:
+                        f.write(_gzip.compress(data, 9))
+                if br_stale:
+                    with open(br, "wb") as f:
+                        f.write(brotli.compress(data, quality=10))
+            except Exception:
+                logging.debug("precompress failed for %s", src, exc_info=True)
+
+
+def _send_web_file(fname):
+    """send_from_directory(WEB_DIR, ...) preferring a precompressed variant."""
+    import mimetypes
+    accept = request.headers.get("Accept-Encoding", "").lower()
+    if fname.endswith(_COMPRESSIBLE):
+        cache = _web_cache_dir()
+        for enc, ext in (("br", ".br"), ("gzip", ".gz")):
+            if enc in accept and os.path.isfile(os.path.join(cache, fname + ext)):
+                resp = send_from_directory(cache, fname + ext)
+                resp.headers["Content-Encoding"] = enc
+                resp.headers["Content-Type"] = (
+                    mimetypes.guess_type(fname)[0] or "application/octet-stream")
+                resp.headers["Vary"] = "Accept-Encoding"
+                return resp
+    return send_from_directory(WEB_DIR, fname)
+
+
 def _no_cache(response):
     response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
     response.headers["Pragma"] = "no-cache"
@@ -625,11 +691,16 @@ def _immutable(response):
 WEB_DIR = os.path.join(_BASE_DIR, "mobile", "dist")
 _WEB_INDEX = os.path.join(WEB_DIR, "index.html")
 
+# Generate the .br/.gz variants at import so they exist under gunicorn
+# (wsgi.py) and `python server.py` alike. Idempotent and cheap (~1 s for the
+# whole bundle; skipped entirely when the cache is fresh).
+threading.Thread(target=_precompress_web_dir, name="web-precompress", daemon=True).start()
+
 
 @app.route("/")
 def index():
     if os.path.exists(_WEB_INDEX):
-        return _no_cache(send_from_directory(WEB_DIR, "index.html"))
+        return _no_cache(_send_web_file("index.html"))
     return _no_cache(send_from_directory(_BASE_DIR, "StockScreenPro.html"))
 
 
@@ -647,15 +718,15 @@ def static_files(fname):
         # re-download the whole ~1.4 MB bundle on every visit — the single
         # biggest cause of slow website startup.
         if fname.startswith(("_expo/", "assets/")):
-            return _immutable(send_from_directory(WEB_DIR, fname))
-        return _no_cache(send_from_directory(WEB_DIR, fname))
+            return _immutable(_send_web_file(fname))
+        return _no_cache(_send_web_file(fname))
     # 2) Fall back to repo-root files (StockScreenPro.html, VERSION, legacy assets)
     if os.path.isfile(os.path.join(_BASE_DIR, fname)):
         return _no_cache(send_from_directory(_BASE_DIR, fname))
     # 3) SPA fallback: unknown non-API paths → the web shell (API routes are
     #    matched by Flask before this catch-all, so they're unaffected)
     if os.path.exists(_WEB_INDEX):
-        return _no_cache(send_from_directory(WEB_DIR, "index.html"))
+        return _no_cache(_send_web_file("index.html"))
     return ("Not found", 404)
 
 
@@ -774,6 +845,29 @@ _CSP = (
     "frame-src 'self' blob: https://*.tradingview.com https://*.tradingview-widget.com; "
     "object-src 'none'; base-uri 'self'; form-action 'self'"
 )
+
+
+@app.after_request
+def _gzip_json(resp):
+    # Compress large dynamic JSON payloads (scan results, movers, dashboards
+    # are hundreds of KB). Static files are handled by the precompressed-file
+    # path above (their responses stream in passthrough mode, skipped here).
+    try:
+        if (resp.status_code == 200
+                and not resp.direct_passthrough
+                and "Content-Encoding" not in resp.headers
+                and (resp.content_type or "").startswith("application/json")
+                and "gzip" in request.headers.get("Accept-Encoding", "").lower()):
+            body = resp.get_data()
+            if len(body) > 1024:
+                import gzip as _gzip
+                resp.set_data(_gzip.compress(body, 5))
+                resp.headers["Content-Encoding"] = "gzip"
+                resp.headers["Content-Length"] = str(len(resp.get_data()))
+                resp.headers["Vary"] = "Accept-Encoding"
+    except Exception:
+        pass
+    return resp
 
 
 @app.after_request
