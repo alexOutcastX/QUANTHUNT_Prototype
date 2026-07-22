@@ -691,7 +691,7 @@ function MbList({
                 hint={warming ? 'Fundamentals are still warming — matches appear as they load.' : 'No mid/small cap currently passes the fixed multibagger screen.'}
               />
             ) : (
-              matches.map((item) => {
+              matches.map((item, rowIdx) => {
                 const dir = trackDirOf(item.sym);
                 const starred = isWatched(item.sym);
                 const scanned = scannedSet.has(item.sym.toUpperCase());
@@ -706,11 +706,11 @@ function MbList({
                           onPress={() => onAnalyse(item.sym)}
                           activeOpacity={0.75}
                         >
-                          {c.render(item)}
+                          {c.render(item, rowIdx)}
                         </TouchableOpacity>
                       ) : (
                         <View key={c.key} style={[styles.td, cellFlex(c), { alignItems: c.align === 'left' ? 'flex-start' : 'flex-end' }]}>
-                          {c.render(item)}
+                          {c.render(item, rowIdx)}
                         </View>
                       ),
                     )}

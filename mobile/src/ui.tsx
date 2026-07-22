@@ -350,11 +350,15 @@ export function Sheet({
   onClose,
   maxHeight = '94%',
   maxWidth = 620,
+  fill = false,
 }: {
   children: React.ReactNode;
   onClose: () => void;
   maxHeight?: number | string;
   maxWidth?: number;
+  // fill: occupy the whole screen (fixed header/footer layouts need a
+  // definite height for flexed children; also clears the bottom nav bar).
+  fill?: boolean;
 }) {
   const a = React.useRef(new Animated.Value(0)).current;
   React.useEffect(() => {
@@ -366,7 +370,15 @@ export function Sheet({
       <Animated.View style={[sh.scrim, { opacity: a }]}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
       </Animated.View>
-      <Animated.View style={[sh.panel, { maxHeight: maxHeight as number, maxWidth, opacity: a, transform: [{ translateY }] }]}>
+      <Animated.View
+        style={[
+          sh.panel,
+          fill
+            ? sh.panelFill
+            : { maxHeight: maxHeight as number, maxWidth },
+          { opacity: a, transform: [{ translateY }] },
+        ]}
+      >
         {children}
       </Animated.View>
     </View>
@@ -374,7 +386,8 @@ export function Sheet({
 }
 
 const sh = StyleSheet.create({
-  wrap: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, justifyContent: 'flex-end' },
+  // zIndex above any fixed in-page toolbar (screener's dropdown rows use ~60).
+  wrap: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, justifyContent: 'flex-end', zIndex: 1000, elevation: 1000 },
   scrim: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: '#000a' },
   panel: {
     backgroundColor: theme.surface,
@@ -386,6 +399,7 @@ const sh = StyleSheet.create({
     alignSelf: 'center',
     width: '100%',
   },
+  panelFill: { height: '100%', maxHeight: '100%', borderRadius: 0, paddingBottom: 28 },
 });
 
 export function Btn({
