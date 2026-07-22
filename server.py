@@ -1396,41 +1396,9 @@ def _rows_with_chg(name, cap=180):
     return rows
 
 
-@app.route("/movers")
-def movers():
-    """Advance/decline breadth + top gainers/losers for an index, computed
-    server-side and cached (3 min, stale-on-error). Resilient: NSE pChange when
-    live, else a single Yahoo batch quote, else the last-good snapshot — so the
-    dashboard's breadth/gainers/losers never blank just because NSE blocked the
-    VM (the previous client-side derivation went empty on the CSV fallback)."""
-    name = request.args.get("index", "NIFTY 50").strip().upper()
-    try:
-        top = min(max(int(request.args.get("n", 6) or 6), 1), 15)
-    except Exception:
-        top = 6
-    if name not in NSE_INDEX_MAP:
-        return jsonify({"error": f"Unknown index '{name}'"}), 400
-
+def _movers_aggregate(name, rows, top, partial=False):
+    """Breadth + top movers payload from constituent rows carrying `chg`."""
     now = time.time()
-    hit = _movers_cache.get(name)
-    if hit and now - hit[0] < _MOVERS_TTL:
-        return jsonify(hit[1])
-
-    rows = [r for r in _rows_with_chg(name) if r.get("chg") is not None]
-    if not rows:
-        if hit:
-            stale = dict(hit[1]); stale["stale"] = True
-            return jsonify(stale)
-        # In-memory cache is empty after every deploy/restart; fall back to the
-        # persisted last-good snapshot so the dashboard renders yesterday's
-        # breadth (marked stale) instead of 502ing while the feeds are blocked.
-        saved = _store.kv_get("movers." + name)
-        if saved:
-            saved = dict(saved); saved["stale"] = True
-            return jsonify(saved)
-        return jsonify({"index": name, "breadth": None, "gainers": [], "losers": [],
-                        "error": "movers unavailable"}), 502
-
     up = sum(1 for r in rows if r["chg"] > 0)
     down = sum(1 for r in rows if r["chg"] < 0)
     flat = len(rows) - up - down
@@ -1444,12 +1412,112 @@ def movers():
         "losers": list(reversed(srt[-top:])) if len(srt) >= top else list(reversed(srt)),
         "asof": int(now),
     }
-    _movers_cache[name] = (now, payload)
+    if partial:
+        payload["partial"] = True
+    return payload
+
+
+def _movers_build(name, top):
+    """The slow full build (may block minutes against a rate-limited feed —
+    only ever runs on the background thread)."""
+    rows = [r for r in _rows_with_chg(name) if r.get("chg") is not None]
+    if not rows:
+        return None
+    return _movers_aggregate(name, rows, top)
+
+
+_movers_refreshing = {}
+
+
+def _movers_refresh_bg(name, top):
+    """Single-flight background rebuild; persists the result so it survives
+    restarts (deploys previously wiped the only copy)."""
+    if _movers_refreshing.get(name):
+        return
+
+    _movers_refreshing[name] = True
+
+    def work():
+        try:
+            p = _movers_build(name, top)
+            if p:
+                _movers_cache[name] = (time.time(), p)
+                try:
+                    _store.kv_set("movers." + name, p)
+                except Exception:
+                    pass
+        except Exception as e:
+            log.debug("movers bg rebuild failed for %s: %s", name, e)
+        finally:
+            _movers_refreshing[name] = False
+
+    threading.Thread(target=work, daemon=True).start()
+
+
+def _movers_from_scan_cache(name, top):
+    """Instant degraded answer from the warm scanner cache (no network):
+    whatever symbols the scan loop already holds fresh rows for. Marked
+    partial — better an honest subset now than a spinner forever."""
+    import scanner as _sc
+    now = time.time()
+    rows = []
     try:
-        _store.kv_set("movers." + name, payload)   # survives restarts
+        with _sc._CACHE_LOCK:
+            for sym, (ts, row) in _sc._CACHE.items():
+                if row and row.get("chg") is not None and now - ts < 1800:
+                    rows.append({"symbol": sym, "price": row.get("price"),
+                                 "chg": row.get("chg"), "volume": row.get("volume")})
+    except Exception:
+        return None
+    if len(rows) < 20:
+        return None
+    return _movers_aggregate(name, rows, top, partial=True)
+
+
+@app.route("/movers")
+def movers():
+    """Advance/decline breadth + top gainers/losers for an index.
+
+    NEVER blocks on upstream work: the full NIFTY-500 rebuild can take minutes
+    against a rate-limited feed while the client aborts at 25 s — which showed
+    as the breadth cards spinning forever. Order of service: fresh memory
+    cache -> last-good (memory, then disk — marked stale) with a background
+    single-flight rebuild -> an instant partial answer from the warm scanner
+    cache -> 503 'warming' (the client shows a retrying state and the
+    background build lands within a couple of minutes)."""
+    name = request.args.get("index", "NIFTY 50").strip().upper()
+    try:
+        top = min(max(int(request.args.get("n", 6) or 6), 1), 15)
+    except Exception:
+        top = 6
+    if name not in NSE_INDEX_MAP:
+        return jsonify({"error": f"Unknown index '{name}'"}), 400
+
+    now = time.time()
+    hit = _movers_cache.get(name)
+    if hit and now - hit[0] < _MOVERS_TTL:
+        return jsonify(hit[1])
+    if hit:
+        _movers_refresh_bg(name, top)
+        stale = dict(hit[1])
+        stale["stale"] = True
+        return jsonify(stale)
+    saved = None
+    try:
+        saved = _store.kv_get("movers." + name)
     except Exception:
         pass
-    return jsonify(payload)
+    if saved:
+        _movers_refresh_bg(name, top)
+        saved = dict(saved)
+        saved["stale"] = True
+        return jsonify(saved)
+    _movers_refresh_bg(name, top)
+    fb = _movers_from_scan_cache(name, top)
+    if fb:
+        return jsonify(fb)
+    return jsonify({"index": name, "breadth": None, "gainers": [], "losers": [],
+                    "error": "movers warming — retry shortly"}), 503
 
 
 @app.route("/universe")
