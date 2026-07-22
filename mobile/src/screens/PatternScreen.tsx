@@ -302,6 +302,7 @@ const PATTERN_GROUPS: { title: string; labels: string[] }[] = [
 ];
 
 const SCREEN_COLS: Col[] = [
+  { key: 'sno', label: '#', w: 36, align: 'right' },
   { key: 'symbol', label: 'SYMBOL', w: 118, align: 'left' },
   { key: 'pattern', label: 'PATTERN', w: 178, align: 'left' },
   { key: 'bias', label: 'BIAS', w: 78, align: 'left' },
@@ -447,7 +448,7 @@ function PatternIndexScreener({ onOpenSymbol }: { onOpenSymbol: (sym: string) =>
                   ))}
                 </View>
                 {shown.map((h, i) => (
-                  <ScreenHitRow key={`${h.symbol}-${h.type}-${i}`} h={h} top={i === 0} onPress={() => onOpenSymbol(h.symbol)} />
+                  <ScreenHitRow key={`${h.symbol}-${h.type}-${i}`} h={h} idx={i} top={i === 0} onPress={() => onOpenSymbol(h.symbol)} />
                 ))}
               </View>
             </ScrollView>
@@ -477,10 +478,11 @@ function PatternIndexScreener({ onOpenSymbol }: { onOpenSymbol: (sym: string) =>
   );
 }
 
-function ScreenHitRow({ h, top, onPress }: { h: PatternScreenHit; top?: boolean; onPress: () => void }) {
+function ScreenHitRow({ h, idx, top, onPress }: { h: PatternScreenHit; idx: number; top?: boolean; onPress: () => void }) {
   const c = biasColor(h.bias);
   return (
     <TouchableOpacity style={[styles.dataRow, top && { borderTopWidth: 0 }]} onPress={onPress} activeOpacity={0.75}>
+      <Text style={[styles.cellNum, { width: 36, color: theme.muted }]}>{idx + 1}</Text>
       <View style={{ width: 118 }}>
         <Text style={styles.sym}>{h.symbol}</Text>
         {h.price != null ? <Text style={styles.priceSub}>₹{h.price.toLocaleString('en-IN')}</Text> : null}

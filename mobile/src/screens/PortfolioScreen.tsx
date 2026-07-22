@@ -372,7 +372,7 @@ export default function PortfolioScreen() {
   }, [colOrder, colHidden]);
 
   const tableW = useMemo(
-    () => visibleCols.reduce((a, c) => a + c.w, 0) + ACTIONS_W,
+    () => 36 + visibleCols.reduce((a, c) => a + c.w, 0) + ACTIONS_W, // 36 = serial column
     [visibleCols],
   );
 
@@ -526,6 +526,9 @@ export default function PortfolioScreen() {
             <ScrollView horizontal showsHorizontalScrollIndicator>
               <View style={{ width: tableW }}>
                 <View style={styles.headerRow}>
+                  <View style={[styles.thCell, { width: 36, alignItems: 'flex-end' }]}>
+                    <Text style={styles.thTxt}>#</Text>
+                  </View>
                   {visibleCols.map((c) => (
                     <View
                       key={c.key}
@@ -536,8 +539,11 @@ export default function PortfolioScreen() {
                   ))}
                   <View style={styles.actionsCell} />
                 </View>
-                {rows.map((r) => (
+                {rows.map((r, rowIdx) => (
                   <View key={r.h.symbol} style={styles.dataRow}>
+                    <View style={[styles.tdCell, { width: 36, alignItems: 'flex-end' }]}>
+                      <Text style={styles.snoTxt}>{rowIdx + 1}</Text>
+                    </View>
                     {visibleCols.map((c) => (
                       <View
                         key={c.key}
@@ -821,6 +827,7 @@ const styles = StyleSheet.create({
   cell: { color: theme.text, fontFamily: theme.mono, fontSize: theme.fs.sm, textAlign: 'right' },
   cellSub: { fontFamily: theme.mono, fontSize: theme.fs.xs + 1, marginTop: 2, textAlign: 'right' },
   symTxt: { color: theme.text, fontFamily: theme.mono, fontWeight: '700', fontSize: theme.fs.md },
+  snoTxt: { color: theme.muted, fontFamily: theme.mono, fontSize: theme.fs.sm },
   symSub: { color: theme.muted, fontFamily: theme.mono, fontSize: theme.fs.xs + 1, marginTop: 2 },
   actionsCell: { width: ACTIONS_W, alignItems: 'center', justifyContent: 'center' },
   del: { padding: theme.sp.xs },

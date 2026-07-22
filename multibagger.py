@@ -182,6 +182,9 @@ def fetch_metrics(symbol: str, with_history: bool = True, retries: int = 1):
         "relvol":   round(vol / avgvol, 2) if vol and avgvol else None,
         "vs_50dma": round((price / d50avg - 1) * 100, 1) if price and d50avg else None,
         "about":    (info.get("longBusinessSummary") or "")[:500],
+        # First trading day (epoch) — lets the universe sweep build the
+        # "recent IPOs" group with zero extra fetching.
+        "listed_ts": info.get("firstTradeDateEpochUtc"),
     }
     return metrics, ident
 

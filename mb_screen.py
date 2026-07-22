@@ -89,6 +89,7 @@ def _load_disk():
                 "results": saved["results"],
                 "sector_acc": saved.get("sector_acc") or {},
                 "sector_universe": saved.get("sector_universe", 0),
+                "recent_ipos": saved.get("recent_ipos") or {},
             })
     except Exception:
         pass
@@ -97,10 +98,24 @@ def _load_disk():
 _load_disk()
 
 
+def recent_ipos():
+    """Rows for the RECENT IPOS custom index: stocks whose first trading day
+    was within the last year (per the sweep's Yahoo metadata), newest first.
+    'Shows for one year after its IPO' — each drops out automatically."""
+    now = time.time()
+    with _lock:
+        acc = dict(_state.get("recent_ipos") or {})
+    rows = [dict(v) for v in acc.values()
+            if v.get("listed_ts") and (now - v["listed_ts"]) <= 365 * 86400]
+    rows.sort(key=lambda r: -(r.get("listed_ts") or 0))
+    return rows
+
+
 def _save_disk():
     try:
         payload = {k: _state[k] for k in
                    ("asof", "universe", "results", "sector_acc", "sector_universe")}
+        payload["recent_ipos"] = _state.get("recent_ipos") or {}
         with open(_FILE + ".tmp", "w") as f:
             json.dump(payload, f)
         os.replace(_FILE + ".tmp", _FILE)
@@ -117,6 +132,7 @@ def _run(universe_fn):
         syms = [x["symbol"] for x in (universe_fn() or []) if x.get("symbol")]
         sector_acc = {}
         sector_ct = [0]
+        ipo_acc = {}
         with _lock:
             _state.update({"status": "running", "universe": len(syms), "error": None,
                            "results": [], "progress": f"0/{len(syms)} analysed",
@@ -130,6 +146,16 @@ def _run(universe_fn):
             try:
                 metrics, ident = mb.fetch_metrics(s, with_history=False, retries=0)
                 r = mb.score(metrics)
+                # Record fresh listings (same .info call): anything that first
+                # traded in the last ~13 months feeds the "RECENT IPOS" group.
+                lts = ident.get("listed_ts")
+                if lts and (time.time() - lts) < 400 * 86400:
+                    with _lock:
+                        ipo_acc[s] = {"symbol": s, "name": ident.get("name"),
+                                      "price": ident.get("price"),
+                                      "chg": ident.get("chg"),
+                                      "listed_ts": int(lts)}
+                        _state["recent_ipos"] = ipo_acc
                 # Fold EVERY resolved stock into the sector tally (not just the
                 # 60+ scorers) so the sectoral heatmap sees the whole universe.
                 # Also accumulate the Yahoo GICS sector into the app-wide NSE
