@@ -19,6 +19,7 @@ import SmcScreen from './SmcScreen';
 import { useResponsive } from '../responsive';
 import { openPdfPreview } from '../pdf';
 import { LONG_STRATEGIES } from '../strategies';
+import { netRR } from '../costs';
 import { Card, Dropdown, EmptyState, FadeSlideIn, InfoButton, RiskBadge, Segmented, Sheet } from '../ui';
 import { PaperTrade, addPaperTrade, hasOpenPaper, loadPaperTrades } from '../paperTrades';
 import { INSTITUTIONAL_INFO, RECOMMENDATIONS_INFO, SHORT_TERM_INFO, SMC_INFO } from '../tabInfo';
@@ -219,7 +220,7 @@ function RecCard({
         <SetupCell label={L.entry} value={money(r.entry)} compact={compact} />
         <SetupCell label={L.stop} value={money(r.stop)} sub={signPct(r.stop_pct)} color={theme.red} compact={compact} />
         <SetupCell label={L.target} value={money(r.target)} sub={signPct(r.upside_pct)} color={theme.green} compact={compact} />
-        <SetupCell label="R : R" value={r.rr != null ? `${r.rr.toFixed(1)}:1` : '—'} compact={compact} />
+        <SetupCell label="R : R (net)" value={(() => { const n = netRR(r.entry, r.stop, r.target); return n != null ? `${n.toFixed(1)}:1` : r.rr != null ? `${r.rr.toFixed(1)}:1` : '—'; })()} compact={compact} />
       </View>
 
       <View style={styles.levelGrid}>

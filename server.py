@@ -944,6 +944,14 @@ def auth_otp_verify():
     return resp
 
 
+@app.route("/calibration")
+def calibration():
+    """Community calibration: per-engine realised hit-rate / avg R / sample
+    size aggregated over every synced paper-trade log. Public and honest —
+    hit-rates only appear once an engine has a meaningful closed sample."""
+    return jsonify(_users.calibration())
+
+
 # ── compliance flags ─────────────────────────────────────────────────────────
 # advisory_mode gates every advice-shaped surface (BUY/WATCH actions, targets,
 # stops, confidence/probability framing). Until SEBI Research-Analyst

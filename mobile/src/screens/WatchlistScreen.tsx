@@ -182,7 +182,22 @@ export default function WatchlistScreen() {
     }
     setError(null);
     try {
-      setQuotes(await api.ltp(syms));
+      const base = await api.ltp(syms);
+      // Entitled real-time overlay: when the user's own broker is connected,
+      // its LTP feed supersedes the delayed public quote (P1-4).
+      try {
+        const st = await api.brokerStatus();
+        if (st.connected) {
+          const b = await api.brokerLtp(syms);
+          for (const s of syms) {
+            const q = b.data[s];
+            if (q?.price != null) base[s] = { ...base[s], ...q };
+          }
+        }
+      } catch {
+        /* broker feed optional — delayed quotes stand */
+      }
+      setQuotes(base);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to fetch quotes');
     }

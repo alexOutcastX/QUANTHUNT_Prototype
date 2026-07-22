@@ -31,6 +31,8 @@ import EntityGraphScreen from './EntityGraphScreen';
 import PaperTradeScreen from './PaperTradeScreen';
 import AlertsScreen from './AlertsScreen';
 import AccountScreen from './AccountScreen';
+import CalibrationScreen from './CalibrationScreen';
+import MethodologyScreen from './MethodologyScreen';
 import DeveloperScreen from './DeveloperScreen';
 
 type SubTab = { key: string; label: string; hint?: string; render: () => React.ReactElement };
@@ -244,6 +246,7 @@ export function DeskHub() {
         { key: 'watchlist', label: 'Watchlist', hint: 'Symbols with entry price + since-add move · live quotes', render: () => <WatchlistScreen /> },
         { key: 'portfolio', label: 'Portfolio', hint: 'Holdings with live P&L · broker sync', render: () => <PortfolioScreen /> },
         { key: 'paper', label: 'Paper trades', hint: 'Simulated outcomes of your logged setups · win-rate', render: () => <PaperTradeScreen /> },
+        { key: 'calibration', label: 'Calibration', hint: 'Realised hit-rate & avg R per engine — the honesty page', render: () => <CalibrationScreen /> },
         { key: 'alerts', label: 'Alerts', hint: 'Price / % / RSI alerts', render: () => <AlertsScreen /> },
         { key: 'inst', label: 'Dossier', hint: 'Full company dossier · fundamentals, valuation, ownership, filings', render: () => <AnalysisScreen /> },
         { key: 'shareholders', label: 'Shareholders', hint: 'Institutions, promoters & political funding · every link cited', render: () => <EntityGraphScreen /> },
@@ -273,6 +276,7 @@ export function ChartsHome() {
 // back header. Keeps the bottom tab bar to five primary destinations.
 const MORE_ITEMS: { key: string; label: string; hint: string; render: () => React.ReactElement }[] = [
   { key: 'account', label: 'Account', hint: 'Sign in · cloud sync across devices', render: () => <AccountScreen /> },
+  { key: 'methodology', label: 'Methodology', hint: 'How every score is computed — the published rules', render: () => <MethodologyScreen /> },
   { key: 'community', label: 'Community chat', hint: 'Global room, topic channels & direct messages with other traders', render: () => <ChatScreen /> },
   { key: 'announcements', label: 'Announcements', hint: 'Updates & notices from the team', render: () => <AnnouncementsScreen /> },
   { key: 'heatmap', label: 'Heatmap', hint: 'Sector & index day-change map · drill into constituents', render: () => <HeatmapScreen /> },
