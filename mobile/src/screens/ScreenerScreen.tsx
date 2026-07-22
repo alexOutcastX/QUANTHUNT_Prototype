@@ -43,7 +43,8 @@ import {
 import { TrackDir, TrackEntry, addTrack, loadTrack, removeTrack } from '../tracklist';
 import { addSymbol, loadWatchlist, normSymbol, removeSymbol } from '../watchlist';
 import { theme } from '../theme';
-import { Btn, EmptyState, Loading } from '../ui';
+import { useResponsive } from '../responsive';
+import { Btn, EmptyState, Loading, Sheet } from '../ui';
 
 const INDICES = [
   'NIFTY 50', 'NIFTY 100', 'NIFTY BANK', 'NIFTY IT', 'NIFTY AUTO',
@@ -193,6 +194,9 @@ function readSharedScreen(): ScreenState | null {
 }
 
 export default function ScreenerScreen() {
+  const { isDesktop } = useResponsive();
+  // Mobile: the filter builder lives in a popup so it never buries the table.
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [indexName, setIndexName] = useState('NIFTY 50');
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
@@ -679,14 +683,33 @@ export default function ScreenerScreen() {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.accent} />
         }
       >
-      <FilterPanel
-        expr={expr}
-        setExpr={setExpr}
-        savedCount={saved.length}
-        onShare={onShare}
-        onSaveScreen={() => setSavedModal(true)}
-      />
-
+      {isDesktop ? (
+        <FilterPanel
+          expr={expr}
+          setExpr={setExpr}
+          savedCount={saved.length}
+          onShare={onShare}
+          onSaveScreen={() => setSavedModal(true)}
+        />
+      ) : (
+        // Mobile: one compact line — a Filters chip that opens the builder in
+        // a popup, next to a tiny summary of what's active. The results table
+        // stays on screen.
+        <View style={styles.filterBar}>
+          <TouchableOpacity
+            style={[styles.filterBarBtn, expr.length > 0 && styles.filterBarBtnOn]}
+            onPress={() => setFiltersOpen(true)}
+            activeOpacity={0.75}
+          >
+            <Text style={[styles.filterBarBtnTxt, expr.length > 0 && styles.filterBarBtnTxtOn]}>
+              ⚙ Filters{expr.length ? ` (${expr.length})` : ''}
+            </Text>
+          </TouchableOpacity>
+          <Text style={styles.filterSummary} numberOfLines={1}>
+            {expr.length ? exprSummary(expr) : 'No filters — full universe'}
+          </Text>
+        </View>
+      )}
       <View style={styles.statsRow}>
         <Text style={styles.statsTxt} numberOfLines={1}>
           <Text style={styles.statsN}>{stats.total}</Text> matches
@@ -818,6 +841,29 @@ export default function ScreenerScreen() {
         onApply={applySaved}
       />
 
+      {/* Mobile filter-builder popup — at container level: Sheet is an
+          absolute overlay and would mis-position inside the page ScrollView. */}
+      {!isDesktop && filtersOpen ? (
+        <Sheet onClose={() => setFiltersOpen(false)} maxHeight="90%">
+          <ScrollView bounces={false} keyboardShouldPersistTaps="handled" nestedScrollEnabled>
+            <View style={styles.sheetHead}>
+              <Text style={styles.sheetTitle}>Filters</Text>
+              <TouchableOpacity onPress={() => setFiltersOpen(false)} hitSlop={12} activeOpacity={0.75}>
+                <Text style={styles.sheetClose}>✕ Close</Text>
+              </TouchableOpacity>
+            </View>
+            <FilterPanel
+              expr={expr}
+              setExpr={setExpr}
+              savedCount={saved.length}
+              onShare={onShare}
+              onSaveScreen={() => setSavedModal(true)}
+            />
+            <Btn label={`Show ${stats.total} matches`} onPress={() => setFiltersOpen(false)} style={styles.sheetApply} />
+          </ScrollView>
+        </Sheet>
+      ) : null}
+
       {detail ? <StockDetail row={detail} onClose={() => setDetail(null)} /> : null}
 
       {flash ? (
@@ -896,6 +942,24 @@ const OP_ITEMS: SelItem[] = [
   { v: 'eq', label: '=' },
 ];
 const OP_LABEL: Record<string, string> = { gt: '>', lt: '<', between: 'between', eq: '=', is: 'is true', has: 'is' };
+
+// One tiny line describing the active filter rows for the mobile summary
+// ("Minervini Trend Template · Price > 100 · RSI < 30").
+function exprSummary(expr: ExprRow[]): string {
+  return expr
+    .map((e) => {
+      const def = DEF_BY_KEY[e.key];
+      if (!def) return null;
+      if (def.type === 'range') {
+        const v = e.op === 'between' ? `${e.v1 || 0}–${e.v2 || '∞'}` : (e.v1 || '0');
+        return `${def.label} ${e.op === 'between' ? '' : OP_LABEL[e.op] || '>'} ${v}`.replace('  ', ' ');
+      }
+      if (def.type === 'select') return `${def.label}: ${e.v1 || 'any'}`;
+      return def.label;
+    })
+    .filter(Boolean)
+    .join(' · ');
+}
 const PRESET_GROUPS = ['Strategies', 'Trend', 'Momentum', 'Breakouts', 'Candlesticks', 'Volume', 'Fundamentals'] as const;
 
 function FilterPanel({
@@ -1006,6 +1070,12 @@ function FilterPanel({
         </View>
         {presetsOpen ? (
           <View style={[styles.pickerDrop, { width: 480 }]}>
+            <View style={styles.presetHead}>
+              <Text style={styles.presetHeadTxt}>PRESET SCANS</Text>
+              <TouchableOpacity onPress={() => setPresetsOpen(false)} hitSlop={12} activeOpacity={0.75}>
+                <Text style={styles.presetClose}>✕ Close</Text>
+              </TouchableOpacity>
+            </View>
             <ScrollView style={styles.pickerScroll} keyboardShouldPersistTaps="handled" nestedScrollEnabled>
               {PRESET_GROUPS.map((g) => {
                 const ps = PRESETS.filter((p) => p.group === g);
@@ -1404,6 +1474,41 @@ const styles = StyleSheet.create({
   nlAddOff: { backgroundColor: theme.surface2, borderColor: theme.border2, borderWidth: 1 },
   nlAddTxt: { color: theme.onAccent, fontWeight: '700', fontSize: theme.fs.sm + 1 },
   nlFeedback: { color: theme.green, fontSize: theme.fs.sm, marginTop: theme.sp.sm, lineHeight: 17 },
+  // Mobile compact filter bar + popup builder
+  filterBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.sp.sm,
+    paddingHorizontal: theme.sp.lg,
+    paddingTop: theme.sp.sm,
+  },
+  filterBarBtn: {
+    backgroundColor: theme.surface2,
+    borderColor: theme.border2,
+    borderWidth: 1,
+    borderRadius: theme.radius.pill,
+    paddingHorizontal: theme.sp.md,
+    paddingVertical: 6,
+  },
+  filterBarBtnOn: { borderColor: theme.brand, backgroundColor: theme.brandSoft },
+  filterBarBtnTxt: { color: theme.text, fontSize: theme.fs.sm, fontWeight: '700' },
+  filterBarBtnTxtOn: { color: theme.brand },
+  filterSummary: { flex: 1, color: theme.muted, fontSize: theme.fs.xs + 1 },
+  sheetHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: theme.sp.xs },
+  sheetTitle: { color: theme.text, fontSize: theme.fs.xl, fontWeight: '800' },
+  sheetClose: { color: theme.muted2, fontSize: theme.fs.md, fontWeight: '700' },
+  sheetApply: { marginTop: theme.sp.lg },
+  presetHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: theme.sp.md,
+    paddingVertical: theme.sp.sm,
+    borderBottomColor: theme.border,
+    borderBottomWidth: 1,
+  },
+  presetHeadTxt: { color: theme.muted, fontSize: theme.fs.xs, fontWeight: '800', letterSpacing: 1 },
+  presetClose: { color: theme.muted2, fontSize: theme.fs.sm, fontWeight: '700' },
   statsRow: {
     flexDirection: 'row',
     alignItems: 'center',
