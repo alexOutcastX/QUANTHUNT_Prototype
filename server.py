@@ -2602,10 +2602,31 @@ _DR_INDICES = [
     ("SIFY",  "Sify",        "SIFY"),
 ]
 # Category → index list. "domestic" keeps the historic default behaviour.
+# Currencies (INR crosses + dollar index + BTC) and commodities — same
+# (key, name, yf_sym) shape, mainly for the configurable ticker strip.
+_CURRENCY_LIST = [
+    ("USDINR", "USD/INR", "USDINR=X"),
+    ("EURINR", "EUR/INR", "EURINR=X"),
+    ("GBPINR", "GBP/INR", "GBPINR=X"),
+    ("JPYINR", "JPY/INR", "JPYINR=X"),
+    ("DXY",    "Dollar Index", "DX-Y.NYB"),
+    ("BTCUSD", "Bitcoin", "BTC-USD"),
+]
+_COMMODITY_LIST = [
+    ("GOLD",   "Gold",       "GC=F"),
+    ("SILVER", "Silver",     "SI=F"),
+    ("BRENT",  "Brent Crude", "BZ=F"),
+    ("WTI",    "WTI Crude",  "CL=F"),
+    ("NATGAS", "Natural Gas", "NG=F"),
+    ("COPPER", "Copper",     "HG=F"),
+]
+
 _INDEX_LISTS = {
     "domestic":      _MAJOR_INDICES,
     "international": _INTL_INDICES,
     "depository":    _DR_INDICES,
+    "currency":      _CURRENCY_LIST,
+    "commodity":     _COMMODITY_LIST,
 }
 # Per-category cache: category → {"ts": float, "data": [...]}
 _indices_cache = {}
