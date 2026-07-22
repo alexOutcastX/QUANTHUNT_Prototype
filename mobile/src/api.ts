@@ -228,6 +228,9 @@ export type ScanResp = {
 
 export type IndexConstituent = {
   symbol: string;
+  // Custom groups (SME EMERGE / RECENT IPOS) carry names the main-board
+  // master list doesn't have.
+  name?: string | null;
   price?: number | null;
   prevClose?: number | null;
   chg?: number | null;
