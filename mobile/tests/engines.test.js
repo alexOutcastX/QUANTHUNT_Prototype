@@ -1,53 +1,14 @@
-// Node smoke tests for the pure TS engines (backtest, screener, analysis).
+// Node smoke tests for the pure TS engines (screener, costs, analysis).
 // CI bundles each with esbuild and runs assertions — no RN/browser needed.
 // Run:  node mobile/tests/engines.test.js   (CI builds the bundles first)
+//
+// The backtest engine moved server-side (backtest_engine.py) and is covered by
+// tests/test_backtest_engine.py in the Python suite.
 const assert = require('assert');
 const path = require('path');
 
-const bt = require(path.join(__dirname, 'build', 'backtest.js'));
 const scr = require(path.join(__dirname, 'build', 'screener.js'));
 const costs = require(path.join(__dirname, 'build', 'costs.js'));
-
-// ── backtest: custom strategy fires and produces trades ──
-(function backtest() {
-  const candles = [];
-  let px = 100;
-  for (let i = 0; i < 60; i++) {
-    if (i >= 20 && i < 30) px -= 2;
-    else if (i >= 30) px += 2;
-    candles.push({ t: 1700000000 + i * 86400, o: px, h: px * 1.01, l: px * 0.99, c: px, v: 1000 });
-  }
-  const sig = bt.runCustomStrategy(candles, {
-    buy: [{ ind: 'rsi', period: 5, op: 'lt', target: 'value', value: 25 }],
-    sell: [{ ind: 'rsi', period: 5, op: 'gt', target: 'value', value: 75 }],
-  });
-  assert(sig.some((s) => s === 1), 'custom buy signal fires');
-  const res = bt.runBacktest(candles, 'custom', [], {
-    slType: 'none', slVal: 0, tpType: 'none', tpVal: 0, trail: false, trailPct: 0, capital: 100000,
-  }, {
-    buy: [{ ind: 'rsi', period: 5, op: 'lt', target: 'value', value: 25 }],
-    sell: [{ ind: 'rsi', period: 5, op: 'gt', target: 'value', value: 75 }],
-  });
-  assert(res.trades.length >= 1, 'backtest produces >= 1 trade');
-  // built-in EMA crossover also runs
-  const ema = bt.runBacktest(candles, 'ema_cross', [5, 15], {
-    slType: 'none', slVal: 0, tpType: 'none', tpVal: 0, trail: false, trailPct: 0, capital: 100000,
-  });
-  assert(Array.isArray(ema.markers), 'ema_cross returns markers');
-
-  // with a cost model, charges drag net return below the frictionless run
-  const gross = bt.runBacktest(candles, 'ema_cross', [5, 15], {
-    slType: 'none', slVal: 0, tpType: 'none', tpVal: 0, trail: false, trailPct: 0, capital: 100000,
-  });
-  const net = bt.runBacktest(candles, 'ema_cross', [5, 15], {
-    slType: 'none', slVal: 0, tpType: 'none', tpVal: 0, trail: false, trailPct: 0, capital: 100000,
-  }, undefined, costs.DEFAULT_COSTS);
-  if (net.trades.length) {
-    assert(typeof net.stats.totalCharges === 'number' && net.stats.totalCharges > 0, 'costs booked');
-    assert(net.stats.finalCapital < gross.stats.finalCapital, 'costs reduce net capital');
-  }
-  console.log('OK backtest');
-})();
 
 // ── costs: India charge model + slippage ──
 (function costModel() {

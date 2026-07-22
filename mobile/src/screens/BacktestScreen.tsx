@@ -1,687 +1,754 @@
-import React, { useEffect, useState } from 'react';
-import {
-  ActivityIndicator,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+// Quant Lab — institutional-grade portfolio backtester (server engine v2).
+//
+// The heavy lifting happens server-side (backtest_engine.py): T+1-open
+// execution, gap-aware stops, whole-share sizing, the Indian cost stack and
+// the full analytics suite. This screen is the strategy console: configure
+// universe / strategy / sizing / costs / risk, launch the job, watch live
+// progress, then read the tear sheet — metric tiles, equity vs buy&hold,
+// drawdown, monthly returns, per-symbol breakdown and the complete trade
+// blotter with CSV / Excel / PDF export.
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Candle, api } from '../api';
-import { BacktestResult, CUSTOM_KEY, CustomRule, Risk, STRATEGIES, runBacktest } from '../backtest';
-import { LW_SCRIPT } from '../chartHtml';
-import { DEFAULT_COSTS } from '../costs';
+
+import { BtConfig, BtResult, BtRule, BtStrategyMeta, BtTrade, api } from '../api';
 import HtmlView from '../components/HtmlView';
+import { LW_SCRIPT } from '../chartHtml';
+import { exportCsvRows, exportExcelRows } from '../csv';
+import { openPdfPreview } from '../pdf';
 import { getPalette, theme } from '../theme';
-import { Card, ChipBtn, EmptyState, Loading, ScreenTitle, SectionTitle, StatTile } from '../ui';
+import { Btn, Card, Dropdown, EmptyState, InfoButton, SectionTitle, Segmented, Sheet } from '../ui';
+import { useResponsive } from '../responsive';
 
-const UP = '#10b981';
-const DOWN = '#f43f5e';
-const INTERVALS = [
-  { label: 'Daily', v: '1d' },
-  { label: '1H', v: '1h' },
-  { label: '15m', v: '15m' },
+const CFG_KEY = 'taureye.bt.cfg.v2';
+const SAVED_KEY = 'taureye.bt.saved.v2';
+
+const INDICES = ['NIFTY 50', 'NIFTY 100', 'NIFTY 200', 'NIFTY 500', 'NIFTY BANK', 'NIFTY IT',
+  'NIFTY MIDCAP 100', 'NIFTY SMALLCAP 100', 'NIFTY AUTO', 'NIFTY PHARMA', 'NIFTY FMCG'];
+const PERIODS = [
+  { key: '1y', label: '1 year' }, { key: '2y', label: '2 years' },
+  { key: '5y', label: '5 years' }, { key: '10y', label: '10 years' },
 ];
-const PERIODS = ['3mo', '6mo', '1y', '2y', '5y'];
 
-const money = (v: number) => '₹' + Math.round(v).toLocaleString('en-IN');
-const signed = (v: number, d = 2) => (v >= 0 ? '+' : '') + v.toFixed(d);
+// Offline fallback so the console still renders if /backtest/strategies is
+// briefly unreachable — keys/params mirror backtest_engine.STRATEGIES.
+const FALLBACK_STRATS: BtStrategyMeta[] = [
+  { key: 'ema_cross', label: 'EMA Crossover', params: { fast: 9, slow: 21 }, blurb: '' },
+  { key: 'sma_cross', label: 'SMA Crossover', params: { fast: 20, slow: 50 }, blurb: '' },
+  { key: 'macd', label: 'MACD Signal', params: { fast: 12, slow: 26, signal: 9 }, blurb: '' },
+  { key: 'rsi_rev', label: 'RSI Mean Reversion', params: { period: 14, oversold: 30, overbought: 70 }, blurb: '' },
+  { key: 'donchian', label: 'Donchian Breakout', params: { entry: 55, exit: 20 }, blurb: '' },
+];
 
-// ── Custom rule builder ──────────────────────────────────────────────────────
-const RULES_KEY = 'te_custom_rules_v1';
-const IND_OPTS: CustomRule['ind'][] = ['close', 'rsi', 'ema', 'sma', 'macd_hist', 'volume'];
-const OP_OPTS: CustomRule['op'][] = ['gt', 'lt', 'cross_above', 'cross_below'];
-const TGT_OPTS: CustomRule['target'][] = ['value', 'ema', 'sma', 'close'];
-const IND_LBL: Record<CustomRule['ind'], string> = {
-  close: 'CLOSE', rsi: 'RSI', ema: 'EMA', sma: 'SMA', macd_hist: 'MACD-H', volume: 'VOL',
-};
-const OP_LBL: Record<CustomRule['op'], string> = {
-  gt: '>', lt: '<', cross_above: 'X↑', cross_below: 'X↓',
-};
-const TGT_LBL: Record<CustomRule['target'], string> = {
-  value: 'VALUE', ema: 'EMA', sma: 'SMA', close: 'CLOSE',
-};
-const hasPeriod = (ind: CustomRule['ind']) => ind === 'rsi' || ind === 'ema' || ind === 'sma';
-const defaultBuyRule = (): CustomRule => ({ ind: 'rsi', period: 14, op: 'lt', target: 'value', value: 30 });
-const defaultSellRule = (): CustomRule => ({ ind: 'rsi', period: 14, op: 'gt', target: 'value', value: 70 });
-const cycle = <T,>(opts: readonly T[], cur: T): T => opts[(opts.indexOf(cur) + 1) % opts.length];
+const RULE_INDS = [
+  { key: 'close', label: 'Close' }, { key: 'volume', label: 'Volume' }, { key: 'rsi', label: 'RSI' },
+  { key: 'ema', label: 'EMA' }, { key: 'sma', label: 'SMA' }, { key: 'macd_hist', label: 'MACD hist' },
+  { key: 'atr', label: 'ATR' }, { key: 'high_n', label: 'N-day high' }, { key: 'low_n', label: 'N-day low' },
+];
+const RULE_OPS = [
+  { key: 'gt', label: '>' }, { key: 'lt', label: '<' },
+  { key: 'cross_above', label: 'crosses above' }, { key: 'cross_below', label: 'crosses below' },
+];
+const RULE_TARGETS = [
+  { key: 'value', label: 'Value' }, { key: 'ema', label: 'EMA' }, { key: 'sma', label: 'SMA' },
+  { key: 'close', label: 'Close' }, { key: 'high_n', label: 'N-day high' }, { key: 'low_n', label: 'N-day low' },
+];
 
-function RuleRow({
-  rule,
-  onChange,
-  onRemove,
-}: {
-  rule: CustomRule;
-  onChange: (r: CustomRule) => void;
-  onRemove: () => void;
+const money = (v?: number | null) =>
+  v == null || !isFinite(v) ? '—' : '₹' + v.toLocaleString('en-IN', { maximumFractionDigits: 0 });
+const num = (v?: number | null, d = 2, suffix = '') =>
+  v == null || !isFinite(v) ? '—' : v.toFixed(d) + suffix;
+
+type SavedCfg = { name: string; cfg: BtConfig };
+
+function NumIn({ label, value, onChange, width = 96 }: {
+  label: string; value: number; onChange: (n: number) => void; width?: number;
 }) {
-  const cycleInd = () => {
-    const ind = cycle(IND_OPTS, rule.ind);
-    onChange({ ...rule, ind, period: hasPeriod(ind) ? rule.period ?? (ind === 'rsi' ? 14 : 20) : rule.period });
-  };
-  const cycleTgt = () => {
-    const target = cycle(TGT_OPTS, rule.target);
-    const value = target === 'ema' || target === 'sma' ? rule.value || 20 : rule.value;
-    onChange({ ...rule, target, value });
-  };
+  const [txt, setTxt] = useState(String(value));
+  useEffect(() => setTxt(String(value)), [value]);
   return (
-    <View style={styles.ruleRow}>
-      <TouchableOpacity style={styles.ruleSeg} onPress={cycleInd} activeOpacity={0.75}>
-        <Text style={styles.ruleSegTxt}>{IND_LBL[rule.ind]}</Text>
-      </TouchableOpacity>
-      {hasPeriod(rule.ind) ? (
-        <TextInput
-          style={styles.ruleInput}
-          value={String(rule.period ?? '')}
-          onChangeText={(t) => onChange({ ...rule, period: parseFloat(t) || 0 })}
-          keyboardType="numeric"
-        />
-      ) : null}
-      <TouchableOpacity
-        style={styles.ruleSeg}
-        onPress={() => onChange({ ...rule, op: cycle(OP_OPTS, rule.op) })}
-        activeOpacity={0.75}
-      >
-        <Text style={[styles.ruleSegTxt, styles.ruleOpTxt]}>{OP_LBL[rule.op]}</Text>
-      </TouchableOpacity>
-      <TouchableOpacity style={styles.ruleSeg} onPress={cycleTgt} activeOpacity={0.75}>
-        <Text style={styles.ruleSegTxt}>{TGT_LBL[rule.target]}</Text>
-      </TouchableOpacity>
-      {rule.target !== 'close' ? (
-        <TextInput
-          style={styles.ruleInput}
-          value={String(rule.value ?? '')}
-          onChangeText={(t) => onChange({ ...rule, value: parseFloat(t) || 0 })}
-          keyboardType="numeric"
-        />
-      ) : null}
-      <TouchableOpacity style={styles.ruleDel} onPress={onRemove} activeOpacity={0.75}>
-        <Text style={styles.ruleDelTxt}>✕</Text>
-      </TouchableOpacity>
+    <View style={{ width }}>
+      <Text style={styles.inLbl}>{label}</Text>
+      <TextInput
+        style={styles.in}
+        value={txt}
+        keyboardType="numeric"
+        onChangeText={setTxt}
+        onBlur={() => {
+          const n = parseFloat(txt);
+          if (isFinite(n)) onChange(n);
+          else setTxt(String(value));
+        }}
+      />
     </View>
   );
 }
 
-function resultHtml(candles: Candle[], result: BacktestResult): string {
-  const theme = getPalette();
-  const cData = JSON.stringify(
-    candles.map((c) => ({ time: c.t, open: c.o, high: c.h, low: c.l, close: c.c })),
-  );
-  const markers = JSON.stringify(
-    result.markers.map((m) => ({
-      time: m.time,
-      position: m.kind === 'buy' ? 'belowBar' : 'aboveBar',
-      color: m.kind === 'buy' ? UP : m.win ? UP : DOWN,
-      shape: m.kind === 'buy' ? 'arrowUp' : 'arrowDown',
-      text: m.kind === 'buy' ? 'B' : 'S',
-    })),
-  );
-  const eq = JSON.stringify(result.equityCurve.map((p) => ({ time: p.t, value: p.eq })));
-  const eqColor = result.stats.totalRet >= 0 ? UP : DOWN;
-  return `<!DOCTYPE html><html><head>
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-  <style>html,body{margin:0;background:${theme.bg}}#p{height:60%}#e{height:40%}
-  .lbl{color:${theme.muted2};font:10px monospace;padding:4px 8px}
-  #msg{color:#5e6776;font:12px monospace;text-align:center;padding-top:40px}</style>
-  </head><body>
-  <div id="msg">Loading chart library…</div>
-  <div class="lbl" id="pl" style="display:none">Price &amp; Signals</div><div id="p"></div>
-  <div class="lbl" id="el" style="display:none">Equity Curve</div><div id="e"></div>
-  ${LW_SCRIPT}
-  <script>
-  (function(){
-    var msg=document.getElementById('msg');
-    if(typeof LightweightCharts==='undefined'){msg.textContent='⚠ Chart library unavailable (no network).';return;}
-    msg.style.display='none';document.getElementById('pl').style.display='block';document.getElementById('el').style.display='block';
-    var LW=LightweightCharts;
-    function base(el){return LW.createChart(el,{autoSize:true,layout:{background:{color:'${theme.bg}'},textColor:'${theme.muted2}',fontFamily:'monospace'},grid:{vertLines:{color:'${theme.border}'},horzLines:{color:'${theme.border}'}},rightPriceScale:{borderColor:'${theme.border2}'},timeScale:{borderColor:'${theme.border2}',timeVisible:false}});}
-    var pc=base(document.getElementById('p'));
-    var cs=pc.addCandlestickSeries({upColor:'${UP}',downColor:'${DOWN}',borderUpColor:'${UP}',borderDownColor:'${DOWN}',wickUpColor:'${UP}',wickDownColor:'${DOWN}'});
-    cs.setData(${cData});
-    cs.setMarkers(${markers});
-    pc.timeScale().fitContent();
-    var ec=base(document.getElementById('e'));
-    var ls=ec.addAreaSeries({lineColor:'${eqColor}',topColor:'${eqColor}55',bottomColor:'${eqColor}05',lineWidth:2});
-    ls.setData(${eq});
-    ec.timeScale().fitContent();
-  })();
-  </script></body></html>`;
+// ── Equity + drawdown chart (self-hosted lightweight-charts) ────────────────
+function equityChartHtml(res: BtResult): string {
+  const pal = getPalette();
+  const eq = JSON.stringify(res.equity_curve.map((p) => ({ time: p.t, value: p.eq })));
+  const bm = JSON.stringify(res.benchmark_curve.map((p) => ({ time: p.t, value: p.eq })));
+  const dd = JSON.stringify(res.stats.drawdown_curve.map((p) => ({ time: p.t, value: p.dd })));
+  return `<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width,initial-scale=1">
+${LW_SCRIPT}
+<style>body{margin:0;background:${pal.bg};font-family:system-ui}
+.lbl{color:${pal.muted};font-size:10px;padding:4px 8px 0;letter-spacing:.5px}
+.legend{color:${pal.muted};font-size:10px;padding:0 8px}
+.legend b{font-weight:600}
+.err{color:${pal.muted};padding:16px;font-size:12px}</style></head><body>
+<div class="lbl">EQUITY CURVE</div>
+<div class="legend"><b style="color:#10b981">■</b> Strategy &nbsp; <b style="color:#64748b">■</b> Buy &amp; hold (equal-weight)</div>
+<div id="eq" style="height:250px"></div>
+<div class="lbl">DRAWDOWN %</div>
+<div id="dd" style="height:110px"></div>
+<script>
+try{
+  var opts={layout:{background:{color:'${pal.bg}'},textColor:'${pal.muted}'},
+    grid:{vertLines:{color:'${pal.border}'},horzLines:{color:'${pal.border}'}},
+    rightPriceScale:{borderColor:'${pal.border}'},timeScale:{borderColor:'${pal.border}'},
+    handleScroll:false,handleScale:false};
+  var c1=LightweightCharts.createChart(document.getElementById('eq'),opts);
+  c1.addLineSeries({color:'#64748b',lineWidth:1,priceLineVisible:false}).setData(${bm});
+  c1.addLineSeries({color:'#10b981',lineWidth:2,priceLineVisible:false}).setData(${eq});
+  c1.timeScale().fitContent();
+  var c2=LightweightCharts.createChart(document.getElementById('dd'),opts);
+  c2.addAreaSeries({lineColor:'#f43f5e',topColor:'rgba(244,63,94,0.05)',bottomColor:'rgba(244,63,94,0.35)',lineWidth:1,priceLineVisible:false}).setData(${dd});
+  c2.timeScale().fitContent();
+}catch(e){document.body.innerHTML='<div class="err">Chart library unavailable — metrics and blotter below are unaffected.</div>'}
+</script></body></html>`;
 }
 
-function Segmented<T extends string>({
-  options,
-  value,
-  onChange,
-  labelOf,
-}: {
-  options: T[];
-  value: T;
-  onChange: (v: T) => void;
-  labelOf?: (v: T) => string;
-}) {
-  return (
-    <View style={styles.seg}>
-      {options.map((o) => (
-        <ChipBtn
-          key={o}
-          label={labelOf ? labelOf(o) : o}
-          on={value === o}
-          onPress={() => onChange(o)}
-        />
-      ))}
-    </View>
-  );
+// ── PDF tear sheet ───────────────────────────────────────────────────────────
+const esc = (v: unknown) =>
+  String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+function tearSheetHtml(res: BtResult, stratLabel: string): string {
+  const s = res.stats;
+  const cell = (l: string, v: string) =>
+    `<tr><td style="color:#64748b">${esc(l)}</td><td style="text-align:right"><b>${esc(v)}</b></td></tr>`;
+  const trades = res.trades.slice(0, 200).map((t) =>
+    `<tr><td>${t.id}</td><td>${esc(t.symbol)}</td><td style="text-align:right">${t.qty}</td>` +
+    `<td>${t.entry_date}</td><td style="text-align:right">${t.entry_px}</td>` +
+    `<td>${t.exit_date}</td><td style="text-align:right">${t.exit_px}</td>` +
+    `<td>${esc(t.reason)}</td><td style="text-align:right;color:${t.net_pnl >= 0 ? '#0b7a53' : '#c92a2a'}">${t.net_pnl.toLocaleString('en-IN')}</td>` +
+    `<td style="text-align:right">${t.ret_pct}%</td><td style="text-align:right">${t.hold_days}</td></tr>`).join('');
+  const monthly = s.monthly_returns.map((r) =>
+    `<tr><td><b>${r.year}</b></td>` + r.months.map((m) =>
+      `<td style="text-align:right;color:${m == null ? '#999' : m >= 0 ? '#0b7a53' : '#c92a2a'}">${m == null ? '—' : m + '%'}</td>`).join('') +
+    `<td style="text-align:right;font-weight:700">${r.total}%</td></tr>`).join('');
+  return `<html><head><title>TaurEye — Backtest tear sheet</title></head><body>
+<h1>Backtest tear sheet <span class="sub">${esc(stratLabel)} · ${esc(res.period)} · ${res.universe.length} symbols · ${esc(res.execution)}</span></h1>
+<div class="big" style="color:${s.net_profit >= 0 ? '#0b7a53' : '#c92a2a'}">${s.total_return_pct}% <span class="sub">net ${money(s.net_profit)} · CAGR ${s.cagr_pct}%</span></div>
+<h2>Performance</h2><table>
+${cell('Final capital', money(s.final_capital))}${cell('CAGR', s.cagr_pct + '%')}
+${cell('Sharpe (rf ' + s.rf_rate_pct + '%)', String(s.sharpe))}${cell('Sortino', String(s.sortino))}
+${cell('Calmar', s.calmar == null ? '—' : String(s.calmar))}${cell('Volatility (ann.)', s.volatility_pct + '%')}
+${cell('Max drawdown', s.max_drawdown_pct + '% over ' + s.max_drawdown_days + ' days')}
+${cell('Exposure', s.exposure_pct + '%')}${cell('Turnover', s.turnover_x + '× / yr')}
+${cell('Trades', String(s.trades))}${cell('Win rate', s.win_rate_pct + '%')}
+${cell('Profit factor', s.profit_factor == null ? '∞' : String(s.profit_factor))}
+${cell('Expectancy / trade', money(s.expectancy))}${cell('Avg win / avg loss', money(s.avg_win) + ' / ' + money(s.avg_loss))}
+${cell('Avg holding', s.avg_hold_days + ' days')}${cell('Total charges', money(s.total_charges))}
+</table>
+<h2>Monthly returns</h2>
+<table><tr><td></td>${['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'].map((m) => `<td style="text-align:right"><b>${m}</b></td>`).join('')}<td style="text-align:right"><b>YR</b></td></tr>${monthly}</table>
+<h2>Trade blotter ${res.trades.length > 200 ? `(first 200 of ${res.trades.length})` : `(${res.trades.length} trades)`}</h2>
+<table><tr><td><b>#</b></td><td><b>Symbol</b></td><td style="text-align:right"><b>Qty</b></td><td><b>Entry</b></td><td style="text-align:right"><b>₹</b></td><td><b>Exit</b></td><td style="text-align:right"><b>₹</b></td><td><b>Reason</b></td><td style="text-align:right"><b>Net ₹</b></td><td style="text-align:right"><b>%</b></td><td style="text-align:right"><b>Days</b></td></tr>${trades}</table>
+<p style="color:#999;font-size:10px;margin-top:14px">Signals execute at the next bar's open; stops and targets are gap-aware resting orders. Charges: brokerage, STT, exchange, SEBI, GST, stamp duty + slippage. Historical simulation on public market data — past performance does not predict future results. Educational only — not investment advice.</p>
+</body></html>`;
 }
 
 export default function BacktestScreen() {
-  const [sym, setSym] = useState('RELIANCE');
+  const { isDesktop } = useResponsive();
+  const [metas, setMetas] = useState<BtStrategyMeta[]>(FALLBACK_STRATS);
+  const [defaultCosts, setDefaultCosts] = useState<Record<string, number>>({});
+
+  // ── Config state ──
+  const [uniMode, setUniMode] = useState<'index' | 'symbols'>('index');
+  const [index, setIndex] = useState('NIFTY 50');
+  const [symText, setSymText] = useState('RELIANCE, TCS, INFY');
+  const [period, setPeriod] = useState('2y');
+  const [capital, setCapital] = useState(1000000);
+  const [maxPos, setMaxPos] = useState(5);
+  const [execution, setExecution] = useState<'next_open' | 'same_close'>('next_open');
   const [stratKey, setStratKey] = useState('ema_cross');
-  const [interval, setInterval] = useState('1d');
-  const [period, setPeriod] = useState('1y');
-  const [params, setParams] = useState<number[]>(
-    STRATEGIES[0].params.map((p) => p.default),
-  );
-  const [capital, setCapital] = useState('100000');
-  const [slType, setSlType] = useState<Risk['slType']>('pct');
-  const [slVal, setSlVal] = useState('5');
-  const [tpType, setTpType] = useState<Risk['tpType']>('none');
-  const [tpVal, setTpVal] = useState('10');
-  const [trailOn, setTrailOn] = useState(false);
-  const [trailPct, setTrailPct] = useState('1.5');
-  const [realistic, setRealistic] = useState(true); // apply India charges + slippage
+  const [params, setParams] = useState<Record<string, number>>({ fast: 9, slow: 21 });
+  const [buyRules, setBuyRules] = useState<BtRule[]>([
+    { ind: 'close', op: 'cross_above', target: 'sma', value: 50 },
+  ]);
+  const [sellRules, setSellRules] = useState<BtRule[]>([
+    { ind: 'close', op: 'cross_below', target: 'sma', value: 50 },
+  ]);
+  const [sizeMode, setSizeMode] = useState<'equal' | 'fixed' | 'risk'>('equal');
+  const [sizeVal, setSizeVal] = useState(1);
+  const [slType, setSlType] = useState<'none' | 'pct' | 'atr'>('none');
+  const [slVal, setSlVal] = useState(5);
+  const [tpType, setTpType] = useState<'none' | 'pct' | 'rr'>('none');
+  const [tpVal, setTpVal] = useState(10);
+  const [trailPct, setTrailPct] = useState(0);
+  const [maxHold, setMaxHold] = useState(0);
+  const [costs, setCosts] = useState<Record<string, number> | null>(null); // null = server defaults
+  const [showCosts, setShowCosts] = useState(false);
 
-  const [buyRules, setBuyRules] = useState<CustomRule[]>([defaultBuyRule()]);
-  const [sellRules, setSellRules] = useState<CustomRule[]>([defaultSellRule()]);
-  const [rulesRestored, setRulesRestored] = useState(false);
+  // ── Run state ──
+  const [running, setRunning] = useState(false);
+  const [progress, setProgress] = useState('');
+  const [error, setError] = useState('');
+  const [result, setResult] = useState<BtResult | null>(null);
+  const [isPrevious, setIsPrevious] = useState(false);
+  const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState<string | null>(null);
-  const [result, setResult] = useState<BacktestResult | null>(null);
-  const [html, setHtml] = useState('');
+  // ── Saved configs ──
+  const [saved, setSaved] = useState<SavedCfg[]>([]);
+  const [saveOpen, setSaveOpen] = useState(false);
+  const [saveName, setSaveName] = useState('');
 
-  // One-shot symbol handoff from the Multibagger analyser's "Backtest" action.
-  useEffect(() => {
-    AsyncStorage.getItem('taureye.backtest.prefill')
-      .then((v) => {
-        if (v) {
-          setSym(v);
-          AsyncStorage.removeItem('taureye.backtest.prefill').catch(() => {});
-        }
-      })
-      .catch(() => {});
-  }, []);
+  const meta = metas.find((m) => m.key === stratKey);
+  const stratLabel = stratKey === 'custom' ? 'Custom rules' : meta?.label || stratKey;
 
-  // Restore persisted custom rules once, before saving anything back.
-  useEffect(() => {
-    (async () => {
-      try {
-        const raw = await AsyncStorage.getItem(RULES_KEY);
-        if (raw) {
-          const parsed = JSON.parse(raw);
-          if (parsed && Array.isArray(parsed.buy) && Array.isArray(parsed.sell)) {
-            setBuyRules(parsed.buy);
-            setSellRules(parsed.sell);
-          }
-        }
-      } catch {
-        /* fresh start */
-      } finally {
-        setRulesRestored(true);
-      }
-    })();
-  }, []);
+  const buildCfg = (): BtConfig => ({
+    ...(uniMode === 'index'
+      ? { index }
+      : { symbols: symText.split(/[,\s]+/).map((t) => t.trim().toUpperCase()).filter(Boolean) }),
+    period,
+    capital,
+    max_positions: maxPos,
+    execution,
+    strategy: stratKey === 'custom'
+      ? { key: 'custom', buy: buyRules, sell: sellRules }
+      : { key: stratKey, params },
+    sizing: { mode: sizeMode, value: sizeVal },
+    risk: { sl_type: slType, sl_val: slVal, tp_type: tpType, tp_val: tpVal,
+      trail_pct: trailPct, max_hold_days: maxHold },
+    ...(costs ? { costs } : {}),
+  });
 
-  useEffect(() => {
-    if (!rulesRestored) return;
-    AsyncStorage.setItem(RULES_KEY, JSON.stringify({ buy: buyRules, sell: sellRules })).catch(() => {});
-  }, [buyRules, sellRules, rulesRestored]);
-
-  const strat = STRATEGIES.find((s) => s.key === stratKey) || STRATEGIES[0];
-  const isCustom = stratKey === CUSTOM_KEY;
-  const stratLabel = isCustom ? 'Custom' : strat.label;
-
-  const pickStrat = (key: string) => {
-    setStratKey(key);
-    const def = STRATEGIES.find((s) => s.key === key);
-    if (def) setParams(def.params.map((p) => p.default));
+  const applyCfg = (cfg: BtConfig) => {
+    if (cfg.index) { setUniMode('index'); setIndex(cfg.index); }
+    if (cfg.symbols?.length) { setUniMode('symbols'); setSymText(cfg.symbols.join(', ')); }
+    if (cfg.period) setPeriod(cfg.period);
+    if (cfg.capital) setCapital(cfg.capital);
+    if (cfg.max_positions) setMaxPos(cfg.max_positions);
+    if (cfg.execution) setExecution(cfg.execution);
+    if (cfg.strategy) {
+      setStratKey(cfg.strategy.key);
+      if (cfg.strategy.params) setParams(cfg.strategy.params);
+      if (cfg.strategy.buy) setBuyRules(cfg.strategy.buy);
+      if (cfg.strategy.sell) setSellRules(cfg.strategy.sell);
+    }
+    if (cfg.sizing) { setSizeMode(cfg.sizing.mode); if (cfg.sizing.value != null) setSizeVal(cfg.sizing.value); }
+    if (cfg.risk) {
+      setSlType(cfg.risk.sl_type || 'none'); setSlVal(cfg.risk.sl_val ?? 5);
+      setTpType(cfg.risk.tp_type || 'none'); setTpVal(cfg.risk.tp_val ?? 10);
+      setTrailPct(cfg.risk.trail_pct ?? 0); setMaxHold(cfg.risk.max_hold_days ?? 0);
+    }
+    if (cfg.costs) setCosts(cfg.costs);
   };
-  const setParam = (i: number, text: string) => {
-    setParams((prev) => prev.map((v, idx) => (idx === i ? parseFloat(text) || 0 : v)));
+
+  useEffect(() => {
+    api.btStrategies()
+      .then((r) => { setMetas(r.strategies); setDefaultCosts(r.default_costs); })
+      .catch(() => {});
+    AsyncStorage.getItem(CFG_KEY).then((raw) => {
+      if (raw) { try { applyCfg(JSON.parse(raw)); } catch { /* corrupt saved config */ } }
+    });
+    AsyncStorage.getItem(SAVED_KEY).then((raw) => {
+      if (raw) { try { setSaved(JSON.parse(raw)); } catch { /* ignore */ } }
+    });
+    // Show the last completed run (survives restarts) until a fresh one lands.
+    api.btLast().then((r) => {
+      if (r?.result) { setResult(r.result); setIsPrevious(true); }
+    }).catch(() => {});
+    return () => { if (pollRef.current) clearTimeout(pollRef.current); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const pickStrategy = (k: string) => {
+    setStratKey(k);
+    const m = metas.find((x) => x.key === k);
+    if (m) setParams({ ...m.params });
   };
 
   const run = async () => {
-    const symbol = sym.trim().toUpperCase().replace(/^NSE:/, '');
-    if (!symbol) {
-      setMsg('⚠ Enter a symbol to backtest.');
-      return;
-    }
-    if (isCustom && buyRules.length === 0 && sellRules.length === 0) {
-      setMsg('⚠ Add at least one rule.');
-      return;
-    }
-    setBusy(true);
-    setResult(null);
-    setHtml('');
-    setMsg('⟳ Fetching data…');
+    if (running) return;
+    const cfg = buildCfg();
+    AsyncStorage.setItem(CFG_KEY, JSON.stringify(cfg)).catch(() => {});
+    setError('');
+    setRunning(true);
+    setProgress('launching…');
     try {
-      const hist = await api.history(symbol, period, interval);
-      const candles = Array.isArray(hist.candles) ? hist.candles : [];
-      if (candles.length < 20) {
-        setMsg(`⚠ No data for ${symbol}. Try a different symbol or period.`);
-        setBusy(false);
-        return;
-      }
-      setMsg(`⟳ Running ${stratLabel} on ${candles.length} bars…`);
-      await new Promise((r) => setTimeout(r, 16));
-      const risk: Risk = {
-        capital: parseFloat(capital) || 100000,
-        slType,
-        slVal: parseFloat(slVal) || 0,
-        tpType,
-        tpVal: parseFloat(tpVal) || 0,
-        trailOn,
-        trailPct: parseFloat(trailPct) || 1.5,
+      const { run_id } = await api.btRun(cfg);
+      let misses = 0;
+      const poll = async () => {
+        try {
+          const snap = await api.btStatus(run_id);
+          misses = 0;
+          if (snap.status === 'done' && snap.result) {
+            setResult(snap.result);
+            setIsPrevious(false);
+            setRunning(false);
+            return;
+          }
+          if (snap.status === 'error' || snap.status === 'unknown') {
+            setError(snap.error || 'Backtest failed — retry shortly.');
+            setRunning(false);
+            return;
+          }
+          setProgress(snap.progress || 'running…');
+        } catch {
+          if (++misses > 8) { setError('Lost contact with the server — retry.'); setRunning(false); return; }
+        }
+        pollRef.current = setTimeout(poll, 1500);
       };
-      const res = runBacktest(
-        candles,
-        stratKey,
-        params,
-        risk,
-        isCustom ? { buy: buyRules, sell: sellRules } : undefined,
-        realistic ? DEFAULT_COSTS : undefined,
-      );
-      setResult(res);
-      setHtml(resultHtml(candles, res));
-      setMsg(null);
+      poll();
     } catch (e) {
-      setMsg('⚠ ' + (e instanceof Error ? e.message : 'Backtest failed') + ' — is the backend reachable?');
-    } finally {
-      setBusy(false);
+      setError(e instanceof Error ? e.message : 'Could not launch the backtest');
+      setRunning(false);
     }
   };
 
+  const saveCurrent = async () => {
+    const name = saveName.trim() || stratLabel;
+    const next = [{ name, cfg: buildCfg() }, ...saved.filter((sv) => sv.name !== name)].slice(0, 12);
+    setSaved(next);
+    setSaveOpen(false);
+    setSaveName('');
+    AsyncStorage.setItem(SAVED_KEY, JSON.stringify(next)).catch(() => {});
+  };
+
+  // ── Blotter export ──
+  const BLOTTER_HEADERS = ['#', 'Symbol', 'Qty', 'Entry date', 'Entry price', 'Exit date', 'Exit price',
+    'Reason', 'Gross P&L', 'Charges', 'Net P&L', 'Return %', 'Days', 'R'];
+  const blotterRows = (trades: BtTrade[]) => trades.map((t) => [
+    String(t.id), t.symbol, String(t.qty), t.entry_date, String(t.entry_px), t.exit_date,
+    String(t.exit_px), t.reason, String(t.gross_pnl), String(t.charges), String(t.net_pnl),
+    String(t.ret_pct), String(t.hold_days), t.r_multiple == null ? '' : String(t.r_multiple),
+  ]);
+  const [exportOpen, setExportOpen] = useState(false);
+  const doExport = (kind: 'csv' | 'excel' | 'pdf') => {
+    if (!result) return;
+    setExportOpen(false);
+    if (kind === 'csv') exportCsvRows(BLOTTER_HEADERS, blotterRows(result.trades), 'backtest-trades');
+    else if (kind === 'excel') exportExcelRows(BLOTTER_HEADERS, blotterRows(result.trades), 'backtest-trades');
+    else openPdfPreview(tearSheetHtml(result, stratLabel), { docType: 'Backtest tear sheet', fileName: 'TaurEye-backtest' });
+  };
+
+  const chartDoc = useMemo(() => (result ? equityChartHtml(result) : ''), [result]);
+  const s = result?.stats;
+
+  const ruleRow = (r: BtRule, i: number, list: BtRule[], set: (x: BtRule[]) => void) => (
+    <View key={i} style={styles.ruleRow}>
+      <Dropdown value={r.ind} options={RULE_INDS} onChange={(k) => set(list.map((x, j) => (j === i ? { ...x, ind: k } : x)))} style={styles.ruleDd} />
+      <NumIn label="PER" width={52} value={r.period ?? 14} onChange={(n) => set(list.map((x, j) => (j === i ? { ...x, period: n } : x)))} />
+      <Dropdown value={r.op} options={RULE_OPS} onChange={(k) => set(list.map((x, j) => (j === i ? { ...x, op: k as BtRule['op'] } : x)))} style={styles.ruleDd} />
+      <Dropdown value={r.target} options={RULE_TARGETS} onChange={(k) => set(list.map((x, j) => (j === i ? { ...x, target: k } : x)))} style={styles.ruleDd} />
+      <NumIn label="VAL" width={64} value={r.value ?? 0} onChange={(n) => set(list.map((x, j) => (j === i ? { ...x, value: n } : x)))} />
+      <TouchableOpacity onPress={() => set(list.filter((_x, j) => j !== i))} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+        <Text style={styles.ruleDel}>✕</Text>
+      </TouchableOpacity>
+    </View>
+  );
+
+  const tile = (label: string, value: string, color?: string) => (
+    <View style={styles.tile} key={label}>
+      <Text style={styles.tileLbl}>{label}</Text>
+      <Text style={[styles.tileVal, color ? { color } : null]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>
+        {value}
+      </Text>
+    </View>
+  );
+
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-      <ScreenTitle title="Backtest" sub="Test a strategy against historical data before risking capital." />
-      <View style={styles.body}>
-        <SectionTitle>Strategy</SectionTitle>
-        <Card>
-          <Text style={[styles.lbl, styles.lblFirst]}>Symbol</Text>
+    <ScrollView contentContainerStyle={styles.body}>
+      {/* ── 1 · Strategy ── */}
+      <Card style={styles.cfgCard}>
+        <View style={styles.secHead}>
+          <SectionTitle>1 · Strategy</SectionTitle>
+          <InfoButton
+            title="Strategy"
+            content={{ about: "Pick a systematic (bot) strategy and tune its parameters, or build your own entry/exit rules. Signals are computed on each bar's close and executed at the NEXT bar's open — no lookahead." }}
+          />
+        </View>
+        <Dropdown
+          value={stratKey}
+          options={[...metas.map((m) => ({ key: m.key, label: m.label })), { key: 'custom', label: 'Custom rules (manual)' }]}
+          onChange={pickStrategy}
+        />
+        {stratKey !== 'custom' && meta?.blurb ? <Text style={styles.blurb}>{meta.blurb}</Text> : null}
+        {stratKey !== 'custom' && meta ? (
+          <View style={styles.paramRow}>
+            {Object.keys(meta.params).map((k) => (
+              <NumIn key={k} label={k.toUpperCase()} value={params[k] ?? meta.params[k]}
+                onChange={(n) => setParams((p) => ({ ...p, [k]: n }))} />
+            ))}
+          </View>
+        ) : null}
+        {stratKey === 'custom' ? (
+          <View>
+            <Text style={styles.ruleGroup}>BUY WHEN ALL OF…</Text>
+            {buyRules.map((r, i) => ruleRow(r, i, buyRules, setBuyRules))}
+            <TouchableOpacity onPress={() => setBuyRules([...buyRules, { ind: 'rsi', period: 14, op: 'lt', target: 'value', value: 30 }])}>
+              <Text style={styles.ruleAdd}>+ Add buy rule</Text>
+            </TouchableOpacity>
+            <Text style={styles.ruleGroup}>SELL WHEN ALL OF…</Text>
+            {sellRules.map((r, i) => ruleRow(r, i, sellRules, setSellRules))}
+            <TouchableOpacity onPress={() => setSellRules([...sellRules, { ind: 'rsi', period: 14, op: 'gt', target: 'value', value: 70 }])}>
+              <Text style={styles.ruleAdd}>+ Add sell rule</Text>
+            </TouchableOpacity>
+          </View>
+        ) : null}
+      </Card>
+
+      {/* ── 2 · Universe & capital ── */}
+      <Card style={styles.cfgCard}>
+        <View style={styles.secHead}>
+          <SectionTitle>2 · Universe · capital · execution</SectionTitle>
+          <InfoButton
+            title="Universe & execution"
+            content={{ about: "Backtest a whole index (constituents are fetched live) or your own symbol list. Capital is one shared pool; positions are whole shares. 'Next open' fills signals at the following bar's open — the honest default." }}
+          />
+        </View>
+        <Segmented
+          items={[{ key: 'index', label: 'Index' }, { key: 'symbols', label: 'My symbols' }]}
+          value={uniMode}
+          onChange={(k) => setUniMode(k)}
+        />
+        {uniMode === 'index' ? (
+          <Dropdown value={index} options={INDICES.map((i) => ({ key: i, label: i }))} onChange={setIndex} style={{ marginTop: theme.sp.sm }} />
+        ) : (
           <TextInput
-            style={styles.input}
-            value={sym}
-            onChangeText={setSym}
+            style={[styles.in, { width: '100%', marginTop: theme.sp.sm }]}
+            value={symText}
+            onChangeText={setSymText}
+            placeholder="RELIANCE, TCS, INFY…"
+            placeholderTextColor={theme.muted}
             autoCapitalize="characters"
-            placeholder="RELIANCE"
+          />
+        )}
+        <View style={styles.paramRow}>
+          <Dropdown label="Period" value={period} options={PERIODS} onChange={setPeriod} style={styles.ddSm} />
+          <NumIn label="CAPITAL ₹" width={110} value={capital} onChange={setCapital} />
+          <NumIn label="MAX POSITIONS" width={110} value={maxPos} onChange={(n) => setMaxPos(Math.max(1, Math.round(n)))} />
+          <Dropdown
+            label="Execution"
+            value={execution}
+            options={[{ key: 'next_open', label: 'Next open (realistic)' }, { key: 'same_close', label: 'Same close' }]}
+            onChange={(k) => setExecution(k)}
+            style={styles.ddSm}
+          />
+        </View>
+        <View style={styles.paramRow}>
+          <Dropdown
+            label="Position sizing"
+            value={sizeMode}
+            options={[
+              { key: 'equal', label: 'Equal weight (capital ÷ slots)' },
+              { key: 'fixed', label: 'Fixed ₹ per position' },
+              { key: 'risk', label: '% risk per trade (needs a stop)' },
+            ]}
+            onChange={(k) => setSizeMode(k)}
+            style={{ minWidth: 220 }}
+          />
+          {sizeMode !== 'equal' ? (
+            <NumIn label={sizeMode === 'fixed' ? '₹ / POSITION' : 'RISK % / TRADE'} width={110}
+              value={sizeVal} onChange={setSizeVal} />
+          ) : null}
+        </View>
+      </Card>
+
+      {/* ── 3 · Risk management ── */}
+      <Card style={styles.cfgCard}>
+        <View style={styles.secHead}>
+          <SectionTitle>3 · Risk management</SectionTitle>
+          <InfoButton
+            title="Risk"
+            content={{ about: "Stops, targets and trailing exits are resting orders checked every bar. When price gaps through a level at the open, the fill is the open — the real, worse price — never the level itself. Time stop closes a position after N trading days." }}
+          />
+        </View>
+        <View style={styles.paramRow}>
+          <Dropdown label="Stop loss" value={slType}
+            options={[{ key: 'none', label: 'No stop' }, { key: 'pct', label: '% below entry' }, { key: 'atr', label: 'ATR multiple' }]}
+            onChange={(k) => setSlType(k)} style={styles.ddSm} />
+          {slType !== 'none' ? <NumIn label={slType === 'pct' ? 'SL %' : 'SL × ATR'} width={72} value={slVal} onChange={setSlVal} /> : null}
+          <Dropdown label="Take profit" value={tpType}
+            options={[{ key: 'none', label: 'No target' }, { key: 'pct', label: '% above entry' }, { key: 'rr', label: 'R:R multiple' }]}
+            onChange={(k) => setTpType(k)} style={styles.ddSm} />
+          {tpType !== 'none' ? <NumIn label={tpType === 'pct' ? 'TP %' : 'R : R'} width={72} value={tpVal} onChange={setTpVal} /> : null}
+        </View>
+        <View style={styles.paramRow}>
+          <NumIn label="TRAIL % (0 = off)" width={110} value={trailPct} onChange={setTrailPct} />
+          <NumIn label="MAX HOLD DAYS (0 = ∞)" width={140} value={maxHold} onChange={(n) => setMaxHold(Math.max(0, Math.round(n)))} />
+        </View>
+      </Card>
+
+      {/* ── 4 · Costs ── */}
+      <Card style={styles.cfgCard}>
+        <TouchableOpacity style={styles.secHead} onPress={() => setShowCosts((v) => !v)} activeOpacity={0.7}>
+          <SectionTitle>4 · Costs &amp; slippage {showCosts ? '▾' : '▸'}</SectionTitle>
+          <Text style={styles.costState}>{costs ? 'custom' : 'Indian delivery defaults'}</Text>
+        </TouchableOpacity>
+        {showCosts ? (
+          <View>
+            <Text style={styles.blurb}>
+              Charged per fill: brokerage (capped), STT, exchange txn, SEBI, GST, stamp duty — plus slippage
+              against every fill. Defaults mirror an Indian discount broker on delivery.
+            </Text>
+            <View style={styles.paramRow}>
+              {Object.entries(costs ?? defaultCosts).map(([k, v]) => (
+                <NumIn key={k} label={k.replace(/_/g, ' ').toUpperCase()} width={110} value={v}
+                  onChange={(n) => setCosts({ ...(costs ?? defaultCosts), [k]: n })} />
+              ))}
+            </View>
+            {costs ? (
+              <TouchableOpacity onPress={() => setCosts(null)}>
+                <Text style={styles.ruleAdd}>Reset to defaults</Text>
+              </TouchableOpacity>
+            ) : null}
+          </View>
+        ) : null}
+      </Card>
+
+      {/* ── Run row ── */}
+      <View style={styles.runRow}>
+        <Btn label={running ? '… Running' : '▶ Run backtest'} onPress={run} disabled={running} style={{ flex: 1 }} />
+        <Btn label="Save" kind="ghost" onPress={() => setSaveOpen(true)} />
+        {saved.length ? (
+          <Dropdown
+            value=""
+            options={[{ key: '', label: 'Load…' }, ...saved.map((sv) => ({ key: sv.name, label: sv.name }))]}
+            onChange={(name) => { const sv = saved.find((x) => x.name === name); if (sv) applyCfg(sv.cfg); }}
+            style={styles.ddSm}
+          />
+        ) : null}
+      </View>
+      {running ? <Text style={styles.progress}>{progress}</Text> : null}
+      {error ? <EmptyState icon="⚠" title="Backtest failed" hint={error} /> : null}
+
+      {saveOpen ? (
+        <Sheet onClose={() => setSaveOpen(false)}>
+          <SectionTitle>Save this configuration</SectionTitle>
+          <TextInput
+            style={[styles.in, { width: '100%', marginVertical: theme.sp.md }]}
+            value={saveName}
+            onChangeText={setSaveName}
+            placeholder={stratLabel}
             placeholderTextColor={theme.muted}
           />
+          <Btn label="Save" onPress={saveCurrent} />
+        </Sheet>
+      ) : null}
 
-          <Text style={styles.lbl}>Strategy</Text>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            style={styles.chipScroll}
-            contentContainerStyle={styles.chipRow}
-          >
-            {STRATEGIES.map((s) => (
-              <ChipBtn key={s.key} label={s.label} on={s.key === stratKey} onPress={() => pickStrat(s.key)} />
-            ))}
-            <ChipBtn key={CUSTOM_KEY} label="Custom" on={isCustom} onPress={() => pickStrat(CUSTOM_KEY)} />
-          </ScrollView>
+      {/* ── Results ── */}
+      {result && s ? (
+        <View>
+          <SectionTitle>
+            {isPrevious ? 'Previous run · ' : ''}
+            {result.universe.length} symbols · {result.period} · {result.execution === 'next_open' ? 'next-open fills' : 'same-close fills'}
+            {result.skipped.length ? ` · ${result.skipped.length} skipped (no data)` : ''}
+          </SectionTitle>
 
-          {isCustom ? (
+          <View style={styles.verdict}>
+            <Text style={[styles.verdictBig, { color: s.net_profit >= 0 ? theme.green : theme.red }]}>
+              {num(s.total_return_pct, 1, '%')}
+            </Text>
             <View>
-              <Text style={styles.hint}>
-                Tap a segment to cycle it. X↑ / X↓ = crosses above / below.
-              </Text>
-              <SectionTitle>BUY WHEN (all true)</SectionTitle>
-              {buyRules.map((r, i) => (
-                <RuleRow
-                  key={'b' + i}
-                  rule={r}
-                  onChange={(nr) => setBuyRules((p) => p.map((x, j) => (j === i ? nr : x)))}
-                  onRemove={() => setBuyRules((p) => p.filter((_, j) => j !== i))}
-                />
-              ))}
-              <TouchableOpacity
-                style={styles.addRule}
-                onPress={() => setBuyRules((p) => [...p, defaultBuyRule()])}
-                activeOpacity={0.75}
-              >
-                <Text style={styles.addRuleTxt}>+ ADD RULE</Text>
-              </TouchableOpacity>
-              <SectionTitle>SELL WHEN (all true)</SectionTitle>
-              {sellRules.map((r, i) => (
-                <RuleRow
-                  key={'s' + i}
-                  rule={r}
-                  onChange={(nr) => setSellRules((p) => p.map((x, j) => (j === i ? nr : x)))}
-                  onRemove={() => setSellRules((p) => p.filter((_, j) => j !== i))}
-                />
-              ))}
-              <TouchableOpacity
-                style={styles.addRule}
-                onPress={() => setSellRules((p) => [...p, defaultSellRule()])}
-                activeOpacity={0.75}
-              >
-                <Text style={styles.addRuleTxt}>+ ADD RULE</Text>
-              </TouchableOpacity>
+              <Text style={styles.verdictSub}>net {money(s.net_profit)} · CAGR {num(s.cagr_pct, 1, '%')}</Text>
+              <Text style={styles.verdictSub2}>final {money(s.final_capital)} · charges {money(s.total_charges)}</Text>
             </View>
-          ) : (
-            <View style={styles.paramRow}>
-              {strat.params.map((p, i) => (
-                <View key={p.label} style={styles.paramCell}>
-                  <Text style={styles.paramLbl}>{p.label}</Text>
-                  <TextInput
-                    style={styles.paramInput}
-                    value={String(params[i] ?? '')}
-                    onChangeText={(t) => setParam(i, t)}
-                    keyboardType="numeric"
-                  />
+          </View>
+
+          <View style={styles.tiles}>
+            {tile('SHARPE', num(s.sharpe))}
+            {tile('SORTINO', num(s.sortino))}
+            {tile('CALMAR', s.calmar == null ? '—' : num(s.calmar))}
+            {tile('MAX DD', num(s.max_drawdown_pct, 1, '%'), theme.red)}
+            {tile('DD LENGTH', s.max_drawdown_days + 'd')}
+            {tile('VOLATILITY', num(s.volatility_pct, 1, '%'))}
+            {tile('WIN RATE', num(s.win_rate_pct, 1, '%'))}
+            {tile('PROFIT FACTOR', s.profit_factor == null ? '∞' : num(s.profit_factor))}
+            {tile('EXPECTANCY', money(s.expectancy), s.expectancy >= 0 ? theme.green : theme.red)}
+            {tile('PAYOFF', s.payoff == null ? '—' : num(s.payoff))}
+            {tile('TRADES', String(s.trades))}
+            {tile('AVG HOLD', num(s.avg_hold_days, 1) + 'd')}
+            {tile('EXPOSURE', num(s.exposure_pct, 0, '%'))}
+            {tile('TURNOVER', num(s.turnover_x, 1, '×/yr'))}
+          </View>
+
+          <View style={[styles.chartBox, { height: 470 }]}>
+            <HtmlView html={chartDoc} />
+          </View>
+
+          {/* Monthly returns */}
+          <SectionTitle>Monthly returns</SectionTitle>
+          <ScrollView horizontal showsHorizontalScrollIndicator contentContainerStyle={{ minWidth: '100%' }}>
+            <View>
+              <View style={styles.mRow}>
+                <Text style={[styles.mCellHead, { width: 46 }]}> </Text>
+                {['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC', 'YEAR'].map((m) => (
+                  <Text key={m} style={styles.mCellHead}>{m}</Text>
+                ))}
+              </View>
+              {s.monthly_returns.map((r) => (
+                <View key={r.year} style={styles.mRow}>
+                  <Text style={[styles.mCellHead, { width: 46 }]}>{r.year}</Text>
+                  {r.months.map((m, i) => (
+                    <Text key={i} style={[styles.mCell, { color: m == null ? theme.muted : m >= 0 ? theme.green : theme.red }]}>
+                      {m == null ? '—' : m.toFixed(1)}
+                    </Text>
+                  ))}
+                  <Text style={[styles.mCell, { fontWeight: '700', color: r.total >= 0 ? theme.green : theme.red }]}>
+                    {r.total.toFixed(1)}
+                  </Text>
                 </View>
               ))}
             </View>
-          )}
-        </Card>
+          </ScrollView>
 
-        <SectionTitle>Data</SectionTitle>
-        <Card>
-          <Text style={[styles.lbl, styles.lblFirst]}>Interval</Text>
-          <Segmented
-            options={INTERVALS.map((x) => x.v)}
-            value={interval}
-            onChange={setInterval}
-            labelOf={(v) => INTERVALS.find((x) => x.v === v)?.label || v}
-          />
-          <Text style={styles.lbl}>Period</Text>
-          <Segmented options={PERIODS} value={period} onChange={setPeriod} />
-        </Card>
+          {/* Per-symbol breakdown */}
+          <SectionTitle>Per-symbol P&amp;L</SectionTitle>
+          <ScrollView horizontal showsHorizontalScrollIndicator contentContainerStyle={{ minWidth: '100%' }}>
+            <View style={{ minWidth: 430 }}>
+              <View style={styles.mRow}>
+                {['SYMBOL', 'TRADES', 'WINS', 'NET ₹', 'CHARGES ₹'].map((h, i) => (
+                  <Text key={h} style={[styles.mCellHead, { width: i === 0 ? 110 : 80, textAlign: i === 0 ? 'left' : 'right' }]}>{h}</Text>
+                ))}
+              </View>
+              {s.per_symbol.slice(0, 40).map((r) => (
+                <View key={r.symbol} style={styles.mRow}>
+                  <Text style={[styles.mCell, { width: 110, textAlign: 'left', fontWeight: '700', color: theme.text }]}>{r.symbol}</Text>
+                  <Text style={[styles.mCell, { width: 80 }]}>{r.trades}</Text>
+                  <Text style={[styles.mCell, { width: 80 }]}>{r.wins}</Text>
+                  <Text style={[styles.mCell, { width: 80, color: r.net_pnl >= 0 ? theme.green : theme.red }]}>
+                    {r.net_pnl.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                  </Text>
+                  <Text style={[styles.mCell, { width: 80 }]}>{r.charges.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</Text>
+                </View>
+              ))}
+            </View>
+          </ScrollView>
 
-        <SectionTitle>Risk</SectionTitle>
-        <Card>
-          <Text style={[styles.lbl, styles.lblFirst]}>Capital ₹</Text>
-          <TextInput style={styles.input} value={capital} onChangeText={setCapital} keyboardType="numeric" />
-
-          <Text style={styles.lbl}>Stop Loss</Text>
-          <View style={styles.riskRow}>
-            <Segmented
-              options={['none', 'pct', 'atr'] as Risk['slType'][]}
-              value={slType}
-              onChange={setSlType}
-              labelOf={(v) => (v === 'none' ? 'Off' : v === 'pct' ? '%' : 'ATR×')}
-            />
-            {slType !== 'none' ? (
-              <TextInput style={styles.smInput} value={slVal} onChangeText={setSlVal} keyboardType="numeric" />
-            ) : null}
-          </View>
-
-          <Text style={styles.lbl}>Target</Text>
-          <View style={styles.riskRow}>
-            <Segmented
-              options={['none', 'pct', 'rr'] as Risk['tpType'][]}
-              value={tpType}
-              onChange={setTpType}
-              labelOf={(v) => (v === 'none' ? 'Off' : v === 'pct' ? '%' : 'R:R')}
-            />
-            {tpType !== 'none' ? (
-              <TextInput style={styles.smInput} value={tpVal} onChangeText={setTpVal} keyboardType="numeric" />
-            ) : null}
-          </View>
-
-          <Text style={styles.lbl}>Trailing Stop</Text>
-          <View style={styles.riskRow}>
-            <ChipBtn
-              label={trailOn ? 'On' : 'Off'}
-              on={trailOn}
-              onPress={() => setTrailOn((v) => !v)}
-              style={styles.trailChip}
-            />
-            {trailOn ? (
-              <TextInput style={styles.smInput} value={trailPct} onChangeText={setTrailPct} keyboardType="numeric" />
-            ) : null}
-          </View>
-
-          <Text style={styles.lbl}>Realistic costs</Text>
-          <View style={styles.riskRow}>
-            <ChipBtn
-              label={realistic ? 'On' : 'Off'}
-              on={realistic}
-              onPress={() => setRealistic((v) => !v)}
-              style={styles.trailChip}
-            />
-            <Text style={styles.costHint}>Brokerage · STT · exchange/SEBI/GST · stamp · slippage</Text>
-          </View>
-        </Card>
-
-        <TouchableOpacity style={styles.runBtn} onPress={run} disabled={busy} activeOpacity={0.75}>
-          {busy ? <ActivityIndicator color={theme.onAccent} /> : <Text style={styles.runTxt}>Run Backtest</Text>}
-        </TouchableOpacity>
-
-        {busy && msg ? (
-          <View style={styles.loadingBox}>
-            <Loading label={msg.replace(/^[⟳⚠]\s*/, '')} />
-          </View>
-        ) : msg ? (
-          <Text style={styles.msg}>{msg.replace(/^[⟳⚠]\s*/, '')}</Text>
-        ) : null}
-
-        {result ? (
-          <View style={styles.results}>
-            <View style={styles.statGrid}>
-              <StatTile
-                label="Total Return"
-                value={signed(result.stats.totalRet) + '%'}
-                color={result.stats.totalRet >= 0 ? theme.green : theme.red}
-              />
-              <StatTile
-                label="Final Capital"
-                value={money(result.stats.finalCapital)}
-                color={result.stats.totalRet >= 0 ? theme.green : theme.red}
-              />
-              <StatTile label="Win Rate" value={result.stats.winRate.toFixed(0) + '%'} />
-              <StatTile label="Trades" value={String(result.stats.trades)} />
-              <StatTile label="Wins / Losses" value={`${result.stats.wins} / ${result.stats.losses}`} />
-              <StatTile label="Max Drawdown" value={result.stats.maxDD.toFixed(1) + '%'} />
-              <StatTile
-                label="Profit Factor"
-                value={result.stats.profitFactor == null ? '∞' : result.stats.profitFactor.toFixed(2)}
-              />
-              <StatTile
-                label="Avg Trade"
-                value={signed(result.stats.avgRet) + '%'}
-                color={result.stats.avgRet >= 0 ? theme.green : theme.red}
-              />
-              {result.stats.totalCharges != null ? (
-                <StatTile label="Costs (charges)" value={money(result.stats.totalCharges)} color={theme.red} />
+          {/* Trade blotter */}
+          <View style={styles.blotterHead}>
+            <SectionTitle>Trade blotter · {result.trades.length} trades</SectionTitle>
+            <View>
+              <TouchableOpacity style={styles.exportBtn} onPress={() => setExportOpen((v) => !v)} activeOpacity={0.75}>
+                <Text style={styles.exportTxt}>Export ▾</Text>
+              </TouchableOpacity>
+              {exportOpen ? (
+                <View style={styles.exportMenu}>
+                  {(['csv', 'excel', 'pdf'] as const).map((k) => (
+                    <TouchableOpacity key={k} style={styles.exportItem} onPress={() => doExport(k)} activeOpacity={0.7}>
+                      <Text style={styles.exportItemTxt}>{k === 'pdf' ? 'PDF tear sheet' : k.toUpperCase()}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
               ) : null}
             </View>
-
-            {html ? (
-              <View style={styles.chartBox}>
-                <HtmlView html={html} style={styles.web} />
-              </View>
-            ) : null}
-
-            <SectionTitle>Trade Log ({result.trades.length})</SectionTitle>
-            <View style={styles.tHead}>
-              <Text style={[styles.th, styles.cDate]}>Buy</Text>
-              <Text style={[styles.th, styles.cDate]}>Sell</Text>
-              <Text style={[styles.th, styles.cNum]}>Ret%</Text>
-              <Text style={[styles.th, styles.cExit]}>Exit</Text>
-            </View>
-            {result.trades.slice(-50).reverse().map((t, i) => (
-              <View style={styles.tRow} key={i}>
-                <Text style={[styles.tCell, styles.cDate]}>{fmtT(t.buyT)}</Text>
-                <Text style={[styles.tCell, styles.cDate]}>{fmtT(t.sellT)}</Text>
-                <Text style={[styles.tCell, styles.cNum, { color: t.ret >= 0 ? theme.green : theme.red }]}>{signed(t.ret)}</Text>
-                <Text style={[styles.tCell, styles.cExit]}>{t.exit}</Text>
-              </View>
-            ))}
-            {result.trades.length === 0 ? (
-              <EmptyState
-                icon="▤"
-                title="No trades generated"
-                hint="Try a longer period or looser parameters."
-              />
-            ) : null}
           </View>
-        ) : null}
-      </View>
+          <ScrollView horizontal showsHorizontalScrollIndicator contentContainerStyle={{ minWidth: '100%' }}>
+            <View style={{ minWidth: 940 }}>
+              <View style={styles.mRow}>
+                {[['#', 34], ['SYMBOL', 96], ['QTY', 60], ['ENTRY', 88], ['ENTRY ₹', 76], ['EXIT', 88], ['EXIT ₹', 76],
+                  ['REASON', 86], ['NET ₹', 84], ['RET %', 64], ['DAYS', 48], ['R', 44]].map(([h, w]) => (
+                    <Text key={String(h)} style={[styles.mCellHead, { width: Number(w), textAlign: h === 'SYMBOL' || h === 'ENTRY' || h === 'EXIT' || h === 'REASON' ? 'left' : 'right' }]}>
+                      {h}
+                    </Text>
+                  ))}
+              </View>
+              {result.trades.slice(0, isDesktop ? 400 : 150).map((t) => (
+                <View key={t.id} style={styles.mRow}>
+                  <Text style={[styles.mCell, { width: 34 }]}>{t.id}</Text>
+                  <Text style={[styles.mCell, { width: 96, textAlign: 'left', fontWeight: '700', color: theme.text }]}>{t.symbol}</Text>
+                  <Text style={[styles.mCell, { width: 60 }]}>{t.qty}</Text>
+                  <Text style={[styles.mCell, { width: 88, textAlign: 'left' }]}>{t.entry_date}</Text>
+                  <Text style={[styles.mCell, { width: 76 }]}>{t.entry_px}</Text>
+                  <Text style={[styles.mCell, { width: 88, textAlign: 'left' }]}>{t.exit_date}</Text>
+                  <Text style={[styles.mCell, { width: 76 }]}>{t.exit_px}</Text>
+                  <Text style={[styles.mCell, { width: 86, textAlign: 'left' }]}>{t.reason}</Text>
+                  <Text style={[styles.mCell, { width: 84, color: t.net_pnl >= 0 ? theme.green : theme.red }]}>
+                    {t.net_pnl.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                  </Text>
+                  <Text style={[styles.mCell, { width: 64, color: t.ret_pct >= 0 ? theme.green : theme.red }]}>{t.ret_pct}</Text>
+                  <Text style={[styles.mCell, { width: 48 }]}>{t.hold_days}</Text>
+                  <Text style={[styles.mCell, { width: 44 }]}>{t.r_multiple == null ? '—' : t.r_multiple}</Text>
+                </View>
+              ))}
+            </View>
+          </ScrollView>
+          {result.trades.length > (isDesktop ? 400 : 150) ? (
+            <Text style={styles.note}>Showing the first {isDesktop ? 400 : 150} trades — export CSV/Excel for the full log.</Text>
+          ) : null}
+        </View>
+      ) : null}
+
+      {!result && !running && !error ? (
+        <EmptyState
+          icon="◇"
+          title="No backtest yet"
+          hint="Configure the strategy, universe and risk above, then Run. Signals fill at the next bar's open, stops are gap-aware, and every trade is charged the full Indian cost stack."
+        />
+      ) : null}
+
+      <Text style={styles.method}>
+        Historical simulation on public market data (daily bars). Signals execute at the next bar's open by
+        default; stop/target/trailing exits are resting orders — a gap through the level fills at the open.
+        Charges per fill: brokerage, STT, exchange transaction, SEBI, GST, stamp duty, plus slippage. Sharpe
+        and Sortino use a {s ? s.rf_rate_pct : 6}% risk-free rate. Past performance does not predict future
+        results. Educational only — not investment advice.
+      </Text>
     </ScrollView>
   );
 }
 
-function fmtT(t: number): string {
-  const d = new Date(t * 1000);
-  return `${d.getDate()}/${d.getMonth() + 1}/${String(d.getFullYear()).slice(2)}`;
-}
-
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: theme.bg },
-  content: { paddingBottom: 48, width: '100%', maxWidth: 820, alignSelf: 'center' },
-  body: { paddingHorizontal: theme.sp.lg },
-  lbl: { color: theme.muted2, fontSize: theme.fs.sm, marginTop: theme.sp.lg, marginBottom: theme.sp.xs },
-  lblFirst: { marginTop: 0 },
-  input: {
-    backgroundColor: theme.surface,
-    borderColor: theme.border2,
-    borderWidth: 1,
-    borderRadius: theme.radius.sm + 2,
-    color: theme.text,
-    paddingHorizontal: theme.sp.md,
-    paddingVertical: 10,
-    fontFamily: theme.mono,
-    fontSize: theme.fs.md,
+  body: { padding: theme.sp.md, paddingBottom: 90 },
+  cfgCard: { marginBottom: theme.sp.md },
+  secHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' },
+  blurb: { color: theme.muted, fontSize: theme.fs.xs + 1, marginTop: 4, marginBottom: 2 },
+  paramRow: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.sp.md, marginTop: theme.sp.sm, alignItems: 'flex-end' },
+  inLbl: { color: theme.muted, fontSize: 9, fontFamily: theme.mono, letterSpacing: 0.5, marginBottom: 3 },
+  in: {
+    backgroundColor: theme.surface2, color: theme.text, borderRadius: theme.radius.sm,
+    borderWidth: 1, borderColor: theme.border, paddingHorizontal: 10, paddingVertical: 7,
+    fontFamily: theme.mono, fontSize: theme.fs.sm,
   },
-  chipScroll: { marginVertical: 2 },
-  chipRow: { gap: theme.sp.sm, paddingVertical: 2 },
-  hint: { color: theme.muted, fontSize: theme.fs.sm, marginTop: theme.sp.md, lineHeight: 17 },
-  ruleRow: { flexDirection: 'row', alignItems: 'center', gap: theme.sp.sm, marginBottom: theme.sp.sm, flexWrap: 'wrap' },
-  ruleSeg: {
-    height: 38,
-    justifyContent: 'center',
-    backgroundColor: theme.surface2,
-    borderColor: theme.border2,
-    borderWidth: 1,
-    borderRadius: theme.radius.sm + 2,
-    paddingHorizontal: theme.sp.md,
+  ddSm: { minWidth: 150 },
+  ruleGroup: { color: theme.muted, fontSize: 10, fontFamily: theme.mono, letterSpacing: 0.5, marginTop: theme.sp.md, marginBottom: 4 },
+  ruleRow: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.sp.sm, alignItems: 'flex-end', marginBottom: theme.sp.sm },
+  ruleDd: { minWidth: 108, flexShrink: 1 },
+  ruleDel: { color: theme.red, fontSize: theme.fs.md, paddingBottom: 8 },
+  ruleAdd: { color: theme.brand, fontSize: theme.fs.sm, marginTop: 2, marginBottom: 4 },
+  costState: { color: theme.muted2, fontSize: theme.fs.xs, fontFamily: theme.mono },
+  runRow: { flexDirection: 'row', gap: theme.sp.sm, alignItems: 'center', marginBottom: theme.sp.sm },
+  progress: { color: theme.muted, fontSize: theme.fs.sm, fontFamily: theme.mono, marginBottom: theme.sp.md },
+  verdict: { flexDirection: 'row', alignItems: 'center', gap: theme.sp.lg, marginVertical: theme.sp.sm, flexWrap: 'wrap' },
+  verdictBig: { fontSize: 40, fontWeight: '800', fontFamily: theme.mono },
+  verdictSub: { color: theme.text, fontSize: theme.fs.md, fontWeight: '600' },
+  verdictSub2: { color: theme.muted, fontSize: theme.fs.sm },
+  tiles: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.sp.sm, marginBottom: theme.sp.md },
+  tile: {
+    backgroundColor: theme.surface2, borderRadius: theme.radius.sm, borderWidth: 1, borderColor: theme.border,
+    paddingVertical: 8, paddingHorizontal: 10, minWidth: 92, flexGrow: 1,
   },
-  ruleSegTxt: { color: theme.text, fontSize: theme.fs.sm, fontWeight: '600' },
-  ruleOpTxt: { color: theme.accent, fontWeight: '700' },
-  ruleInput: {
-    height: 38,
-    backgroundColor: theme.surface,
-    borderColor: theme.border2,
-    borderWidth: 1,
-    borderRadius: theme.radius.sm + 2,
-    color: theme.text,
-    fontFamily: theme.mono,
-    fontSize: theme.fs.sm,
-    paddingHorizontal: theme.sp.sm,
-    minWidth: 52,
-    textAlign: 'center',
+  tileLbl: { color: theme.muted, fontSize: 9, fontFamily: theme.mono, letterSpacing: 0.5 },
+  tileVal: { color: theme.text, fontSize: theme.fs.md + 1, fontWeight: '700', fontFamily: theme.mono, marginTop: 2 },
+  chartBox: { borderRadius: theme.radius.md, overflow: 'hidden', borderWidth: 1, borderColor: theme.border, marginBottom: theme.sp.md },
+  mRow: { flexDirection: 'row', alignItems: 'center', borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.border, paddingVertical: 6 },
+  mCellHead: { width: 52, color: theme.muted, fontSize: 9, fontFamily: theme.mono, letterSpacing: 0.4, textAlign: 'right' },
+  mCell: { width: 52, color: theme.muted2, fontSize: theme.fs.xs + 1, fontFamily: theme.mono, textAlign: 'right' },
+  blotterHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', zIndex: 40, marginTop: theme.sp.md },
+  exportBtn: {
+    borderWidth: 1, borderColor: theme.border, borderRadius: theme.radius.sm,
+    paddingHorizontal: 12, paddingVertical: 6, backgroundColor: theme.surface2,
   },
-  ruleDel: { height: 38, width: 30, alignItems: 'center', justifyContent: 'center' },
-  ruleDelTxt: { color: theme.muted, fontSize: theme.fs.md },
-  addRule: {
-    alignSelf: 'flex-start',
-    borderColor: theme.border2,
-    borderWidth: 1,
-    borderRadius: 999,
-    paddingHorizontal: theme.sp.md,
-    paddingVertical: 8,
-    marginBottom: theme.sp.xs,
+  exportTxt: { color: theme.text, fontSize: theme.fs.sm, fontFamily: theme.mono },
+  exportMenu: {
+    position: 'absolute', top: 34, right: 0, backgroundColor: theme.surface, borderWidth: 1,
+    borderColor: theme.border, borderRadius: theme.radius.sm, zIndex: 50, elevation: 8, minWidth: 150,
   },
-  addRuleTxt: { color: theme.muted2, fontSize: theme.fs.sm, fontWeight: '600', letterSpacing: 1 },
-  paramRow: { flexDirection: 'row', gap: theme.sp.md, marginTop: theme.sp.lg, flexWrap: 'wrap' },
-  paramCell: { width: 96 },
-  paramLbl: { color: theme.muted2, fontSize: theme.fs.sm, marginBottom: theme.sp.xs },
-  paramInput: {
-    height: 38,
-    backgroundColor: theme.surface,
-    borderColor: theme.border2,
-    borderWidth: 1,
-    borderRadius: theme.radius.sm + 2,
-    color: theme.text,
-    paddingHorizontal: theme.sp.sm,
-    fontFamily: theme.mono,
-    fontSize: theme.fs.md,
-    textAlign: 'center',
-  },
-  seg: { flexDirection: 'row', gap: theme.sp.sm, flexWrap: 'wrap' },
-  riskRow: { flexDirection: 'row', alignItems: 'center', gap: theme.sp.sm },
-  trailChip: { minWidth: 70, alignItems: 'center' },
-  costHint: { color: theme.muted, fontSize: theme.fs.xs + 1, flex: 1, flexWrap: 'wrap' },
-  smInput: {
-    height: 38,
-    backgroundColor: theme.surface,
-    borderColor: theme.border2,
-    borderWidth: 1,
-    borderRadius: theme.radius.sm + 2,
-    color: theme.text,
-    paddingHorizontal: theme.sp.sm,
-    width: 72,
-    fontFamily: theme.mono,
-    fontSize: theme.fs.md,
-    textAlign: 'center',
-  },
-  runBtn: {
-    backgroundColor: theme.accent,
-    borderRadius: theme.radius.sm + 2,
-    paddingVertical: 13,
-    alignItems: 'center',
-    marginTop: theme.sp.xl,
-  },
-  runTxt: { color: theme.onAccent, fontWeight: '700', fontSize: theme.fs.sm + 1, letterSpacing: 0.3 },
-  loadingBox: { paddingVertical: theme.sp.xl },
-  msg: {
-    color: theme.muted2,
-    fontSize: theme.fs.sm,
-    marginTop: theme.sp.lg,
-    textAlign: 'center',
-    lineHeight: 18,
-  },
-  results: { marginTop: theme.sp.xl },
-  statGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.sp.md },
-  chartBox: {
-    height: 380,
-    marginTop: theme.sp.lg,
-    borderColor: theme.border,
-    borderWidth: 1,
-    borderRadius: theme.radius.md,
-    overflow: 'hidden',
-  },
-  web: { flex: 1, backgroundColor: theme.bg },
-  tHead: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: theme.surface2,
-    borderTopColor: theme.border,
-    borderTopWidth: 1,
-    borderBottomColor: theme.border2,
-    borderBottomWidth: 1,
-    paddingVertical: theme.sp.sm,
-    paddingHorizontal: theme.sp.sm,
-  },
-  th: {
-    color: theme.muted2,
-    fontSize: theme.fs.xs + 1,
-    fontWeight: '700',
-    letterSpacing: 0.6,
-    textTransform: 'uppercase',
-  },
-  tRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    minHeight: 44,
-    paddingHorizontal: theme.sp.sm,
-    borderBottomColor: theme.border,
-    borderBottomWidth: 1,
-  },
-  tCell: { color: theme.text, fontFamily: theme.mono, fontSize: theme.fs.sm },
-  cDate: { flex: 1 },
-  cNum: { width: 64, textAlign: 'right' },
-  cExit: { width: 60, textAlign: 'right', color: theme.muted2 },
+  exportItem: { paddingHorizontal: 14, paddingVertical: 10 },
+  exportItemTxt: { color: theme.text, fontSize: theme.fs.sm },
+  note: { color: theme.muted, fontSize: theme.fs.xs + 1, marginTop: 6 },
+  method: { color: theme.muted, fontSize: theme.fs.xs + 1, lineHeight: 17, marginTop: theme.sp.lg },
 });

@@ -1,9 +1,35 @@
 """Throwaway static server for headless verification. Serves mobile/dist; stubs API as empty."""
-import json, os, sys
+import json, math, os, sys
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from urllib.parse import parse_qs, urlparse
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import backtest_engine as bte  # stdlib-only: the REAL engine runs in the fake server
 
 DIST = os.path.join(os.path.dirname(__file__), "mobile", "dist")
 PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 5056
+
+_BT_SYMS = ["RELIANCE", "TCS", "INFY", "HDFCBANK", "SBIN"]
+
+
+def _bt_candles(sym, period, interval):
+    """Deterministic synthetic daily series (per-symbol phase, mild trend +
+    sine swings) so backtests are reproducible in headless checks."""
+    seed = sum(ord(c) for c in sym)
+    t0 = 1_700_000_000 - (1_700_000_000 % 86400)
+    out = []
+    px = 100.0 + seed % 40
+    for i in range(420):
+        drift = 0.0006 * px
+        swing = math.sin((i + seed) / 9.0) * 0.02 * px
+        o = px
+        c = px + drift + swing
+        h = max(o, c) * 1.003
+        l = min(o, c) * 0.997
+        out.append({"t": t0 + i * 86400, "o": round(o, 2), "h": round(h, 2),
+                    "l": round(l, 2), "c": round(c, 2), "v": 100000 + (seed + i) % 5000})
+        px = c
+    return out
 
 
 class H(BaseHTTPRequestHandler):
@@ -456,6 +482,14 @@ class H(BaseHTTPRequestHandler):
             return self._mb_screen()
         if path == "/patterns/screen":
             return self._pattern_screen()
+        if path == "/backtest/strategies":
+            return self._json({"strategies": bte.strategies_meta(),
+                               "default_costs": bte.DEFAULT_COSTS, "max_symbols": 100})
+        if path == "/backtest/status":
+            q = parse_qs(urlparse(self.path).query)
+            return self._json(bte.snapshot((q.get("id") or [""])[0]))
+        if path == "/backtest/last":
+            return self._json({"run_id": None})
         if path == "/history":
             return self._history()
         if path == "/multibagger":
@@ -495,6 +529,14 @@ class H(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_POST(self):
+        if self.path.split("?")[0] == "/backtest/run":
+            n = int(self.headers.get("Content-Length") or 0)
+            cfg = json.loads(self.rfile.read(n) or b"{}")
+            run_id, err = bte.start(
+                cfg, lambda name: ([{"symbol": s} for s in _BT_SYMS], "fake"), _bt_candles)
+            if err:
+                return self._json({"error": err})
+            return self._json({"run_id": run_id})
         self._api()
 
 
