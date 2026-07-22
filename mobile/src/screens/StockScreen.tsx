@@ -32,6 +32,20 @@ import { addSymbol, loadWatchlist, normSymbol, removeSymbol } from '../watchlist
 import { theme } from '../theme';
 
 const RECENT_KEY = 'taureye.stock.recent';
+
+// One broker-status check per app session — when the user has connected their
+// own broker, quotes upgrade to that entitled real-time feed (P1-4).
+let brokerOk: Promise<boolean> | null = null;
+const brokerConnected = () => (brokerOk ??= api.brokerStatus().then((s) => !!s.connected).catch(() => false));
+
+// The house view (P1-2): ONE reconciled read per symbol, weighted from the
+// engines, with disagreement shown as a range and the engines as evidence.
+type HouseView = { score: number; lo: number; hi: number; parts: { name: string; score: number | null }[] };
+const HV_WEIGHTS: Record<string, number> = {
+  'Multi-timeframe technicals': 0.4,
+  'Strategy screens (avg)': 0.35,
+  'Fundamental checklist': 0.25,
+};
 type Tab = 'overview' | 'technicals' | 'fundamentals' | 'patterns';
 
 const TABS: { key: Tab; label: string }[] = [
@@ -58,6 +72,8 @@ export default function StockScreen() {
 
   // Patterns tab data (the other tabs' panels fetch for themselves).
   const [pat, setPat] = useState<ChartPatternsResp | null | 'loading'>(null);
+  const [hv, setHv] = useState<HouseView | null>(null);
+  const [src, setSrc] = useState('delayed · NSE/Yahoo');
   const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
@@ -94,6 +110,47 @@ export default function StockScreen() {
     setMeta({});
     setPat(null);
     setSpineLoading(true);
+    setHv(null);
+    setSrc('delayed · NSE/Yahoo');
+    // House view: reconcile the engines into one read (each call is
+    // server-cached; failures just drop that engine from the evidence).
+    Promise.all([
+      api.timeframes(q).catch(() => null),
+      api.strategyScores(q).catch(() => null),
+      api.checklist(q).catch(() => null),
+    ]).then(([tf, st, chk]) => {
+      if (token.current !== my) return;
+      const stArr = (st?.strategies ?? []).map((x) => x.score).filter((x): x is number => x != null);
+      const parts = [
+        { name: 'Multi-timeframe technicals', score: tf?.overall?.score ?? null },
+        { name: 'Strategy screens (avg)', score: stArr.length ? Math.round(stArr.reduce((a, b) => a + b, 0) / stArr.length) : null },
+        { name: 'Fundamental checklist', score: chk?.score ?? null },
+      ];
+      const have = parts.filter((x): x is { name: string; score: number } => x.score != null);
+      if (!have.length) return;
+      const totW = have.reduce((a, x) => a + HV_WEIGHTS[x.name], 0);
+      setHv({
+        score: Math.round(have.reduce((a, x) => a + x.score * HV_WEIGHTS[x.name], 0) / totW),
+        lo: Math.min(...have.map((x) => x.score)),
+        hi: Math.max(...have.map((x) => x.score)),
+        parts,
+      });
+    });
+    // Entitled real-time overlay: the user's own broker feed, when connected.
+    brokerConnected().then(async (ok) => {
+      if (!ok || token.current !== my) return;
+      try {
+        const r = await api.brokerLtp([q]);
+        const bq = r.data[q];
+        if (bq?.price != null && token.current === my) {
+          setScan((prev) => ({ ...(prev || {}), price: bq.price, chg: bq.chg ?? prev?.chg, prevClose: bq.prevClose ?? prev?.prevClose }));
+          setScanTs(Math.floor(Date.now() / 1000));
+          setSrc('LIVE · broker');
+        }
+      } catch {
+        /* fall back to the delayed feed silently */
+      }
+    });
     setRecent((prev) => {
       const next = [q, ...prev.filter((x) => x !== q)].slice(0, 8);
       AsyncStorage.setItem(RECENT_KEY, JSON.stringify(next)).catch(() => {});
@@ -258,7 +315,7 @@ export default function StockScreen() {
                   1M {pct(scan.ret_1m, 1)}
                 </Text>
               ) : null}
-              <AsOfChip ts={scanTs || null} source="NSE/Yahoo" style={{ marginLeft: 'auto' }} />
+              <AsOfChip ts={scanTs || null} source={src} style={{ marginLeft: 'auto' }} />
             </View>
             {/* THE action row — identical everywhere this stock appears */}
             <View style={s.actions}>
@@ -274,6 +331,27 @@ export default function StockScreen() {
           <ScrollView contentContainerStyle={s.body} key={tab}>
             {tab === 'overview' ? (
               <>
+                {hv ? (
+                  <Card style={{ gap: 6 }}>
+                    <Text style={s.cardTitle}>HOUSE VIEW</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 10 }}>
+                      <Text style={[s.hvScore, theme.numCell, { color: hv.score >= 60 ? theme.green : hv.score <= 40 ? theme.red : '#b7791f' }]}>{hv.score}</Text>
+                      <Text style={s.hvOf}>/100</Text>
+                      {hv.hi - hv.lo >= 15 ? (
+                        <Text style={s.hvRange}>engines disagree · {hv.lo}–{hv.hi}</Text>
+                      ) : (
+                        <Text style={s.hvRange}>range {hv.lo}–{hv.hi}</Text>
+                      )}
+                    </View>
+                    {hv.parts.map((p) => (
+                      <View key={p.name} style={s.hvRow}>
+                        <Text style={s.hvName}>{p.name}</Text>
+                        <Text style={[s.hvVal, theme.numCell]}>{p.score ?? '—'}</Text>
+                      </View>
+                    ))}
+                    <Text style={s.hvNote}>Weighted reconciliation of the engines above — a mechanical aggregate, not advice. Methodology: Desk → Calibration.</Text>
+                  </Card>
+                ) : null}
                 <Card><StrategyScores symbol={active} /></Card>
                 <Card>
                   <Text style={s.cardTitle}>KEY LEVELS</Text>
@@ -404,6 +482,13 @@ const s = StyleSheet.create({
   actions: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.sp.sm },
 
   body: { padding: theme.sp.lg, gap: theme.sp.md },
+  hvScore: { fontSize: 34, fontWeight: '800', lineHeight: 38 },
+  hvOf: { color: theme.muted, fontSize: theme.fs.sm },
+  hvRange: { color: theme.muted, fontSize: theme.fs.xs + 1, marginLeft: 'auto' },
+  hvRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 3 },
+  hvName: { color: theme.muted2, fontSize: theme.fs.sm },
+  hvVal: { color: theme.text, fontSize: theme.fs.sm, fontWeight: '700' },
+  hvNote: { color: theme.muted, fontSize: theme.fs.xs + 1, lineHeight: 15, marginTop: 2 },
   cardTitle: { color: theme.muted, fontSize: theme.fs.xs, fontWeight: '800', letterSpacing: 1.2, marginBottom: theme.sp.sm },
   kvGrid: { flexDirection: 'row', flexWrap: 'wrap' },
   kv: { width: '33.33%', paddingVertical: theme.sp.sm },

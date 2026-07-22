@@ -198,6 +198,58 @@ def delete_user(uid: int) -> None:
         c.commit()
 
 
+# ── calibration (community aggregate over synced paper-trade logs) ───────────
+CAL_MIN_SAMPLE = 20
+
+
+def calibration():
+    """Aggregate every synced paper-trade log into per-engine realised
+    hit-rate / average R / sample size. Hit-rates only appear at
+    CAL_MIN_SAMPLE closed trades — below that the truthful answer is
+    'insufficient sample', not a percentage."""
+    with _lock:
+        rows = _db().execute(
+            "SELECT v FROM user_data WHERE kind='papertrades_v1'").fetchall()
+    by = {}
+    for row in rows:
+        try:
+            trades = json.loads(row["v"]) or []
+        except Exception:
+            continue
+        if not isinstance(trades, list):
+            continue
+        for t in trades:
+            if not isinstance(t, dict):
+                continue
+            src = str(t.get("source") or "Unlabelled")[:40]
+            b = by.setdefault(src, {"n": 0, "closed": 0, "wins": 0, "r_sum": 0.0, "r_n": 0})
+            b["n"] += 1
+            status = t.get("status")
+            if status not in ("won", "lost"):
+                continue
+            b["closed"] += 1
+            try:
+                entry, stop, target = float(t["entry"]), float(t["stop"]), float(t["target"])
+                risk = abs(entry - stop)
+                if risk > 0:
+                    b["r_sum"] += (abs(target - entry) / risk) if status == "won" else -1.0
+                    b["r_n"] += 1
+            except Exception:
+                pass
+            if status == "won":
+                b["wins"] += 1
+    engines = []
+    for src, b in sorted(by.items(), key=lambda kv: -kv[1]["closed"]):
+        enough = b["closed"] >= CAL_MIN_SAMPLE
+        engines.append({
+            "source": src, "n": b["n"], "closed": b["closed"], "wins": b["wins"],
+            "hit_rate": round(b["wins"] / b["closed"], 3) if enough else None,
+            "avg_r": round(b["r_sum"] / b["r_n"], 2) if enough and b["r_n"] else None,
+        })
+    return {"engines": engines, "min_sample": CAL_MIN_SAMPLE,
+            "accounts": len(rows)}
+
+
 # ── per-user documents ───────────────────────────────────────────────────────
 def data_get(uid: int, kind: str):
     with _lock:
