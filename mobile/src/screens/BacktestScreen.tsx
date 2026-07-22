@@ -11,6 +11,7 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Candle, api } from '../api';
 import { BacktestResult, CUSTOM_KEY, CustomRule, Risk, STRATEGIES, runBacktest } from '../backtest';
+import { LW_SCRIPT } from '../chartHtml';
 import { DEFAULT_COSTS } from '../costs';
 import HtmlView from '../components/HtmlView';
 import { getPalette, theme } from '../theme';
@@ -128,7 +129,7 @@ function resultHtml(candles: Candle[], result: BacktestResult): string {
   <div id="msg">Loading chart library…</div>
   <div class="lbl" id="pl" style="display:none">Price &amp; Signals</div><div id="p"></div>
   <div class="lbl" id="el" style="display:none">Equity Curve</div><div id="e"></div>
-  <script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
+  ${LW_SCRIPT}
   <script>
   (function(){
     var msg=document.getElementById('msg');
