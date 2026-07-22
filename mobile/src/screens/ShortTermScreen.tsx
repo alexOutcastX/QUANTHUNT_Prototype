@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SwingRec, api } from '../api';
+import { CapChip, Enrich, fmtCap, useEnrich } from '../enrich';
 import StockDetail from '../components/StockDetail';
 import StrategyScores from '../components/StrategyScores';
 import { Row } from '../screener';
@@ -49,12 +50,13 @@ function timeAgo(ms: number | null): string {
 }
 
 // Compact list row — tap to open the full setup popup.
-function SwingRow({ r, onOpen }: { r: SwingRec; onOpen: () => void }) {
+function SwingRow({ r, enr, onOpen }: { r: SwingRec; enr?: Enrich; onOpen: () => void }) {
   return (
     <TouchableOpacity style={styles.row} onPress={onOpen} activeOpacity={0.7}>
       <View style={styles.rowLeft}>
         <View style={styles.rowTop}>
           <Text style={styles.sym}>{r.symbol}</Text>
+          <CapChip mcapCr={enr?.mcap} />
           <View style={styles.swingPill}>
             <Text style={styles.swingTxt}>SWING</Text>
           </View>
@@ -63,6 +65,10 @@ function SwingRow({ r, onOpen }: { r: SwingRec; onOpen: () => void }) {
           </Text>
         </View>
         {r.name ? <Text style={styles.name} numberOfLines={1}>{r.name}</Text> : null}
+        <Text style={styles.cmpLine} numberOfLines={1}>
+          CMP {money(r.price)}
+          {fmtCap(enr?.mcap) ? <Text style={{ color: theme.muted2 }}> · {fmtCap(enr?.mcap)}</Text> : null}
+        </Text>
         <Text style={styles.setupLine} numberOfLines={1}>
           {r.setup} · RSI {r.rsi} · piv {money(r.entry)} · S {money(r.stop)} · R {money(r.target)} ({signPct(r.upside_pct)})
         </Text>
@@ -83,6 +89,7 @@ function SwingRow({ r, onOpen }: { r: SwingRec; onOpen: () => void }) {
 // The detail popup shown when a scrip is tapped.
 function SwingDetail({
   r,
+  enr,
   watched,
   alerted,
   papered,
@@ -95,6 +102,7 @@ function SwingDetail({
   onAlert,
 }: {
   r: SwingRec;
+  enr?: Enrich;
   watched: boolean;
   alerted: boolean;
   papered: boolean;
@@ -124,6 +132,7 @@ function SwingDetail({
             <View style={{ flex: 1 }}>
               <View style={styles.rowTop}>
                 <Text style={styles.sheetSym}>{r.symbol}</Text>
+                <CapChip mcapCr={enr?.mcap} value />
                 {adv ? <View style={styles.swingPill}><Text style={styles.swingTxt}>{r.action}</Text></View> : null}
               </View>
               {r.name ? <Text style={styles.name}>{r.name}</Text> : null}
@@ -143,6 +152,8 @@ function SwingDetail({
           </View>
 
           <View style={styles.grid}>
+            <Cell label="CMP" value={money(r.price)} />
+            <Cell label="MKT CAP" value={fmtCap(enr?.mcap) ?? '—'} />
             <Cell label={L.entry} value={money(r.entry)} />
             <Cell label={L.stop} value={money(r.stop)} sub={signPct(r.stop_pct)} color={theme.red} />
             <Cell label={L.target} value={money(r.target)} sub={signPct(r.upside_pct)} color={theme.green} />
@@ -380,6 +391,7 @@ export default function ShortTermScreen() {
     () => (strat === 'balanced' ? sorted : (stratDef.apply(recs as SwingLike[]) as typeof recs)),
     [sorted, recs, stratDef, strat],
   );
+  const enrich = useEnrich(useMemo(() => shown.map((r) => r.symbol), [shown]));
 
   const isWatched = (s: string) => watch.includes(normSymbol(s));
   const onWatch = async (r: SwingRec) => {
@@ -477,7 +489,7 @@ export default function ShortTermScreen() {
             <View key={r.symbol} style={isDesktop ? styles.gridCell : undefined}>
               <FadeSlideIn index={i}>
                 <Card style={{ padding: 0 }}>
-                  <SwingRow r={r} onOpen={() => setOpen(r)} />
+                  <SwingRow r={r} enr={enrich[r.symbol]} onOpen={() => setOpen(r)} />
                 </Card>
               </FadeSlideIn>
             </View>
@@ -488,6 +500,7 @@ export default function ShortTermScreen() {
       {open ? (
         <SwingDetail
           r={open}
+          enr={enrich[open.symbol]}
           watched={isWatched(open.symbol)}
           alerted={hasLocalAlert(alerts, open.symbol)}
           papered={hasOpenPaper(paper, open.symbol)}
@@ -557,6 +570,7 @@ const styles = StyleSheet.create({
   trend: { fontSize: theme.fs.xs + 1, fontWeight: '700' },
   name: { color: theme.muted2, fontSize: theme.fs.sm },
   setupLine: { color: theme.muted, fontSize: theme.fs.xs + 1, fontFamily: theme.mono },
+  cmpLine: { color: theme.text, fontSize: theme.fs.xs + 2, fontFamily: theme.mono, fontWeight: '700' },
   rowRight: { flexDirection: 'row', alignItems: 'center', gap: theme.sp.sm },
   probBox: { alignItems: 'flex-end', minWidth: 78 },
   prob: { fontFamily: theme.mono, fontWeight: '800', fontSize: 22, lineHeight: 24 },

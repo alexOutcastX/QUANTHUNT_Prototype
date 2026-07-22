@@ -8,6 +8,7 @@ import { Row } from '../screener';
 import { addSymbol, loadWatchlist, normSymbol, removeSymbol } from '../watchlist';
 import { LocalAlert, addLocalAlert, hasLocalAlert, loadLocalAlerts } from '../localalerts';
 import { capBand } from '../marketcap';
+import { Enrich, useEnrich } from '../enrich';
 import { Btn, Dropdown, EmptyState, InfoButton, Loading, Sheet } from '../ui';
 import { MOMENTUM_INFO } from '../tabInfo';
 import StrategyScores from '../components/StrategyScores';
@@ -17,10 +18,6 @@ import { navigate, openStock, takeSector, takeSymbol } from '../navIntent';
 import { useAdvisory } from '../flags';
 import { mergeSectors } from '../sectors';
 import { theme } from '../theme';
-
-// Per-symbol enrichment (sector + market cap) fetched separately from the
-// radar — the momentum scan itself carries neither field.
-type Enrich = { sector?: string | null; mcap?: number | null };
 
 const GOLD = '#f5c518';
 
@@ -260,6 +257,7 @@ function MomDetail({
 
         <View style={styles.dGrid}>
           {stat('LTP', `₹${fmtIN(h.price)}`)}
+          {stat('MKT CAP', fmtCap(enr?.mcap) ?? '—')}
           {stat('% CHG', <Text style={{ color: (h.chg ?? 0) >= 0 ? theme.green : theme.red }}>{pct(h.chg, 2)}</Text>)}
           {stat('RSI', h.rsi != null ? h.rsi.toFixed(0) : '—')}
           {stat('REL VOL', h.relvol != null ? h.relvol.toFixed(2) + 'x' : '—')}
@@ -528,7 +526,6 @@ function MomAnalyser({
 let momCache: MomentumHit[] | null = null;
 let momNote = '';
 let momAsof = 0;
-let momEnrichCache: Record<string, Enrich> = {};
 
 export default function MomentumScreen() {
   const [hits, setHits] = useState<MomentumHit[]>(momCache || []);
@@ -539,7 +536,7 @@ export default function MomentumScreen() {
   const [view, setView] = useState<'radar' | 'analyse'>('radar');
   const [setupFilter, setSetupFilter] = useState<'all' | SetupKind>('all');
   const [strategy, setStrategy] = useState('all');
-  const [enrich, setEnrich] = useState<Record<string, Enrich>>(momEnrichCache);
+  const enrich = useEnrich(useMemo(() => hits.map((h) => h.symbol), [hits]));
   const [sector, setSector] = useState('');
   const [sel, setSel] = useState<MomentumHit | null>(null);
   const [detail, setDetail] = useState<Row | null>(null);
@@ -581,8 +578,6 @@ export default function MomentumScreen() {
     if (loading) return;
     momCache = null;
     momNote = '';
-    momEnrichCache = {};
-    setEnrich({});
     setSector('');
     setHits([]);
     setLoading(true);
@@ -632,47 +627,9 @@ export default function MomentumScreen() {
     };
   }, [tick]);
 
-  // Enrich hits with sector + market cap (the radar carries neither). A
-  // separate effect keyed on the hit list, NOT part of the radar fetch: the
-  // radar effect early-returns when its module cache is warm, so enrichment
-  // bundled inside it never resumed after a remount — leaving caps null and
-  // Cap-sorting inert ("sorting sometimes doesn't work"). Caps warm in the
-  // background server-side; poll until `pending` drains, merging progressively
-  // so tags and sorting fill in as data arrives.
-  useEffect(() => {
-    if (!hits.length) return;
-    const syms = hits.map((h) => h.symbol);
-    if (!syms.some((s) => momEnrichCache[s]?.mcap == null)) return;
-    let cancelled = false;
-    (async () => {
-      for (let round = 0; round < 8 && !cancelled; round++) {
-        let res: Awaited<ReturnType<typeof api.fundamentalsBulk>>;
-        try {
-          res = await api.fundamentalsBulk(syms);
-        } catch {
-          break;
-        }
-        if (cancelled) return;
-        if (res.data) {
-          const merged = { ...momEnrichCache };
-          Object.entries(res.data).forEach(([sym, f]) => {
-            const rec = f as Record<string, unknown>;
-            merged[sym] = {
-              sector: (rec.sector as string) ?? merged[sym]?.sector ?? null,
-              mcap: typeof rec.market_cap_cr === 'number' ? rec.market_cap_cr : (merged[sym]?.mcap ?? null),
-            };
-          });
-          momEnrichCache = merged;
-          setEnrich(merged);
-        }
-        if (!res.pending || !res.pending.length) break;
-        await new Promise((r) => setTimeout(r, 3000));
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [hits]);
+  // Sector + market cap come from the shared useEnrich hook above (the radar
+  // carries neither) — its poll budget scales with universe size, so caps fill
+  // in even on the full NSE+BSE radar.
 
   // Tap-to-sort columns (default: score, best first). Numeric columns sort
   // desc first; text columns (symbol/name/exch/setup) asc first.

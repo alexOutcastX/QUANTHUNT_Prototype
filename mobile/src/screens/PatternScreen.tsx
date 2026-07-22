@@ -1,7 +1,8 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Candle, ChartPattern, ChartPatternsResp, PatternScreenHit, PatternScreenResp, api } from '../api';
+import { CapChip, Enrich, useEnrich } from '../enrich';
 import { chartHtml } from '../chartHtml';
 import HtmlView from '../components/HtmlView';
 import StockDetail from '../components/StockDetail';
@@ -304,6 +305,7 @@ const PATTERN_GROUPS: { title: string; labels: string[] }[] = [
 const SCREEN_COLS: Col[] = [
   { key: 'sno', label: '#', w: 36, align: 'right' },
   { key: 'symbol', label: 'SYMBOL', w: 118, align: 'left' },
+  { key: 'cap', label: 'MKT CAP', w: 110, align: 'left' },
   { key: 'pattern', label: 'PATTERN', w: 178, align: 'left' },
   { key: 'bias', label: 'BIAS', w: 78, align: 'left' },
   { key: 'status', label: 'STATUS', w: 92, align: 'left' },
@@ -328,14 +330,25 @@ function PatternIndexScreener({ onOpenSymbol }: { onOpenSymbol: (sym: string) =>
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | null = null;
     setError('');
+    let misses = 0;
     const tick = async () => {
       try {
         const s = await api.patternsScreen(index);
         if (cancelled) return;
+        misses = 0;
+        setError('');
         setSnap(s);
         if (s.status === 'running' || s.refreshing) timer = setTimeout(tick, 4000);
       } catch (e) {
-        if (!cancelled) setError(e instanceof Error ? e.message : 'Screen failed');
+        if (cancelled) return;
+        // Transient poll failures (mobile network blips, server busy) must not
+        // wipe a sweep that's mid-flight — keep the last snapshot and retry.
+        misses += 1;
+        if (misses <= 5) {
+          timer = setTimeout(tick, 6000);
+        } else {
+          setError(e instanceof Error ? e.message : 'Screen failed');
+        }
       }
     };
     setSnap(null);
@@ -347,6 +360,7 @@ function PatternIndexScreener({ onOpenSymbol }: { onOpenSymbol: (sym: string) =>
   }, [index, sweep]);
 
   const hits = snap?.results || [];
+  const enrich = useEnrich(useMemo(() => hits.map((h) => h.symbol), [hits]));
   const biasGroup = patFilter === 'Bullish' || patFilter === 'Bearish';
   const shown = hits.filter((h) => {
     if (!patFilter) return true;
@@ -419,7 +433,7 @@ function PatternIndexScreener({ onOpenSymbol }: { onOpenSymbol: (sym: string) =>
         </Sheet>
       ) : null}
 
-      {error ? <EmptyState icon="⚠" title="Couldn't screen" hint={error} /> : null}
+      {error && !snap ? <EmptyState icon="⚠" title="Couldn't screen" hint={`${error} — pull down or tap Rescan to retry.`} /> : null}
       {!error && !snap ? <Loading label={`Loading ${index} pattern screen…`} /> : null}
       {snap ? (
         <>
@@ -448,7 +462,7 @@ function PatternIndexScreener({ onOpenSymbol }: { onOpenSymbol: (sym: string) =>
                   ))}
                 </View>
                 {shown.map((h, i) => (
-                  <ScreenHitRow key={`${h.symbol}-${h.type}-${i}`} h={h} idx={i} top={i === 0} onPress={() => onOpenSymbol(h.symbol)} />
+                  <ScreenHitRow key={`${h.symbol}-${h.type}-${i}`} h={h} enr={enrich[h.symbol]} idx={i} top={i === 0} onPress={() => onOpenSymbol(h.symbol)} />
                 ))}
               </View>
             </ScrollView>
@@ -478,7 +492,7 @@ function PatternIndexScreener({ onOpenSymbol }: { onOpenSymbol: (sym: string) =>
   );
 }
 
-function ScreenHitRow({ h, idx, top, onPress }: { h: PatternScreenHit; idx: number; top?: boolean; onPress: () => void }) {
+function ScreenHitRow({ h, enr, idx, top, onPress }: { h: PatternScreenHit; enr?: Enrich; idx: number; top?: boolean; onPress: () => void }) {
   const c = biasColor(h.bias);
   return (
     <TouchableOpacity style={[styles.dataRow, top && { borderTopWidth: 0 }]} onPress={onPress} activeOpacity={0.75}>
@@ -486,6 +500,9 @@ function ScreenHitRow({ h, idx, top, onPress }: { h: PatternScreenHit; idx: numb
       <View style={{ width: 118 }}>
         <Text style={styles.sym}>{h.symbol}</Text>
         {h.price != null ? <Text style={styles.priceSub}>₹{h.price.toLocaleString('en-IN')}</Text> : null}
+      </View>
+      <View style={{ width: 110, alignItems: 'flex-start' }}>
+        <CapChip mcapCr={enr?.mcap} value />
       </View>
       <Text style={[styles.cellLeft, { width: 178 }]} numberOfLines={2}>{h.label}</Text>
       <Text style={[styles.cellLeft, { width: 78, color: c, fontWeight: '700' }]}>
