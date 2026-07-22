@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { InstitutionalRec, StrategyHit, api } from '../api';
+import { CapChip, Enrich, fmtCap, useEnrich } from '../enrich';
 import StockDetail from '../components/StockDetail';
 import StrategyScores from '../components/StrategyScores';
 import { Row } from '../screener';
@@ -65,13 +66,14 @@ function StrategyTag({ s, small }: { s: StrategyHit; small?: boolean }) {
 }
 
 // Compact list row — tap to open the full strategy breakdown.
-function InstRow({ r, onOpen }: { r: InstitutionalRec; onOpen: () => void }) {
+function InstRow({ r, enr, onOpen }: { r: InstitutionalRec; enr?: Enrich; onOpen: () => void }) {
   const extra = r.strategies.length - 1;
   return (
     <TouchableOpacity style={styles.row} onPress={onOpen} activeOpacity={0.7}>
       <View style={styles.rowLeft}>
         <View style={styles.rowTop}>
           <Text style={styles.sym}>{r.symbol}</Text>
+          <CapChip mcapCr={enr?.mcap} />
           {r.strategies[0] ? <StrategyTag s={r.strategies[0]} small /> : null}
           {extra > 0 ? <Text style={styles.more}>+{extra}</Text> : null}
           <Text style={[styles.trend, { color: trendColor(r.trend) }]}>
@@ -79,6 +81,10 @@ function InstRow({ r, onOpen }: { r: InstitutionalRec; onOpen: () => void }) {
           </Text>
         </View>
         {r.name ? <Text style={styles.name} numberOfLines={1}>{r.name}</Text> : null}
+        <Text style={styles.cmpLine} numberOfLines={1}>
+          CMP {money(r.price)}
+          {fmtCap(enr?.mcap) ? <Text style={{ color: theme.muted2 }}> · {fmtCap(enr?.mcap)}</Text> : null}
+        </Text>
         <Text style={styles.setupLine} numberOfLines={1}>
           piv {money(r.entry)} · S {money(r.stop)} · R {money(r.target)} ({signPct(r.upside_pct)})
           {r.rr != null ? ` · ${r.rr.toFixed(1)}:1` : ''}
@@ -98,9 +104,10 @@ function InstRow({ r, onOpen }: { r: InstitutionalRec; onOpen: () => void }) {
 
 // The detail popup — leads with WHICH strategies flagged the stock and why.
 function InstDetail({
-  r, watched, alerted, papered, onClose, onChart, onAnalyse, onPattern, onPaper, onWatch, onAlert,
+  r, enr, watched, alerted, papered, onClose, onChart, onAnalyse, onPattern, onPaper, onWatch, onAlert,
 }: {
   r: InstitutionalRec;
+  enr?: Enrich;
   watched: boolean;
   alerted: boolean;
   papered: boolean;
@@ -130,6 +137,7 @@ function InstDetail({
             <View style={{ flex: 1 }}>
               <View style={styles.rowTop}>
                 <Text style={styles.sheetSym}>{r.symbol}</Text>
+                <CapChip mcapCr={enr?.mcap} value />
                 {adv ? <View style={[styles.actionPill, { backgroundColor: r.action === 'BUY' ? theme.green : GOLD }]}>
                   <Text style={styles.actionTxt}>{r.action}</Text>
                 </View> : null}
@@ -171,6 +179,8 @@ function InstDetail({
           </View>
 
           <View style={styles.grid}>
+            <Cell label="CMP" value={money(r.price)} />
+            <Cell label="MKT CAP" value={fmtCap(enr?.mcap) ?? '—'} />
             <Cell label={L.entry} value={money(r.entry)} />
             <Cell label={L.stop} value={money(r.stop)} sub={signPct(r.stop_pct)} color={theme.red} />
             <Cell label={L.target} value={money(r.target)} sub={signPct(r.upside_pct)} color={theme.green} />
@@ -401,6 +411,7 @@ export default function InstitutionalScreen() {
     else xs.sort((a, b) => b.score - a.score);
     return xs;
   }, [recs, sortKey, filter]);
+  const enrich = useEnrich(useMemo(() => sorted.map((r) => r.symbol), [sorted]));
 
   const SORTS: { key: typeof sortKey; label: string }[] = [
     { key: 'score', label: 'Score' },
@@ -497,7 +508,7 @@ export default function InstitutionalScreen() {
             <View key={r.symbol} style={isDesktop ? styles.gridCell : undefined}>
               <FadeSlideIn index={i}>
                 <Card style={{ padding: 0 }}>
-                  <InstRow r={r} onOpen={() => setOpen(r)} />
+                  <InstRow r={r} enr={enrich[r.symbol]} onOpen={() => setOpen(r)} />
                 </Card>
               </FadeSlideIn>
             </View>
@@ -508,6 +519,7 @@ export default function InstitutionalScreen() {
       {open ? (
         <InstDetail
           r={open}
+          enr={enrich[open.symbol]}
           watched={isWatched(open.symbol)}
           alerted={hasLocalAlert(alerts, open.symbol)}
           papered={hasOpenPaper(paper, open.symbol)}
@@ -572,6 +584,7 @@ const styles = StyleSheet.create({
   trend: { fontSize: theme.fs.xs + 1, fontWeight: '700' },
   name: { color: theme.muted2, fontSize: theme.fs.sm },
   setupLine: { color: theme.muted, fontSize: theme.fs.xs + 1, fontFamily: theme.mono },
+  cmpLine: { color: theme.text, fontSize: theme.fs.xs + 2, fontFamily: theme.mono, fontWeight: '700' },
   rowRight: { flexDirection: 'row', alignItems: 'center', gap: theme.sp.sm },
   scoreBox: { alignItems: 'flex-end', minWidth: 84 },
   score: { fontFamily: theme.mono, fontWeight: '800', fontSize: 22, lineHeight: 24 },

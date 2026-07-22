@@ -21,13 +21,17 @@ def _candles(n=260, base=100.0):
     return out
 
 
-def _pattern(end_index, confidence, ptype="double_bottom"):
+def _pattern(end_index, confidence, ptype="double_bottom", candles=None):
+    # Mirrors the real detect() output shape: bar indices are STRIPPED before
+    # detections are returned — only start_ts/end_ts timestamps survive. The
+    # screener's recency filter must therefore work off end_ts.
+    cs = candles or _candles()
+    i = max(0, min(end_index, len(cs) - 1))
     return {"type": ptype, "label": "Double Bottom", "bias": "bullish",
             "category": "reversal", "status": "confirmed",
             "confidence": confidence, "continuation": 66,
             "expansion_pct": 5.0, "target": 120.0,
-            "start_index": max(0, end_index - 30), "end_index": end_index,
-            "start_ts": 1, "end_ts": 2}
+            "start_ts": cs[max(0, i - 30)]["t"], "end_ts": cs[i]["t"]}
 
 
 class PatternScreenTest(unittest.TestCase):
@@ -115,6 +119,38 @@ class PatternScreenTest(unittest.TestCase):
         self.assertEqual(snap["scanned_ok"], 0)
         # every symbol was retried once after the first refusal
         self.assertEqual(len(calls), 6)
+
+    def test_real_detector_output_shape_produces_hits(self):
+        # Regression: detect_patterns() strips bar indices from its output, so
+        # the sweep's recency filter must work off end_ts. A synthetic series
+        # that oscillates right up to the last bar must produce fresh hits when
+        # scanned with the REAL detector (not a fake).
+        import math
+        import random
+        from patterns import detect_patterns
+        n = 260
+        t0 = int(time.time()) - n * 86400
+        random.seed(7)
+        cs = []
+        for i in range(n):
+            if i < 200:
+                px = 100 + i * 0.3 + random.uniform(-1, 1)
+            else:
+                px = 160 + 6 * math.sin((i - 200) * math.pi / 10) + random.uniform(-0.5, 0.5)
+            cs.append({"t": t0 + i * 86400, "o": px, "h": px + 1.2,
+                       "l": px - 1.2, "c": px, "v": 1000})
+        rows = [{"symbol": "AAA"}]
+        ps.ensure("NIFTY 50", lambda _n: (rows, "test"),
+                  lambda s, p, i: cs, detect_patterns)
+        deadline = time.time() + 10
+        while time.time() < deadline:
+            snap = ps.snapshot("NIFTY 50")
+            if snap["status"] in ("done", "error") and not snap["refreshing"]:
+                break
+            time.sleep(0.05)
+        self.assertEqual(snap["status"], "done")
+        self.assertGreaterEqual(snap["matches"], 1)
+        self.assertTrue(all(h["confidence"] >= ps.MIN_CONF for h in snap["results"]))
 
     def test_results_sorted_by_confidence(self):
         n = len(_candles())
