@@ -124,3 +124,25 @@ class PatternScreenTest(unittest.TestCase):
         snap = self._sweep(detect, syms=("AAA",))
         confs = [h["confidence"] for h in snap["results"]]
         self.assertEqual(confs, sorted(confs, reverse=True))
+
+
+class RecentIposTest(unittest.TestCase):
+    """recent_ipos() (mb_screen) — the RECENT IPOS custom index source."""
+
+    def test_only_last_year_and_newest_first(self):
+        import mb_screen as mbs
+        now = time.time()
+        with mbs._lock:
+            old_state = mbs._state.get("recent_ipos")
+            mbs._state["recent_ipos"] = {
+                "NEW1": {"symbol": "NEW1", "listed_ts": int(now - 30 * 86400), "price": 100},
+                "NEW2": {"symbol": "NEW2", "listed_ts": int(now - 300 * 86400), "price": 50},
+                "OLD": {"symbol": "OLD", "listed_ts": int(now - 400 * 86400), "price": 10},
+            }
+        try:
+            rows = mbs.recent_ipos()
+            syms = [r["symbol"] for r in rows]
+            self.assertEqual(syms, ["NEW1", "NEW2"])  # OLD aged out, newest first
+        finally:
+            with mbs._lock:
+                mbs._state["recent_ipos"] = old_state

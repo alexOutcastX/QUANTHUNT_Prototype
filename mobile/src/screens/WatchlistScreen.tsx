@@ -348,7 +348,7 @@ export default function WatchlistScreen() {
   }, [colOrder, colHidden]);
 
   const tableW = useMemo(
-    () => visibleCols.reduce((a, c) => a + c.w, 0) + ACTIONS_W,
+    () => 36 + visibleCols.reduce((a, c) => a + c.w, 0) + ACTIONS_W, // 36 = serial column
     [visibleCols],
   );
 
@@ -383,6 +383,9 @@ export default function WatchlistScreen() {
     const q = quotes[item];
     return (
       <View style={[styles.dataRow, index % 2 === 1 && styles.dataRowAlt]}>
+        <View style={[styles.td, { width: 36, alignItems: 'flex-end' }]}>
+          <Text style={styles.snoTxt}>{index + 1}</Text>
+        </View>
         {visibleCols.map((c) => (
           <View
             key={c.key}
@@ -511,6 +514,9 @@ export default function WatchlistScreen() {
         <ScrollView horizontal showsHorizontalScrollIndicator>
           <View style={{ width: tableW }}>
             <View style={styles.headerRow}>
+              <View style={[styles.th, { width: 36, alignItems: 'flex-end' }]}>
+                <Text style={styles.thTxt}>#</Text>
+              </View>
               {visibleCols.map((c) => (
                 <View
                   key={c.key}
@@ -879,6 +885,7 @@ const styles = StyleSheet.create({
   dataRowAlt: { backgroundColor: theme.surface },
   td: { justifyContent: 'center', paddingHorizontal: theme.sp.xs },
   cell: { color: theme.text, fontFamily: theme.mono, fontSize: theme.fs.sm },
+  snoTxt: { color: theme.muted, fontFamily: theme.mono, fontSize: theme.fs.sm },
   symTxt: { color: theme.text, fontFamily: theme.mono, fontWeight: '700', fontSize: theme.fs.md },
   actionsCell: { width: ACTIONS_W, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 5, paddingLeft: theme.sp.md, paddingRight: theme.sp.sm },
   rowBtn: {

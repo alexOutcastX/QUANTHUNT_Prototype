@@ -43,14 +43,30 @@ import {
 import { TrackDir, TrackEntry, addTrack, loadTrack, removeTrack } from '../tracklist';
 import { addSymbol, loadWatchlist, normSymbol, removeSymbol } from '../watchlist';
 import { theme } from '../theme';
+import { Icon } from '../icons';
+import { navigate } from '../navIntent';
 import { useResponsive } from '../responsive';
 import { Btn, EmptyState, Loading, Sheet } from '../ui';
 
-const INDICES = [
-  'NIFTY 50', 'NIFTY 100', 'NIFTY BANK', 'NIFTY IT', 'NIFTY AUTO',
-  'NIFTY PHARMA', 'NIFTY FMCG', 'NIFTY METAL', 'NIFTY MIDCAP 100',
-  'NIFTY SMALLCAP 100',
+// Universe picker (dropdown): NSE's official indices plus the custom groups
+// the backend derives — BSE SENSEX (static 30), SME EMERGE (bhavcopy SM/ST
+// series) and RECENT IPOS (listed within the last year, drops out after one).
+const INDEX_GROUPS: { title: string; items: string[] }[] = [
+  {
+    title: 'NSE — broad',
+    items: ['NIFTY 50', 'NIFTY 100', 'NIFTY 200', 'NIFTY 500',
+      'NIFTY MIDCAP 100', 'NIFTY SMALLCAP 100', 'NIFTY MICROCAP 250'],
+  },
+  {
+    title: 'NSE — sectoral',
+    items: ['NIFTY BANK', 'NIFTY IT', 'NIFTY AUTO', 'NIFTY PHARMA',
+      'NIFTY FMCG', 'NIFTY METAL'],
+  },
+  { title: 'BSE', items: ['BSE SENSEX'] },
+  { title: 'Special', items: ['SME EMERGE', 'RECENT IPOS'] },
 ];
+const INDICES = INDEX_GROUPS.flatMap((g) => g.items);
+const shortIdx = (n: string) => n.replace('NIFTY ', '').replace('BSE ', '');
 
 const pct = (v: number | null | undefined, d = 2) =>
   v == null || !isFinite(v) ? '—' : (v >= 0 ? '+' : '') + v.toFixed(d) + '%';
@@ -91,7 +107,9 @@ export type Col = {
   w: number; // min width; cells also flex-grow so the table fills the page
   flex?: number; // flex-grow weight (default 1; 0 = fixed)
   align?: 'left' | 'right';
-  render: (r: Row) => React.ReactNode;
+  // `i` is the row's absolute position in the sorted result set (0-based) —
+  // only the serial-number column uses it.
+  render: (r: Row, i?: number) => React.ReactNode;
 };
 
 // TaurEye-style column set: Symbol/Name/Exch/LTP/%Chg/Volume/RelVol/RSI/
@@ -99,7 +117,9 @@ export type Col = {
 // Exported (with cellFlex/ACTIONS_W/DEFAULT_HIDDEN/loadNames) so the
 // Multibagger screener renders the identical table.
 export const COLS: Col[] = [
-  { key: 'sym', label: 'Symbol', w: 96, flex: 0, align: 'left', render: (r) => <Text style={styles.symTxt}>{r.sym}</Text> },
+  { key: 'sno', label: '#', w: 40, flex: 0, align: 'right', render: (_r, i) => <Text style={styles.snoTxt}>{(i ?? 0) + 1}</Text> },
+  // Wide enough for a long symbol plus the inline chart + watch controls.
+  { key: 'sym', label: 'Symbol', w: 136, flex: 0, align: 'left', render: (r) => <Text style={styles.symTxt}>{r.sym}</Text> },
   { key: 'name', label: 'Name', w: 190, flex: 3, align: 'left', render: (r) => <Text style={styles.nameTxt} numberOfLines={1}>{r.name || '—'}</Text> },
   { key: 'exchange', label: 'Exch', w: 48, flex: 0, render: (r) => <Text style={styles.exchTxt}>{r.exchange || 'NSE'}</Text> },
   { key: 'price', label: 'LTP', w: 100, render: (r) => <Text style={[styles.cell, styles.ltp]}>{fmtIN(r.price)}</Text> },
@@ -156,8 +176,8 @@ export const DEFAULT_HIDDEN = ['d20', 'd200', 'willr', 'bollb', 'beta', 'sqzMom'
 const FILTERS_KEY = 'taureye.screener.filters.v1'; // legacy keyed filters (migrated)
 const EXPR_KEY = 'taureye.screener.expr.v1';
 const INDEX_KEY = 'taureye.screener.index.v1';
-const COLS_KEY = 'taureye.screener.cols.v3';
-const PAGE_KEY = 'taureye.screener.pagesize.v1';
+// v4: the serial-number column joined the set — reset stored orders once.
+const COLS_KEY = 'taureye.screener.cols.v4';
 
 // Universe name/exchange lookup (fetched once per app session) so the table
 // can show full company names like the TaurEye site.
@@ -182,8 +202,8 @@ export function loadNames(): Promise<Record<string, { name: string; exchange: st
   return namesPromise;
 }
 
-const PAGE_SIZES: (number | 'all')[] = [25, 50, 100, 'all'];
-type PageSize = number | 'all';
+// Fixed page size — 50 rows a page keeps the (sticky-header) table snappy.
+const PAGE_SIZE = 50;
 
 // Reads a shared screen state from `#screen=` on the web URL, if present.
 function readSharedScreen(): ScreenState | null {
@@ -221,8 +241,11 @@ export default function ScreenerScreen() {
   const [saved, setSaved] = useState<SavedScreen[]>([]);
   const [savedModal, setSavedModal] = useState(false);
   const [watch, setWatch] = useState<string[]>([]);
-  const [pageSize, setPageSize] = useState<PageSize>(100);
   const [page, setPage] = useState(0);
+  // Dropdown/popup UI state: universe picker, export menu, per-row Analyse.
+  const [idxOpen, setIdxOpen] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
+  const [analyseFor, setAnalyseFor] = useState<Row | null>(null);
   const [flash, setFlash] = useState('');
   const flashTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const toast = useCallback((msg: string) => {
@@ -269,22 +292,15 @@ export default function ScreenerScreen() {
     })();
   }, []);
 
-  // Restore column prefs + page size once (independent of index/filters).
+  // Restore column prefs once (independent of index/filters).
   useEffect(() => {
     (async () => {
       try {
-        const [rawCols, rawPage] = await Promise.all([
-          AsyncStorage.getItem(COLS_KEY),
-          AsyncStorage.getItem(PAGE_KEY),
-        ]);
+        const rawCols = await AsyncStorage.getItem(COLS_KEY);
         if (rawCols) {
           const p = JSON.parse(rawCols);
           if (Array.isArray(p?.order)) setColOrder(p.order.filter((k: unknown) => typeof k === 'string'));
           if (Array.isArray(p?.hidden)) setColHidden(p.hidden.filter((k: unknown) => typeof k === 'string'));
-        }
-        if (rawPage) {
-          const v = JSON.parse(rawPage);
-          if (v === 'all' || (typeof v === 'number' && [25, 50, 100].includes(v))) setPageSize(v);
         }
       } catch {
         /* defaults */
@@ -298,11 +314,6 @@ export default function ScreenerScreen() {
     if (!prefsRestored) return;
     AsyncStorage.setItem(COLS_KEY, JSON.stringify({ order: colOrder, hidden: colHidden })).catch(() => {});
   }, [colOrder, colHidden, prefsRestored]);
-
-  useEffect(() => {
-    if (!prefsRestored) return;
-    AsyncStorage.setItem(PAGE_KEY, JSON.stringify(pageSize)).catch(() => {});
-  }, [pageSize, prefsRestored]);
 
   useEffect(() => {
     loadSavedScreens().then(setSaved);
@@ -484,8 +495,11 @@ export default function ScreenerScreen() {
     COLS.forEach((c) => {
       if (!seen.has(c.key)) ordered.push(c);
     });
+    // Pin # then Symbol to the front regardless of stored order.
     const symIdx = ordered.findIndex((c) => c.key === 'sym');
     if (symIdx > 0) ordered.unshift(ordered.splice(symIdx, 1)[0]);
+    const snoIdx = ordered.findIndex((c) => c.key === 'sno');
+    if (snoIdx > 0) ordered.unshift(ordered.splice(snoIdx, 1)[0]);
     const hidden = new Set(colHidden.filter((k) => k !== 'sym'));
     return ordered.filter((c) => !hidden.has(c.key));
   }, [colOrder, colHidden]);
@@ -493,16 +507,16 @@ export default function ScreenerScreen() {
   const tableW = useMemo(() => visibleCols.reduce((a, c) => a + c.w, 0) + ACTIONS_W, [visibleCols]);
 
   // Client-side pagination over the sorted set (stats + export use the full set).
-  const pageCount = pageSize === 'all' ? 1 : Math.max(1, Math.ceil(sorted.length / pageSize));
+  const pageCount = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
   useEffect(() => {
     setPage(0);
-  }, [indexName, expr, sortCol, sortDir, pageSize]);
+  }, [indexName, expr, sortCol, sortDir]);
   useEffect(() => {
     if (page > pageCount - 1) setPage(0);
   }, [page, pageCount]);
   const pageRows = useMemo(
-    () => (pageSize === 'all' ? sorted : sorted.slice(page * pageSize, page * pageSize + pageSize)),
-    [sorted, page, pageSize],
+    () => sorted.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE),
+    [sorted, page],
   );
 
   const stats = useMemo(() => {
@@ -519,8 +533,8 @@ export default function ScreenerScreen() {
   }, [filtered]);
 
   // "showing X–Y" bounds for the current page.
-  const showFrom = sorted.length ? (pageSize === 'all' ? 1 : page * pageSize + 1) : 0;
-  const showTo = pageSize === 'all' ? sorted.length : Math.min((page + 1) * (pageSize as number), sorted.length);
+  const showFrom = sorted.length ? page * PAGE_SIZE + 1 : 0;
+  const showTo = Math.min((page + 1) * PAGE_SIZE, sorted.length);
 
   const onSort = (col: string) => {
     if (col === sortCol) setSortDir((d) => (d === 1 ? -1 : 1));
@@ -601,24 +615,30 @@ export default function ScreenerScreen() {
     toast(`Applied "${s.name}"`);
   };
 
-  const renderRow = (item: Row) => {
+  const renderRow = (item: Row, rowIdx: number) => {
     const dir = trackDirOf(item.sym);
     const starred = isWatched(item.sym);
+    const absIdx = page * PAGE_SIZE + rowIdx; // serial number across pages
     return (
       <View key={item.sym} style={styles.dataRow}>
         {visibleCols.map((c) =>
           c.key === 'sym' ? (
-            <TouchableOpacity
-              key={c.key}
-              style={[styles.td, cellFlex(c), { alignItems: 'flex-start' }]}
-              onPress={() => setDetail(item)}
-              activeOpacity={0.75}
-            >
-              {c.render(item)}
-            </TouchableOpacity>
+            // Symbol cell: tap the symbol for the dossier; chart + watch star
+            // sit right next to it.
+            <View key={c.key} style={[styles.td, cellFlex(c), styles.symCell]}>
+              <TouchableOpacity onPress={() => setDetail(item)} activeOpacity={0.75}>
+                {c.render(item, absIdx)}
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => onChart(item)} hitSlop={6} activeOpacity={0.75}>
+                <Icon name="candles" size={14} color={theme.muted2} />
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => onToggleWatch(item)} hitSlop={6} activeOpacity={0.75}>
+                <Text style={[styles.starTxt, starred && styles.starOn]}>{starred ? '★' : '☆'}</Text>
+              </TouchableOpacity>
+            </View>
           ) : (
             <View key={c.key} style={[styles.td, cellFlex(c), { alignItems: c.align === 'left' ? 'flex-start' : 'flex-end' }]}>
-              {c.render(item)}
+              {c.render(item, absIdx)}
             </View>
           ),
         )}
@@ -637,14 +657,11 @@ export default function ScreenerScreen() {
           >
             <Text style={[styles.tBtnTxt, dir === 'sell' && styles.tOnTxt]}>{dir === 'sell' ? '✓S' : 'S'}</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.aBtn} onPress={() => onChart(item)} activeOpacity={0.75}>
-            <Text style={styles.aBtnTxt}>Chart</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.aBtn} onPress={() => onToggleWatch(item)} activeOpacity={0.75}>
-            <Text style={[styles.aBtnTxt, starred && styles.starOn]}>{starred ? '★' : '☆'}</Text>
-          </TouchableOpacity>
           <TouchableOpacity style={styles.aBtn} onPress={() => setDetail(item)} activeOpacity={0.75}>
-            <Text style={styles.aBtnTxt}>Report</Text>
+            <Text style={styles.aBtnTxt}>Dossier</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.aBtn} onPress={() => setAnalyseFor(item)} activeOpacity={0.75}>
+            <Text style={styles.aBtnTxt}>Analyse ▾</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -661,28 +678,32 @@ export default function ScreenerScreen() {
 
   return (
     <View style={styles.container}>
+      {/* Everything above the rows is FIXED — universe picker, filters,
+          columns/export, pagination and the table's header row never scroll
+          away; only the result rows do. */}
       <View style={styles.topBar}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.idxChips}>
-          {INDICES.map((idx) => (
+        <TouchableOpacity style={styles.idxDrop} onPress={() => setIdxOpen(true)} activeOpacity={0.75}>
+          <Text style={styles.idxDropLabel}>UNIVERSE</Text>
+          <Text style={styles.idxDropTxt}>{shortIdx(indexName)} ▾</Text>
+        </TouchableOpacity>
+        {!isDesktop ? (
+          <>
             <TouchableOpacity
-              key={idx}
-              style={[styles.idxChip, idx === indexName && styles.idxChipOn]}
-              onPress={() => setIndexName(idx)}
+              style={[styles.filterBarBtn, expr.length > 0 && styles.filterBarBtnOn]}
+              onPress={() => setFiltersOpen(true)}
               activeOpacity={0.75}
             >
-              <Text style={[styles.idxTxt, idx === indexName && styles.idxTxtOn]}>{idx.replace('NIFTY ', '')}</Text>
+              <Text style={[styles.filterBarBtnTxt, expr.length > 0 && styles.filterBarBtnTxtOn]}>
+                ⚙ Filters{expr.length ? ` (${expr.length})` : ''}
+              </Text>
             </TouchableOpacity>
-          ))}
-        </ScrollView>
+            <Text style={styles.filterSummary} numberOfLines={1}>
+              {expr.length ? exprSummary(expr) : 'No filters'}
+            </Text>
+          </>
+        ) : null}
       </View>
 
-      <ScrollView
-        style={styles.page}
-        keyboardShouldPersistTaps="handled"
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.accent} />
-        }
-      >
       {isDesktop ? (
         <FilterPanel
           expr={expr}
@@ -691,87 +712,57 @@ export default function ScreenerScreen() {
           onShare={onShare}
           onSaveScreen={() => setSavedModal(true)}
         />
-      ) : (
-        // Mobile: one compact line — a Filters chip that opens the builder in
-        // a popup, next to a tiny summary of what's active. The results table
-        // stays on screen.
-        <View style={styles.filterBar}>
-          <TouchableOpacity
-            style={[styles.filterBarBtn, expr.length > 0 && styles.filterBarBtnOn]}
-            onPress={() => setFiltersOpen(true)}
-            activeOpacity={0.75}
-          >
-            <Text style={[styles.filterBarBtnTxt, expr.length > 0 && styles.filterBarBtnTxtOn]}>
-              ⚙ Filters{expr.length ? ` (${expr.length})` : ''}
-            </Text>
-          </TouchableOpacity>
-          <Text style={styles.filterSummary} numberOfLines={1}>
-            {expr.length ? exprSummary(expr) : 'No filters — full universe'}
-          </Text>
-        </View>
-      )}
+      ) : null}
       <View style={styles.statsRow}>
         <Text style={styles.statsTxt} numberOfLines={1}>
           <Text style={styles.statsN}>{stats.total}</Text> matches
-          {stats.total ? ` · showing ${showFrom}–${showTo}` : ''}{'   '}
+          {stats.total ? ` · ${showFrom}–${showTo}` : ''}{'   '}
           <Text style={{ color: theme.green }}>{stats.buy}▲</Text>{'  '}
           <Text style={{ color: theme.red }}>{stats.sell}▼</Text>{'  '}
           <Text style={{ color: theme.muted2 }}>{stats.neutral}—</Text>
         </Text>
         <View style={styles.actionsWrap}>
           <TouchableOpacity style={styles.filterBtn} onPress={() => setColMenu(true)} activeOpacity={0.75}>
-            <Text style={styles.filterTxt}>⚙ Columns {COLS.length - colHidden.length}</Text>
+            <Text style={styles.filterTxt}>▤ Columns</Text>
           </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.filterBtn}
-            onPress={() => exportCsv(sorted, indexName).catch(() => {})}
-            activeOpacity={0.75}
-          >
-            <Text style={styles.filterTxt}>⇩ CSV</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.filterBtn}
-            onPress={() => exportExcel(sorted, indexName).catch(() => {})}
-            activeOpacity={0.75}
-          >
-            <Text style={styles.filterTxt}>⇩ Excel</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.filterBtn}
-            onPress={() => exportPdf(sorted, indexName).catch(() => {})}
-            activeOpacity={0.75}
-          >
-            <Text style={styles.filterTxt}>⇩ PDF</Text>
-          </TouchableOpacity>
-          <Text style={styles.pageLabel}>Rows</Text>
-          {PAGE_SIZES.map((sz) => (
-            <TouchableOpacity
-              key={String(sz)}
-              style={[styles.pageChip, pageSize === sz && styles.pageChipOn]}
-              onPress={() => setPageSize(sz)}
-              activeOpacity={0.75}
-            >
-              <Text style={[styles.pageChipTxt, pageSize === sz && styles.pageChipTxtOn]}>
-                {sz === 'all' ? 'All' : sz}
-              </Text>
+          <View style={styles.exportWrap}>
+            <TouchableOpacity style={styles.filterBtn} onPress={() => setExportOpen((v) => !v)} activeOpacity={0.75}>
+              <Text style={styles.filterTxt}>⇩ Export ▾</Text>
             </TouchableOpacity>
-          ))}
+            {exportOpen ? (
+              <View style={styles.exportMenu}>
+                {([['CSV', exportCsv], ['Excel', exportExcel], ['PDF', exportPdf]] as const).map(([label, fn]) => (
+                  <TouchableOpacity
+                    key={label}
+                    style={styles.exportItem}
+                    onPress={() => {
+                      setExportOpen(false);
+                      fn(sorted, indexName).catch(() => {});
+                    }}
+                    activeOpacity={0.75}
+                  >
+                    <Text style={styles.exportItemTxt}>{label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            ) : null}
+          </View>
           <TouchableOpacity
             style={[styles.pageBtn, page <= 0 && styles.pageBtnOff]}
             onPress={() => setPage((p) => Math.max(0, p - 1))}
             disabled={page <= 0}
             activeOpacity={0.75}
           >
-            <Text style={styles.pageBtnTxt}>‹ Prev</Text>
+            <Text style={styles.pageBtnTxt}>‹</Text>
           </TouchableOpacity>
-          <Text style={styles.pageInfo}>{sorted.length ? `${page + 1} / ${pageCount}` : '0 / 0'}</Text>
+          <Text style={styles.pageInfo}>{sorted.length ? `${page + 1}/${pageCount}` : '0/0'}</Text>
           <TouchableOpacity
             style={[styles.pageBtn, page >= pageCount - 1 && styles.pageBtnOff]}
             onPress={() => setPage((p) => Math.min(pageCount - 1, p + 1))}
             disabled={page >= pageCount - 1}
             activeOpacity={0.75}
           >
-            <Text style={styles.pageBtnTxt}>Next ›</Text>
+            <Text style={styles.pageBtnTxt}>›</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -782,8 +773,11 @@ export default function ScreenerScreen() {
         {error ? ` · ${error}` : ''}
       </Text>
 
-      <ScrollView horizontal showsHorizontalScrollIndicator contentContainerStyle={styles.tableStretch}>
-        <View style={{ minWidth: tableW, flexGrow: 1 }}>
+      {/* Table: header row is fixed; only the data rows scroll vertically.
+          The horizontal ScrollView carries header + rows together so columns
+          stay aligned while scrolling sideways. */}
+      <ScrollView horizontal showsHorizontalScrollIndicator style={styles.tableArea} contentContainerStyle={styles.tableStretch}>
+        <View style={{ minWidth: tableW, flexGrow: 1, flex: 1 }}>
           <View style={styles.headerRow}>
             {visibleCols.map((c) => (
               <TouchableOpacity
@@ -802,18 +796,90 @@ export default function ScreenerScreen() {
               <Text style={styles.thTxt}>Actions</Text>
             </View>
           </View>
-          {pageRows.length === 0 ? (
-            <EmptyState
-              icon="⌕"
-              title="No matches"
-              hint="Loosen or clear a filter to see more of this index."
-            />
-          ) : (
-            pageRows.map(renderRow)
-          )}
+          <ScrollView
+            style={{ flex: 1 }}
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.accent} />
+            }
+          >
+            {pageRows.length === 0 ? (
+              <EmptyState
+                icon="⌕"
+                title="No matches"
+                hint="Loosen or clear a filter to see more of this index."
+              />
+            ) : (
+              pageRows.map(renderRow)
+            )}
+          </ScrollView>
         </View>
       </ScrollView>
-      </ScrollView>
+
+      {/* Universe picker */}
+      {idxOpen ? (
+        <Sheet onClose={() => setIdxOpen(false)} maxHeight="85%">
+          <View style={styles.sheetHead}>
+            <Text style={styles.sheetTitle}>Universe</Text>
+            <TouchableOpacity onPress={() => setIdxOpen(false)} hitSlop={12} activeOpacity={0.75}>
+              <Text style={styles.sheetClose}>✕ Close</Text>
+            </TouchableOpacity>
+          </View>
+          <ScrollView bounces={false}>
+            {INDEX_GROUPS.map((g) => (
+              <View key={g.title}>
+                <Text style={styles.idxGroupTitle}>{g.title.toUpperCase()}</Text>
+                {g.items.map((idx) => (
+                  <TouchableOpacity
+                    key={idx}
+                    style={styles.idxOpt}
+                    onPress={() => {
+                      setIndexName(idx);
+                      setIdxOpen(false);
+                    }}
+                    activeOpacity={0.75}
+                  >
+                    <Text style={[styles.idxOptTxt, idx === indexName && { color: theme.brand, fontWeight: '700' }]}>
+                      {idx}
+                      {idx === 'RECENT IPOS' ? '  · listed in the last year' : idx === 'SME EMERGE' ? '  · NSE SME platform' : ''}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            ))}
+          </ScrollView>
+        </Sheet>
+      ) : null}
+
+      {/* Per-row Analyse menu */}
+      {analyseFor ? (
+        <Sheet onClose={() => setAnalyseFor(null)} maxHeight="50%">
+          <View style={styles.sheetHead}>
+            <Text style={styles.sheetTitle}>Analyse {analyseFor.sym}</Text>
+            <TouchableOpacity onPress={() => setAnalyseFor(null)} hitSlop={12} activeOpacity={0.75}>
+              <Text style={styles.sheetClose}>✕ Close</Text>
+            </TouchableOpacity>
+          </View>
+          {([
+            ['As a multibagger', 'Fundamental compounding score + 5x probability', 'mb'],
+            ['Momentum', 'Trend, relative strength and momentum read', 'momentum'],
+            ['Chart patterns', 'Scan its full history for classic formations', 'patterns'],
+          ] as const).map(([label, hint, sub]) => (
+            <TouchableOpacity
+              key={sub}
+              style={styles.idxOpt}
+              onPress={() => {
+                const sym = analyseFor.sym;
+                setAnalyseFor(null);
+                navigate('analysis', { sub, symbol: sym });
+              }}
+              activeOpacity={0.75}
+            >
+              <Text style={styles.idxOptTxt}>{label}</Text>
+              <Text style={styles.idxOptHint}>{hint}</Text>
+            </TouchableOpacity>
+          ))}
+        </Sheet>
+      ) : null}
 
       <ColumnMenu
         visible={colMenu}
@@ -844,14 +910,16 @@ export default function ScreenerScreen() {
       {/* Mobile filter-builder popup — at container level: Sheet is an
           absolute overlay and would mis-position inside the page ScrollView. */}
       {!isDesktop && filtersOpen ? (
-        <Sheet onClose={() => setFiltersOpen(false)} maxHeight="90%">
-          <ScrollView bounces={false} keyboardShouldPersistTaps="handled" nestedScrollEnabled>
-            <View style={styles.sheetHead}>
-              <Text style={styles.sheetTitle}>Filters</Text>
-              <TouchableOpacity onPress={() => setFiltersOpen(false)} hitSlop={12} activeOpacity={0.75}>
-                <Text style={styles.sheetClose}>✕ Close</Text>
-              </TouchableOpacity>
-            </View>
+        // Full-screen: title + Close stay fixed, the builder scrolls, the
+        // apply button is pinned above the device nav bar.
+        <Sheet onClose={() => setFiltersOpen(false)} fill>
+          <View style={styles.sheetHead}>
+            <Text style={styles.sheetTitle}>Filters</Text>
+            <TouchableOpacity onPress={() => setFiltersOpen(false)} hitSlop={12} activeOpacity={0.75}>
+              <Text style={styles.sheetClose}>✕ Close</Text>
+            </TouchableOpacity>
+          </View>
+          <ScrollView style={{ flex: 1 }} bounces={false} keyboardShouldPersistTaps="handled" nestedScrollEnabled>
             <FilterPanel
               expr={expr}
               setExpr={setExpr}
@@ -859,8 +927,8 @@ export default function ScreenerScreen() {
               onShare={onShare}
               onSaveScreen={() => setSavedModal(true)}
             />
-            <Btn label={`Show ${stats.total} matches`} onPress={() => setFiltersOpen(false)} style={styles.sheetApply} />
           </ScrollView>
+          <Btn label={`Show ${stats.total} matches`} onPress={() => setFiltersOpen(false)} style={styles.sheetApply} />
         </Sheet>
       ) : null}
 
@@ -1423,7 +1491,15 @@ function SavedScreensModal({
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.bg },
   center: { flex: 1, backgroundColor: theme.bg },
-  topBar: { borderBottomColor: theme.border, borderBottomWidth: 1 },
+  topBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.sp.sm,
+    paddingHorizontal: theme.sp.md,
+    paddingVertical: theme.sp.sm,
+    borderBottomColor: theme.border,
+    borderBottomWidth: 1,
+  },
   idxChips: { paddingHorizontal: theme.sp.md, paddingVertical: theme.sp.sm, gap: theme.sp.sm },
   idxChip: {
     backgroundColor: theme.surface2,
@@ -1494,6 +1570,31 @@ const styles = StyleSheet.create({
   filterBarBtnTxt: { color: theme.text, fontSize: theme.fs.sm, fontWeight: '700' },
   filterBarBtnTxtOn: { color: theme.brand },
   filterSummary: { flex: 1, color: theme.muted, fontSize: theme.fs.xs + 1 },
+  // Universe dropdown + sheets + export menu + serial column
+  idxDrop: {
+    flexDirection: 'row', alignItems: 'center', gap: theme.sp.sm,
+    backgroundColor: theme.surface2, borderColor: theme.border2, borderWidth: 1,
+    borderRadius: theme.radius.sm + 2, paddingHorizontal: theme.sp.md, paddingVertical: 6,
+  },
+  idxDropLabel: { color: theme.muted, fontSize: theme.fs.xs, fontWeight: '800', letterSpacing: 1 },
+  idxDropTxt: { color: theme.text, fontSize: theme.fs.sm + 1, fontWeight: '800', fontFamily: theme.mono },
+  idxGroupTitle: { color: theme.muted, fontSize: theme.fs.xs, fontWeight: '800', letterSpacing: 1, marginTop: theme.sp.md, marginBottom: 2 },
+  idxOpt: { paddingVertical: theme.sp.sm },
+  idxOptTxt: { color: theme.text, fontSize: theme.fs.md },
+  idxOptHint: { color: theme.muted, fontSize: theme.fs.sm, marginTop: 1 },
+  exportWrap: { position: 'relative', zIndex: 80 },
+  exportMenu: {
+    position: 'absolute', top: '100%', right: 0, marginTop: 4, minWidth: 120,
+    backgroundColor: theme.surface2, borderColor: theme.border2, borderWidth: 1,
+    borderRadius: theme.radius.md, paddingVertical: 4, zIndex: 90, elevation: 12,
+    shadowColor: '#000', shadowOpacity: 0.4, shadowRadius: 12, shadowOffset: { width: 0, height: 6 },
+  },
+  exportItem: { paddingHorizontal: theme.sp.md, paddingVertical: theme.sp.sm },
+  exportItemTxt: { color: theme.text, fontSize: theme.fs.md },
+  symCell: { flexDirection: 'row', alignItems: 'center', gap: 6, justifyContent: 'flex-start' },
+  starTxt: { color: theme.muted2, fontSize: 14 },
+  snoTxt: { color: theme.muted, fontSize: theme.fs.sm, fontFamily: theme.mono },
+  tableArea: { flex: 1 },
   sheetHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: theme.sp.xs },
   sheetTitle: { color: theme.text, fontSize: theme.fs.xl, fontWeight: '800' },
   sheetClose: { color: theme.muted2, fontSize: theme.fs.md, fontWeight: '700' },
@@ -1516,6 +1617,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.sp.md,
     paddingVertical: theme.sp.sm,
     gap: theme.sp.md,
+    zIndex: 60, // export dropdown must overlay the table
   },
   statsTxt: { color: theme.muted, fontSize: theme.fs.sm, fontFamily: theme.mono, flexShrink: 1 },
   statsN: { color: theme.text, fontWeight: '700' },
@@ -1740,15 +1842,15 @@ const styles = StyleSheet.create({
   savedDel: { color: theme.red, fontSize: theme.fs.lg, fontWeight: '700', paddingHorizontal: theme.sp.sm },
   // drawer
   backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)' },
+  // Full screen: top 0 + a padded footer so Apply/Cancel clear the device's
+  // gesture/nav bar (they were half-hidden behind it before).
   drawer: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    top: 60,
+    top: 0,
     backgroundColor: theme.surface,
-    borderTopLeftRadius: theme.radius.lg + 2,
-    borderTopRightRadius: theme.radius.lg + 2,
     overflow: 'hidden',
   },
   drawerHead: {
@@ -1809,6 +1911,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: theme.sp.md,
     padding: theme.sp.lg,
+    paddingBottom: theme.sp.lg + 24, // clear the device gesture/nav bar
     borderTopColor: theme.border,
     borderTopWidth: 1,
   },

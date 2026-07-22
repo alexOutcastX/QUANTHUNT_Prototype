@@ -142,7 +142,7 @@ export default function UniverseScreen() {
     () => (segment ? [BASE_COLS[0], MCAP_COL, ...BASE_COLS.slice(1)] : BASE_COLS),
     [segment],
   );
-  const TABLE_W = COLS.reduce((a, c) => a + c.w, 0);
+  const TABLE_W = 36 + COLS.reduce((a, c) => a + c.w, 0); // 36 = serial column
 
   const sorted = useMemo(() => {
     return [...rows].sort((a, b) => {
@@ -155,8 +155,9 @@ export default function UniverseScreen() {
     });
   }, [rows, sortCol, sortDir]);
 
-  const renderRow = ({ item }: { item: UnivRow }) => (
+  const renderRow = ({ item, index }: { item: UnivRow; index: number }) => (
     <View style={[styles.row, heatmap ? { backgroundColor: heatBg(item.chg) } : null]}>
+      <Text style={[styles.cell, styles.right, { width: 36, color: theme.muted }]}>{index + 1}</Text>
       <Text style={[styles.cell, styles.cSym, { width: BASE_COLS[0].w }]}>{item.symbol}</Text>
       {segment ? (
         <Text style={[styles.cell, styles.right, { width: MCAP_COL.w }]}>
@@ -226,6 +227,7 @@ export default function UniverseScreen() {
       <ScrollView horizontal showsHorizontalScrollIndicator>
         <View style={{ width: TABLE_W }}>
           <View style={styles.headerRow}>
+            <Text style={[styles.th, styles.right, { width: 36 }]}>#</Text>
             {COLS.map((c) => (
               <TouchableOpacity
                 key={String(c.key)}

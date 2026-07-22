@@ -153,6 +153,11 @@ _universe_lock  = threading.Lock()
 _UNIVERSE_TTL   = 6 * 3600   # refresh every 6 hours
 
 
+# SME (NSE EMERGE) scrips from the same bhavcopy download — populated as a
+# side-effect of _load_bhavcopy, served as the "SME EMERGE" custom group.
+_SME_LIST: list = []
+
+
 def _load_bhavcopy():
     """Download latest bhavcopy and return list of EQ-series symbols."""
     s = nse_session()
@@ -177,10 +182,10 @@ def _load_bhavcopy():
                 except Exception:
                     return 0.0
             eq = []
+            sme = []
             for raw in rows:
                 row = {(k or "").strip(): v for k, v in raw.items()}
-                if row.get("SERIES", "").strip() not in ("EQ", "BE"):
-                    continue
+                series = row.get("SERIES", "").strip()
                 sym = row.get("SYMBOL", "").strip()
                 if not sym:
                     continue
@@ -189,9 +194,16 @@ def _load_bhavcopy():
                 chg   = round((close - prev) / prev * 100, 2) if prev else None
                 # TURNOVER is in lakhs of rupees; scale to rupees for a weight.
                 turnover = _num(row.get("TURNOVER_LACS")) * 1e5
-                eq.append({"symbol": sym, "exchange": "NSE", "price": close,
-                           "chg": chg, "turnover": turnover})
-            log.info("Bhavcopy %s: %d EQ/BE symbols", d, len(eq))
+                item = {"symbol": sym, "exchange": "NSE", "price": close,
+                        "chg": chg, "turnover": turnover}
+                if series in ("EQ", "BE"):
+                    eq.append(item)
+                elif series in ("SM", "ST"):
+                    # NSE EMERGE SME platform (same bhavcopy file, no extra fetch)
+                    sme.append(item)
+            global _SME_LIST
+            _SME_LIST = sme
+            log.info("Bhavcopy %s: %d EQ/BE symbols, %d SME", d, len(eq), len(sme))
             return eq, d
         except Exception as e:
             log.warning("Bhavcopy %s failed: %s", d, e)
@@ -1405,10 +1417,42 @@ def _fetch_niftyindices_csv(name):
     return rows or None
 
 
+# Custom constituent groups beyond NSE's official indices. BSE SENSEX is the
+# official 30 (all NSE-listed; static seed, refreshed with the codebase — the
+# basket changes ~twice a year). SME EMERGE and RECENT IPOS are derived from
+# feeds the app already pulls (bhavcopy series / the universe sweep's Yahoo
+# metadata) — no new scraping.
+SENSEX_30 = [
+    "RELIANCE", "HDFCBANK", "ICICIBANK", "INFY", "BHARTIARTL", "TCS", "ITC",
+    "LT", "KOTAKBANK", "SBIN", "AXISBANK", "HINDUNILVR", "BAJFINANCE",
+    "MARUTI", "M&M", "SUNPHARMA", "NTPC", "HCLTECH", "ULTRACEMCO", "TITAN",
+    "POWERGRID", "TATASTEEL", "TATAMOTORS", "ASIANPAINT", "ADANIPORTS",
+    "BAJAJFINSV", "NESTLEIND", "JSWSTEEL", "INDUSINDBK", "TECHM",
+]
+CUSTOM_GROUPS = ("BSE SENSEX", "SME EMERGE", "RECENT IPOS")
+
+
+def _custom_group_rows(name):
+    """Rows for the custom groups; (rows, source) or (None, None)."""
+    if name == "BSE SENSEX":
+        return [{"symbol": s} for s in SENSEX_30], "static"
+    if name == "SME EMERGE":
+        if not _SME_LIST:
+            get_universe_nonblocking()  # warms the bhavcopy → fills _SME_LIST
+        return list(_SME_LIST), ("bhavcopy" if _SME_LIST else "warming")
+    if name == "RECENT IPOS":
+        import mb_screen as mbs
+        rows = mbs.recent_ipos()
+        return rows, ("sweep" if rows else "pending")
+    return None, None
+
+
 def _get_constituents(name):
     """(rows, source) for an index — NSE live (carries pChange) → niftyindices
     CSV (symbols only) → last-good disk cache. (None, None) if all fail.
     Memoized in _INDEX_MEM for _INDEX_MEM_TTL."""
+    if name in CUSTOM_GROUPS:
+        return _custom_group_rows(name)
     key = NSE_INDEX_MAP.get(name)
     if not key:
         return None, None
@@ -1462,11 +1506,19 @@ def _get_constituents(name):
 @app.route("/index")
 def index_constituents():
     name = request.args.get("name", "").strip().upper()
-    if name not in NSE_INDEX_MAP:
-        return jsonify({"error": f"Unknown index '{name}'", "available": list(NSE_INDEX_MAP)}), 400
+    if name not in NSE_INDEX_MAP and name not in CUSTOM_GROUPS:
+        return jsonify({"error": f"Unknown index '{name}'",
+                        "available": list(NSE_INDEX_MAP) + list(CUSTOM_GROUPS)}), 400
     rows, source = _get_constituents(name)
     if rows:
         return jsonify({"index": name, "count": len(rows), "data": rows, "source": source})
+    if name in CUSTOM_GROUPS:
+        # Not failure — the group simply hasn't been derived yet (bhavcopy
+        # still warming / universe sweep hasn't recorded listing dates).
+        note = ("SME list warms with the daily bhavcopy — retry in a minute."
+                if name == "SME EMERGE" else
+                "Recent-IPO list builds during the universe sweep — check back after the next refresh.")
+        return jsonify({"index": name, "count": 0, "data": [], "source": source, "note": note})
     return jsonify({"error": f"All constituent sources failed for {name}", "data": []}), 502
 
 

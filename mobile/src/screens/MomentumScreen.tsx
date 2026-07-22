@@ -111,7 +111,7 @@ const COLS: ColDef[] = [
   { key: 'upside_pct', label: 'UPSIDE', w: 72 },
 ];
 const ACTIONS_W = 142;
-const TABLE_W = COLS.reduce((a, c) => a + c.w, 0) + ACTIONS_W;
+const TABLE_W = 36 + COLS.reduce((a, c) => a + c.w, 0) + ACTIONS_W; // 36 = serial column
 
 // Mobile sort options (headers are gone on the card layout).
 const MOBILE_SORTS: { key: ColKey; label: string }[] = [
@@ -851,6 +851,7 @@ export default function MomentumScreen() {
           <ScrollView horizontal showsHorizontalScrollIndicator contentContainerStyle={{ minWidth: '100%' }}>
             <View style={{ minWidth: TABLE_W }}>
               <View style={styles.headerRow}>
+                <Text style={[styles.thR, { width: 36 }]}>#</Text>
                 {COLS.map((col) => (
                   <TouchableOpacity key={col.key} style={{ width: col.w }} onPress={() => onSort(col.key)} activeOpacity={0.7}>
                     <Text style={col.text ? styles.th : styles.thR}>{col.label}{arrow(col.key)}</Text>
@@ -858,11 +859,12 @@ export default function MomentumScreen() {
                 ))}
                 <Text style={[styles.th, { width: ACTIONS_W, textAlign: 'center' }]}>ACTIONS</Text>
               </View>
-              {shown.map((h) => {
+              {shown.map((h, rowIdx) => {
                 const c = setupColor(h.setup);
                 return (
                   <View key={h.symbol}>
                     <TouchableOpacity style={styles.dataRow} onPress={() => setSel(h)} activeOpacity={0.8}>
+                      <Text style={[styles.exch, { width: 36, textAlign: 'right' }]}>{rowIdx + 1}</Text>
                       <Text style={[styles.sym, { width: 92 }]} numberOfLines={1}>{h.symbol}</Text>
                       <Text style={[styles.name, { width: 190 }]} numberOfLines={1}>{h.name || '—'}</Text>
                       <Text style={[styles.exch, { width: 46 }]}>{h.exchange}</Text>
