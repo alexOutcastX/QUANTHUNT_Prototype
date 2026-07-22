@@ -5,6 +5,7 @@ import StockDetail from '../components/StockDetail';
 import StrategyScores from '../components/StrategyScores';
 import { Row } from '../screener';
 import { navigate, openStock } from '../navIntent';
+import { lvlLabels, useAdvisory } from '../flags';
 import { addSymbol, loadWatchlist, normSymbol } from '../watchlist';
 import { LocalAlert, addLocalAlert, hasLocalAlert, loadLocalAlerts } from '../localalerts';
 import { loadNames } from './ScreenerScreen';
@@ -79,8 +80,8 @@ function InstRow({ r, onOpen }: { r: InstitutionalRec; onOpen: () => void }) {
         </View>
         {r.name ? <Text style={styles.name} numberOfLines={1}>{r.name}</Text> : null}
         <Text style={styles.setupLine} numberOfLines={1}>
-          entry {money(r.entry)} · SL {money(r.stop)} · tgt {money(r.target)} ({signPct(r.upside_pct)})
-          {r.rr != null ? ` · ${r.rr.toFixed(1)}:1` : ''}{r.eta ? ` · ⏱ ${r.eta}` : ''}
+          piv {money(r.entry)} · S {money(r.stop)} · R {money(r.target)} ({signPct(r.upside_pct)})
+          {r.rr != null ? ` · ${r.rr.toFixed(1)}:1` : ''}
         </Text>
       </View>
       <View style={styles.rowRight}>
@@ -111,6 +112,8 @@ function InstDetail({
   onWatch: () => void;
   onAlert: () => void;
 }) {
+  const adv = useAdvisory();
+  const L = lvlLabels(adv);
   const Cell = ({ label, value, color, sub }: { label: string; value: string; color?: string; sub?: string }) => (
     <View style={styles.cell}>
       <Text style={styles.cellLbl}>{label}</Text>
@@ -127,9 +130,9 @@ function InstDetail({
             <View style={{ flex: 1 }}>
               <View style={styles.rowTop}>
                 <Text style={styles.sheetSym}>{r.symbol}</Text>
-                <View style={[styles.actionPill, { backgroundColor: r.action === 'BUY' ? theme.green : GOLD }]}>
+                {adv ? <View style={[styles.actionPill, { backgroundColor: r.action === 'BUY' ? theme.green : GOLD }]}>
                   <Text style={styles.actionTxt}>{r.action}</Text>
-                </View>
+                </View> : null}
               </View>
               {r.name ? <Text style={styles.name}>{r.name}</Text> : null}
               <Text style={[styles.primaryTag, { color: stratColor(r.primary_key) }]}>{r.primary}</Text>
@@ -168,9 +171,9 @@ function InstDetail({
           </View>
 
           <View style={styles.grid}>
-            <Cell label="ENTRY" value={money(r.entry)} />
-            <Cell label="STOP LOSS" value={money(r.stop)} sub={signPct(r.stop_pct)} color={theme.red} />
-            <Cell label="TARGET" value={money(r.target)} sub={signPct(r.upside_pct)} color={theme.green} />
+            <Cell label={L.entry} value={money(r.entry)} />
+            <Cell label={L.stop} value={money(r.stop)} sub={signPct(r.stop_pct)} color={theme.red} />
+            <Cell label={L.target} value={money(r.target)} sub={signPct(r.upside_pct)} color={theme.green} />
             <Cell label="R : R" value={r.rr != null ? `${r.rr.toFixed(1)}:1` : '—'} />
             <Cell label="6M RET" value={signPct(r.ret_6m)} color={(r.ret_6m ?? 0) >= 0 ? theme.green : theme.red} />
             <Cell label="MAX DD" value={signPct(r.max_dd)} color={theme.red} />
@@ -178,9 +181,9 @@ function InstDetail({
             <Cell label="RESISTANCE" value={money(r.resistance)} />
           </View>
 
-          {r.eta ? (
+          {adv && r.eta ? (
             <View style={styles.etaBar}>
-              <Text style={styles.etaLbl}>⏱ Est. time to target</Text>
+              <Text style={styles.etaLbl}>Est. time to target</Text>
               <Text style={styles.etaVal}>{r.eta}</Text>
             </View>
           ) : null}

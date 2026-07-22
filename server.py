@@ -738,7 +738,7 @@ def _identity():
 def _req_start():
     request._t0 = time.time()
     p = request.path
-    if p == "/" or p.startswith(("/_expo/", "/assets/", "/favicon", "/legal", "/status")):
+    if p == "/" or p.startswith(("/_expo/", "/assets/", "/favicon", "/legal", "/privacy", "/terms", "/status")):
         return None
     ident = _identity()
     now = time.time()
@@ -942,6 +942,26 @@ def auth_otp_verify():
                     max_age=_users.SESSION_TTL, httponly=True, samesite="Lax",
                     secure=request.headers.get("X-Forwarded-Proto") == "https")
     return resp
+
+
+# ── compliance flags ─────────────────────────────────────────────────────────
+# advisory_mode gates every advice-shaped surface (BUY/WATCH actions, targets,
+# stops, confidence/probability framing). Until SEBI Research-Analyst
+# registration exists it stays OFF for the public: only the owner sees the
+# advisory framing. ADVISORY_USERS=1 extends it to signed-in users and
+# ADVISORY_ALL=1 to everyone — both explicit owner decisions, never defaults.
+@app.route("/flags")
+def flags():
+    owner = _auth.is_owner(request.cookies.get(_auth.COOKIE, ""))
+    signed_in = current_user_id() is not None
+    advisory = (
+        owner
+        or os.environ.get("ADVISORY_ALL") == "1"
+        or (signed_in and os.environ.get("ADVISORY_USERS") == "1")
+    )
+    return jsonify({"advisory_mode": bool(advisory),
+                    "accounts": _users.enabled(),
+                    "signed_in": signed_in})
 
 
 @app.route("/auth/me")
