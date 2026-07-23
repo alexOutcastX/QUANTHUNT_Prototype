@@ -10,6 +10,8 @@ import SymbolInput from '../components/SymbolInput';
 import { Row } from '../screener';
 import { navigate, takeSymbol } from '../navIntent';
 import { addSymbol, loadWatchlist, normSymbol } from '../watchlist';
+import { addPaperTrade, hasOpenPaper, loadPaperTrades } from '../paperTrades';
+import { openPdfPreview } from '../pdf';
 import { Btn, Card, EmptyState, InfoButton, Loading, SectionTitle, Segmented, Sheet } from '../ui';
 import { PATTERN_INFO } from '../tabInfo';
 import { describePattern } from '../patternInfo';
@@ -316,50 +318,74 @@ const SCREEN_COLS: Col[] = [
 ];
 const SCREEN_TABLE_W = SCREEN_COLS.reduce((a, c) => a + c.w, 0);
 
-function PatternIndexScreener({ onOpenSymbol }: { onOpenSymbol: (sym: string) => void }) {
-  const [index, setIndex] = useState('NIFTY 50');
-  const [snap, setSnap] = useState<PatternScreenResp | null>(null);
+function PatternIndexScreener({ onOpenSymbol, onFullScan }: {
+  onOpenSymbol: (sym: string) => void;
+  onFullScan: (sym: string) => void;
+}) {
+  const { isDesktop } = useResponsive();
+  const [indexSel, setIndexSel] = useState<string[]>(['NIFTY 50']);
+  const [idxOpen, setIdxOpen] = useState(false);
+  const [idxDraft, setIdxDraft] = useState<string[]>(['NIFTY 50']);
+  const [snaps, setSnaps] = useState<Record<string, PatternScreenResp>>({});
   const [error, setError] = useState('');
   const [patFilter, setPatFilter] = useState('');    // '' = all patterns; 'Bullish'/'Bearish' = bias groups
   const [patOpen, setPatOpen] = useState(false);
   const [sweep, setSweep] = useState(0);             // bump to restart the poll loop
+  const [sel, setSel] = useState<PatternScreenHit | null>(null);
 
-  // Poll the sweep: immediately on index change / rescan, then every 4 s while
-  // the backend is still sweeping.
+  // Poll every selected index; merge snapshots client-side (the server sweeps
+  // and caches per index). Keep last data through transient poll failures.
   useEffect(() => {
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | null = null;
     setError('');
     let misses = 0;
     const tick = async () => {
-      try {
-        const s = await api.patternsScreen(index);
-        if (cancelled) return;
+      const results = await Promise.all(
+        indexSel.map((ix) => api.patternsScreen(ix).then((s) => [ix, s] as const).catch(() => null)),
+      );
+      if (cancelled) return;
+      const ok = results.filter(Boolean) as (readonly [string, PatternScreenResp])[];
+      if (ok.length) {
         misses = 0;
         setError('');
-        setSnap(s);
-        if (s.status === 'running' || s.refreshing) timer = setTimeout(tick, 4000);
-      } catch (e) {
-        if (cancelled) return;
-        // Transient poll failures (mobile network blips, server busy) must not
-        // wipe a sweep that's mid-flight — keep the last snapshot and retry.
+        setSnaps((prev) => {
+          const next = { ...prev };
+          ok.forEach(([ix, s]) => { next[ix] = s; });
+          return next;
+        });
+      } else {
         misses += 1;
-        if (misses <= 5) {
-          timer = setTimeout(tick, 6000);
-        } else {
-          setError(e instanceof Error ? e.message : 'Screen failed');
+        if (misses > 5) {
+          setError('Screen failed — check the connection and tap Rescan.');
+          return;
         }
       }
+      const anyRunning = ok.some(([, s]) => s.status === 'running' || s.refreshing);
+      if (anyRunning || ok.length < indexSel.length) timer = setTimeout(tick, 4000);
     };
-    setSnap(null);
+    setSnaps({});
     tick();
     return () => {
       cancelled = true;
       if (timer) clearTimeout(timer);
     };
-  }, [index, sweep]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [indexSel.join('|'), sweep]);
 
-  const hits = snap?.results || [];
+  // Merge the per-index snapshots: dedupe symbol+pattern (keep the stronger
+  // read), aggregate progress/coverage.
+  const loaded = indexSel.map((ix) => snaps[ix]).filter(Boolean) as PatternScreenResp[];
+  const merged = useMemo(() => {
+    const bySig = new Map<string, PatternScreenHit>();
+    loaded.forEach((s) => (s.results || []).forEach((h) => {
+      const k = `${h.symbol}|${h.type}`;
+      const prev = bySig.get(k);
+      if (!prev || h.confidence > prev.confidence) bySig.set(k, h);
+    }));
+    return Array.from(bySig.values()).sort((a, b) => b.confidence - a.confidence);
+  }, [loaded]);
+  const hits = merged;
   const enrich = useEnrich(useMemo(() => hits.map((h) => h.symbol), [hits]));
   const biasGroup = patFilter === 'Bullish' || patFilter === 'Bearish';
   const shown = hits.filter((h) => {
@@ -367,39 +393,41 @@ function PatternIndexScreener({ onOpenSymbol }: { onOpenSymbol: (sym: string) =>
     if (biasGroup) return h.bias === patFilter.toLowerCase();
     return h.label === patFilter;
   });
-  const running = snap?.status === 'running' || snap?.refreshing;
+  const running = loaded.some((s) => s.status === 'running' || s.refreshing) || loaded.length < indexSel.length;
+  const anyLoaded = loaded.length > 0;
+  const partial = !running && loaded.some((s) => s.partial);
+  const scannedOk = loaded.reduce((a, s) => a + (s.scanned_ok || 0), 0);
+  const universe = loaded.reduce((a, s) => a + (s.universe || 0), 0);
+  const asof = Math.max(0, ...loaded.map((s) => s.asof || 0));
+  const capped = loaded.some((s) => s.capped);
+  const idxLabel = indexSel.length === 1 ? indexSel[0] : `${indexSel.length} indices`;
 
   const pickPat = (l: string) => {
     setPatFilter(l);
     setPatOpen(false);
   };
+  const toggleIdx = (ix: string) =>
+    setIdxDraft((d) => (d.includes(ix) ? d.filter((x) => x !== ix) : [...d, ix]));
 
-  return (
+  const body = (
     <ScrollView contentContainerStyle={styles.body}>
-      {/* one scrolling line of index chips — no wrap clutter */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.idxScroll} contentContainerStyle={styles.idxLine}>
-        {SCREEN_INDICES.map((ix) => (
-          <TouchableOpacity
-            key={ix}
-            style={[styles.perChip, index === ix && styles.perChipOn]}
-            onPress={() => setIndex(ix)}
-            activeOpacity={0.75}
-          >
-            <Text style={[styles.perTxt, index === ix && styles.perTxtOn]}>{ix.replace('NIFTY ', '')}</Text>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
-
-      {/* one control line: pattern dropdown (default All) + rescan */}
+      {/* control line: index multi-picker + pattern dropdown + rescan */}
       <View style={styles.ctlLine}>
+        <TouchableOpacity
+          style={[styles.perChip, styles.perChipOn]}
+          onPress={() => { setIdxDraft(indexSel); setIdxOpen(true); }}
+          activeOpacity={0.75}
+        >
+          <Text style={[styles.perTxt, styles.perTxtOn]}>Indices · {idxLabel} ▾</Text>
+        </TouchableOpacity>
         <TouchableOpacity style={[styles.perChip, !!patFilter && styles.perChipOn]} onPress={() => setPatOpen(true)} activeOpacity={0.75}>
           <Text style={[styles.perTxt, !!patFilter && styles.perTxtOn]}>{patFilter || 'All patterns'} ▾</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.perChip}
           onPress={() => {
-            // Force a fresh sweep server-side, then restart the poll loop.
-            api.patternsScreen(index, true).catch(() => {});
+            // Force fresh sweeps server-side, then restart the poll loop.
+            indexSel.forEach((ix) => api.patternsScreen(ix, true).catch(() => {}));
             setSweep((n) => n + 1);
           }}
           activeOpacity={0.75}
@@ -433,23 +461,20 @@ function PatternIndexScreener({ onOpenSymbol }: { onOpenSymbol: (sym: string) =>
         </Sheet>
       ) : null}
 
-      {error && !snap ? <EmptyState icon="⚠" title="Couldn't screen" hint={`${error} — pull down or tap Rescan to retry.`} /> : null}
-      {!error && !snap ? <Loading label={`Loading ${index} pattern screen…`} /> : null}
-      {snap ? (
+      {error && !anyLoaded ? <EmptyState icon="⚠" title="Couldn't screen" hint={`${error}`} /> : null}
+      {!error && !anyLoaded ? <Loading label={`Loading ${idxLabel} pattern screen…`} /> : null}
+      {anyLoaded ? (
         <>
           <SectionTitle>
-            {shown.length} hit{shown.length === 1 ? '' : 's'} · {index}
-            {running ? ` · sweeping… ${snap.progress || ''}` : snap.asof ? ` · as of ${fmtDate(snap.asof)}` : ''}
-            {snap.capped ? ' · first 260 constituents' : ''}
+            {shown.length} hit{shown.length === 1 ? '' : 's'} · {idxLabel}
+            {running ? ' · sweeping…' : asof ? ` · as of ${fmtDate(asof)}` : ''}
+            {capped ? ' · first 260 constituents per index' : ''}
           </SectionTitle>
-          {!running && snap.partial ? (
+          {partial ? (
             <Text style={styles.partialNote}>
-              The data feed rate-limited this sweep — only {snap.scanned_ok}/{snap.universe} stocks had price
+              The data feed rate-limited this sweep — only {scannedOk}/{universe} stocks had price
               history. It retries automatically in a few minutes, or tap Rescan.
             </Text>
-          ) : null}
-          {snap.status === 'error' && !hits.length ? (
-            <EmptyState icon="⚠" title="Sweep failed" hint={snap.error || 'Retry shortly.'} />
           ) : null}
           {shown.length ? (
             <ScrollView horizontal showsHorizontalScrollIndicator contentContainerStyle={{ minWidth: '100%' }}>
@@ -462,7 +487,7 @@ function PatternIndexScreener({ onOpenSymbol }: { onOpenSymbol: (sym: string) =>
                   ))}
                 </View>
                 {shown.map((h, i) => (
-                  <ScreenHitRow key={`${h.symbol}-${h.type}-${i}`} h={h} enr={enrich[h.symbol]} idx={i} top={i === 0} onPress={() => onOpenSymbol(h.symbol)} />
+                  <ScreenHitRow key={`${h.symbol}-${h.type}-${i}`} h={h} enr={enrich[h.symbol]} idx={i} top={i === 0} onPress={() => setSel(h)} />
                 ))}
               </View>
             </ScrollView>
@@ -473,22 +498,227 @@ function PatternIndexScreener({ onOpenSymbol }: { onOpenSymbol: (sym: string) =>
               hint={
                 patFilter && hits.length
                   ? 'Other patterns were found — switch the dropdown back to All patterns to see them.'
-                  : snap.partial
+                  : partial
                     ? 'Most of this sweep was rate-limited by the data feed — tap Rescan to fill in the gaps.'
                     : 'No constituent shows a confident formation reaching into the last ~3 weeks. Try another index, or Rescan.'
               }
             />
           ) : (
-            <Loading label={`Sweeping ${index}… hits appear as they're found`} />
+            <Loading label={`Sweeping ${idxLabel}… hits appear as they're found`} />
           )}
           <Text style={styles.method}>
             Every constituent's last year of daily bars is scanned with the same geometric recogniser as the
             single-stock tab. Only formations reaching into the last ~2 weeks with probability ≥ 55 count as
-            hits. Tap a row for the full chart. Indicative and educational only — not investment advice.
+            hits. Tap a row for the full read + actions. Indicative and educational only — not investment advice.
           </Text>
         </>
       ) : null}
     </ScrollView>
+  );
+
+  return (
+    <View style={{ flex: 1, flexDirection: isDesktop ? 'row' : 'column' }}>
+      <View style={{ flex: 1 }}>{body}</View>
+
+      {/* Desktop: the tapped hit opens in the blank space beside the table. */}
+      {isDesktop && sel ? (
+        <ScrollView style={styles.sidePanel} contentContainerStyle={{ padding: theme.sp.md }}>
+          <PatternHitCard
+            h={sel}
+            enr={enrich[sel.symbol]}
+            onClose={() => setSel(null)}
+            onOpenSymbol={onOpenSymbol}
+            onFullScan={onFullScan}
+          />
+        </ScrollView>
+      ) : null}
+
+      {/* Mobile: same card as a popup. */}
+      {!isDesktop && sel ? (
+        <Sheet onClose={() => setSel(null)} maxHeight="92%">
+          <ScrollView bounces={false}>
+            <PatternHitCard
+              h={sel}
+              enr={enrich[sel.symbol]}
+              onClose={() => setSel(null)}
+              onOpenSymbol={onOpenSymbol}
+              onFullScan={onFullScan}
+            />
+          </ScrollView>
+        </Sheet>
+      ) : null}
+
+      {/* Index multi-picker */}
+      {idxOpen ? (
+        <Sheet onClose={() => setIdxOpen(false)} maxHeight="85%">
+          <SectionTitle>Indices to screen</SectionTitle>
+          <ScrollView bounces={false} style={{ marginVertical: theme.sp.sm }}>
+            <TouchableOpacity
+              style={styles.patOpt}
+              onPress={() => setIdxDraft(idxDraft.length === SCREEN_INDICES.length ? ['NIFTY 50'] : [...SCREEN_INDICES])}
+              activeOpacity={0.75}
+            >
+              <Text style={[styles.patOptTxt, { fontWeight: '700' }]}>
+                {idxDraft.length === SCREEN_INDICES.length ? '☑' : '☐'} All indices
+              </Text>
+            </TouchableOpacity>
+            {SCREEN_INDICES.map((ix) => (
+              <TouchableOpacity key={ix} style={styles.patOpt} onPress={() => toggleIdx(ix)} activeOpacity={0.75}>
+                <Text style={[styles.patOptTxt, idxDraft.includes(ix) && { color: theme.brand, fontWeight: '700' }]}>
+                  {idxDraft.includes(ix) ? '☑' : '☐'} {ix}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+          <Btn
+            label={`Scan ${idxDraft.length === 1 ? idxDraft[0] : `${idxDraft.length} indices`}`}
+            onPress={() => {
+              if (idxDraft.length) setIndexSel(idxDraft);
+              setIdxOpen(false);
+            }}
+          />
+        </Sheet>
+      ) : null}
+    </View>
+  );
+}
+
+// ── Tapped-hit detail card: the full pattern read + every follow-up action ──
+function PatternHitCard({ h, enr, onClose, onOpenSymbol, onFullScan }: {
+  h: PatternScreenHit;
+  enr?: Enrich;
+  onClose: () => void;
+  onOpenSymbol: (sym: string) => void;
+  onFullScan: (sym: string) => void;
+}) {
+  const c = biasColor(h.bias);
+  const desc = describePattern(h.label);
+  const [watch, setWatch] = useState<string[]>([]);
+  const [papered, setPapered] = useState(false);
+  const [flash, setFlash] = useState('');
+  useEffect(() => {
+    loadWatchlist().then(setWatch);
+    loadPaperTrades().then((ts) => setPapered(hasOpenPaper(ts, h.symbol)));
+  }, [h.symbol]);
+  const watched = watch.includes(normSymbol(h.symbol));
+  const toast = (m: string) => {
+    setFlash(m);
+    setTimeout(() => setFlash(''), 2200);
+  };
+
+  const target = h.target ?? (h.price != null && h.expansion_pct != null
+    ? h.price * (1 + h.expansion_pct / 100) : null);
+  const long = h.bias !== 'bearish';
+  const onPaper = async () => {
+    if (h.price == null || target == null) return;
+    // Stop at half the measured move on the opposite side → a 2:1 setup.
+    const stop = long ? h.price - (target - h.price) / 2 : h.price + (h.price - target) / 2;
+    await addPaperTrade({
+      symbol: h.symbol, side: long ? 'long' : 'short', source: 'Pattern screener',
+      entry: h.price, stop: Math.round(stop * 100) / 100, target: Math.round(target * 100) / 100,
+    });
+    setPapered(true);
+    toast(`Paper ${long ? 'long' : 'short'} logged for ${h.symbol}`);
+  };
+  const onExport = () => {
+    const esc = (v: unknown) => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    openPdfPreview(
+      `<html><head><title>TaurEye — Pattern read — ${esc(h.symbol)}</title></head><body>` +
+      `<h1>${esc(h.symbol)} <span class="sub">${esc(h.label)}</span></h1>` +
+      `<div class="big" style="color:${h.bias === 'bearish' ? '#c92a2a' : '#0b7a53'}">${esc(h.label)} · ${h.confidence}% <span class="sub">${esc(h.bias)} · ${h.status === 'confirmed' ? 'confirmed' : 'forming'}</span></div>` +
+      `<h2>Reading</h2><table>` +
+      `<tr><td style="color:#64748b">CMP</td><td style="text-align:right"><b>${h.price != null ? '₹' + h.price.toLocaleString('en-IN') : '—'}</b></td></tr>` +
+      `<tr><td style="color:#64748b">Continuation probability</td><td style="text-align:right"><b>${h.continuation != null ? h.continuation + '%' : '—'}</b></td></tr>` +
+      `<tr><td style="color:#64748b">Measured move</td><td style="text-align:right"><b>${h.expansion_pct != null ? (h.expansion_pct >= 0 ? '+' : '') + h.expansion_pct + '%' : '—'}${target != null ? ' → ₹' + target.toLocaleString('en-IN', { maximumFractionDigits: 2 }) : ''}</b></td></tr>` +
+      `<tr><td style="color:#64748b">Formation window</td><td style="text-align:right"><b>${fmtDate(h.start_ts ?? undefined)} → ${fmtDate(h.end_ts ?? undefined)}</b></td></tr>` +
+      `</table>` +
+      `<h2>What this pattern is</h2><p>${esc(desc.what)}</p><p><b>What it implies</b> — ${esc(desc.implies)}</p>` +
+      `<p style="color:#999;font-size:10px;margin-top:14px">Geometric pattern detection on public daily price data. Indicative and educational only — not investment advice.</p>` +
+      `</body></html>`,
+      { docType: 'Pattern read', fileName: `TaurEye-pattern-${h.symbol}` },
+    );
+  };
+
+  return (
+    <View>
+      <View style={styles.hitHead}>
+        <View style={{ flex: 1 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.sp.sm, flexWrap: 'wrap' }}>
+            <Text style={styles.hitSym}>{h.symbol}</Text>
+            <CapChip mcapCr={enr?.mcap} value />
+          </View>
+          <Text style={styles.hitPx}>
+            {h.price != null ? `₹${h.price.toLocaleString('en-IN')}` : '—'}
+            {enr?.sector ? <Text style={{ color: theme.muted }}> · {enr.sector}</Text> : null}
+          </Text>
+        </View>
+        <TouchableOpacity onPress={onClose} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+          <Text style={styles.hitX}>✕</Text>
+        </TouchableOpacity>
+      </View>
+
+      <View style={[styles.hitBadge, { borderColor: c }]}>
+        <Text style={[styles.hitBadgeTxt, { color: c }]}>
+          {h.label} · {h.bias === 'bullish' ? '▲ Bullish' : h.bias === 'bearish' ? '▼ Bearish' : '— Neutral'} · {h.status === 'confirmed' ? 'Confirmed' : 'Forming'}
+        </Text>
+      </View>
+
+      <View style={styles.hitGrid}>
+        {[
+          ['PROBABILITY', `${h.confidence}%`],
+          ['CONTINUATION', h.continuation != null ? `${h.continuation}%` : '—'],
+          ['MEASURED MOVE', h.expansion_pct != null ? `${h.expansion_pct >= 0 ? '+' : ''}${h.expansion_pct}%` : '—'],
+          ['TARGET', target != null ? `₹${target.toLocaleString('en-IN', { maximumFractionDigits: 2 })}` : '—'],
+          ['FORMED', fmtDate(h.start_ts ?? undefined)],
+          ['DETECTED', fmtDate(h.end_ts ?? undefined)],
+        ].map(([l, v]) => (
+          <View key={l} style={styles.hitCell}>
+            <Text style={styles.hitCellLbl}>{l}</Text>
+            <Text style={styles.hitCellVal}>{v}</Text>
+          </View>
+        ))}
+      </View>
+      <Bar pct={h.confidence} color={c} />
+
+      <Text style={styles.hitDesc}>{desc.what}</Text>
+      <Text style={styles.hitDesc}><Text style={{ fontWeight: '700' }}>Implies</Text> — {desc.implies}</Text>
+
+      <View style={styles.hitActions}>
+        <TouchableOpacity style={styles.hitBtn} onPress={() => onOpenSymbol(h.symbol)} activeOpacity={0.75}>
+          <Text style={styles.hitBtnTxt}>Company profile</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.hitBtn} onPress={() => onFullScan(h.symbol)} activeOpacity={0.75}>
+          <Text style={styles.hitBtnTxt}>▤ Chart + full scan</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.hitBtn} onPress={() => navigate('analysis', { sub: 'mb', symbol: h.symbol })} activeOpacity={0.75}>
+          <Text style={[styles.hitBtnTxt, { color: theme.accent }]}>Multibagger</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.hitBtn} onPress={() => navigate('analysis', { sub: 'momentum', symbol: h.symbol })} activeOpacity={0.75}>
+          <Text style={styles.hitBtnTxt}>Momentum</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.hitBtn} onPress={() => navigate('analysis', { sub: 'inst', symbol: h.symbol })} activeOpacity={0.75}>
+          <Text style={styles.hitBtnTxt}>Dossier</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.hitBtn}
+          onPress={async () => { setWatch(await addSymbol(watch, h.symbol)); toast(`${h.symbol} added to watchlist`); }}
+          activeOpacity={0.75}
+        >
+          <Text style={[styles.hitBtnTxt, watched && { color: theme.green }]}>{watched ? '★ Watching' : '☆ Watchlist'}</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.hitBtn} onPress={onPaper} activeOpacity={0.75} disabled={h.price == null || target == null}>
+          <Text style={[styles.hitBtnTxt, papered && { color: theme.green }]}>{papered ? '✓ Papered' : '✎ Paper trade'}</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.hitBtn} onPress={onExport} activeOpacity={0.75}>
+          <Text style={styles.hitBtnTxt}>⤓ Export PDF</Text>
+        </TouchableOpacity>
+      </View>
+      {flash ? <Text style={styles.hitFlash}>{flash}</Text> : null}
+      <Text style={styles.method}>
+        Geometric read on daily bars — the measured move projects the pattern's height from its breakout
+        level. Indicative and educational only — not investment advice.
+      </Text>
+    </View>
   );
 }
 
@@ -632,7 +862,10 @@ export default function PatternScreen() {
       </View>
 
       {mode === 'screen' ? (
-        <PatternIndexScreener onOpenSymbol={(s) => setDetail({ sym: s } as Row)} />
+        <PatternIndexScreener
+          onOpenSymbol={(s) => setDetail({ sym: s } as Row)}
+          onFullScan={(s) => { setMode('stock'); setSymbol(s); scan(s); }}
+        />
       ) : (
       <>
       <View style={styles.inputRow}>
@@ -907,4 +1140,33 @@ const styles = StyleSheet.create({
   barTrack: { height: 4, width: '86%', borderRadius: 2, backgroundColor: theme.surface3, overflow: 'hidden', marginTop: 3 },
   barFill: { height: '100%', borderRadius: 2 },
   method: { color: theme.muted, fontSize: theme.fs.xs + 1, lineHeight: 16, marginTop: theme.sp.sm },
+  // ── index-screener hit card ──
+  sidePanel: {
+    width: 380, borderLeftWidth: 1, borderLeftColor: theme.border,
+    backgroundColor: theme.surface,
+  },
+  hitHead: { flexDirection: 'row', alignItems: 'flex-start', gap: theme.sp.sm },
+  hitSym: { color: theme.text, fontSize: theme.fs.xl, fontWeight: '800', fontFamily: theme.mono },
+  hitPx: { color: theme.text, fontSize: theme.fs.md, fontFamily: theme.mono, fontWeight: '700', marginTop: 2 },
+  hitX: { color: theme.muted, fontSize: theme.fs.lg, paddingHorizontal: 4 },
+  hitBadge: {
+    borderWidth: 1, borderRadius: theme.radius.sm, paddingHorizontal: 10, paddingVertical: 6,
+    alignSelf: 'flex-start', marginTop: theme.sp.sm,
+  },
+  hitBadgeTxt: { fontSize: theme.fs.sm, fontWeight: '700' },
+  hitGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.sp.sm, marginVertical: theme.sp.md },
+  hitCell: {
+    backgroundColor: theme.surface2, borderRadius: theme.radius.sm, borderWidth: 1, borderColor: theme.border,
+    paddingVertical: 6, paddingHorizontal: 10, minWidth: 104, flexGrow: 1,
+  },
+  hitCellLbl: { color: theme.muted, fontSize: 9, fontFamily: theme.mono, letterSpacing: 0.5 },
+  hitCellVal: { color: theme.text, fontSize: theme.fs.md, fontWeight: '700', fontFamily: theme.mono, marginTop: 2 },
+  hitDesc: { color: theme.muted2, fontSize: theme.fs.sm, lineHeight: 19, marginTop: theme.sp.sm },
+  hitActions: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.sp.sm, marginTop: theme.sp.md },
+  hitBtn: {
+    borderWidth: 1, borderColor: theme.border, borderRadius: theme.radius.sm,
+    paddingHorizontal: 12, paddingVertical: 8, backgroundColor: theme.surface2,
+  },
+  hitBtnTxt: { color: theme.text, fontSize: theme.fs.sm },
+  hitFlash: { color: theme.green, fontSize: theme.fs.sm, marginTop: theme.sp.sm, fontWeight: '600' },
 });
