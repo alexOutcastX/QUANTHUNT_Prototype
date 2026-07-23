@@ -48,14 +48,21 @@ type SubTab = { key: string; label: string; hint?: string; render: () => React.R
 // Desktop shows a segmented pill row (there's room). Mobile can't fit 7 labels,
 // so it collapses into a hamburger dropdown: the current tab + a menu listing
 // every tab with a one-line description of what it's for.
-function SubTabs({ tabs, persistKey }: { tabs: SubTab[]; persistKey?: string }) {
-  const has = (k?: string) => !!k && tabs.some((t) => t.key === k);
+function SubTabs({ tabs, persistKey, alias }: { tabs: SubTab[]; persistKey?: string; alias?: Record<string, string> }) {
+  // alias maps legacy intent sub-keys onto the tab that now hosts them (e.g.
+  // 'mb'/'momentum' → 'screener' since Multibagger and Momentum became tabs
+  // inside the Screener page) so every old navigate() still lands somewhere.
+  const resolve = (k?: string) => (k && alias?.[k]) || k;
+  const has = (k?: string) => {
+    const r = resolve(k);
+    return !!r && tabs.some((t) => t.key === r);
+  };
   const { isDesktop } = useResponsive();
   // If we arrived here via a cross-screen navigation targeting one of our
   // sub-tabs, open on that tab instead of the first.
   const [active, setActive] = useState(() => {
     const p = peekNav();
-    return has(p?.sub) ? (p!.sub as string) : tabs[0].key;
+    return has(p?.sub) ? (resolve(p!.sub) as string) : tabs[0].key;
   });
   const [hydrated, setHydrated] = useState(false);
   // Restore the last sub-tab (unless a cross-nav intent targeted a specific one)
@@ -81,7 +88,7 @@ function SubTabs({ tabs, persistKey }: { tabs: SubTab[]; persistKey?: string }) 
     () =>
       subscribeNav(() => {
         const p = peekNav();
-        if (has(p?.sub)) setActive(p!.sub as string);
+        if (has(p?.sub)) setActive(resolve(p!.sub) as string);
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
@@ -96,7 +103,11 @@ function SubTabs({ tabs, persistKey }: { tabs: SubTab[]; persistKey?: string }) 
         // small groups keep the classic equal-width segmented row.
         <View style={styles.subBarWrap}>
           {tabs.length > 6 ? (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.subScrollCenter}
+            >
               <View style={styles.subBar}>
                 {tabs.map((t) => (
                   <TouchableOpacity
@@ -111,11 +122,13 @@ function SubTabs({ tabs, persistKey }: { tabs: SubTab[]; persistKey?: string }) 
               </View>
             </ScrollView>
           ) : (
-            <View style={styles.subBar}>
+            // Content-width pills, centered in the row (report issues 2/9),
+            // instead of equal-width pills stretched across the page.
+            <View style={[styles.subBar, styles.subBarHug]}>
               {tabs.map((t) => (
                 <TouchableOpacity
                   key={t.key}
-                  style={[styles.subBtn, active === t.key && styles.subBtnOn]}
+                  style={[styles.subBtn, styles.subBtnFixed, active === t.key && styles.subBtnOn]}
                   onPress={() => setActive(t.key)}
                   activeOpacity={0.75}
                 >
@@ -227,11 +240,13 @@ export function ScreensHub() {
   return (
     <SubTabs
       persistKey="screens"
+      // Multibagger & Momentum are tabs inside the Screener page now; legacy
+      // intents targeting them land on the screener tab and ScreenerHub picks
+      // the right inner tab from the same intent.
+      alias={{ mb: 'screener', momentum: 'screener' }}
       tabs={[
-        { key: 'screener', label: 'Screener', hint: 'Filter NSE / BSE by technicals & fundamentals — the raw scan', render: () => <ScreenerScreen /> },
+        { key: 'screener', label: 'Screener', hint: 'Custom filters · Multibagger · Momentum — one screening console', render: () => <ScreenerHub /> },
         { key: 'reco', label: 'Recommendations', hint: 'Ranked buy setups from the Multibagger candidates', render: () => <RecommendationsScreen /> },
-        { key: 'mb', label: 'Multibagger', hint: 'Fixed-screen candidates + one-click potential analyser', render: () => <MultibaggerScreen /> },
-        { key: 'momentum', label: 'Momentum', hint: 'Trend & thrust radar with upside-remaining', render: () => <MomentumScreen /> },
         { key: 'patterns', label: 'Patterns', hint: 'Classic chart-pattern scanner with confidence & targets', render: () => <PatternScreen /> },
         { key: 'heatmap', label: 'Heatmap', hint: 'NSE + BSE sector map · tap a sector to screen it', render: () => <HeatmapScreen /> },
         { key: 'universe', label: 'Universe', hint: 'Index constituents · mcap segments', render: () => <UniverseScreen /> },
@@ -240,10 +255,55 @@ export function ScreensHub() {
   );
 }
 
+// Screener console tabs: the raw Custom screener is the default on load;
+// Multibagger and Momentum live beside it instead of on the Screens bar.
+const SCREENER_TABS: SubTab[] = [
+  { key: 'custom', label: 'Custom', render: () => <ScreenerScreen /> },
+  { key: 'mb', label: 'Multibagger', render: () => <MultibaggerScreen /> },
+  { key: 'momentum', label: 'Momentum', render: () => <MomentumScreen /> },
+];
+// Legacy intent sub-keys → inner tab. 'screener' (the outer tab's own key)
+// means the raw custom screener.
+const SCREENER_SUBS: Record<string, string> = { screener: 'custom', mb: 'mb', momentum: 'momentum' };
+
+export function ScreenerHub() {
+  const pick = (sub?: string) => (sub && SCREENER_SUBS[sub]) || null;
+  const [active, setActive] = useState(() => pick(peekNav()?.sub) || 'custom');
+  useEffect(
+    () =>
+      subscribeNav(() => {
+        const k = pick(peekNav()?.sub);
+        if (k) setActive(k);
+      }),
+    [],
+  );
+  const cur = SCREENER_TABS.find((t) => t.key === active) || SCREENER_TABS[0];
+  return (
+    <View style={styles.host}>
+      <View style={styles.innerBarWrap}>
+        <View style={[styles.subBar, styles.subBarHug]}>
+          {SCREENER_TABS.map((t) => (
+            <TouchableOpacity
+              key={t.key}
+              style={[styles.subBtn, styles.subBtnFixed, active === t.key && styles.subBtnOn]}
+              onPress={() => setActive(t.key)}
+              activeOpacity={0.75}
+            >
+              <Text style={[styles.subTxt, active === t.key && styles.subTxtOn]}>{t.label}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </View>
+      <View style={styles.hostBody}>{cur.render()}</View>
+    </View>
+  );
+}
+
 // Desk = the user's own workspace: positions, lists, alerts, deep research and
 // utilities. Everything that used to live under Lists / Tools / the rest of
 // Analysis, plus the More list so no destination is lost.
 export function DeskHub() {
+  const { isDesktop } = useResponsive();
   return (
     <SubTabs
       persistKey="desk"
@@ -260,7 +320,9 @@ export function DeskHub() {
         { key: 'calc', label: 'Calculator', hint: 'Position size · SIP · CAGR', render: () => <CalculatorScreen /> },
         { key: 'account', label: 'Account', hint: 'Sign in · cloud sync across devices', render: () => <AccountScreen /> },
         { key: 'more', label: 'More', hint: 'Charts, community, corporate data, indices & settings', render: () => <MoreScreen /> },
-      ]}
+        // Desktop promotes Backtest to the top bar beside Terminal; keep the
+        // Desk tab only where that top-level entry doesn't exist (mobile).
+      ].filter((t) => !(isDesktop && t.key === 'bt'))}
     />
   );
 }
@@ -300,6 +362,11 @@ const MORE_ITEMS: { key: string; label: string; hint: string; render: () => Reac
   { key: 'holidays', label: 'Holidays', hint: 'NSE holiday calendar · market open/closed', render: () => <HolidaysScreen /> },
 ];
 
+// Destinations that already have a first-class tab on the new shell's Screens
+// or Desk bars — More only lists them in classic navigation, where this page
+// is their sole home (report issue 12: no duplicates).
+const MORE_DUP_KEYS = new Set(['account', 'heatmap', 'universe', 'portfolio', 'watchlist', 'calc', 'risk', 'entities', 'alerts']);
+
 export function MoreScreen() {
   const [sel, setSel] = useState<string | null>(null);
   const [classic, setClassic] = useState(isClassicNav());
@@ -308,7 +375,8 @@ export function MoreScreen() {
   useEffect(() => {
     api.version().then((v) => setVersion(v.version)).catch(() => {});
   }, []);
-  const item = MORE_ITEMS.find((i) => i.key === sel);
+  const items = classic ? MORE_ITEMS : MORE_ITEMS.filter((i) => !MORE_DUP_KEYS.has(i.key));
+  const item = items.find((i) => i.key === sel);
 
   if (item) {
     return (
@@ -327,7 +395,7 @@ export function MoreScreen() {
 
   return (
     <ScrollView style={styles.host} contentContainerStyle={styles.menuPad}>
-      {MORE_ITEMS.map((i) => (
+      {items.map((i) => (
         <TouchableOpacity
           key={i.key}
           style={styles.menuRow}
@@ -380,6 +448,10 @@ const styles = StyleSheet.create({
   // basis collapsed every pill to zero width (labels stacked on top of each
   // other in the scrollable desktop bar).
   subBtnFixed: { flexGrow: 0, flexShrink: 0, flexBasis: 'auto', paddingHorizontal: 18 },
+  // Hug content + center in the row (desktop bars are center-aligned).
+  subBarHug: { alignSelf: 'center' },
+  subScrollCenter: { flexGrow: 1, justifyContent: 'center' },
+  innerBarWrap: { paddingHorizontal: theme.sp.lg, paddingBottom: theme.sp.sm, alignItems: 'center' },
   subBtnOn: { backgroundColor: theme.accent },
   subTxt: { color: theme.muted2, fontSize: theme.fs.sm },
   subTxtOn: { color: theme.onAccent, fontWeight: '700' },
