@@ -23,6 +23,7 @@ import { useResponsive } from '../responsive';
 
 const CFG_KEY = 'taureye.bt.cfg.v2';
 const SAVED_KEY = 'taureye.bt.saved.v2';
+const MYSTRATS_KEY = 'taureye.bt.mystrats.v1';
 
 const INDICES = ['NIFTY 50', 'NIFTY 100', 'NIFTY 200', 'NIFTY 500', 'NIFTY BANK', 'NIFTY IT',
   'NIFTY MIDCAP 100', 'NIFTY SMALLCAP 100', 'NIFTY AUTO', 'NIFTY PHARMA', 'NIFTY FMCG'];
@@ -182,6 +183,13 @@ export default function BacktestScreen() {
   const [sellRules, setSellRules] = useState<BtRule[]>([
     { ind: 'close', op: 'cross_below', target: 'sma', value: 50 },
   ]);
+  const [filterRules, setFilterRules] = useState<BtRule[]>([]);
+  const [modeBuy, setModeBuy] = useState<'all' | 'any'>('all');
+  const [modeSell, setModeSell] = useState<'all' | 'any'>('all');
+  const [baseKey, setBaseKey] = useState('');            // '' = no base bot
+  const [baseParams, setBaseParams] = useState<Record<string, number>>({});
+  const [stratName, setStratName] = useState('');
+  const [myStrats, setMyStrats] = useState<{ name: string; def: BtConfig['strategy'] }[]>([]);
   const [sizeMode, setSizeMode] = useState<'equal' | 'fixed' | 'risk'>('equal');
   const [sizeVal, setSizeVal] = useState(1);
   const [slType, setSlType] = useState<'none' | 'pct' | 'atr'>('none');
@@ -207,7 +215,46 @@ export default function BacktestScreen() {
   const [saveName, setSaveName] = useState('');
 
   const meta = metas.find((m) => m.key === stratKey);
-  const stratLabel = stratKey === 'custom' ? 'Custom rules' : meta?.label || stratKey;
+  const stratLabel = stratKey === 'custom' ? (stratName || 'Custom strategy') : meta?.label || stratKey;
+
+  // The full custom-strategy definition currently in the builder.
+  const customDef = (): BtConfig['strategy'] => ({
+    key: 'custom',
+    ...(stratName.trim() ? { name: stratName.trim() } : {}),
+    buy: buyRules,
+    sell: sellRules,
+    filters: filterRules,
+    mode_buy: modeBuy,
+    mode_sell: modeSell,
+    ...(baseKey ? { base: { key: baseKey, params: baseParams } } : {}),
+  });
+
+  const loadCustomDef = (def: BtConfig['strategy']) => {
+    setStratKey('custom');
+    setStratName(def.name || '');
+    setBuyRules(def.buy || []);
+    setSellRules(def.sell || []);
+    setFilterRules(def.filters || []);
+    setModeBuy(def.mode_buy === 'any' ? 'any' : 'all');
+    setModeSell(def.mode_sell === 'any' ? 'any' : 'all');
+    setBaseKey(def.base?.key || '');
+    setBaseParams(def.base?.params || {});
+  };
+
+  const saveStrategy = () => {
+    const def = customDef();
+    const name = (def.name || '').trim();
+    if (!name) return;
+    const next = [{ name, def }, ...myStrats.filter((s) => s.name !== name)].slice(0, 20);
+    setMyStrats(next);
+    AsyncStorage.setItem(MYSTRATS_KEY, JSON.stringify(next)).catch(() => {});
+  };
+
+  const deleteStrategy = (name: string) => {
+    const next = myStrats.filter((s) => s.name !== name);
+    setMyStrats(next);
+    AsyncStorage.setItem(MYSTRATS_KEY, JSON.stringify(next)).catch(() => {});
+  };
 
   // Add a symbol from the predictive search (dedup, cap at the engine's limit).
   const addSym = (sym: string) => {
@@ -225,9 +272,7 @@ export default function BacktestScreen() {
     capital,
     max_positions: maxPos,
     execution,
-    strategy: stratKey === 'custom'
-      ? { key: 'custom', buy: buyRules, sell: sellRules }
-      : { key: stratKey, params },
+    strategy: stratKey === 'custom' ? customDef() : { key: stratKey, params },
     sizing: { mode: sizeMode, value: sizeVal },
     risk: { sl_type: slType, sl_val: slVal, tp_type: tpType, tp_val: tpVal,
       trail_pct: trailPct, max_hold_days: maxHold },
@@ -242,10 +287,12 @@ export default function BacktestScreen() {
     if (cfg.max_positions) setMaxPos(cfg.max_positions);
     if (cfg.execution) setExecution(cfg.execution);
     if (cfg.strategy) {
-      setStratKey(cfg.strategy.key);
-      if (cfg.strategy.params) setParams(cfg.strategy.params);
-      if (cfg.strategy.buy) setBuyRules(cfg.strategy.buy);
-      if (cfg.strategy.sell) setSellRules(cfg.strategy.sell);
+      if (cfg.strategy.key === 'custom') {
+        loadCustomDef(cfg.strategy);
+      } else {
+        setStratKey(cfg.strategy.key);
+        if (cfg.strategy.params) setParams(cfg.strategy.params);
+      }
     }
     if (cfg.sizing) { setSizeMode(cfg.sizing.mode); if (cfg.sizing.value != null) setSizeVal(cfg.sizing.value); }
     if (cfg.risk) {
@@ -266,6 +313,9 @@ export default function BacktestScreen() {
     AsyncStorage.getItem(SAVED_KEY).then((raw) => {
       if (raw) { try { setSaved(JSON.parse(raw)); } catch { /* ignore */ } }
     });
+    AsyncStorage.getItem(MYSTRATS_KEY).then((raw) => {
+      if (raw) { try { setMyStrats(JSON.parse(raw)); } catch { /* ignore */ } }
+    });
     // Show the last completed run (survives restarts) until a fresh one lands.
     api.btLast().then((r) => {
       if (r?.result) { setResult(r.result); setIsPrevious(true); }
@@ -275,6 +325,15 @@ export default function BacktestScreen() {
   }, []);
 
   const pickStrategy = (k: string) => {
+    if (k.startsWith('my:')) {
+      const sv = myStrats.find((s) => s.name === k.slice(3));
+      if (sv) loadCustomDef(sv.def);
+      return;
+    }
+    if (k === 'custom') {
+      setStratKey('custom');
+      return;
+    }
     setStratKey(k);
     const m = metas.find((x) => x.key === k);
     if (m) setParams({ ...m.params });
@@ -381,8 +440,12 @@ export default function BacktestScreen() {
           />
         </View>
         <Dropdown
-          value={stratKey}
-          options={[...metas.map((m) => ({ key: m.key, label: m.label })), { key: 'custom', label: 'Custom rules (manual)' }]}
+          value={stratKey === 'custom' && stratName && myStrats.some((s) => s.name === stratName) ? `my:${stratName}` : stratKey}
+          options={[
+            ...metas.map((m) => ({ key: m.key, label: m.label })),
+            ...myStrats.map((s) => ({ key: `my:${s.name}`, label: `★ ${s.name}` })),
+            { key: 'custom', label: '＋ Custom strategy builder' },
+          ]}
           onChange={pickStrategy}
         />
         {stratKey !== 'custom' && meta?.blurb ? <Text style={styles.blurb}>{meta.blurb}</Text> : null}
@@ -396,16 +459,79 @@ export default function BacktestScreen() {
         ) : null}
         {stratKey === 'custom' ? (
           <View>
-            <Text style={styles.ruleGroup}>BUY WHEN ALL OF…</Text>
+            <Text style={styles.blurb}>
+              Build your own system: an optional base bot supplies the trigger, your entry rules refine it
+              (ALL/ANY), filters gate every entry (e.g. only above the 200-SMA), and exit rules or the base
+              bot close the trade. Name it and Save to keep it in the strategy list.
+            </Text>
+
+            <Text style={styles.ruleGroup}>BASE STRATEGY (OPTIONAL)</Text>
+            <Dropdown
+              value={baseKey}
+              options={[{ key: '', label: 'None — my rules only' }, ...metas.map((m) => ({ key: m.key, label: m.label }))]}
+              onChange={(k) => {
+                setBaseKey(k);
+                const m = metas.find((x) => x.key === k);
+                setBaseParams(m ? { ...m.params } : {});
+              }}
+            />
+            {baseKey ? (
+              <View style={styles.paramRow}>
+                {Object.keys(metas.find((m) => m.key === baseKey)?.params || {}).map((k) => (
+                  <NumIn key={k} label={k.toUpperCase()} value={baseParams[k] ?? 0}
+                    onChange={(n) => setBaseParams((p) => ({ ...p, [k]: n }))} />
+                ))}
+              </View>
+            ) : null}
+
+            <View style={styles.ruleHead}>
+              <Text style={styles.ruleGroup}>ENTRY RULES</Text>
+              <Segmented
+                items={[{ key: 'all', label: 'ALL' }, { key: 'any', label: 'ANY' }]}
+                value={modeBuy}
+                onChange={(k) => setModeBuy(k)}
+              />
+            </View>
             {buyRules.map((r, i) => ruleRow(r, i, buyRules, setBuyRules))}
             <TouchableOpacity onPress={() => setBuyRules([...buyRules, { ind: 'rsi', period: 14, op: 'lt', target: 'value', value: 30 }])}>
-              <Text style={styles.ruleAdd}>+ Add buy rule</Text>
+              <Text style={styles.ruleAdd}>+ Add entry rule</Text>
             </TouchableOpacity>
-            <Text style={styles.ruleGroup}>SELL WHEN ALL OF…</Text>
+
+            <Text style={styles.ruleGroup}>FILTERS — EVERY ENTRY MUST ALSO SATISFY…</Text>
+            {filterRules.map((r, i) => ruleRow(r, i, filterRules, setFilterRules))}
+            <TouchableOpacity onPress={() => setFilterRules([...filterRules, { ind: 'close', op: 'gt', target: 'sma', value: 200 }])}>
+              <Text style={styles.ruleAdd}>+ Add filter</Text>
+            </TouchableOpacity>
+
+            <View style={styles.ruleHead}>
+              <Text style={styles.ruleGroup}>EXIT RULES</Text>
+              <Segmented
+                items={[{ key: 'all', label: 'ALL' }, { key: 'any', label: 'ANY' }]}
+                value={modeSell}
+                onChange={(k) => setModeSell(k)}
+              />
+            </View>
             {sellRules.map((r, i) => ruleRow(r, i, sellRules, setSellRules))}
             <TouchableOpacity onPress={() => setSellRules([...sellRules, { ind: 'rsi', period: 14, op: 'gt', target: 'value', value: 70 }])}>
-              <Text style={styles.ruleAdd}>+ Add sell rule</Text>
+              <Text style={styles.ruleAdd}>+ Add exit rule</Text>
             </TouchableOpacity>
+
+            <Text style={styles.ruleGroup}>SAVE AS…</Text>
+            <View style={styles.stratSaveRow}>
+              <TextInput
+                style={[styles.in, { flex: 1, minWidth: 140 }]}
+                value={stratName}
+                onChangeText={setStratName}
+                placeholder="My breakout system…"
+                placeholderTextColor={theme.muted}
+              />
+              <Btn label="Save strategy" kind="ghost" onPress={saveStrategy} disabled={!stratName.trim()} />
+              {stratName.trim() && myStrats.some((s) => s.name === stratName.trim()) ? (
+                <TouchableOpacity onPress={() => deleteStrategy(stratName.trim())}>
+                  <Text style={[styles.ruleAdd, { color: theme.red }]}>Delete</Text>
+                </TouchableOpacity>
+              ) : null}
+            </View>
           </View>
         ) : null}
       </Card>
@@ -742,6 +868,8 @@ const styles = StyleSheet.create({
   },
   ddSm: { minWidth: 150 },
   ruleGroup: { color: theme.muted, fontSize: 10, fontFamily: theme.mono, letterSpacing: 0.5, marginTop: theme.sp.md, marginBottom: 4 },
+  ruleHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: theme.sp.sm },
+  stratSaveRow: { flexDirection: 'row', alignItems: 'center', gap: theme.sp.sm, flexWrap: 'wrap' },
   ruleRow: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.sp.sm, alignItems: 'flex-end', marginBottom: theme.sp.sm },
   ruleDd: { minWidth: 108, flexShrink: 1 },
   ruleDel: { color: theme.red, fontSize: theme.fs.md, paddingBottom: 8 },
