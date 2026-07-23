@@ -14,6 +14,7 @@ import {
   View,
   ViewStyle,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { theme } from './theme';
 import { useResponsive } from './responsive';
 import { RiskInput, tradeRisk } from './risk';
@@ -278,6 +279,70 @@ export function ScreenTitle({
 
 export function SectionTitle({ children }: { children: React.ReactNode }) {
   return <Text style={s.section}>{children}</Text>;
+}
+
+// Collapsible section — the standard treatment for long pages. The header row
+// carries the title, a one-line summary of the settings inside (visible while
+// collapsed, so a fully-folded page still reads as a dense config sheet) and a
+// chevron; `right` hosts extras (info buttons, badges) outside the toggle
+// area. Open state persists per `persistKey`; a session-level cache stops the
+// async restore from flashing the default state on remount.
+const foldCache: Record<string, boolean> = {};
+export function Fold({
+  title,
+  summary,
+  right,
+  open: openDefault = true,
+  persistKey,
+  flat,
+  children,
+  style,
+}: {
+  title: string;
+  summary?: string;
+  right?: React.ReactNode;
+  open?: boolean;
+  persistKey?: string;
+  flat?: boolean;
+  children: React.ReactNode;
+  style?: ViewStyle;
+}) {
+  const [open, setOpen] = React.useState(() =>
+    persistKey && foldCache[persistKey] !== undefined ? foldCache[persistKey] : openDefault,
+  );
+  React.useEffect(() => {
+    if (!persistKey || foldCache[persistKey] !== undefined) return;
+    AsyncStorage.getItem('taureye.fold.' + persistKey)
+      .then((v) => {
+        if (v === '0' || v === '1') {
+          foldCache[persistKey] = v === '1';
+          setOpen(v === '1');
+        }
+      })
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const toggle = () => {
+    const next = !open;
+    setOpen(next);
+    if (persistKey) {
+      foldCache[persistKey] = next;
+      AsyncStorage.setItem('taureye.fold.' + persistKey, next ? '1' : '0').catch(() => {});
+    }
+  };
+  return (
+    <View style={[s.card, !flat && theme.shadow.soft, style]}>
+      <TouchableOpacity style={s.foldHead} onPress={toggle} activeOpacity={0.7}>
+        <Text style={s.foldChev}>{open ? '▾' : '▸'}</Text>
+        <Text style={s.foldTitle}>{title}</Text>
+        {!open && summary ? (
+          <Text style={s.foldSum} numberOfLines={1}>{summary}</Text>
+        ) : <View style={{ flex: 1 }} />}
+        {right}
+      </TouchableOpacity>
+      {open ? <View style={s.foldBody}>{children}</View> : null}
+    </View>
+  );
 }
 
 // Springy press-scale for a crisp, tactile feel on primary actions.
@@ -902,6 +967,23 @@ const s = StyleSheet.create({
   },
   modalDisclaimerLabel: { color: theme.red, fontSize: theme.fs.xs + 1, fontWeight: '800', letterSpacing: 1.2, marginBottom: 4 },
   modalDisclaimerTxt: { color: theme.red, fontSize: theme.fs.sm + 1, lineHeight: 19 },
+  foldHead: { flexDirection: 'row', alignItems: 'center', gap: theme.sp.sm },
+  foldChev: { color: theme.muted2, fontSize: 11, width: 12, textAlign: 'center' },
+  foldTitle: {
+    color: theme.muted,
+    fontSize: theme.fs.xs + 1,
+    fontWeight: '800',
+    letterSpacing: 1.4,
+    textTransform: 'uppercase',
+  },
+  foldSum: {
+    flex: 1,
+    color: theme.muted2,
+    fontSize: theme.fs.xs + 1,
+    fontFamily: theme.mono,
+    textAlign: 'right',
+  },
+  foldBody: { marginTop: theme.sp.md },
   section: {
     color: theme.muted,
     fontSize: theme.fs.xs + 1,
