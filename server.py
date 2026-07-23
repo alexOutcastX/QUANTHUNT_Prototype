@@ -2139,10 +2139,15 @@ def _load_ohlc(sym, period, interval="1d"):
     out = []
     for ts, row in df.iterrows():
         try:
+            o, h, l, c = (float(row["Open"]), float(row["High"]),
+                          float(row["Low"]), float(row["Close"]))
+            # Yahoo pads illiquid scrips (e.g. BSE Ltd on holidays) with NaN
+            # rows; float(nan) does NOT raise, and a NaN that reaches jsonify
+            # produces literal `NaN` — invalid JSON that kills the client.
+            if any(math.isnan(x) or math.isinf(x) for x in (o, h, l, c)):
+                continue
             out.append({
-                "t": int(ts.timestamp()),
-                "o": float(row["Open"]), "h": float(row["High"]),
-                "l": float(row["Low"]), "c": float(row["Close"]),
+                "t": int(ts.timestamp()), "o": o, "h": h, "l": l, "c": c,
                 "v": int(row["Volume"]) if not math.isnan(row["Volume"]) else 0,
             })
         except Exception:
@@ -2151,6 +2156,18 @@ def _load_ohlc(sym, period, interval="1d"):
         with _ohlc_lock:
             _ohlc_cache[key] = (now, out)
     return out
+
+
+def _nan_safe(obj):
+    """Recursively replace NaN/Inf floats with None so jsonify never emits
+    invalid JSON (Python's json module writes bare `NaN` by default)."""
+    if isinstance(obj, float):
+        return None if (math.isnan(obj) or math.isinf(obj)) else obj
+    if isinstance(obj, dict):
+        return {k: _nan_safe(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_nan_safe(v) for v in obj]
+    return obj
 
 
 @app.route("/chart-patterns")
@@ -2182,7 +2199,7 @@ def chart_patterns():
         # second round trip.
         result["candles"] = [{"t": c["t"], "o": c["o"], "h": c["h"],
                               "l": c["l"], "c": c["c"]} for c in candles]
-        return jsonify(result)
+        return jsonify(_nan_safe(result))
     except Exception as e:
         log.error("Chart-patterns error for %s: %s", sym, e)
         return jsonify({"error": str(e), "symbol": sym, "patterns": []}), 503
@@ -2198,12 +2215,14 @@ def patterns_screen():
     from patterns import detect_patterns as _detect_chart
 
     name = request.args.get("index", "NIFTY 50").strip().upper()
-    if name not in NSE_INDEX_MAP:
+    # Custom groups (BSE SENSEX / SME EMERGE / RECENT IPOS) are sweepable too —
+    # _get_constituents resolves them the same way the equity screener does.
+    if name not in NSE_INDEX_MAP and name not in CUSTOM_GROUPS:
         return jsonify({"error": f"Unknown index '{name}'",
-                        "indices": sorted(NSE_INDEX_MAP)}), 400
+                        "indices": sorted(list(NSE_INDEX_MAP) + list(CUSTOM_GROUPS))}), 400
     ps.ensure(name, _get_constituents, _load_ohlc, _detect_chart,
               force=request.args.get("refresh") == "1")
-    return jsonify(ps.snapshot(name))
+    return jsonify(_nan_safe(ps.snapshot(name)))
 
 
 @app.route("/backtest/strategies")
