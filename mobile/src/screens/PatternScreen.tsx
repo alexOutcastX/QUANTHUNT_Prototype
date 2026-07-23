@@ -43,6 +43,7 @@ const COLS: Col[] = [
   { key: 'conf', label: 'PROBABILITY', w: 108, align: 'right' },
   { key: 'cont', label: 'CONTINUATION', w: 116, align: 'right' },
   { key: 'exp', label: 'EXPANSION', w: 96, align: 'right' },
+  { key: 'chart', label: 'CHART', w: 64, align: 'right' },
 ];
 const TABLE_W = COLS.reduce((a, c) => a + c.w, 0);
 
@@ -54,7 +55,12 @@ function Bar({ pct, color }: { pct: number; color: string }) {
   );
 }
 
-function PatternRow({ p, top }: { p: ChartPattern; top?: boolean }) {
+function PatternRow({ p, top, shown, onToggle }: {
+  p: ChartPattern;
+  top?: boolean;
+  shown: boolean;
+  onToggle: () => void;
+}) {
   const c = biasColor(p.bias);
   return (
     <View style={[styles.dataRow, p.current && styles.currentRow, top && { borderTopWidth: 0 }]}>
@@ -85,6 +91,17 @@ function PatternRow({ p, top }: { p: ChartPattern; top?: boolean }) {
       <Text style={[styles.cell, styles.mono, { width: 96, color: p.expansion_pct >= 0 ? theme.green : theme.red }]}>
         {signPct(p.expansion_pct)}
       </Text>
+      {/* Toggle this pattern's drawing (span trace + key level + target) on the chart. */}
+      <View style={{ width: 64, alignItems: 'flex-end' }}>
+        <TouchableOpacity
+          style={[styles.drawBtn, shown && { borderColor: c, backgroundColor: theme.surface2 }]}
+          onPress={onToggle}
+          activeOpacity={0.7}
+          hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+        >
+          <Text style={[styles.drawBtnTxt, shown && { color: c }]}>{shown ? '▣' : '▤'}</Text>
+        </TouchableOpacity>
+      </View>
     </View>
   );
 }
@@ -821,6 +838,7 @@ export default function PatternScreen() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [data, setData] = useState<ChartPatternsResp | null>(null);
+  const [chartPat, setChartPat] = useState<ChartPattern | null>(null);
   const [recent, setRecent] = useState<string[]>([]);
   const [detail, setDetail] = useState<Row | null>(null);
   const [watch, setWatch] = useState<string[]>([]);
@@ -869,8 +887,12 @@ export default function PatternScreen() {
     api
       .chartPatterns(sym, per)
       .then((r) => {
-        if (r && !r.error) setData(r);
-        else setError(r?.error || `No price history for ${sym}`);
+        if (r && !r.error) {
+          setData(r);
+          // Draw the current (most recent) pattern on the chart by default;
+          // any row's ▤ toggle can swap or clear the drawing.
+          setChartPat(r.current || null);
+        } else setError(r?.error || `No price history for ${sym}`);
       })
       .catch((e) => setError(e instanceof Error ? e.message : 'Pattern scan failed'))
       .finally(() => setBusy(false));
@@ -889,6 +911,12 @@ export default function PatternScreen() {
   }));
 
   const cur = data?.current || null;
+  const drawing = chartPat ? {
+    label: chartPat.label, bias: chartPat.bias,
+    start_ts: chartPat.start_ts, end_ts: chartPat.end_ts,
+    active: !!chartPat.active || !!chartPat.current,
+    target: chartPat.target, level: chartPat.level,
+  } : null;
   const activeSym = (data?.symbol || symbol).trim().toUpperCase();
 
   const actions: CardActions = {
@@ -983,7 +1011,7 @@ export default function PatternScreen() {
           <>
             {chartCandles.length ? (
               <Card style={styles.chartCard}>
-                <HtmlView html={chartHtml(chartCandles, 86400)} style={styles.chart} />
+                <HtmlView html={chartHtml(chartCandles, 86400, undefined, drawing)} style={styles.chart} />
               </Card>
             ) : null}
 
@@ -1015,7 +1043,13 @@ export default function PatternScreen() {
                         ))}
                       </View>
                       {data.patterns.map((p, i) => (
-                        <PatternRow key={`${p.type}-${p.start_ts}-${i}`} p={p} top={i === 0} />
+                        <PatternRow
+                          key={`${p.type}-${p.start_ts}-${i}`}
+                          p={p}
+                          top={i === 0}
+                          shown={chartPat === p}
+                          onToggle={() => setChartPat(chartPat === p ? null : p)}
+                        />
                       ))}
                     </View>
                   </ScrollView>
@@ -1236,4 +1270,9 @@ const styles = StyleSheet.create({
   },
   hitRecentLbl: { color: theme.text, fontSize: theme.fs.sm, fontWeight: '700' },
   hitRecentSub: { color: theme.muted, fontSize: theme.fs.xs + 1, marginTop: 1 },
+  drawBtn: {
+    borderWidth: 1, borderColor: theme.border, borderRadius: theme.radius.sm,
+    paddingHorizontal: 8, paddingVertical: 4,
+  },
+  drawBtnTxt: { color: theme.muted, fontSize: theme.fs.sm },
 });
