@@ -9,13 +9,13 @@
 //   → the Analysis SubTabs group switches its active sub-tab to 'mb'
 //   → MultibaggerScreen consumes the pending symbol on mount and analyses it.
 
-export type NavIntent = { page: string; sub?: string; symbol?: string; sector?: string };
+export type NavIntent = { page: string; sub?: string; symbol?: string; sector?: string; index?: string };
 
 let pending: NavIntent | null = null;
 const listeners = new Set<() => void>();
 
-export function navigate(page: string, opts: { sub?: string; symbol?: string; sector?: string } = {}): void {
-  pending = { page, sub: opts.sub, symbol: opts.symbol, sector: opts.sector };
+export function navigate(page: string, opts: { sub?: string; symbol?: string; sector?: string; index?: string } = {}): void {
+  pending = { page, sub: opts.sub, symbol: opts.symbol, sector: opts.sector, index: opts.index };
   listeners.forEach((l) => {
     try {
       l();
@@ -62,6 +62,18 @@ export function takeSector(sub: string): string | undefined {
   if (pending && pending.sub === sub && pending.sector) {
     const s = pending.sector;
     pending = { ...pending, sector: undefined };
+    return s;
+  }
+  return undefined;
+}
+
+// Consume a pending universe/index selection (one-shot). Used by the landing
+// page's "open in Custom screener" buttons: the screener pre-selects this
+// index in its universe dropdown.
+export function takeIndex(sub: string): string | undefined {
+  if (pending && pending.sub === sub && pending.index) {
+    const s = pending.index;
+    pending = { ...pending, index: undefined };
     return s;
   }
   return undefined;

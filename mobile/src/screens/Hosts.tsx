@@ -40,7 +40,9 @@ const CalibrationScreen = lazyScreen(() => import('./CalibrationScreen'));
 const MethodologyScreen = lazyScreen(() => import('./MethodologyScreen'));
 const DeveloperScreen = lazyScreen(() => import('./DeveloperScreen'));
 
-type SubTab = { key: string; label: string; hint?: string; render: () => React.ReactElement };
+// hidden: routable via nav intents but not shown as a pill/menu entry (e.g.
+// Universe after it left the Screens bar for the Today landing page).
+type SubTab = { key: string; label: string; hint?: string; render: () => React.ReactElement; hidden?: boolean };
 
 // A lightweight top switcher hosting several full screens under one bottom tab.
 // Only the active sub-screen is mounted (each manages its own state / fetches).
@@ -95,6 +97,7 @@ function SubTabs({ tabs, persistKey, alias }: { tabs: SubTab[]; persistKey?: str
   );
   const cur = tabs.find((t) => t.key === active) || tabs[0];
   const [menuOpen, setMenuOpen] = useState(false);
+  const shown = tabs.filter((t) => !t.hidden);
 
   return (
     <View style={styles.host}>
@@ -102,14 +105,14 @@ function SubTabs({ tabs, persistKey, alias }: { tabs: SubTab[]; persistKey?: str
         // Wide groups (the Desk hub) scroll horizontally with fixed-width pills;
         // small groups keep the classic equal-width segmented row.
         <View style={styles.subBarWrap}>
-          {tabs.length > 6 ? (
+          {shown.length > 6 ? (
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.subScrollCenter}
             >
               <View style={styles.subBar}>
-                {tabs.map((t) => (
+                {shown.map((t) => (
                   <TouchableOpacity
                     key={t.key}
                     style={[styles.subBtn, styles.subBtnFixed, active === t.key && styles.subBtnOn]}
@@ -125,7 +128,7 @@ function SubTabs({ tabs, persistKey, alias }: { tabs: SubTab[]; persistKey?: str
             // Content-width pills, centered in the row (report issues 2/9),
             // instead of equal-width pills stretched across the page.
             <View style={[styles.subBar, styles.subBarHug]}>
-              {tabs.map((t) => (
+              {shown.map((t) => (
                 <TouchableOpacity
                   key={t.key}
                   style={[styles.subBtn, styles.subBtnFixed, active === t.key && styles.subBtnOn]}
@@ -154,7 +157,7 @@ function SubTabs({ tabs, persistKey, alias }: { tabs: SubTab[]; persistKey?: str
             <Pressable style={styles.menuScrim} onPress={() => setMenuOpen(false)} />
             <View style={styles.menuSheet}>
               <ScrollView bounces={false}>
-                {tabs.map((t) => (
+                {shown.map((t) => (
                   <TouchableOpacity
                     key={t.key}
                     style={[styles.menuItem, active === t.key && styles.menuItemOn]}
@@ -249,7 +252,10 @@ export function ScreensHub() {
         { key: 'reco', label: 'Recommendations', hint: 'Ranked buy setups from the Multibagger candidates', render: () => <RecommendationsScreen /> },
         { key: 'patterns', label: 'Patterns', hint: 'Classic chart-pattern scanner with confidence & targets', render: () => <PatternScreen /> },
         { key: 'heatmap', label: 'Heatmap', hint: 'NSE + BSE sector map · tap a sector to screen it', render: () => <HeatmapScreen /> },
-        { key: 'universe', label: 'Universe', hint: 'Index constituents · mcap segments', render: () => <UniverseScreen /> },
+        // The Universe left this bar when Today became the market-universe
+        // landing page (report issue 4); the constituent table stays reachable
+        // via intents so old navigate('screens', {sub:'universe'}) still works.
+        { key: 'universe', label: 'Universe', hint: 'Index constituents · mcap segments', render: () => <UniverseScreen />, hidden: true },
       ]}
     />
   );

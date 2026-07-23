@@ -44,7 +44,7 @@ import { TrackDir, TrackEntry, addTrack, loadTrack, removeTrack } from '../track
 import { addSymbol, loadWatchlist, normSymbol, removeSymbol } from '../watchlist';
 import { theme } from '../theme';
 import { Icon } from '../icons';
-import { navigate } from '../navIntent';
+import { navigate, subscribeNav, takeIndex } from '../navIntent';
 import { useResponsive } from '../responsive';
 import { Btn, EmptyState, Loading, Sheet } from '../ui';
 
@@ -310,6 +310,20 @@ export default function ScreenerScreen() {
       }
     })();
   }, []);
+
+  // Landing-page "open in Custom screener" handoff: pre-select that universe
+  // (on mount for a fresh open, and live while this screen stays mounted).
+  // Runs after the persisted-index restore so the intent wins, not the save.
+  useEffect(() => {
+    if (!restored) return;
+    const apply = () => {
+      const ix = takeIndex('screener');
+      if (ix && INDICES.includes(ix)) setIndexSel([ix]);
+    };
+    apply();
+    return subscribeNav(apply);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [restored]);
 
   // Restore column prefs once (independent of index/filters).
   useEffect(() => {

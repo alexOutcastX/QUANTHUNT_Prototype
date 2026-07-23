@@ -31,7 +31,7 @@ const DESTS: Dest[] = [
   { label: 'Momentum', hint: 'Trend & thrust radar', icon: 'screens', page: 'screens', sub: 'momentum' },
   { label: 'Patterns', hint: 'Chart-pattern scanner', icon: 'screens', page: 'screens', sub: 'patterns' },
   { label: 'Heatmap', hint: 'Sector map', icon: 'screens', page: 'screens', sub: 'heatmap' },
-  { label: 'Universe', hint: 'Index constituents', icon: 'screens', page: 'screens', sub: 'universe' },
+  { label: 'Universe', hint: 'Market overview — the Today landing page', icon: 'home', page: 'today' },
   { label: 'Watchlist', hint: 'Your tracked symbols', icon: 'desk', page: 'desk', sub: 'watchlist' },
   { label: 'Portfolio', hint: 'Holdings & live P&L', icon: 'desk', page: 'desk', sub: 'portfolio' },
   { label: 'Paper trades', hint: 'Simulated setups & win-rate', icon: 'desk', page: 'desk', sub: 'paper' },

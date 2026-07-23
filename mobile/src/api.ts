@@ -259,6 +259,21 @@ export type MoversResp = {
 export type ReturnsRow = { ret1y?: number | null; ret3y?: number | null; ret5y?: number | null };
 export type ReturnsResp = Record<string, ReturnsRow>;
 
+// Landing-page windows: NSE public-issue calendar + traded G-Sec/SGB quotes.
+export type IpoItem = {
+  symbol: string; name: string; series: string; start: string; end: string;
+  price_band: string; size: string; status: 'open' | 'upcoming';
+};
+export type IpoResp = { items: IpoItem[]; asof?: string; stale?: boolean; error?: string };
+export type GsecItem = {
+  symbol: string; series: string; kind: 'gsec' | 'sgb';
+  ltp?: number | null; chg?: number | null; yld?: number | null;
+  coupon?: number | null; maturity: string;
+};
+export type GsecResp = { items: GsecItem[]; asof?: string; stale?: boolean; error?: string };
+export type NewsItem = { title: string; link: string; source: string; ts?: number | null; sym?: string };
+export type NewsResp = { items: NewsItem[]; fetched?: number; cached?: boolean };
+
 // Scan up to 60 symbols per request; caller batches larger lists.
 async function scanBatch(symbols: string[]): Promise<ScanResp> {
   return getJson<ScanResp>('/scan?symbols=' + encodeURIComponent(symbols.join(',')), 60000);
@@ -1197,6 +1212,11 @@ export const api = {
   // the NSE constituent feed falls back to the symbols-only CSV.
   movers: (index = 'NIFTY 50', n = 6) =>
     getJson<MoversResp>('/movers?index=' + encodeURIComponent(index) + '&n=' + n),
+  // Landing-page windows: NSE public-issue calendar + traded G-Sec/SGB quotes.
+  ipos: () => getJson<IpoResp>('/ipos'),
+  gsec: () => getJson<GsecResp>('/gsec'),
+  news: (force = false) =>
+    getJson<NewsResp>('/news' + (force ? '?force=1' : '')),
   // /returns caps at 50 symbols/call; batch and merge.
   returns: async (symbols: string[]): Promise<ReturnsResp> => {
     const merged: ReturnsResp = {};
