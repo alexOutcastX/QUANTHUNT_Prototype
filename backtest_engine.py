@@ -410,7 +410,15 @@ def _rule_series(candles, ind, period):
     return closes
 
 
-def _custom_signals(candles, buy_rules, sell_rules):
+def _custom_signals(candles, buy_rules, sell_rules, filters=None,
+                    mode_buy="all", mode_sell="all", base=None):
+    """User-defined strategy signals.
+
+    Entry  = (base bot signal, when one is chosen) AND (entry rules matched
+             per mode_buy: 'all'/'any') AND (every filter — regime conditions
+             like `close > SMA 200` that gate entries without triggering them).
+    Exit   = base bot sell signal OR exit rules (matched per mode_sell).
+    """
     n = len(candles)
 
     def compile_(rules):
@@ -446,13 +454,33 @@ def _custom_signals(candles, buy_rules, sell_rules):
             return left[i - 1] <= right[i - 1] and l > r
         return left[i - 1] >= right[i - 1] and l < r
 
+    def matched(rules, mode, i):
+        if not rules:
+            return False
+        fn = any if mode == "any" else all
+        return fn(true_at(r, i) for r in rules)
+
     buy = compile_(buy_rules)
     sell = compile_(sell_rules)
+    filt = compile_(filters)
+    base_sig = None
+    if base and base.get("key") in STRATEGIES:
+        base_sig = _signals(candles, base["key"], base.get("params"))
+
     sig = [0] * n
     for i in range(n):
-        if buy and all(true_at(r, i) for r in buy):
+        # Entry: every configured trigger source must agree, filters must pass.
+        enter = base_sig[i] == 1 if base_sig else False
+        if buy:
+            rule_hit = matched(buy, mode_buy, i)
+            enter = (enter and rule_hit) if base_sig else rule_hit
+        if enter and filt and not all(true_at(r, i) for r in filt):
+            enter = False
+        # Exit: any configured exit source suffices.
+        leave = (base_sig[i] == -1 if base_sig else False) or matched(sell, mode_sell, i)
+        if enter:
             sig[i] = 1
-        elif sell and all(true_at(r, i) for r in sell):
+        elif leave:
             sig[i] = -1
     return sig
 
@@ -885,8 +913,8 @@ def validate_config(cfg):
     key = strat.get("key")
     if key != "custom" and key not in STRATEGIES:
         return f"Unknown strategy '{key}'"
-    if key == "custom" and not (strat.get("buy") or []):
-        return "Custom strategy needs at least one buy rule"
+    if key == "custom" and not (strat.get("buy") or []) and not (strat.get("base") or {}).get("key"):
+        return "Custom strategy needs at least one entry rule or a base strategy"
     if not (cfg.get("symbols") or cfg.get("index")):
         return "Pick a universe: symbols[] or index"
     return None
@@ -958,8 +986,13 @@ def _run_job(run_id, cfg, constituents_fn, load_ohlc):
         strat = cfg["strategy"]
         _set(run_id, progress="computing signals…")
         if strat.get("key") == "custom":
-            signals = {sym: _custom_signals(cs, strat.get("buy"), strat.get("sell"))
-                       for sym, cs in series.items()}
+            signals = {sym: _custom_signals(
+                cs, strat.get("buy"), strat.get("sell"),
+                filters=strat.get("filters"),
+                mode_buy=strat.get("mode_buy") or "all",
+                mode_sell=strat.get("mode_sell") or "all",
+                base=strat.get("base"))
+                for sym, cs in series.items()}
         else:
             signals = {sym: _signals(cs, strat["key"], strat.get("params"))
                        for sym, cs in series.items()}

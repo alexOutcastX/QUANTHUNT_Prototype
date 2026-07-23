@@ -245,6 +245,43 @@ class CustomRulesTest(unittest.TestCase):
             cs, [{"ind": "rsi", "period": 14, "op": "cross_above", "target": "value", "value": 30}], [])
         self.assertIn(1, sig)
 
+    def test_any_mode_fires_on_single_match(self):
+        cs = mk([(100,) * 4] * 10)
+        rules = [{"ind": "close", "op": "gt", "target": "value", "value": 50},   # true
+                 {"ind": "close", "op": "gt", "target": "value", "value": 500}]  # false
+        self.assertNotIn(1, bt._custom_signals(cs, rules, [], mode_buy="all"))
+        self.assertIn(1, bt._custom_signals(cs, rules, [], mode_buy="any"))
+
+    def test_filters_gate_entries_without_triggering(self):
+        cs = mk([(100,) * 4] * 10)
+        buy = [{"ind": "close", "op": "gt", "target": "value", "value": 50}]
+        veto = [{"ind": "close", "op": "gt", "target": "value", "value": 500}]
+        ok = [{"ind": "close", "op": "gt", "target": "value", "value": 1}]
+        self.assertNotIn(1, bt._custom_signals(cs, buy, [], filters=veto))
+        self.assertIn(1, bt._custom_signals(cs, buy, [], filters=ok))
+        # A filter alone must never generate an entry.
+        self.assertNotIn(1, bt._custom_signals(cs, [], [], filters=ok))
+
+    def test_base_bot_combined_with_filters_and_rules(self):
+        closes = [100 + i for i in range(80)]
+        cs = mk([(c,) * 4 for c in closes])
+        base = {"key": "momentum", "params": {"period": 10, "entry": 5, "exit": 0}}
+        plain = bt._custom_signals(cs, [], [], base=base)
+        self.assertIn(1, plain)  # base signal alone triggers
+        vetoed = bt._custom_signals(
+            cs, [], [], base=base,
+            filters=[{"ind": "close", "op": "gt", "target": "value", "value": 9999}])
+        self.assertNotIn(1, vetoed)  # regime filter vetoes every base entry
+        # base AND rules: an impossible extra rule kills entries too
+        both = bt._custom_signals(
+            cs, [{"ind": "close", "op": "gt", "target": "value", "value": 9999}], [], base=base)
+        self.assertNotIn(1, both)
+
+    def test_base_strategy_alone_validates(self):
+        self.assertIsNone(bt.validate_config(
+            {"strategy": {"key": "custom", "buy": [], "base": {"key": "ema_cross"}},
+             "symbols": ["A"]}))
+
     def test_validation_rejects_bad_config(self):
         self.assertIsNotNone(bt.validate_config({"strategy": {"key": "nope"}, "symbols": ["A"]}))
         self.assertIsNotNone(bt.validate_config({"strategy": {"key": "custom", "buy": []}, "symbols": ["A"]}))
