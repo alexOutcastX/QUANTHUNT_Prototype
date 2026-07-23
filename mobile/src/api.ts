@@ -498,7 +498,17 @@ export type BtConfig = {
   capital?: number;
   max_positions?: number;
   execution?: 'next_open' | 'same_close';
-  strategy: { key: string; params?: Record<string, number>; buy?: BtRule[]; sell?: BtRule[] };
+  strategy: {
+    key: string;
+    name?: string;
+    params?: Record<string, number>;
+    buy?: BtRule[];
+    sell?: BtRule[];
+    filters?: BtRule[];
+    mode_buy?: 'all' | 'any';
+    mode_sell?: 'all' | 'any';
+    base?: { key: string; params?: Record<string, number> };
+  };
   sizing?: { mode: 'equal' | 'fixed' | 'risk'; value?: number };
   costs?: Record<string, number>;
   risk?: {
