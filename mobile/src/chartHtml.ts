@@ -41,11 +41,30 @@ export const MA_CONFIG: { period: number; color: string }[] = [
 ];
 export const DEFAULT_MA: number[] = [20, 50, 200];
 
+// A detected chart pattern drawn onto the price chart: the formation span is
+// traced in the bias colour, the key level (neckline/breakout) and measured-
+// move target become labelled price lines, and start/end markers pin the span.
+export type PatternDrawing = {
+  label: string;
+  bias: 'bullish' | 'bearish' | 'neutral';
+  start_ts: number;
+  end_ts: number;
+  active?: boolean;         // still in play → trace runs to the last bar
+  target?: number | null;
+  level?: number | null;
+};
+
 // `maSet` is the set of SMA periods to draw (default 20/50/200). StockDetail
 // calls chartHtml(candles, barSec) and gets the default overlays.
-export function chartHtml(candles: Candle[], barSec: number, maSet: number[] = DEFAULT_MA): string {
+export function chartHtml(
+  candles: Candle[],
+  barSec: number,
+  maSet: number[] = DEFAULT_MA,
+  drawing?: PatternDrawing | null,
+): string {
   const data = JSON.stringify(candles);
   const mas = JSON.stringify(MA_CONFIG.filter((m) => maSet.includes(m.period)));
+  const draw = JSON.stringify(drawing || null);
   const theme = getPalette();
   return `<!DOCTYPE html><html><head>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
@@ -101,6 +120,25 @@ export function chartHtml(candles: Candle[], barSec: number, maSet: number[] = D
       }
       drawSegments(vals,m.color,2);
     });
+    // ── Pattern drawing: formation trace + key-level/target lines + markers ──
+    var pat=${draw};
+    if(pat){
+      var pc=pat.bias==='bullish'?'${UP}':pat.bias==='bearish'?'${DOWN}':'#8b93a7';
+      var endTs=pat.active?candles[candles.length-1].t:pat.end_ts;
+      var span=candles.filter(function(c){return c.t>=pat.start_ts&&c.t<=endTs&&c.c!=null;});
+      if(span.length>1){
+        var trace=chart.addLineSeries({color:pc,lineWidth:4,priceLineVisible:false,lastValueVisible:false,crosshairMarkerVisible:false});
+        trace.setData(span.map(function(c){return{time:c.t,value:c.c};}));
+      }
+      if(pat.level!=null)cs.createPriceLine({price:pat.level,color:'#c9a45b',lineWidth:1,lineStyle:LW.LineStyle.Solid,axisLabelVisible:true,title:'Key level'});
+      if(pat.target!=null)cs.createPriceLine({price:pat.target,color:pc,lineWidth:1,lineStyle:LW.LineStyle.Dashed,axisLabelVisible:true,title:'Target'});
+      if(span.length){
+        cs.setMarkers([
+          {time:span[0].t,position:'belowBar',color:pc,shape:'arrowUp',text:pat.label},
+          {time:span[span.length-1].t,position:'aboveBar',color:pc,shape:'arrowDown',text:pat.active?'now':'end'}
+        ]);
+      }
+    }
     chart.timeScale().fitContent();
   })();
   </script>
