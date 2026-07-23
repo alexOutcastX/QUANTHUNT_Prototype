@@ -1236,7 +1236,7 @@ const styles = StyleSheet.create({
   method: { color: theme.muted, fontSize: theme.fs.xs + 1, lineHeight: 16, marginTop: theme.sp.sm },
   // ── index-screener hit card ──
   sidePanel: {
-    width: 380, borderLeftWidth: 1, borderLeftColor: theme.border,
+    width: 336, borderLeftWidth: 1, borderLeftColor: theme.border,
     backgroundColor: theme.surface,
   },
   hitHead: { flexDirection: 'row', alignItems: 'flex-start', gap: theme.sp.sm },
