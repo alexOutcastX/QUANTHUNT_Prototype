@@ -18,7 +18,7 @@ import { LW_SCRIPT } from '../chartHtml';
 import { exportCsvRows, exportExcelRows } from '../csv';
 import { openPdfPreview } from '../pdf';
 import { getPalette, theme } from '../theme';
-import { Btn, Card, Dropdown, EmptyState, InfoButton, SectionTitle, Segmented, Sheet } from '../ui';
+import { Btn, Dropdown, EmptyState, Fold, InfoButton, SectionTitle, Segmented, Sheet } from '../ui';
 import { useResponsive } from '../responsive';
 
 const CFG_KEY = 'taureye.bt.cfg.v2';
@@ -199,7 +199,6 @@ export default function BacktestScreen() {
   const [trailPct, setTrailPct] = useState(0);
   const [maxHold, setMaxHold] = useState(0);
   const [costs, setCosts] = useState<Record<string, number> | null>(null); // null = server defaults
-  const [showCosts, setShowCosts] = useState(false);
 
   // ── Run state ──
   const [running, setRunning] = useState(false);
@@ -428,17 +427,38 @@ export default function BacktestScreen() {
     </View>
   );
 
-  return (
-    <ScrollView contentContainerStyle={styles.body}>
-      {/* ── 1 · Strategy ── */}
-      <Card style={styles.cfgCard}>
-        <View style={styles.secHead}>
-          <SectionTitle>1 · Strategy</SectionTitle>
-          <InfoButton
-            title="Strategy"
-            content={{ about: "Pick a systematic (bot) strategy and tune its parameters, or build your own entry/exit rules. Signals are computed on each bar's close and executed at the NEXT bar's open — no lookahead." }}
-          />
-        </View>
+  // One-line summaries so the fully-collapsed console still reads as a dense
+  // config sheet (the whole setup scans in four lines).
+  const inr = (v: number) =>
+    v >= 1e7 ? '₹' + +(v / 1e7).toFixed(1) + 'Cr' : v >= 1e5 ? '₹' + +(v / 1e5).toFixed(1) + 'L' : money(v);
+  const stratSum = stratKey === 'custom'
+    ? `${stratName.trim() || 'custom rules'} · ${buyRules.length} in / ${sellRules.length} out` +
+      (filterRules.length ? ` / ${filterRules.length} filt` : '') +
+      (baseKey ? ` + ${metas.find((m) => m.key === baseKey)?.label || baseKey}` : '')
+    : `${meta?.label || stratKey} · ` + Object.entries(params).map(([k, v]) => `${k} ${v}`).join(' · ');
+  const uniSum =
+    `${uniMode === 'index' ? index : symList.length + ' symbols'} · ${period} · ${inr(capital)} · ` +
+    `${maxPos} slots · ${execution === 'next_open' ? 'next open' : 'same close'}`;
+  const riskSum = [
+    slType === 'none' ? 'no SL' : slType === 'pct' ? `SL ${slVal}%` : `SL ${slVal}×ATR`,
+    tpType === 'none' ? 'no TP' : tpType === 'pct' ? `TP ${tpVal}%` : `TP ${tpVal}R`,
+    trailPct ? `trail ${trailPct}%` : '',
+    maxHold ? `≤${maxHold}d` : '',
+  ].filter(Boolean).join(' · ');
+
+  const stratFold = (
+    <Fold
+      title="Strategy"
+      summary={stratSum}
+      persistKey="bt.cfg.strat"
+      style={styles.cfgCard}
+      right={
+        <InfoButton
+          title="Strategy"
+          content={{ about: "Pick a systematic (bot) strategy and tune its parameters, or build your own entry/exit rules. Signals are computed on each bar's close and executed at the NEXT bar's open — no lookahead." }}
+        />
+      }
+    >
         <Dropdown
           value={stratKey === 'custom' && stratName && myStrats.some((s) => s.name === stratName) ? `my:${stratName}` : stratKey}
           options={[
@@ -534,17 +554,22 @@ export default function BacktestScreen() {
             </View>
           </View>
         ) : null}
-      </Card>
+    </Fold>
+  );
 
-      {/* ── 2 · Universe & capital ── */}
-      <Card style={styles.cfgCard}>
-        <View style={styles.secHead}>
-          <SectionTitle>2 · Universe · capital · execution</SectionTitle>
-          <InfoButton
-            title="Universe & execution"
-            content={{ about: "Backtest a whole index (constituents are fetched live) or your own symbol list. Capital is one shared pool; positions are whole shares. 'Next open' fills signals at the following bar's open — the honest default." }}
-          />
-        </View>
+  const uniFold = (
+    <Fold
+      title="Universe · capital"
+      summary={uniSum}
+      persistKey="bt.cfg.uni"
+      style={styles.cfgCard}
+      right={
+        <InfoButton
+          title="Universe & execution"
+          content={{ about: "Backtest a whole index (constituents are fetched live) or your own symbol list. Capital is one shared pool; positions are whole shares. 'Next open' fills signals at the following bar's open — the honest default." }}
+        />
+      }
+    >
         <Segmented
           items={[{ key: 'index', label: 'Index' }, { key: 'symbols', label: 'My symbols' }]}
           value={uniMode}
@@ -608,18 +633,23 @@ export default function BacktestScreen() {
               value={sizeVal} onChange={setSizeVal} />
           ) : null}
         </View>
-      </Card>
+    </Fold>
+  );
 
-      {/* ── 3 · Risk management ── */}
-      <Card style={styles.cfgCard}>
-        <View style={styles.secHead}>
-          <SectionTitle>3 · Risk management</SectionTitle>
-          <InfoButton
-            title="Risk"
-            content={{ about: "Stops, targets and trailing exits are resting orders checked every bar. When price gaps through a level at the open, the fill is the open — the real, worse price — never the level itself. Time stop closes a position after N trading days." }}
-          />
-        </View>
-        <View style={styles.paramRow}>
+  const riskFold = (
+    <Fold
+      title="Risk management"
+      summary={riskSum}
+      persistKey="bt.cfg.risk"
+      style={styles.cfgCard}
+      right={
+        <InfoButton
+          title="Risk"
+          content={{ about: "Stops, targets and trailing exits are resting orders checked every bar. When price gaps through a level at the open, the fill is the open — the real, worse price — never the level itself. Time stop closes a position after N trading days." }}
+        />
+      }
+    >
+        <View style={[styles.paramRow, { marginTop: 0 }]}>
           <Dropdown label="Stop loss" value={slType}
             options={[{ key: 'none', label: 'No stop' }, { key: 'pct', label: '% below entry' }, { key: 'atr', label: 'ATR multiple' }]}
             onChange={(k) => setSlType(k)} style={styles.ddSm} />
@@ -633,34 +663,46 @@ export default function BacktestScreen() {
           <NumIn label="TRAIL % (0 = off)" width={110} value={trailPct} onChange={setTrailPct} />
           <NumIn label="MAX HOLD DAYS (0 = ∞)" width={140} value={maxHold} onChange={(n) => setMaxHold(Math.max(0, Math.round(n)))} />
         </View>
-      </Card>
+    </Fold>
+  );
 
-      {/* ── 4 · Costs ── */}
-      <Card style={styles.cfgCard}>
-        <TouchableOpacity style={styles.secHead} onPress={() => setShowCosts((v) => !v)} activeOpacity={0.7}>
-          <SectionTitle>4 · Costs &amp; slippage {showCosts ? '▾' : '▸'}</SectionTitle>
-          <Text style={styles.costState}>{costs ? 'custom' : 'Indian delivery defaults'}</Text>
-        </TouchableOpacity>
-        {showCosts ? (
-          <View>
-            <Text style={styles.blurb}>
-              Charged per fill: brokerage (capped), STT, exchange txn, SEBI, GST, stamp duty — plus slippage
-              against every fill. Defaults mirror an Indian discount broker on delivery.
-            </Text>
-            <View style={styles.paramRow}>
-              {Object.entries(costs ?? defaultCosts).map(([k, v]) => (
-                <NumIn key={k} label={k.replace(/_/g, ' ').toUpperCase()} width={110} value={v}
-                  onChange={(n) => setCosts({ ...(costs ?? defaultCosts), [k]: n })} />
-              ))}
-            </View>
-            {costs ? (
-              <TouchableOpacity onPress={() => setCosts(null)}>
-                <Text style={styles.ruleAdd}>Reset to defaults</Text>
-              </TouchableOpacity>
-            ) : null}
-          </View>
+  const costFold = (
+    <Fold
+      title="Costs & slippage"
+      summary={costs ? 'custom' : 'Indian delivery defaults'}
+      persistKey="bt.cfg.costs"
+      open={false}
+      style={styles.cfgCard}
+    >
+        <Text style={[styles.blurb, { marginTop: 0 }]}>
+          Charged per fill: brokerage (capped), STT, exchange txn, SEBI, GST, stamp duty — plus slippage
+          against every fill. Defaults mirror an Indian discount broker on delivery.
+        </Text>
+        <View style={styles.paramRow}>
+          {Object.entries(costs ?? defaultCosts).map(([k, v]) => (
+            <NumIn key={k} label={k.replace(/_/g, ' ').toUpperCase()} width={110} value={v}
+              onChange={(n) => setCosts({ ...(costs ?? defaultCosts), [k]: n })} />
+          ))}
+        </View>
+        {costs ? (
+          <TouchableOpacity onPress={() => setCosts(null)}>
+            <Text style={styles.ruleAdd}>Reset to defaults</Text>
+          </TouchableOpacity>
         ) : null}
-      </Card>
+    </Fold>
+  );
+
+  return (
+    <ScrollView contentContainerStyle={styles.body}>
+      {isDesktop ? (
+        // Two columns so the whole console + Run fits one desktop viewport.
+        <View style={styles.cfgGrid}>
+          <View style={styles.cfgCol}>{stratFold}{riskFold}</View>
+          <View style={styles.cfgCol}>{uniFold}{costFold}</View>
+        </View>
+      ) : (
+        <>{stratFold}{uniFold}{riskFold}{costFold}</>
+      )}
 
       {/* ── Run row ── */}
       <View style={styles.runRow}>
@@ -711,6 +753,7 @@ export default function BacktestScreen() {
             </View>
           </View>
 
+          <Fold title="Metrics" persistKey="bt.res.tiles" flat style={styles.resFold}>
           <View style={styles.tiles}>
             {tile('SHARPE', num(s.sharpe))}
             {tile('SORTINO', num(s.sortino))}
@@ -727,13 +770,15 @@ export default function BacktestScreen() {
             {tile('EXPOSURE', num(s.exposure_pct, 0, '%'))}
             {tile('TURNOVER', num(s.turnover_x, 1, '×/yr'))}
           </View>
+          </Fold>
 
-          <View style={[styles.chartBox, { height: 470 }]}>
+          <Fold title="Equity & drawdown" persistKey="bt.res.chart" flat style={styles.resFold}>
+          <View style={[styles.chartBox, { height: 470, marginBottom: 0 }]}>
             <HtmlView html={chartDoc} />
           </View>
+          </Fold>
 
-          {/* Monthly returns */}
-          <SectionTitle>Monthly returns</SectionTitle>
+          <Fold title="Monthly returns" persistKey="bt.res.monthly" flat style={styles.resFold}>
           <ScrollView horizontal showsHorizontalScrollIndicator contentContainerStyle={{ minWidth: '100%' }}>
             <View>
               <View style={styles.mRow}>
@@ -757,9 +802,9 @@ export default function BacktestScreen() {
               ))}
             </View>
           </ScrollView>
+          </Fold>
 
-          {/* Per-symbol breakdown */}
-          <SectionTitle>Per-symbol P&amp;L</SectionTitle>
+          <Fold title="Per-symbol P&L" summary={s.per_symbol.length + ' symbols'} persistKey="bt.res.persym" open={false} flat style={styles.resFold}>
           <ScrollView horizontal showsHorizontalScrollIndicator contentContainerStyle={{ minWidth: '100%' }}>
             <View style={{ minWidth: 430 }}>
               <View style={styles.mRow}>
@@ -780,25 +825,30 @@ export default function BacktestScreen() {
               ))}
             </View>
           </ScrollView>
+          </Fold>
 
-          {/* Trade blotter */}
-          <View style={styles.blotterHead}>
-            <SectionTitle>Trade blotter · {result.trades.length} trades</SectionTitle>
-            <View>
-              <TouchableOpacity style={styles.exportBtn} onPress={() => setExportOpen((v) => !v)} activeOpacity={0.75}>
-                <Text style={styles.exportTxt}>Export ▾</Text>
-              </TouchableOpacity>
-              {exportOpen ? (
-                <View style={styles.exportMenu}>
-                  {(['csv', 'excel', 'pdf'] as const).map((k) => (
-                    <TouchableOpacity key={k} style={styles.exportItem} onPress={() => doExport(k)} activeOpacity={0.7}>
-                      <Text style={styles.exportItemTxt}>{k === 'pdf' ? 'PDF tear sheet' : k.toUpperCase()}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              ) : null}
-            </View>
-          </View>
+          <Fold
+            title={'Trade blotter · ' + result.trades.length}
+            persistKey="bt.res.blotter"
+            flat
+            style={styles.resFold}
+            right={
+              <View style={{ zIndex: 40 }}>
+                <TouchableOpacity style={styles.exportBtn} onPress={() => setExportOpen((v) => !v)} activeOpacity={0.75}>
+                  <Text style={styles.exportTxt}>Export ▾</Text>
+                </TouchableOpacity>
+                {exportOpen ? (
+                  <View style={styles.exportMenu}>
+                    {(['csv', 'excel', 'pdf'] as const).map((k) => (
+                      <TouchableOpacity key={k} style={styles.exportItem} onPress={() => doExport(k)} activeOpacity={0.7}>
+                        <Text style={styles.exportItemTxt}>{k === 'pdf' ? 'PDF tear sheet' : k.toUpperCase()}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                ) : null}
+              </View>
+            }
+          >
           <ScrollView horizontal showsHorizontalScrollIndicator contentContainerStyle={{ minWidth: '100%' }}>
             <View style={{ minWidth: 940 }}>
               <View style={styles.mRow}>
@@ -832,6 +882,7 @@ export default function BacktestScreen() {
           {result.trades.length > (isDesktop ? 400 : 150) ? (
             <Text style={styles.note}>Showing the first {isDesktop ? 400 : 150} trades — export CSV/Excel for the full log.</Text>
           ) : null}
+          </Fold>
         </View>
       ) : null}
 
@@ -857,6 +908,10 @@ export default function BacktestScreen() {
 const styles = StyleSheet.create({
   body: { padding: theme.sp.md, paddingBottom: 90 },
   cfgCard: { marginBottom: theme.sp.md },
+  // Desktop: config folds sit in two columns so setup + Run fit one viewport.
+  cfgGrid: { flexDirection: 'row', gap: theme.sp.md, alignItems: 'flex-start' },
+  cfgCol: { flex: 1, minWidth: 0 },
+  resFold: { marginTop: theme.sp.md },
   secHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' },
   blurb: { color: theme.muted, fontSize: theme.fs.xs + 1, marginTop: 4, marginBottom: 2 },
   paramRow: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.sp.md, marginTop: theme.sp.sm, alignItems: 'flex-end' },
