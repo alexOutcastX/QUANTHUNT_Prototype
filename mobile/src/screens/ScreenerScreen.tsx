@@ -223,6 +223,7 @@ export default function ScreenerScreen() {
   const { isDesktop } = useResponsive();
   // Mobile: the filter builder lives in a popup so it never buries the table.
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [fieldPickFor, setFieldPickFor] = useState<string | null>(null);
   // One or more universes; the scan runs over their deduped union.
   const [indexSel, setIndexSel] = useState<string[]>(['NIFTY 50']);
   const indexName = selName(indexSel);
@@ -749,6 +750,7 @@ export default function ScreenerScreen() {
           savedCount={saved.length}
           onShare={onShare}
           onSaveScreen={() => setSavedModal(true)}
+          onOpenFieldPicker={setFieldPickFor}
         />
       ) : null}
       <View style={styles.statsRow}>
@@ -941,10 +943,26 @@ export default function ScreenerScreen() {
               savedCount={saved.length}
               onShare={onShare}
               onSaveScreen={() => setSavedModal(true)}
+              onOpenFieldPicker={setFieldPickFor}
             />
           </ScrollView>
           <Btn label={`Show ${stats.total} matches`} onPress={() => setFiltersOpen(false)} style={styles.sheetApply} />
         </Sheet>
+      ) : null}
+
+      {/* Metric mega-picker — rendered at container level so it overlays the
+          desktop panel AND the mobile filters Sheet (it comes later in the
+          tree, so it paints on top). */}
+      {fieldPickFor ? (
+        <FieldPicker
+          onClose={() => setFieldPickFor(null)}
+          onPick={(k) => {
+            setExpr((cur) => cur.map((e) => (e.id === fieldPickFor
+              ? { ...e, key: k, op: defaultOpFor(k), v1: '', v2: '' }
+              : e)));
+            setFieldPickFor(null);
+          }}
+        />
       ) : null}
 
       {detail ? <StockDetail row={detail} onClose={() => setDetail(null)} /> : null}
@@ -1076,6 +1094,59 @@ function Sel({
   );
 }
 
+// Fullscreen "everything screenable" metric picker: every technical, signal,
+// strategy, candlestick pattern, volume/structure and fundamental field,
+// grouped and searchable — replaces the old short dropdown for choosing a
+// filter row's metric.
+function FieldPicker({ onPick, onClose }: { onPick: (key: string) => void; onClose: () => void }) {
+  const [q, setQ] = useState('');
+  const ql = q.trim().toLowerCase();
+  const groups = TE_GROUPS.map((g) => ({
+    g,
+    defs: FILTER_DEFS.filter((d) => d.group === g && (!ql || d.label.toLowerCase().includes(ql))),
+  })).filter((x) => x.defs.length);
+  return (
+    <Sheet onClose={onClose} fill>
+      <View style={styles.sheetHead}>
+        <Text style={styles.sheetTitle}>Choose metric</Text>
+        <TouchableOpacity onPress={onClose} hitSlop={12} activeOpacity={0.75}>
+          <Text style={styles.sheetClose}>✕ Close</Text>
+        </TouchableOpacity>
+      </View>
+      <TextInput
+        style={styles.fpSearch}
+        value={q}
+        onChangeText={setQ}
+        placeholder="Search — RSI, P/E, hammer, golden cross, revenue…"
+        placeholderTextColor={theme.muted}
+        autoFocus
+      />
+      <ScrollView style={{ flex: 1 }} bounces={false} keyboardShouldPersistTaps="handled">
+        {groups.length === 0 ? (
+          <Text style={styles.fpEmpty}>No metric matches “{q}”.</Text>
+        ) : (
+          groups.map(({ g, defs }) => (
+            <View key={g}>
+              <Text style={styles.fpGroup}>{g.toUpperCase()}</Text>
+              <View style={styles.fpGrid}>
+                {defs.map((d) => (
+                  <TouchableOpacity key={d.key} style={styles.fpChip} onPress={() => onPick(d.key)} activeOpacity={0.7}>
+                    <Text style={styles.fpChipTxt}>
+                      {d.label}
+                      {d.fund ? <Text style={{ color: theme.muted }}> ·f</Text> : null}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          ))
+        )}
+        <Text style={styles.fundNote}>·f = fundamental — fetches company financials for the universe.</Text>
+      </ScrollView>
+    </Sheet>
+  );
+}
+
 const FIELD_ITEMS: SelItem[] = TE_GROUPS.flatMap((g) => {
   const defs = FILTER_DEFS.filter((d) => d.group === g);
   return defs.length
@@ -1151,12 +1222,14 @@ function FilterPanel({
   savedCount,
   onShare,
   onSaveScreen,
+  onOpenFieldPicker,
 }: {
   expr: ExprRow[];
   setExpr: React.Dispatch<React.SetStateAction<ExprRow[]>>;
   savedCount: number;
   onShare: () => void;
   onSaveScreen: () => void;
+  onOpenFieldPicker: (rowId: string) => void;
 }) {
   const [nlText, setNlText] = useState('');
   const [presetsOpen, setPresetsOpen] = useState(false);
@@ -1321,17 +1394,16 @@ function FilterPanel({
                 ) : (
                   <View style={styles.joinSpacer} />
                 )}
-                <Sel
-                  label={def ? def.label + (def.fund ? ' ·f' : '') : 'Choose metric'}
-                  items={FIELD_ITEMS}
-                  open={openSel === e.id + ':f'}
-                  onToggle={() => toggleSel(e.id + ':f')}
-                  onPick={(k) => {
-                    patch(e.id, { key: k, op: defaultOpFor(k), v1: '', v2: '' });
-                    setOpenSel('');
-                  }}
-                  width={235}
-                />
+                <TouchableOpacity
+                  style={[styles.selBtn, { width: 235 }]}
+                  onPress={() => { setOpenSel(''); onOpenFieldPicker(e.id); }}
+                  activeOpacity={0.75}
+                >
+                  <Text style={styles.selTxt} numberOfLines={1}>
+                    {def ? def.label + (def.fund ? ' ·f' : '') : 'Choose metric'}
+                  </Text>
+                  <Text style={styles.selCaret}>▾</Text>
+                </TouchableOpacity>
                 {isRange ? (
                   <Sel
                     label={OP_LABEL[e.op] || '>'}
@@ -2040,7 +2112,12 @@ const styles = StyleSheet.create({
     backgroundColor: theme.surface,
     borderBottomColor: theme.border,
     borderBottomWidth: 1,
-    zIndex: 50,
+    // Must stack ABOVE statsRow (zIndex 60): the filter/preset dropdowns are
+    // absolutely positioned inside this panel, and RN-web scopes their
+    // zIndex to this container — a lower value here let the match-count row
+    // bleed through every open menu.
+    zIndex: 120,
+    elevation: 20,
   },
   panelBody: { paddingHorizontal: theme.sp.lg, paddingBottom: theme.sp.sm },
   rowRight: { flexDirection: 'row', alignItems: 'center', gap: theme.sp.sm },
@@ -2149,6 +2226,37 @@ const styles = StyleSheet.create({
     shadowRadius: 14,
     shadowOffset: { width: 0, height: 6 },
   },
+  fpSearch: {
+    backgroundColor: theme.surface2,
+    color: theme.text,
+    borderColor: theme.border2,
+    borderWidth: 1,
+    borderRadius: theme.radius.sm,
+    paddingHorizontal: theme.sp.md,
+    paddingVertical: 9,
+    fontSize: theme.fs.sm,
+    marginBottom: theme.sp.sm,
+  },
+  fpGroup: {
+    color: theme.muted,
+    fontSize: theme.fs.xs,
+    fontFamily: theme.mono,
+    fontWeight: '700',
+    letterSpacing: 1,
+    marginTop: theme.sp.md,
+    marginBottom: theme.sp.sm,
+  },
+  fpGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.sp.sm },
+  fpChip: {
+    backgroundColor: theme.surface2,
+    borderColor: theme.border2,
+    borderWidth: 1,
+    borderRadius: theme.radius.sm,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  fpChipTxt: { color: theme.text, fontSize: theme.fs.sm },
+  fpEmpty: { color: theme.muted, fontSize: theme.fs.sm, marginTop: theme.sp.lg, textAlign: 'center' },
   selHeader: {
     color: theme.muted,
     fontSize: theme.fs.xs,
