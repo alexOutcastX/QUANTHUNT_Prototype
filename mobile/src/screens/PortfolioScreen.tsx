@@ -14,7 +14,7 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { BrokerStatus, api, Quote } from '../api';
 import { exportCsvRows, exportExcelRows } from '../csv';
-import { Holding, addHolding, importHoldings, loadPortfolio, removeHolding } from '../portfolio';
+import { DEFAULT_GROUP, Holding, addHolding, groupOf, importHoldings, loadGroups, loadPortfolio, moveHolding, removeHolding, saveGroups } from '../portfolio';
 import { theme } from '../theme';
 import { Btn, Card, EmptyState, Loading, ScreenTitle, SectionTitle, StatTile } from '../ui';
 
@@ -57,7 +57,10 @@ const COLS: PCol[] = [
       <View>
         <Text style={styles.symTxt}>{r.h.symbol}</Text>
         <Text style={styles.symSub} numberOfLines={1}>
-          {r.sector !== 'Unknown' ? r.sector : `${r.h.qty} @ ${money(r.h.avg)}`}
+          {[
+            groupOf(r.h) !== DEFAULT_GROUP ? groupOf(r.h) : null,
+            r.sector !== 'Unknown' ? r.sector : `${r.h.qty} @ ${money(r.h.avg)}`,
+          ].filter(Boolean).join(' · ')}
         </Text>
       </View>
     ),
@@ -109,8 +112,9 @@ const COLS: PCol[] = [
   },
 ];
 const COL_META = COLS.map((c) => ({ key: c.key, label: c.label }));
-const ACTIONS_W = 44;
+const ACTIONS_W = 76;
 const COLS_KEY = 'taureye.portfolio.cols.v1';
+const GROUP_SEL_KEY = 'taureye.portfolio.group.sel';
 
 // ── concentration (Herfindahl–Hirschman index over market-value weights) ───────
 function hhiOf(weights: number[]): number {
@@ -143,6 +147,14 @@ export default function PortfolioScreen() {
   const [colHidden, setColHidden] = useState<string[]>([]);
   const [colMenu, setColMenu] = useState(false);
   const [prefsRestored, setPrefsRestored] = useState(false);
+  // Holding groups: 'all' shows everything; otherwise every action (add, sell,
+  // export, totals) is scoped to the selected group so long-term positions
+  // can't be touched while working the trading book.
+  const [customGroups, setCustomGroups] = useState<string[]>([]);
+  const [activeGroup, setActiveGroup] = useState<string>('all');
+  const [newGroupOpen, setNewGroupOpen] = useState(false);
+  const [newGroupName, setNewGroupName] = useState('');
+  const [moveFor, setMoveFor] = useState<{ symbol: string; group: string } | null>(null);
 
   // Sectors drive allocation grouping; best-effort from bulk fundamentals.
   const fetchSectors = useCallback(async (holdings: Holding[]) => {
@@ -256,11 +268,59 @@ export default function PortfolioScreen() {
     (async () => {
       const saved = await loadPortfolio();
       setList(saved);
+      loadGroups().then(setCustomGroups).catch(() => {});
+      AsyncStorage.getItem(GROUP_SEL_KEY).then((v) => { if (v) setActiveGroup(v); }).catch(() => {});
       await fetchQuotes(saved);
       fetchSectors(saved);
       setLoading(false);
     })();
   }, [fetchQuotes, fetchSectors]);
+
+  // Every group with a chip: default first, then stored custom groups, then
+  // anything present on holdings (covers groups created on another device).
+  const allGroups = useMemo(() => {
+    const seen = new Set<string>();
+    const out: string[] = [];
+    [DEFAULT_GROUP, ...customGroups, ...list.map(groupOf)].forEach((g) => {
+      if (!seen.has(g)) { seen.add(g); out.push(g); }
+    });
+    return out;
+  }, [customGroups, list]);
+
+  const pickGroup = useCallback((g: string) => {
+    setActiveGroup(g);
+    AsyncStorage.setItem(GROUP_SEL_KEY, g).catch(() => {});
+  }, []);
+
+  // Holdings in view — the working set for totals, rows, exports and sells.
+  const shown = useMemo(
+    () => (activeGroup === 'all' ? list : list.filter((h) => groupOf(h) === activeGroup)),
+    [list, activeGroup],
+  );
+
+  const createGroup = useCallback(() => {
+    const name = newGroupName.trim();
+    setNewGroupOpen(false);
+    setNewGroupName('');
+    if (!name || name.toLowerCase() === 'all' || allGroups.some((g) => g.toLowerCase() === name.toLowerCase())) return;
+    const next = [...customGroups, name];
+    setCustomGroups(next);
+    saveGroups(next);
+    pickGroup(name);
+  }, [newGroupName, allGroups, customGroups, pickGroup]);
+
+  const deleteGroup = useCallback((g: string) => {
+    if (g === DEFAULT_GROUP || list.some((h) => groupOf(h) === g)) return; // only empty custom groups
+    const next = customGroups.filter((x) => x !== g);
+    setCustomGroups(next);
+    saveGroups(next);
+    pickGroup('all');
+  }, [customGroups, list, pickGroup]);
+
+  const onMove = useCallback(async (symbol: string, fromGroup: string, toGroup: string) => {
+    setMoveFor(null);
+    setList(await moveHolding(list, symbol, fromGroup, toGroup));
+  }, [list]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -270,7 +330,9 @@ export default function PortfolioScreen() {
   }, [list, fetchQuotes, fetchSectors]);
 
   const onAdd = useCallback(async () => {
-    const next = await addHolding(list, sym, parseFloat(qty), parseFloat(price));
+    // Buys land in the group being viewed (the default group from All view).
+    const g = activeGroup === 'all' ? DEFAULT_GROUP : activeGroup;
+    const next = await addHolding(list, sym, parseFloat(qty), parseFloat(price), g);
     if (next !== list) {
       setSym('');
       setQty('');
@@ -279,10 +341,10 @@ export default function PortfolioScreen() {
       await fetchQuotes(next);
       fetchSectors(next);
     }
-  }, [list, sym, qty, price, fetchQuotes, fetchSectors]);
+  }, [list, sym, qty, price, activeGroup, fetchQuotes, fetchSectors]);
 
   const onRemove = useCallback(
-    async (s: string) => setList(await removeHolding(list, s)),
+    async (s: string, g: string) => setList(await removeHolding(list, s, g)),
     [list],
   );
 
@@ -291,7 +353,7 @@ export default function PortfolioScreen() {
     let value = 0;
     let dayChg = 0;
     let priced = 0;
-    for (const h of list) {
+    for (const h of shown) {
       invested += h.qty * h.avg;
       const q = quotes[h.symbol];
       if (q?.price != null) {
@@ -305,12 +367,12 @@ export default function PortfolioScreen() {
     const pnl = value - invested;
     const pnlPct = invested > 0 ? (pnl / invested) * 100 : 0;
     return { invested, value, pnl, pnlPct, dayChg, priced };
-  }, [list, quotes]);
+  }, [shown, quotes]);
 
   // Per-holding rows with market-value weights, sorted by value.
   const rows = useMemo<Row[]>(() => {
     const totalValue = totals.value || 1;
-    return list
+    return shown
       .map((h) => {
         const q = quotes[h.symbol];
         const priced = q?.price != null;
@@ -331,7 +393,7 @@ export default function PortfolioScreen() {
         };
       })
       .sort((a, b) => b.value - a.value);
-  }, [list, quotes, sectors, totals.value]);
+  }, [shown, quotes, sectors, totals.value]);
 
   // Allocation: by sector when any sector is known, else by holding.
   const sectorAvailable = useMemo(() => rows.some((r) => r.sector !== 'Unknown'), [rows]);
@@ -401,8 +463,8 @@ export default function PortfolioScreen() {
       <ScreenTitle
         title="Portfolio"
         sub={
-          list.length
-            ? `${list.length} holding${list.length === 1 ? '' : 's'} · live valuation${totals.priced < list.length ? ` · ${totals.priced}/${list.length} priced` : ''}`
+          shown.length
+            ? `${activeGroup === 'all' ? '' : activeGroup + ' · '}${shown.length} holding${shown.length === 1 ? '' : 's'} · live valuation${totals.priced < shown.length ? ` · ${totals.priced}/${shown.length} priced` : ''}`
             : 'Live-valued holdings · saved on this device'
         }
       />
@@ -412,7 +474,39 @@ export default function PortfolioScreen() {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.accent} />
         }
       >
-        {list.length ? (
+        {/* Holding groups: All + each group + create. Buys/sells scope here. */}
+        <View style={styles.groupRow}>
+          {['all', ...allGroups].map((g) => {
+            const on = activeGroup === g;
+            return (
+              <TouchableOpacity
+                key={g}
+                style={[styles.groupChip, on && styles.groupChipOn]}
+                onPress={() => pickGroup(g)}
+                activeOpacity={0.75}
+              >
+                <Text style={[styles.groupChipTxt, on && styles.groupChipTxtOn]}>
+                  {g === 'all' ? 'All' : g}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+          <TouchableOpacity style={styles.groupChip} onPress={() => setNewGroupOpen(true)} activeOpacity={0.75}>
+            <Text style={styles.groupChipTxt}>＋ Group</Text>
+          </TouchableOpacity>
+          {activeGroup !== 'all' && activeGroup !== DEFAULT_GROUP && !shown.length ? (
+            <TouchableOpacity onPress={() => deleteGroup(activeGroup)} activeOpacity={0.75}>
+              <Text style={styles.groupDel}>Delete group</Text>
+            </TouchableOpacity>
+          ) : null}
+        </View>
+        {activeGroup !== 'all' ? (
+          <Text style={styles.groupNote}>
+            Working in “{activeGroup}” — buys add here and sells only touch this group's positions.
+          </Text>
+        ) : null}
+
+        {shown.length ? (
           <View style={styles.summaryRow}>
             <StatTile label="Current value" value={money(totals.value)} />
             <StatTile label="Invested" value={money(totals.invested)} />
@@ -507,7 +601,7 @@ export default function PortfolioScreen() {
 
         {error ? <Text style={styles.error}>{error} — is the backend reachable?</Text> : null}
 
-        {list.length ? (
+        {shown.length ? (
           <>
             {/* holdings table toolbar */}
             <View style={styles.toolbar}>
@@ -540,7 +634,7 @@ export default function PortfolioScreen() {
                   <View style={styles.actionsCell} />
                 </View>
                 {rows.map((r, rowIdx) => (
-                  <View key={r.h.symbol} style={styles.dataRow}>
+                  <View key={groupOf(r.h) + '|' + r.h.symbol} style={styles.dataRow}>
                     <View style={[styles.tdCell, { width: 36, alignItems: 'flex-end' }]}>
                       <Text style={styles.snoTxt}>{rowIdx + 1}</Text>
                     </View>
@@ -554,7 +648,16 @@ export default function PortfolioScreen() {
                     ))}
                     <View style={styles.actionsCell}>
                       <TouchableOpacity
-                        onPress={() => onRemove(r.h.symbol)}
+                        onPress={() => setMoveFor({ symbol: r.h.symbol, group: groupOf(r.h) })}
+                        style={styles.del}
+                        hitSlop={8}
+                        activeOpacity={0.75}
+                        accessibilityLabel={`Move ${r.h.symbol} to another group`}
+                      >
+                        <Text style={styles.delText}>⇄</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={() => onRemove(r.h.symbol, groupOf(r.h))}
                         style={styles.del}
                         hitSlop={8}
                         activeOpacity={0.75}
@@ -617,11 +720,63 @@ export default function PortfolioScreen() {
           </>
         ) : (
           <EmptyState
-            title="No holdings yet"
-            hint="Add a symbol with quantity and average buy price — it's saved on this device and valued live."
+            title={activeGroup === 'all' ? 'No holdings yet' : `“${activeGroup}” is empty`}
+            hint={
+              activeGroup === 'all'
+                ? "Add a symbol with quantity and average buy price — it's saved on this device and valued live."
+                : 'Add a symbol above or move a holding here with the ⇄ action in another group.'
+            }
           />
         )}
       </ScrollView>
+
+      {/* New group */}
+      <Modal visible={newGroupOpen} animationType="fade" transparent onRequestClose={() => setNewGroupOpen(false)}>
+        <Pressable style={styles.backdrop} onPress={() => setNewGroupOpen(false)} />
+        <View style={styles.miniSheet}>
+          <Text style={styles.drawerTitle}>New holding group</Text>
+          <Text style={styles.groupNote}>
+            e.g. Long term, Trading, SIP — trades act only on the selected group.
+          </Text>
+          <TextInput
+            style={[styles.input, { marginTop: theme.sp.md }]}
+            value={newGroupName}
+            onChangeText={setNewGroupName}
+            placeholder="Group name"
+            placeholderTextColor={theme.muted}
+            autoFocus
+            onSubmitEditing={createGroup}
+          />
+          <View style={{ flexDirection: 'row', gap: theme.sp.md, marginTop: theme.sp.md }}>
+            <Btn label="Cancel" kind="ghost" onPress={() => setNewGroupOpen(false)} style={{ flex: 1 }} />
+            <Btn label="Create" onPress={createGroup} style={{ flex: 2 }} />
+          </View>
+        </View>
+      </Modal>
+
+      {/* Move a holding between groups */}
+      <Modal visible={!!moveFor} animationType="fade" transparent onRequestClose={() => setMoveFor(null)}>
+        <Pressable style={styles.backdrop} onPress={() => setMoveFor(null)} />
+        <View style={styles.miniSheet}>
+          <Text style={styles.drawerTitle}>
+            Move {moveFor?.symbol} · {moveFor?.group} →
+          </Text>
+          {allGroups.filter((g) => g !== moveFor?.group).map((g) => (
+            <TouchableOpacity
+              key={g}
+              style={styles.moveRow}
+              onPress={() => moveFor && onMove(moveFor.symbol, moveFor.group, g)}
+              activeOpacity={0.75}
+            >
+              <Text style={styles.moveRowTxt}>{g}</Text>
+              <Text style={styles.delText}>›</Text>
+            </TouchableOpacity>
+          ))}
+          <Text style={styles.groupNote}>
+            Same symbol already in the target group? The lots merge into a weighted average.
+          </Text>
+        </View>
+      </Modal>
 
       <ColumnMenu
         visible={colMenu}
@@ -829,7 +984,45 @@ const styles = StyleSheet.create({
   symTxt: { color: theme.text, fontFamily: theme.mono, fontWeight: '700', fontSize: theme.fs.md },
   snoTxt: { color: theme.muted, fontFamily: theme.mono, fontSize: theme.fs.sm },
   symSub: { color: theme.muted, fontFamily: theme.mono, fontSize: theme.fs.xs + 1, marginTop: 2 },
-  actionsCell: { width: ACTIONS_W, alignItems: 'center', justifyContent: 'center' },
+  actionsCell: { width: ACTIONS_W, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 2 },
+  // holding groups
+  groupRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: theme.sp.sm, marginTop: theme.sp.md },
+  groupChip: {
+    backgroundColor: theme.surface2,
+    borderColor: theme.border2,
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: theme.sp.md + 2,
+    paddingVertical: 6,
+  },
+  groupChipOn: { backgroundColor: theme.accent, borderColor: theme.accent },
+  groupChipTxt: { color: theme.muted2, fontSize: theme.fs.sm, fontWeight: '600' },
+  groupChipTxtOn: { color: theme.onAccent, fontWeight: '700' },
+  groupDel: { color: theme.red, fontSize: theme.fs.sm, fontWeight: '600', marginLeft: theme.sp.sm },
+  groupNote: { color: theme.muted, fontSize: theme.fs.xs + 1, marginTop: theme.sp.sm },
+  miniSheet: {
+    position: 'absolute',
+    top: '22%',
+    left: theme.sp.lg,
+    right: theme.sp.lg,
+    maxWidth: 460,
+    alignSelf: 'center',
+    width: '92%',
+    backgroundColor: theme.surface,
+    borderColor: theme.border2,
+    borderWidth: 1,
+    borderRadius: theme.radius.lg,
+    padding: theme.sp.lg,
+  },
+  moveRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: theme.sp.md,
+    borderBottomColor: theme.border,
+    borderBottomWidth: 1,
+  },
+  moveRowTxt: { color: theme.text, fontSize: theme.fs.md, fontWeight: '600' },
   del: { padding: theme.sp.xs },
   delText: { color: theme.muted, fontSize: theme.fs.md + 1 },
   // allocation + concentration
