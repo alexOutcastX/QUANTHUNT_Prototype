@@ -13,6 +13,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { BtConfig, BtResult, BtRule, BtStrategyMeta, BtTrade, api } from '../api';
 import HtmlView from '../components/HtmlView';
+import SymbolInput from '../components/SymbolInput';
 import { LW_SCRIPT } from '../chartHtml';
 import { exportCsvRows, exportExcelRows } from '../csv';
 import { openPdfPreview } from '../pdf';
@@ -167,7 +168,8 @@ export default function BacktestScreen() {
   // ── Config state ──
   const [uniMode, setUniMode] = useState<'index' | 'symbols'>('index');
   const [index, setIndex] = useState('NIFTY 50');
-  const [symText, setSymText] = useState('RELIANCE, TCS, INFY');
+  const [symList, setSymList] = useState<string[]>(['RELIANCE', 'TCS', 'INFY']);
+  const [symQuery, setSymQuery] = useState('');
   const [period, setPeriod] = useState('2y');
   const [capital, setCapital] = useState(1000000);
   const [maxPos, setMaxPos] = useState(5);
@@ -207,10 +209,18 @@ export default function BacktestScreen() {
   const meta = metas.find((m) => m.key === stratKey);
   const stratLabel = stratKey === 'custom' ? 'Custom rules' : meta?.label || stratKey;
 
+  // Add a symbol from the predictive search (dedup, cap at the engine's limit).
+  const addSym = (sym: string) => {
+    const s = sym.trim().toUpperCase().replace(/^[A-Z]+:/, '');
+    if (!s) return;
+    setSymList((l) => (l.includes(s) || l.length >= 100 ? l : [...l, s]));
+    setSymQuery('');
+  };
+
   const buildCfg = (): BtConfig => ({
     ...(uniMode === 'index'
       ? { index }
-      : { symbols: symText.split(/[,\s]+/).map((t) => t.trim().toUpperCase()).filter(Boolean) }),
+      : { symbols: symList }),
     period,
     capital,
     max_positions: maxPos,
@@ -226,7 +236,7 @@ export default function BacktestScreen() {
 
   const applyCfg = (cfg: BtConfig) => {
     if (cfg.index) { setUniMode('index'); setIndex(cfg.index); }
-    if (cfg.symbols?.length) { setUniMode('symbols'); setSymText(cfg.symbols.join(', ')); }
+    if (cfg.symbols?.length) { setUniMode('symbols'); setSymList(cfg.symbols); }
     if (cfg.period) setPeriod(cfg.period);
     if (cfg.capital) setCapital(cfg.capital);
     if (cfg.max_positions) setMaxPos(cfg.max_positions);
@@ -417,14 +427,31 @@ export default function BacktestScreen() {
         {uniMode === 'index' ? (
           <Dropdown value={index} options={INDICES.map((i) => ({ key: i, label: i }))} onChange={setIndex} style={{ marginTop: theme.sp.sm }} />
         ) : (
-          <TextInput
-            style={[styles.in, { width: '100%', marginTop: theme.sp.sm }]}
-            value={symText}
-            onChangeText={setSymText}
-            placeholder="RELIANCE, TCS, INFY…"
-            placeholderTextColor={theme.muted}
-            autoCapitalize="characters"
-          />
+          <View style={{ marginTop: theme.sp.sm, zIndex: 30 }}>
+            <SymbolInput
+              value={symQuery}
+              onChangeText={setSymQuery}
+              onSelect={(sym) => { addSym(sym); }}
+              onSubmit={() => { if (symQuery.trim()) addSym(symQuery); }}
+              placeholder="Search any NSE/BSE stock to add…"
+            />
+            <View style={styles.chipWrap}>
+              {symList.map((sym) => (
+                <View key={sym} style={styles.symChip}>
+                  <Text style={styles.symChipTxt}>{sym}</Text>
+                  <TouchableOpacity
+                    onPress={() => setSymList((l) => l.filter((x) => x !== sym))}
+                    hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+                  >
+                    <Text style={styles.symChipX}>✕</Text>
+                  </TouchableOpacity>
+                </View>
+              ))}
+              {!symList.length ? (
+                <Text style={styles.note}>No symbols yet — search above to build your universe (up to 100).</Text>
+              ) : null}
+            </View>
+          </View>
         )}
         <View style={styles.paramRow}>
           <Dropdown label="Period" value={period} options={PERIODS} onChange={setPeriod} style={styles.ddSm} />
@@ -750,5 +777,13 @@ const styles = StyleSheet.create({
   exportItem: { paddingHorizontal: 14, paddingVertical: 10 },
   exportItemTxt: { color: theme.text, fontSize: theme.fs.sm },
   note: { color: theme.muted, fontSize: theme.fs.xs + 1, marginTop: 6 },
+  chipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.sp.sm, marginTop: theme.sp.sm },
+  symChip: {
+    flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: theme.surface2,
+    borderWidth: 1, borderColor: theme.border, borderRadius: theme.radius.sm,
+    paddingHorizontal: 10, paddingVertical: 5,
+  },
+  symChipTxt: { color: theme.text, fontFamily: theme.mono, fontSize: theme.fs.sm, fontWeight: '700' },
+  symChipX: { color: theme.muted, fontSize: theme.fs.sm },
   method: { color: theme.muted, fontSize: theme.fs.xs + 1, lineHeight: 17, marginTop: theme.sp.lg },
 });
