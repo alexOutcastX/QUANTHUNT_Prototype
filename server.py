@@ -15,6 +15,7 @@ import fundamentals as _fund   # bulk fundamentals cache (EODHD + yfinance fallb
 import scanner as _scanner     # live per-symbol technical scan for the screener
 import relations as _relations # curated company-relationship graph (Terminal tab)
 import news as _news           # RSS news aggregation (Terminal news panel)
+import primary_feeds as _primary  # NSE IPO calendar + G-Sec/SGB quotes (landing page)
 import ai_graph as _ai         # AI-generated relationship graphs (any symbol)
 import broker as _broker       # BYOB Zerodha connect (read-only, single user)
 import holidays as _holidays   # NSE trading holidays + market open/closed status
@@ -2866,6 +2867,65 @@ def market_holidays():
     s = _holidays.market_status()
     return jsonify({**s, "holidays": _holidays.holidays(),
                     "note": "Indicative list — verify with NSE circulars."})
+
+
+# ── Primary-market + fixed-income windows (landing page) ─────────────────────
+# Upcoming/current IPOs and traded G-Sec / SGB quotes from NSE's public JSON
+# APIs (parsing in primary_feeds.py). Best-effort with a memory cache and a
+# last-good disk copy — the landing page degrades to an empty window with an
+# error note instead of failing.
+_FEED_LOCK = threading.Lock()
+_FEEDS = {
+    "ipos": {"ts": 0.0, "data": None, "ttl": 1800,
+             "file": os.path.join(_BASE_DIR, "ipo_cache.json"),
+             "parse": lambda: _primary.parse_ipos(lambda p, q=None: nse_get(p, params=q))},
+    "gsec": {"ts": 0.0, "data": None, "ttl": 1800,
+             "file": os.path.join(_BASE_DIR, "gsec_cache.json"),
+             "parse": lambda: _primary.parse_gsec(lambda p, q=None: nse_get(p, params=q))},
+}
+
+
+def _feed_payload(name):
+    feed = _FEEDS[name]
+    now = time.time()
+    with _FEED_LOCK:
+        if feed["data"] is not None and now - feed["ts"] < feed["ttl"]:
+            return feed["data"]
+    items, err = feed["parse"]()
+    if items:
+        payload = {"items": items,
+                   "asof": datetime.datetime.now().isoformat(timespec="seconds")}
+        with _FEED_LOCK:
+            feed["ts"], feed["data"] = now, payload
+        try:
+            with open(feed["file"], "w") as f:
+                json.dump(payload, f)
+        except Exception:
+            pass
+        return payload
+    try:  # degrade: last-good disk copy, marked stale
+        with open(feed["file"]) as f:
+            old = json.load(f)
+        old["stale"] = True
+        with _FEED_LOCK:  # retry the live feed again in 5 min, not a full TTL
+            feed["ts"], feed["data"] = now - feed["ttl"] + 300, old
+        return old
+    except Exception:
+        return {"items": [], "error": err or "unavailable"}
+
+
+@app.route("/ipos")
+@rate_limit("ipos", 30, 300)
+def upcoming_ipos():
+    """Current + upcoming public issues (mainboard & SME) from NSE."""
+    return jsonify(_feed_payload("ipos"))
+
+
+@app.route("/gsec")
+@rate_limit("gsec", 30, 300)
+def gsec_quotes():
+    """Traded G-Secs and sovereign gold bonds — market yields, not FD rates."""
+    return jsonify(_feed_payload("gsec"))
 
 
 # ── Major indices (live level + day change + 1Y return via yfinance) ─────────

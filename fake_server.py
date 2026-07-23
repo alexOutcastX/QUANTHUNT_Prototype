@@ -510,6 +510,46 @@ class H(BaseHTTPRequestHandler):
             return self._shareholding()
         if path == "/indices":
             return self._indices()
+        if path == "/movers":
+            rows = [{"symbol": s, "name": s.title() + " Ltd", "price": 100.0 + i * 25,
+                     "prevClose": 100.0 + i * 25 - d, "chg": round(d / (100.0 + i * 25 - d) * 100, 2),
+                     "absChg": d, "open": 100.0, "high": 140.0, "low": 95.0, "volume": 1000000 + i}
+                    for i, (s, d) in enumerate([("GAINER1", 4.2), ("GAINER2", 3.1), ("GAINER3", 2.4),
+                                                ("LOSER1", -3.8), ("LOSER2", -2.9), ("LOSER3", -1.7)])]
+            return self._json({"index": "NIFTY 500",
+                               "breadth": {"up": 293, "down": 182, "flat": 25, "total": 500, "ratio": 1.61},
+                               "gainers": rows[:3], "losers": rows[3:], "asof": "2026-07-23T15:30:00"})
+        if path == "/news":
+            return self._json({"items": [
+                {"title": f"Fake market headline {i} — earnings beat estimates",
+                 "link": "https://example.com/n" + str(i), "source": "ET Markets",
+                 "ts": 1753200000 + i * 3600, "sym": ""} for i in range(6)],
+                "fetched": 1753260000, "cached": False})
+        if path == "/sectors":
+            return self._json({"status": "done", "refreshing": False, "asof": 1753260000,
+                               "level": "macro", "universe": 2100, "mapped": 1900,
+                               "sectors": [{"sector": n, "count": 40 + i, "market_cap_cr": 500000 - i * 40000,
+                                            "chg": round(1.8 - i * 0.55, 2)}
+                                           for i, n in enumerate(["Financials", "IT", "Energy", "Auto",
+                                                                  "Pharma", "FMCG", "Metals", "SME Emerge"])]})
+        if path == "/ipos":
+            return self._json({"items": [
+                {"symbol": "ABCLTD", "name": "ABC Manufacturing Ltd", "series": "EQ",
+                 "start": "21-Jul-2026", "end": "24-Jul-2026", "price_band": "95-100",
+                 "size": "₹1,200 cr", "status": "open"},
+                {"symbol": "XYZSME", "name": "XYZ Industries", "series": "SME",
+                 "start": "28-Jul-2026", "end": "30-Jul-2026", "price_band": "55-58",
+                 "size": "₹48 cr", "status": "upcoming"}],
+                "asof": "2026-07-23T12:00:00"})
+        if path == "/gsec":
+            return self._json({"items": [
+                {"symbol": "726GS2033", "series": "GS", "kind": "gsec", "ltp": 99.61,
+                 "chg": 0.12, "yld": 7.02, "coupon": 7.26, "maturity": "22-Aug-2033"},
+                {"symbol": "718GS2037", "series": "GS", "kind": "gsec", "ltp": 98.4,
+                 "chg": -0.05, "yld": 7.21, "coupon": 7.18, "maturity": "24-Jul-2037"},
+                {"symbol": "SGBAUG29", "series": "GB", "kind": "sgb", "ltp": 7350.0,
+                 "chg": 0.4, "yld": 2.5, "coupon": 2.5, "maturity": "11-Aug-2029"}],
+                "asof": "2026-07-23T12:00:00"})
         if path.startswith(("/scan", "/index", "/indices", "/quote", "/fundamentals",
                             "/alerts", "/corporate", "/entities", "/api", "/holidays",
                             "/derivatives", "/risk", "/health")):
