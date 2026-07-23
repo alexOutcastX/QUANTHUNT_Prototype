@@ -16,6 +16,7 @@ const ScreenerScreen = lazyScreen(() => import('./screens/ScreenerScreen'));
 const StockScreen = lazyScreen(() => import('./screens/StockScreen'));
 const TerminalScreen = lazyScreen(() => import('./screens/TerminalScreen'));
 const HeatmapScreen = lazyScreen(() => import('./screens/HeatmapScreen'));
+const BacktestScreen = lazyScreen(() => import('./screens/BacktestScreen'));
 import TickerStrip from './components/TickerStrip';
 import CommandPalette from './components/CommandPalette';
 import TickerSettings from './components/TickerSettings';
@@ -91,10 +92,21 @@ const NAV: { k: string; label: string; icon: IconName; render: (nav: (k: string)
   { k: 'terminal', label: 'Terminal', icon: 'terminal', render: () => <TerminalScreen /> },
 ];
 
+// Desktop repartitions the same routes: Symbol leaves the tab row — the wide
+// search box is the way into a stock — and Backtest is promoted out of Desk to
+// a flagship top-level destination beside Terminal.
+const NAV_BY_KEY = Object.fromEntries(NAV.map((t) => [t.k, t]));
+const BACKTEST_TAB: (typeof NAV)[number] = { k: 'backtest', label: 'Backtest', icon: 'flask', render: () => <BacktestScreen /> };
+const NAV_DESKTOP = [NAV_BY_KEY.today, NAV_BY_KEY.screens, NAV_BY_KEY.desk, BACKTEST_TAB, NAV_BY_KEY.terminal];
+// 'stock' stays renderable (openStock routes there); it's just not a tab.
+const ROUTES_DESKTOP = [...NAV_DESKTOP, NAV_BY_KEY.stock];
+
 // Analysis sub-tabs that moved into the Desk hub; the rest went to Screens.
 const DESK_ANALYSIS_SUBS = new Set(['inst', 'shareholders', 'paper', 'risk', 'bt']);
 
-function mapTarget(page: string, sub?: string): string {
+function mapTarget(page: string, sub?: string, desktop?: boolean): string {
+  // Backtest lives at top level on desktop but stays a Desk sub-tab on mobile.
+  const bt = desktop ? 'backtest' : 'desk';
   switch (page) {
     case 'today':
     case 'dashboard':
@@ -103,6 +115,8 @@ function mapTarget(page: string, sub?: string): string {
       return 'stock';
     case 'terminal':
       return 'terminal';
+    case 'backtest':
+      return bt;
     case 'screens':
     case 'screener':
     case 'heatmap':
@@ -112,8 +126,9 @@ function mapTarget(page: string, sub?: string): string {
     case 'tools':
     case 'charts':
     case 'more':
-      return 'desk';
+      return sub === 'bt' ? bt : 'desk';
     case 'analysis':
+      if (sub === 'bt') return bt;
       return sub && DESK_ANALYSIS_SUBS.has(sub) ? 'desk' : 'screens';
     default:
       return 'today';
@@ -133,12 +148,12 @@ function NewDesktopShell() {
   const [active, setActive] = useState('today');
   const [palette, setPalette] = useState(false);
   const [settings, setSettings] = useState(false);
-  const cur = NAV.find((t) => t.k === active) || NAV[0];
+  const cur = ROUTES_DESKTOP.find((t) => t.k === active) || NAV_DESKTOP[0];
   useEffect(
     () =>
       subscribeNav(() => {
         const p = peekNav();
-        if (p) setActive(mapTarget(p.page, p.sub));
+        if (p) setActive(mapTarget(p.page, p.sub, true));
       }),
     [],
   );
@@ -160,8 +175,8 @@ function NewDesktopShell() {
         <Brand big />
         <MarketChip />
         <TouchableOpacity style={styles.searchBtn} onPress={() => setPalette(true)} activeOpacity={0.75}>
-          <Icon name="search" size={13} color={theme.muted} />
-          <Text style={styles.searchTxt}>Search</Text>
+          <Icon name="search" size={14} color={theme.muted} />
+          <Text style={styles.searchTxt}>Search symbols &amp; pages…</Text>
           <Text style={styles.searchKbd}>⌘K</Text>
         </TouchableOpacity>
         <ScrollView
@@ -170,7 +185,7 @@ function NewDesktopShell() {
           style={styles.navScroll}
           contentContainerStyle={styles.pagesRow}
         >
-          {NAV.map((it) => {
+          {NAV_DESKTOP.map((it) => {
             const on = active === it.k;
             return (
               <TouchableOpacity
@@ -524,18 +539,22 @@ const styles = StyleSheet.create({
   mktDot: { width: 6, height: 6, borderRadius: 999 },
   mktTxt: { color: theme.muted2, fontSize: 10, fontFamily: theme.mono, letterSpacing: 0.4 },
 
+  // Wide + prominent (it replaces the Symbol tab as the way into a stock).
   searchBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 7,
+    gap: 8,
+    flexGrow: 1,
+    flexShrink: 1,
+    maxWidth: 440,
     backgroundColor: theme.surface2,
-    borderColor: theme.border,
+    borderColor: theme.border2,
     borderWidth: 1,
     borderRadius: theme.radius.md,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
   },
-  searchTxt: { color: theme.muted, fontSize: 11 },
+  searchTxt: { color: theme.muted, fontSize: 12, flex: 1 },
   searchKbd: {
     color: theme.muted2,
     fontSize: 9,
