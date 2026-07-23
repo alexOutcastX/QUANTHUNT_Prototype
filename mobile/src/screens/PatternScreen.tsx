@@ -520,16 +520,25 @@ function PatternIndexScreener({ onOpenSymbol, onFullScan }: {
     <View style={{ flex: 1, flexDirection: isDesktop ? 'row' : 'column' }}>
       <View style={{ flex: 1 }}>{body}</View>
 
-      {/* Desktop: the tapped hit opens in the blank space beside the table. */}
-      {isDesktop && sel ? (
+      {/* Desktop: a permanent panel in the blank space beside the table — the
+          tapped hit's full read lives here, never as an overlay. */}
+      {isDesktop ? (
         <ScrollView style={styles.sidePanel} contentContainerStyle={{ padding: theme.sp.md }}>
-          <PatternHitCard
-            h={sel}
-            enr={enrich[sel.symbol]}
-            onClose={() => setSel(null)}
-            onOpenSymbol={onOpenSymbol}
-            onFullScan={onFullScan}
-          />
+          {sel ? (
+            <PatternHitCard
+              h={sel}
+              enr={enrich[sel.symbol]}
+              onClose={() => setSel(null)}
+              onOpenSymbol={onOpenSymbol}
+              onFullScan={onFullScan}
+            />
+          ) : (
+            <EmptyState
+              icon="◇"
+              title="Please select a stock"
+              hint="Tap any row in the table — its full pattern read, recent formations and actions appear here."
+            />
+          )}
         </ScrollView>
       ) : null}
 
@@ -596,10 +605,27 @@ function PatternHitCard({ h, enr, onClose, onOpenSymbol, onFullScan }: {
   const [watch, setWatch] = useState<string[]>([]);
   const [papered, setPapered] = useState(false);
   const [flash, setFlash] = useState('');
+  // The symbol's recent formation history — same engine as the single-stock
+  // scanner, trimmed to the last 5 detections for the card.
+  const [recent, setRecent] = useState<ChartPattern[] | null>(null);
+  const [keyLevel, setKeyLevel] = useState<number | null>(null);
   useEffect(() => {
     loadWatchlist().then(setWatch);
     loadPaperTrades().then((ts) => setPapered(hasOpenPaper(ts, h.symbol)));
-  }, [h.symbol]);
+    let cancelled = false;
+    setRecent(null);
+    setKeyLevel(null);
+    api.chartPatterns(h.symbol, '1y')
+      .then((r) => {
+        if (cancelled) return;
+        const ps = (r.patterns || []).slice().sort((a, b) => (b.end_ts || 0) - (a.end_ts || 0));
+        setRecent(ps.slice(0, 5));
+        const cur = ps.find((p) => p.label === h.label) || r.current || null;
+        if (cur?.level != null) setKeyLevel(cur.level);
+      })
+      .catch(() => { if (!cancelled) setRecent([]); });
+    return () => { cancelled = true; };
+  }, [h.symbol, h.label]);
   const watched = watch.includes(normSymbol(h.symbol));
   const toast = (m: string) => {
     setFlash(m);
@@ -669,6 +695,7 @@ function PatternHitCard({ h, enr, onClose, onOpenSymbol, onFullScan }: {
           ['CONTINUATION', h.continuation != null ? `${h.continuation}%` : '—'],
           ['MEASURED MOVE', h.expansion_pct != null ? `${h.expansion_pct >= 0 ? '+' : ''}${h.expansion_pct}%` : '—'],
           ['TARGET', target != null ? `₹${target.toLocaleString('en-IN', { maximumFractionDigits: 2 })}` : '—'],
+          ['KEY LEVEL', keyLevel != null ? `₹${keyLevel.toLocaleString('en-IN', { maximumFractionDigits: 2 })}` : '—'],
           ['FORMED', fmtDate(h.start_ts ?? undefined)],
           ['DETECTED', fmtDate(h.end_ts ?? undefined)],
         ].map(([l, v]) => (
@@ -682,6 +709,39 @@ function PatternHitCard({ h, enr, onClose, onOpenSymbol, onFullScan }: {
 
       <Text style={styles.hitDesc}>{desc.what}</Text>
       <Text style={styles.hitDesc}><Text style={{ fontWeight: '700' }}>Implies</Text> — {desc.implies}</Text>
+
+      {/* Recent formation history — the single-stock scanner's read, last 5. */}
+      <Text style={styles.hitRecentTitle}>RECENT PATTERNS · LAST 5</Text>
+      {recent === null ? (
+        <Text style={styles.hitRecentSub}>Scanning {h.symbol}'s last year of bars…</Text>
+      ) : recent.length === 0 ? (
+        <Text style={styles.hitRecentSub}>No other formations detected in the last year.</Text>
+      ) : (
+        recent.map((p, i) => {
+          const pc = biasColor(p.bias);
+          return (
+            <View key={`${p.type}-${p.end_ts}-${i}`} style={styles.hitRecentRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.hitRecentLbl}>
+                  {p.label}
+                  {p.active ? <Text style={{ color: theme.green }}>  · in play</Text> : null}
+                </Text>
+                <Text style={styles.hitRecentSub}>
+                  {p.category} · {p.status} · {fmtDate(p.start_ts)} → {p.active ? 'active' : fmtDate(p.end_ts)}
+                </Text>
+              </View>
+              <View style={{ alignItems: 'flex-end' }}>
+                <Text style={[styles.hitRecentLbl, { color: pc }]}>
+                  {p.bias === 'bullish' ? '▲' : p.bias === 'bearish' ? '▼' : '—'} {p.confidence}%
+                </Text>
+                <Text style={[styles.hitRecentSub, { color: (p.expansion_pct ?? 0) >= 0 ? theme.green : theme.red }]}>
+                  {p.expansion_pct != null ? `${p.expansion_pct >= 0 ? '+' : ''}${p.expansion_pct}%` : '—'}
+                </Text>
+              </View>
+            </View>
+          );
+        })
+      )}
 
       <View style={styles.hitActions}>
         <TouchableOpacity style={styles.hitBtn} onPress={() => onOpenSymbol(h.symbol)} activeOpacity={0.75}>
@@ -1169,4 +1229,11 @@ const styles = StyleSheet.create({
   },
   hitBtnTxt: { color: theme.text, fontSize: theme.fs.sm },
   hitFlash: { color: theme.green, fontSize: theme.fs.sm, marginTop: theme.sp.sm, fontWeight: '600' },
+  hitRecentTitle: { color: theme.muted, fontSize: 10, fontFamily: theme.mono, letterSpacing: 0.5, marginTop: theme.sp.md, marginBottom: 4 },
+  hitRecentRow: {
+    flexDirection: 'row', alignItems: 'center', gap: theme.sp.sm, paddingVertical: 7,
+    borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.border,
+  },
+  hitRecentLbl: { color: theme.text, fontSize: theme.fs.sm, fontWeight: '700' },
+  hitRecentSub: { color: theme.muted, fontSize: theme.fs.xs + 1, marginTop: 1 },
 });
