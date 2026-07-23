@@ -292,12 +292,15 @@ function CurrentCard({ p, actions }: { p: ChartPattern; actions: CardActions }) 
 }
 
 // ── Index-wide pattern screener ──────────────────────────────────────────────
-// The inverse question to the single-stock recogniser: "which stocks in this
-// index are showing a pattern right now?". The backend sweeps the index in the
-// background and streams hits into the snapshot; we poll while it runs.
+// The inverse question to the single-stock recogniser: "which stocks are
+// showing a pattern right now?". EVERY index below is always swept (no picker
+// — the whole market is the universe, NSE broad + sectoral, BSE via SENSEX,
+// and the SME board); the backend sweeps each in the background and streams
+// hits into per-index snapshots that merge client-side.
 const SCREEN_INDICES = [
   'NIFTY 50', 'NIFTY 100', 'NIFTY 200', 'NIFTY BANK', 'NIFTY IT',
   'NIFTY MIDCAP 100', 'NIFTY SMALLCAP 100', 'NIFTY AUTO', 'NIFTY PHARMA',
+  'NIFTY FMCG', 'NIFTY METAL', 'BSE SENSEX', 'SME EMERGE',
 ];
 
 // Full recogniser vocabulary for the filter dropdown (mirrors patterns.py
@@ -332,26 +335,75 @@ const SCREEN_COLS: Col[] = [
   { key: 'cont', label: 'CONTINUATION', w: 112, align: 'right' },
   { key: 'exp', label: 'TARGET %', w: 88, align: 'right' },
   { key: 'ended', label: 'DETECTED', w: 92, align: 'right' },
+  { key: 'resolves', label: 'RESOLVES ~', w: 96, align: 'right' },
 ];
-const SCREEN_TABLE_W = SCREEN_COLS.reduce((a, c) => a + c.w, 0);
+const SORTABLE = new Set(['symbol', 'pattern', 'bias', 'status', 'conf', 'cont', 'exp', 'ended', 'resolves']);
+const SORT_OPTS: { key: string; label: string }[] = [
+  { key: 'conf', label: 'Probability' },
+  { key: 'cont', label: 'Continuation' },
+  { key: 'exp', label: 'Target %' },
+  { key: 'ended', label: 'Detected date' },
+  { key: 'resolves', label: 'Resolves-by date' },
+  { key: 'symbol', label: 'Symbol A–Z' },
+];
+const PATCOLS_KEY = 'taureye.patscreen.cols.v1';
+
+// Rough resolution estimate: a measured move typically plays out over about
+// the pattern's own formation span, projected forward from its detection date.
+const resolvesTs = (h: { start_ts?: number | null; end_ts?: number | null }): number | null =>
+  h.end_ts != null && h.start_ts != null ? h.end_ts + Math.max(0, h.end_ts - h.start_ts) : null;
+
+const sortVal = (h: PatternScreenHit, k: string): number | string => {
+  switch (k) {
+    case 'symbol': return h.symbol;
+    case 'pattern': return h.label ?? '';
+    case 'bias': return h.bias ?? '';
+    case 'status': return h.status ?? '';
+    case 'cont': return h.continuation ?? -1;
+    case 'exp': return h.expansion_pct ?? -999;
+    case 'ended': return h.end_ts ?? 0;
+    case 'resolves': return resolvesTs(h) ?? 0;
+    default: return h.confidence;
+  }
+};
 
 function PatternIndexScreener({ onOpenSymbol, onFullScan }: {
   onOpenSymbol: (sym: string) => void;
   onFullScan: (sym: string) => void;
 }) {
   const { isDesktop } = useResponsive();
-  const [indexSel, setIndexSel] = useState<string[]>(['NIFTY 50']);
-  const [idxOpen, setIdxOpen] = useState(false);
-  const [idxDraft, setIdxDraft] = useState<string[]>(['NIFTY 50']);
   const [snaps, setSnaps] = useState<Record<string, PatternScreenResp>>({});
   const [error, setError] = useState('');
   const [patFilter, setPatFilter] = useState('');    // '' = all patterns; 'Bullish'/'Bearish' = bias groups
   const [patOpen, setPatOpen] = useState(false);
   const [sweep, setSweep] = useState(0);             // bump to restart the poll loop
   const [sel, setSel] = useState<PatternScreenHit | null>(null);
+  // Sorting + column prefs + the guide/glossary sheet.
+  const [sortKey, setSortKey] = useState('conf');
+  const [sortDir, setSortDir] = useState<1 | -1>(-1);
+  const [sortOpen, setSortOpen] = useState(false);
+  const [colHidden, setColHidden] = useState<string[]>([]);
+  const [colOpen, setColOpen] = useState(false);
+  const [guide, setGuide] = useState(false);
 
-  // Poll every selected index; merge snapshots client-side (the server sweeps
-  // and caches per index). Keep last data through transient poll failures.
+  useEffect(() => {
+    AsyncStorage.getItem(PATCOLS_KEY)
+      .then((v) => {
+        if (!v) return;
+        try {
+          const p = JSON.parse(v);
+          if (Array.isArray(p)) setColHidden(p.filter((k) => typeof k === 'string'));
+        } catch { /* defaults */ }
+      })
+      .catch(() => {});
+  }, []);
+  const saveHidden = (next: string[]) => {
+    setColHidden(next);
+    AsyncStorage.setItem(PATCOLS_KEY, JSON.stringify(next)).catch(() => {});
+  };
+
+  // Poll every index (the whole sweep list, always); merge snapshots
+  // client-side. Keep last data through transient poll failures.
   useEffect(() => {
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | null = null;
@@ -359,7 +411,7 @@ function PatternIndexScreener({ onOpenSymbol, onFullScan }: {
     let misses = 0;
     const tick = async () => {
       const results = await Promise.all(
-        indexSel.map((ix) => api.patternsScreen(ix).then((s) => [ix, s] as const).catch(() => null)),
+        SCREEN_INDICES.map((ix) => api.patternsScreen(ix).then((s) => [ix, s] as const).catch(() => null)),
       );
       if (cancelled) return;
       const ok = results.filter(Boolean) as (readonly [string, PatternScreenResp])[];
@@ -379,20 +431,19 @@ function PatternIndexScreener({ onOpenSymbol, onFullScan }: {
         }
       }
       const anyRunning = ok.some(([, s]) => s.status === 'running' || s.refreshing);
-      if (anyRunning || ok.length < indexSel.length) timer = setTimeout(tick, 4000);
+      if (anyRunning || ok.length < SCREEN_INDICES.length) timer = setTimeout(tick, 4000);
     };
-    setSnaps({});
     tick();
     return () => {
       cancelled = true;
       if (timer) clearTimeout(timer);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [indexSel.join('|'), sweep]);
+  }, [sweep]);
 
   // Merge the per-index snapshots: dedupe symbol+pattern (keep the stronger
   // read), aggregate progress/coverage.
-  const loaded = indexSel.map((ix) => snaps[ix]).filter(Boolean) as PatternScreenResp[];
+  const loaded = SCREEN_INDICES.map((ix) => snaps[ix]).filter(Boolean) as PatternScreenResp[];
   const merged = useMemo(() => {
     const bySig = new Map<string, PatternScreenHit>();
     loaded.forEach((s) => (s.results || []).forEach((h) => {
@@ -410,46 +461,75 @@ function PatternIndexScreener({ onOpenSymbol, onFullScan }: {
     if (biasGroup) return h.bias === patFilter.toLowerCase();
     return h.label === patFilter;
   });
-  const running = loaded.some((s) => s.status === 'running' || s.refreshing) || loaded.length < indexSel.length;
+  const running = loaded.some((s) => s.status === 'running' || s.refreshing) || loaded.length < SCREEN_INDICES.length;
   const anyLoaded = loaded.length > 0;
   const partial = !running && loaded.some((s) => s.partial);
   const scannedOk = loaded.reduce((a, s) => a + (s.scanned_ok || 0), 0);
   const universe = loaded.reduce((a, s) => a + (s.universe || 0), 0);
   const asof = Math.max(0, ...loaded.map((s) => s.asof || 0));
   const capped = loaded.some((s) => s.capped);
-  const idxLabel = indexSel.length === 1 ? indexSel[0] : `${indexSel.length} indices`;
+  const idxLabel = 'all indices · NSE + BSE + SME';
 
   const pickPat = (l: string) => {
     setPatFilter(l);
     setPatOpen(false);
   };
-  const toggleIdx = (ix: string) =>
-    setIdxDraft((d) => (d.includes(ix) ? d.filter((x) => x !== ix) : [...d, ix]));
+
+  const sorted = useMemo(() => {
+    const out = [...shown];
+    out.sort((a, b) => {
+      const va = sortVal(a, sortKey);
+      const vb = sortVal(b, sortKey);
+      const cmp = typeof va === 'string' || typeof vb === 'string'
+        ? String(va).localeCompare(String(vb))
+        : (va as number) - (vb as number);
+      return cmp * sortDir;
+    });
+    return out;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shown, sortKey, sortDir]);
+  const toggleSort = (k: string) => {
+    if (!SORTABLE.has(k)) return;
+    if (sortKey === k) setSortDir((d) => (d === -1 ? 1 : -1));
+    else {
+      setSortKey(k);
+      setSortDir(k === 'symbol' || k === 'pattern' || k === 'bias' || k === 'status' ? 1 : -1);
+    }
+  };
+  const sortLabel = SORT_OPTS.find((o) => o.key === sortKey)?.label
+    || SCREEN_COLS.find((c) => c.key === sortKey)?.label || 'Probability';
+  // # / Symbol always stay; everything else is user-toggleable.
+  const visCols = SCREEN_COLS.filter((c) => c.key === 'sno' || c.key === 'symbol' || !colHidden.includes(c.key));
+  const visTableW = visCols.reduce((a, c) => a + c.w, 0);
 
   const body = (
     <ScrollView contentContainerStyle={styles.body}>
-      {/* control line: index multi-picker + pattern dropdown + rescan */}
+      {/* control line: pattern filter · sort · columns · rescan · guide */}
       <View style={styles.ctlLine}>
-        <TouchableOpacity
-          style={[styles.perChip, styles.perChipOn]}
-          onPress={() => { setIdxDraft(indexSel); setIdxOpen(true); }}
-          activeOpacity={0.75}
-        >
-          <Text style={[styles.perTxt, styles.perTxtOn]}>Indices · {idxLabel} ▾</Text>
-        </TouchableOpacity>
         <TouchableOpacity style={[styles.perChip, !!patFilter && styles.perChipOn]} onPress={() => setPatOpen(true)} activeOpacity={0.75}>
           <Text style={[styles.perTxt, !!patFilter && styles.perTxtOn]}>{patFilter || 'All patterns'} ▾</Text>
         </TouchableOpacity>
+        <TouchableOpacity style={styles.perChip} onPress={() => setSortOpen(true)} activeOpacity={0.75}>
+          <Text style={styles.perTxt}>⇅ {sortLabel}{sortDir === -1 ? ' ↓' : ' ↑'}</Text>
+        </TouchableOpacity>
+        {isDesktop ? (
+          <TouchableOpacity style={styles.perChip} onPress={() => setColOpen(true)} activeOpacity={0.75}>
+            <Text style={styles.perTxt}>▤ Columns</Text>
+          </TouchableOpacity>
+        ) : null}
         <TouchableOpacity
           style={styles.perChip}
           onPress={() => {
             // Force fresh sweeps server-side, then restart the poll loop.
-            indexSel.forEach((ix) => api.patternsScreen(ix, true).catch(() => {}));
+            SCREEN_INDICES.forEach((ix) => api.patternsScreen(ix, true).catch(() => {}));
             setSweep((n) => n + 1);
           }}
           activeOpacity={0.75}
         >
           <Text style={styles.perTxt}>⟳ Rescan</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.perChip} onPress={() => setGuide(true)} activeOpacity={0.75}>
+          <Text style={[styles.perTxt, { color: theme.brand }]}>ⓘ Guide</Text>
         </TouchableOpacity>
       </View>
 
@@ -493,18 +573,34 @@ function PatternIndexScreener({ onOpenSymbol, onFullScan }: {
               history. It retries automatically in a few minutes, or tap Rescan.
             </Text>
           ) : null}
-          {shown.length ? (
+          {sorted.length && !isDesktop ? (
+            // Mobile: compact two-line rows — every field visible, no
+            // horizontal scrolling, no clipped headers.
+            <View>
+              {sorted.map((h, i) => (
+                <MobileHitRow key={`${h.symbol}-${h.type}-${i}`} h={h} enr={enrich[h.symbol]} top={i === 0} onPress={() => setSel(h)} />
+              ))}
+            </View>
+          ) : sorted.length ? (
             <ScrollView horizontal showsHorizontalScrollIndicator contentContainerStyle={{ minWidth: '100%' }}>
-              <View style={{ minWidth: SCREEN_TABLE_W }}>
+              <View style={{ minWidth: visTableW }}>
                 <View style={styles.headerRow}>
-                  {SCREEN_COLS.map((c) => (
-                    <Text key={c.key} style={[styles.th, { width: c.w, textAlign: c.align === 'left' ? 'left' : 'right' }]}>
-                      {c.label}
-                    </Text>
+                  {visCols.map((c) => (
+                    <TouchableOpacity
+                      key={c.key}
+                      style={{ width: c.w }}
+                      onPress={() => toggleSort(c.key)}
+                      disabled={!SORTABLE.has(c.key)}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={[styles.th, { width: c.w, textAlign: c.align === 'left' ? 'left' : 'right' }, sortKey === c.key && { color: theme.brand }]}>
+                        {c.label}{sortKey === c.key ? (sortDir === -1 ? ' ↓' : ' ↑') : ''}
+                      </Text>
+                    </TouchableOpacity>
                   ))}
                 </View>
-                {shown.map((h, i) => (
-                  <ScreenHitRow key={`${h.symbol}-${h.type}-${i}`} h={h} enr={enrich[h.symbol]} idx={i} top={i === 0} onPress={() => setSel(h)} />
+                {sorted.map((h, i) => (
+                  <ScreenHitRow key={`${h.symbol}-${h.type}-${i}`} h={h} enr={enrich[h.symbol]} idx={i} top={i === 0} cols={visCols} onPress={() => setSel(h)} />
                 ))}
               </View>
             </ScrollView>
@@ -574,38 +670,149 @@ function PatternIndexScreener({ onOpenSymbol, onFullScan }: {
         </Sheet>
       ) : null}
 
-      {/* Index multi-picker */}
-      {idxOpen ? (
-        <Sheet onClose={() => setIdxOpen(false)} maxHeight="85%">
-          <SectionTitle>Indices to screen</SectionTitle>
+      {/* Sort picker */}
+      {sortOpen ? (
+        <Sheet onClose={() => setSortOpen(false)} maxHeight="70%">
+          <SectionTitle>Sort hits by</SectionTitle>
           <ScrollView bounces={false} style={{ marginVertical: theme.sp.sm }}>
-            <TouchableOpacity
-              style={styles.patOpt}
-              onPress={() => setIdxDraft(idxDraft.length === SCREEN_INDICES.length ? ['NIFTY 50'] : [...SCREEN_INDICES])}
-              activeOpacity={0.75}
-            >
-              <Text style={[styles.patOptTxt, { fontWeight: '700' }]}>
-                {idxDraft.length === SCREEN_INDICES.length ? '☑' : '☐'} All indices
-              </Text>
-            </TouchableOpacity>
-            {SCREEN_INDICES.map((ix) => (
-              <TouchableOpacity key={ix} style={styles.patOpt} onPress={() => toggleIdx(ix)} activeOpacity={0.75}>
-                <Text style={[styles.patOptTxt, idxDraft.includes(ix) && { color: theme.brand, fontWeight: '700' }]}>
-                  {idxDraft.includes(ix) ? '☑' : '☐'} {ix}
+            {SORT_OPTS.map((o) => (
+              <TouchableOpacity
+                key={o.key}
+                style={styles.patOpt}
+                onPress={() => { toggleSort(o.key); setSortOpen(false); }}
+                activeOpacity={0.75}
+              >
+                <Text style={[styles.patOptTxt, sortKey === o.key && { color: theme.brand, fontWeight: '700' }]}>
+                  {o.label}{sortKey === o.key ? (sortDir === -1 ? '  ↓ high → low' : '  ↑ low → high') : ''}
                 </Text>
               </TouchableOpacity>
             ))}
           </ScrollView>
-          <Btn
-            label={`Scan ${idxDraft.length === 1 ? idxDraft[0] : `${idxDraft.length} indices`}`}
-            onPress={() => {
-              if (idxDraft.length) setIndexSel(idxDraft);
-              setIdxOpen(false);
-            }}
-          />
+          <Text style={styles.hitRecentSub}>Pick the same field again to flip the direction.</Text>
         </Sheet>
       ) : null}
+
+      {/* Column show/hide (the table view) */}
+      {colOpen ? (
+        <Sheet onClose={() => setColOpen(false)} maxHeight="80%">
+          <SectionTitle>Columns</SectionTitle>
+          <ScrollView bounces={false} style={{ marginVertical: theme.sp.sm }}>
+            {SCREEN_COLS.filter((c) => c.key !== 'sno' && c.key !== 'symbol').map((c) => {
+              const on = !colHidden.includes(c.key);
+              return (
+                <TouchableOpacity
+                  key={c.key}
+                  style={styles.patOpt}
+                  onPress={() => saveHidden(on ? [...colHidden, c.key] : colHidden.filter((k) => k !== c.key))}
+                  activeOpacity={0.75}
+                >
+                  <Text style={[styles.patOptTxt, on && { color: theme.brand, fontWeight: '700' }]}>
+                    {on ? '☑' : '☐'} {c.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+          <Text style={styles.hitRecentSub}># and SYMBOL always stay. Preferences persist on this device.</Text>
+        </Sheet>
+      ) : null}
+
+      {/* Guide + glossary */}
+      {guide ? <PatternGuideSheet onClose={() => setGuide(false)} /> : null}
     </View>
+  );
+}
+
+// ── ⓘ Guide: how the pattern engine works + a glossary of every column ──────
+function PatternGuideSheet({ onClose }: { onClose: () => void }) {
+  const G = ({ term, body: b }: { term: string; body: string }) => (
+    <View style={styles.gRow}>
+      <Text style={styles.gTerm}>{term}</Text>
+      <Text style={styles.gBody}>{b}</Text>
+    </View>
+  );
+  return (
+    <Sheet onClose={onClose} maxHeight="92%">
+      <ScrollView showsVerticalScrollIndicator={false}>
+        <View style={styles.exHead}>
+          <Text style={styles.exTitle}>Pattern engine — guide</Text>
+          <TouchableOpacity onPress={onClose} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+            <Text style={styles.exX}>✕</Text>
+          </TouchableOpacity>
+        </View>
+
+        <Text style={styles.exSecTitle}>HOW THE ENGINE WORKS</Text>
+        <Text style={styles.exBody}>
+          Every constituent of every swept index (NSE broad + sectoral indices, BSE SENSEX and the SME
+          board) runs through a geometric recogniser: the last year of daily bars is searched for two
+          dozen textbook formations — double/triple tops and bottoms, head &amp; shoulders, triangles,
+          wedges, flags, pennants, channels, cup &amp; handle, rounding turns and V-reversals. Sweeps run
+          in the background on the server and hits stream in live; only formations reaching into the last
+          ~2 weeks with probability ≥ 55% qualify, so the list is always about what's setting up now.
+        </Text>
+
+        <Text style={styles.exSecTitle}>GLOSSARY — WHAT EACH COLUMN MEANS</Text>
+        <G term="PATTERN" body="The formation's textbook name. Tap a row and use ⓘ Explain on the card for its full description." />
+        <G term="BIAS" body="The direction the pattern usually resolves — ▲ bullish (up), ▼ bearish (down). Bilateral shapes (rectangles, symmetrical triangles) can break either way and count as neutral until they do." />
+        <G term="STATUS" body="Forming — the shape is there but price hasn't broken the key level yet, so it can still fail. Confirmed — price has closed decisively beyond the key level." />
+        <G term="PROBABILITY" body="Shape match, 0–100%: how cleanly the price action fits the ideal geometry of that formation. Higher = more textbook, historically more reliable." />
+        <G term="CONTINUATION" body="Indicative historical odds that the measured move plays out once the pattern confirms. It is not a promise — volume and market context still matter." />
+        <G term="TARGET %" body="The measured move: the pattern's own height projected from its breakout level, as a % from the current price. The card shows it in ₹ too." />
+        <G term="KEY LEVEL" body="The neckline / breakout line. A decisive close beyond it confirms the pattern; a close through the opposite side invalidates it." />
+        <G term="MKT CAP" body="Market capitalisation with a Large/Mid/Small tag, so you can screen by liquidity comfort at a glance." />
+        <G term="FORMED" body="The date the formation started building." />
+        <G term="DETECTED" body="The formation's last bar — when the shape completed, or the latest bar if it's still in play." />
+        <G term="RESOLVES ~" body="The probable end date: measured moves typically play out over roughly the pattern's own formation span, projected forward from the detection date. Treat it as an estimate, never a deadline." />
+
+        <Text style={styles.exSecTitle}>HOW TO USE IT</Text>
+        <Text style={styles.exBody}>
+          1 · Sort by probability or the resolves-by date, and filter to bullish or bearish setups (or one
+          specific pattern) with the dropdown.{'\n'}
+          2 · Tap a row — the card shows the full read: probability, continuation odds, target, key level
+          and the symbol's last five formations.{'\n'}
+          3 · From the card, open the full pattern page to see the pattern drawn on the chart with its key
+          level and target, log a 2:1 paper trade, add to the watchlist, or export the read as a PDF.{'\n'}
+          4 · ⟳ Rescan forces a fresh sweep; otherwise results refresh in the background through the day.
+        </Text>
+
+        <Text style={styles.exDisc}>
+          Chart patterns are probabilistic tendencies, not guarantees — confirmation, volume and broader
+          market context matter. Indicative and educational only, not investment advice.
+        </Text>
+      </ScrollView>
+    </Sheet>
+  );
+}
+
+// Mobile hit row: everything on two dense lines — no sideways scrolling.
+function MobileHitRow({ h, enr, top, onPress }: { h: PatternScreenHit; enr?: Enrich; top?: boolean; onPress: () => void }) {
+  const c = biasColor(h.bias);
+  const rts = resolvesTs(h);
+  return (
+    <TouchableOpacity style={[styles.mHitRow, top && { borderTopWidth: 0 }]} onPress={onPress} activeOpacity={0.75}>
+      <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+        <View style={styles.mHitLine}>
+          <Text style={styles.sym}>{h.symbol}</Text>
+          <CapChip mcapCr={enr?.mcap} />
+        </View>
+        <Text style={[styles.mHitPat, { color: c }]} numberOfLines={1}>
+          {h.label} · {h.status === 'confirmed' ? 'confirmed' : 'forming'}
+        </Text>
+        <Text style={styles.mHitMeta} numberOfLines={1}>
+          {h.price != null ? `₹${h.price.toLocaleString('en-IN')}` : '—'} · det {fmtDate(h.end_ts ?? undefined)}
+          {rts ? ` · res ~${fmtDate(rts)}` : ''}
+        </Text>
+      </View>
+      <View style={{ alignItems: 'flex-end', gap: 2 }}>
+        <Text style={[styles.mHitConf, { color: c }]}>
+          {h.bias === 'bullish' ? '▲' : h.bias === 'bearish' ? '▼' : '—'} {h.confidence}%
+        </Text>
+        <Text style={[styles.mHitTgt, { color: (h.expansion_pct ?? 0) >= 0 ? theme.green : theme.red }]}>
+          {signPct(h.expansion_pct)}
+        </Text>
+        <Text style={styles.mHitMeta}>cont {h.continuation != null ? `${h.continuation}%` : '—'}</Text>
+      </View>
+    </TouchableOpacity>
   );
 }
 
@@ -706,6 +913,12 @@ function PatternHitCard({ h, enr, onClose, onOpenSymbol, onFullScan }: {
         </Text>
       </View>
 
+      {/* The headline action: jump straight to this symbol's full pattern page
+          (chart with the pattern drawn, all formations, every level). */}
+      <TouchableOpacity style={[styles.hitPrim, { borderColor: c }]} onPress={() => onFullScan(h.symbol)} activeOpacity={0.8}>
+        <Text style={[styles.hitPrimTxt, { color: c }]}>▤ Open full pattern page ›</Text>
+      </TouchableOpacity>
+
       <View style={styles.hitGrid}>
         {[
           ['PROBABILITY', `${h.confidence}%`],
@@ -715,6 +928,7 @@ function PatternHitCard({ h, enr, onClose, onOpenSymbol, onFullScan }: {
           ['KEY LEVEL', keyLevel != null ? `₹${keyLevel.toLocaleString('en-IN', { maximumFractionDigits: 2 })}` : '—'],
           ['FORMED', fmtDate(h.start_ts ?? undefined)],
           ['DETECTED', fmtDate(h.end_ts ?? undefined)],
+          ['RESOLVES ~', fmtDate(resolvesTs(h) ?? undefined)],
         ].map(([l, v]) => (
           <View key={l} style={styles.hitCell}>
             <Text style={styles.hitCellLbl}>{l}</Text>
@@ -764,9 +978,6 @@ function PatternHitCard({ h, enr, onClose, onOpenSymbol, onFullScan }: {
         <TouchableOpacity style={styles.hitBtn} onPress={() => onOpenSymbol(h.symbol)} activeOpacity={0.75}>
           <Text style={styles.hitBtnTxt}>Company profile</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.hitBtn} onPress={() => onFullScan(h.symbol)} activeOpacity={0.75}>
-          <Text style={styles.hitBtnTxt}>▤ Chart + full scan</Text>
-        </TouchableOpacity>
         <TouchableOpacity style={styles.hitBtn} onPress={() => navigate('analysis', { sub: 'mb', symbol: h.symbol })} activeOpacity={0.75}>
           <Text style={[styles.hitBtnTxt, { color: theme.accent }]}>Multibagger</Text>
         </TouchableOpacity>
@@ -799,34 +1010,67 @@ function PatternHitCard({ h, enr, onClose, onOpenSymbol, onFullScan }: {
   );
 }
 
-function ScreenHitRow({ h, enr, idx, top, onPress }: { h: PatternScreenHit; enr?: Enrich; idx: number; top?: boolean; onPress: () => void }) {
+function ScreenHitRow({ h, enr, idx, top, cols, onPress }: {
+  h: PatternScreenHit; enr?: Enrich; idx: number; top?: boolean; cols: Col[]; onPress: () => void;
+}) {
   const c = biasColor(h.bias);
+  const cell = (col: Col): React.ReactNode => {
+    switch (col.key) {
+      case 'sno':
+        return <Text key={col.key} style={[styles.cellNum, { width: col.w, color: theme.muted }]}>{idx + 1}</Text>;
+      case 'symbol':
+        return (
+          <View key={col.key} style={{ width: col.w }}>
+            <Text style={styles.sym}>{h.symbol}</Text>
+            {h.price != null ? <Text style={styles.priceSub}>₹{h.price.toLocaleString('en-IN')}</Text> : null}
+          </View>
+        );
+      case 'cap':
+        return (
+          <View key={col.key} style={{ width: col.w, alignItems: 'flex-start' }}>
+            <CapChip mcapCr={enr?.mcap} value />
+          </View>
+        );
+      case 'pattern':
+        return <Text key={col.key} style={[styles.cellLeft, { width: col.w }]} numberOfLines={2}>{h.label}</Text>;
+      case 'bias':
+        return (
+          <Text key={col.key} style={[styles.cellLeft, { width: col.w, color: c, fontWeight: '700' }]}>
+            {h.bias === 'bullish' ? '▲ Bull' : h.bias === 'bearish' ? '▼ Bear' : '— Neut'}
+          </Text>
+        );
+      case 'status':
+        return (
+          <Text key={col.key} style={[styles.cellLeft, { width: col.w, color: h.status === 'confirmed' ? theme.green : theme.muted2 }]}>
+            {h.status === 'confirmed' ? 'Confirmed' : 'Forming'}
+          </Text>
+        );
+      case 'conf':
+        return (
+          <View key={col.key} style={{ width: col.w, alignItems: 'flex-end' }}>
+            <Text style={styles.cellNum}>{h.confidence}%</Text>
+            <Bar pct={h.confidence} color={c} />
+          </View>
+        );
+      case 'cont':
+        return <Text key={col.key} style={[styles.cellNum, { width: col.w }]}>{h.continuation != null ? `${h.continuation}%` : '—'}</Text>;
+      case 'exp':
+        return (
+          <Text key={col.key} style={[styles.cellNum, { width: col.w, color: (h.expansion_pct ?? 0) >= 0 ? theme.green : theme.red }]}>
+            {signPct(h.expansion_pct)}
+          </Text>
+        );
+      case 'ended':
+        return <Text key={col.key} style={[styles.cellNum, { width: col.w }]}>{fmtDate(h.end_ts ?? undefined)}</Text>;
+      case 'resolves':
+        return <Text key={col.key} style={[styles.cellNum, { width: col.w }]}>{fmtDate(resolvesTs(h) ?? undefined)}</Text>;
+      default:
+        return null;
+    }
+  };
   return (
     <TouchableOpacity style={[styles.dataRow, top && { borderTopWidth: 0 }]} onPress={onPress} activeOpacity={0.75}>
-      <Text style={[styles.cellNum, { width: 36, color: theme.muted }]}>{idx + 1}</Text>
-      <View style={{ width: 118 }}>
-        <Text style={styles.sym}>{h.symbol}</Text>
-        {h.price != null ? <Text style={styles.priceSub}>₹{h.price.toLocaleString('en-IN')}</Text> : null}
-      </View>
-      <View style={{ width: 110, alignItems: 'flex-start' }}>
-        <CapChip mcapCr={enr?.mcap} value />
-      </View>
-      <Text style={[styles.cellLeft, { width: 178 }]} numberOfLines={2}>{h.label}</Text>
-      <Text style={[styles.cellLeft, { width: 78, color: c, fontWeight: '700' }]}>
-        {h.bias === 'bullish' ? '▲ Bull' : h.bias === 'bearish' ? '▼ Bear' : '— Neut'}
-      </Text>
-      <Text style={[styles.cellLeft, { width: 92, color: h.status === 'confirmed' ? theme.green : theme.muted2 }]}>
-        {h.status === 'confirmed' ? 'Confirmed' : 'Forming'}
-      </Text>
-      <View style={{ width: 104, alignItems: 'flex-end' }}>
-        <Text style={styles.cellNum}>{h.confidence}%</Text>
-        <Bar pct={h.confidence} color={c} />
-      </View>
-      <Text style={[styles.cellNum, { width: 112 }]}>{h.continuation != null ? `${h.continuation}%` : '—'}</Text>
-      <Text style={[styles.cellNum, { width: 88, color: (h.expansion_pct ?? 0) >= 0 ? theme.green : theme.red }]}>
-        {signPct(h.expansion_pct)}
-      </Text>
-      <Text style={[styles.cellNum, { width: 92 }]}>{fmtDate(h.end_ts ?? undefined)}</Text>
+      {cols.map(cell)}
     </TouchableOpacity>
   );
 }
@@ -1134,7 +1378,7 @@ const styles = StyleSheet.create({
   // index screener
   idxScroll: { flexGrow: 0 },
   idxLine: { flexDirection: 'row', gap: theme.sp.sm, alignItems: 'center', paddingRight: theme.sp.lg },
-  ctlLine: { flexDirection: 'row', gap: theme.sp.sm, alignItems: 'center' },
+  ctlLine: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.sp.sm, alignItems: 'center' },
   patOpt: { paddingVertical: theme.sp.sm },
   patOptTxt: { color: theme.text, fontSize: theme.fs.md },
   patGroup: { color: theme.muted, fontSize: theme.fs.xs, fontWeight: '800', letterSpacing: 1, marginTop: theme.sp.md, marginBottom: 2 },
@@ -1248,6 +1492,25 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start', marginTop: theme.sp.sm,
   },
   hitBadgeTxt: { fontSize: theme.fs.sm, fontWeight: '700' },
+  hitPrim: {
+    borderWidth: 1.5, borderRadius: theme.radius.sm + 2, paddingVertical: 10, alignItems: 'center',
+    backgroundColor: theme.surface2, marginTop: theme.sp.md,
+  },
+  hitPrimTxt: { fontSize: theme.fs.sm + 1, fontWeight: '800' },
+  // mobile compact hit rows (no horizontal scroll)
+  mHitRow: {
+    flexDirection: 'row', alignItems: 'center', gap: theme.sp.md,
+    paddingVertical: theme.sp.md - 2, borderTopColor: theme.border, borderTopWidth: 1,
+  },
+  mHitLine: { flexDirection: 'row', alignItems: 'center', gap: theme.sp.sm, flexWrap: 'wrap' },
+  mHitPat: { fontSize: theme.fs.sm, fontWeight: '700' },
+  mHitMeta: { color: theme.muted, fontSize: theme.fs.xs + 1, fontFamily: theme.mono },
+  mHitConf: { fontSize: theme.fs.md, fontWeight: '800', fontFamily: theme.mono },
+  mHitTgt: { fontSize: theme.fs.sm, fontWeight: '700', fontFamily: theme.mono },
+  // guide / glossary
+  gRow: { paddingVertical: theme.sp.sm, borderBottomColor: theme.border, borderBottomWidth: 1 },
+  gTerm: { color: theme.text, fontSize: theme.fs.sm, fontWeight: '800', fontFamily: theme.mono, letterSpacing: 0.4 },
+  gBody: { color: theme.muted2, fontSize: theme.fs.sm + 1, lineHeight: 19, marginTop: 2 },
   hitGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.sp.sm, marginVertical: theme.sp.md },
   hitCell: {
     backgroundColor: theme.surface2, borderRadius: theme.radius.sm, borderWidth: 1, borderColor: theme.border,
