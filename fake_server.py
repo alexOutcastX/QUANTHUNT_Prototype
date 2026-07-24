@@ -492,6 +492,22 @@ class H(BaseHTTPRequestHandler):
             return self._mb_screen()
         if path == "/patterns/screen":
             return self._pattern_screen()
+        if path == "/patterns/trade-scan":
+            return self._json({"status": "done", "refreshing": False, "asof": 1753260000,
+                               "indices": ["NIFTY 50", "NIFTY BANK", "BSE SENSEX"],
+                               "results": [
+                {"index": "NIFTY 50", "tf": "15m · intraday", "interval": "15m",
+                 "pattern": "Bull Flag", "bias": "bullish", "status": "forming",
+                 "confidence": 78, "continuation": 64, "expansion_pct": 1.8, "active": True,
+                 "price": 24500.5, "entry": 24500.5, "target": 24941.5, "stop": 24280.0, "rr": 2.0},
+                {"index": "NIFTY BANK", "tf": "1h · 1-5 days", "interval": "1h",
+                 "pattern": "Double Top", "bias": "bearish", "status": "confirmed",
+                 "confidence": 84, "continuation": 61, "expansion_pct": -2.4, "active": True,
+                 "price": 52100.0, "entry": 52100.0, "target": 50849.6, "stop": 52725.2, "rr": 2.0},
+                {"index": "BSE SENSEX", "tf": "1D · positional", "interval": "1d",
+                 "pattern": "Ascending Triangle", "bias": "bullish", "status": "forming",
+                 "confidence": 72, "continuation": 66, "expansion_pct": 3.1, "active": False,
+                 "price": 80500.1, "entry": 80500.1, "target": 82995.6, "stop": 79252.3, "rr": 2.0}]})
         if path == "/backtest/strategies":
             return self._json({"strategies": bte.strategies_meta(),
                                "default_costs": bte.DEFAULT_COSTS, "max_symbols": 100})

@@ -2255,6 +2255,102 @@ def patterns_screen():
     return jsonify(_nan_safe(ps.snapshot(name)))
 
 
+# ── Trade Scan: short-term pattern setups on the major indices ──────────────
+# Sweeps each index across intraday/short timeframes, keeps the CURRENT
+# pattern per (index, timeframe) and derives entry/target/stop/R:R via
+# pattern_screen.trade_setup. Refreshed in a background thread, cached 10 min.
+_TRADE_TFS = [
+    ("15m", "60d", "15m · intraday"),
+    ("1h", "1y", "1h · 1-5 days"),
+    ("4h", "2y", "4h · 1-3 weeks"),
+    ("1d", "2y", "1D · positional"),
+]
+_TRADE_INDICES = ["NIFTY 50", "NIFTY BANK", "BSE SENSEX", "NIFTY IT",
+                  "NIFTY MIDCAP 100", "NIFTY SMALLCAP 100"]
+_TRADE = {"ts": 0.0, "data": None, "running": False}
+_TRADE_LOCK = threading.Lock()
+_TRADE_TTL = 600
+
+
+def _resample_4h(candles):
+    """1h → 4h session bars (bucketed on the epoch 4-hour grid)."""
+    out, order = {}, []
+    for c in candles:
+        b = c["t"] - (c["t"] % 14400)
+        if b not in out:
+            out[b] = {"t": b, "o": c["o"], "h": c["h"], "l": c["l"], "c": c["c"], "v": c["v"]}
+            order.append(b)
+        else:
+            d = out[b]
+            d["h"] = max(d["h"], c["h"])
+            d["l"] = min(d["l"], c["l"])
+            d["c"] = c["c"]
+            d["v"] += c["v"]
+    return [out[b] for b in order]
+
+
+def _run_trade_scan():
+    import pattern_screen as ps
+    from patterns import detect_patterns as _detect
+    rows = []
+    for name in _TRADE_INDICES:
+        for interval, period, tf_label in _TRADE_TFS:
+            try:
+                candles = _load_ohlc(name, period, "1h" if interval == "4h" else interval)
+                if interval == "4h":
+                    candles = _resample_4h(candles)
+                if len(candles) < 60:
+                    continue
+                res = _detect(candles)
+                cur = res.get("current")
+                if not cur or (cur.get("confidence") or 0) < 55:
+                    continue
+                px = candles[-1]["c"]
+                setup = ps.trade_setup(cur, px)
+                if not setup:
+                    continue
+                rows.append({
+                    "index": name, "tf": tf_label, "interval": interval,
+                    "pattern": cur.get("label"), "bias": cur.get("bias"),
+                    "status": cur.get("status"),
+                    "confidence": cur.get("confidence"),
+                    "continuation": cur.get("continuation"),
+                    "expansion_pct": cur.get("expansion_pct"),
+                    "active": bool(cur.get("active")),
+                    "price": round(px, 2), **setup,
+                })
+            except Exception as e:
+                log.warning("trade-scan %s %s failed: %s", name, interval, e)
+    order = {iv: i for i, (iv, _p, _l) in enumerate(_TRADE_TFS)}
+    rows.sort(key=lambda r: (order.get(r["interval"], 9), -(r["confidence"] or 0)))
+    payload = _nan_safe({"status": "done", "results": rows,
+                         "indices": _TRADE_INDICES, "asof": int(time.time())})
+    with _TRADE_LOCK:
+        _TRADE.update(ts=time.time(), data=payload, running=False)
+
+
+@app.route("/patterns/trade-scan")
+def patterns_trade_scan():
+    """Short-term chart-pattern setups on the major indices, per timeframe,
+    each with entry / target / stop-loss / R:R plus probability and
+    continuation odds. ?refresh=1 forces a fresh sweep."""
+    force = request.args.get("refresh") == "1"
+    now = time.time()
+    with _TRADE_LOCK:
+        data = _TRADE["data"]
+        fresh = data is not None and now - _TRADE["ts"] < _TRADE_TTL and not force
+        if not fresh and not _TRADE["running"]:
+            _TRADE["running"] = True
+            threading.Thread(target=_run_trade_scan, daemon=True).start()
+        running = _TRADE["running"]
+    if data is not None:
+        out = dict(data)
+        out["refreshing"] = running
+        return jsonify(out)
+    return jsonify({"status": "running", "refreshing": True, "results": [],
+                    "indices": _TRADE_INDICES})
+
+
 @app.route("/backtest/strategies")
 def backtest_strategies():
     """Strategy library for the backtester: key, label, editable params, blurb."""

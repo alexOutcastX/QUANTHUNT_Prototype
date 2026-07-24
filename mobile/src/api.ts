@@ -274,6 +274,19 @@ export type GsecResp = { items: GsecItem[]; asof?: string; stale?: boolean; erro
 export type NewsItem = { title: string; link: string; source: string; ts?: number | null; sym?: string };
 export type NewsResp = { items: NewsItem[]; fetched?: number; cached?: boolean };
 
+// Trade Scan: short-term pattern setups on the major indices, per timeframe.
+export type TradeScanRow = {
+  index: string; tf: string; interval: string;
+  pattern: string; bias: 'bullish' | 'bearish' | 'neutral';
+  status?: string | null; confidence: number; continuation?: number | null;
+  expansion_pct?: number | null; active?: boolean;
+  price: number; entry: number; target: number; stop: number; rr: number;
+};
+export type TradeScanResp = {
+  status: string; refreshing?: boolean; results: TradeScanRow[];
+  indices?: string[]; asof?: number;
+};
+
 // Scan up to 60 symbols per request; caller batches larger lists.
 async function scanBatch(symbols: string[]): Promise<ScanResp> {
   return getJson<ScanResp>('/scan?symbols=' + encodeURIComponent(symbols.join(',')), 60000);
@@ -1217,6 +1230,8 @@ export const api = {
   gsec: () => getJson<GsecResp>('/gsec'),
   news: (force = false) =>
     getJson<NewsResp>('/news' + (force ? '?force=1' : '')),
+  tradeScan: (refresh = false) =>
+    getJson<TradeScanResp>('/patterns/trade-scan' + (refresh ? '?refresh=1' : ''), 30000),
   // /returns caps at 50 symbols/call; batch and merge.
   returns: async (symbols: string[]): Promise<ReturnsResp> => {
     const merged: ReturnsResp = {};
