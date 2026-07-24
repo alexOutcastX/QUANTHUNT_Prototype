@@ -1862,21 +1862,26 @@ def history():
         return jsonify(hit[1])
     try:
         import yfinance as yf
+        # 4h isn't a Yahoo interval — fetch 1h (up to its 730-day cap) and
+        # resample to 4-hour session bars below.
+        fetch_interval = '1h' if interval == '4h' else interval
         # For intraday ≤15m yfinance caps at 60 days — prefer tvDatafeed for longer history
-        yf_limited = interval in ('1m', '5m', '15m')
+        yf_limited = fetch_interval in ('1m', '5m', '15m')
         df = None
 
         if yf_limited:
-            df = _fetch_tv_data(sym, interval, period)
+            df = _fetch_tv_data(sym, fetch_interval, period)
 
         if df is None or df.empty:
             # yfinance caps: 5m/15m → 60d, 1h → 730d; cap period to avoid empty response
             yf_period_cap = {'1m': '7d', '5m': '60d', '15m': '60d', '1h': '2y'}
-            yf_period = yf_period_cap.get(interval, period)
-            yf_sym = sym if sym.startswith('^') else f"{sym}.NS"
+            yf_period = yf_period_cap.get(fetch_interval, period)
+            # Index names ("NIFTY 50", "SENSEX") chart their Yahoo index ticker.
+            mapped = INDEX_YF.get(sym, sym)
+            yf_sym = mapped if mapped.startswith('^') else f"{mapped}.NS"
             ticker = yf.Ticker(yf_sym)
             for attempt in range(3):
-                df = ticker.history(period=yf_period, interval=interval, auto_adjust=True)
+                df = ticker.history(period=yf_period, interval=fetch_interval, auto_adjust=True)
                 if not df.empty:
                     break
                 if attempt < 2:
@@ -1884,7 +1889,13 @@ def history():
                     ticker = yf.Ticker(yf_sym)
 
         if (df is None or df.empty) and not yf_limited:
-            df = _fetch_tv_data(sym, interval, period)
+            df = _fetch_tv_data(sym, fetch_interval, period)
+
+        if interval == '4h' and df is not None and not df.empty:
+            df.index = pd.to_datetime(df.index)
+            df = df.resample('4h', origin='start_day').agg(
+                {"Open": "first", "High": "max", "Low": "min",
+                 "Close": "last", "Volume": "sum"}).dropna(subset=["Open", "Close"])
 
         if df is None or df.empty:
             # Upstream returned nothing (often a transient rate-limit) — serve the

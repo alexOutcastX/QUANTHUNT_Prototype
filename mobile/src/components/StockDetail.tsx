@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import {
+  Linking,
   Modal,
   Pressable,
   ScrollView,
@@ -10,10 +11,38 @@ import {
 } from 'react-native';
 import { Candle, Fundamentals, api } from '../api';
 import { chartHtml } from '../chartHtml';
+import { useResponsive } from '../responsive';
 import { Row, calcSignal } from '../screener';
 import { theme } from '../theme';
 import { Card, EmptyState, Loading, SectionTitle } from '../ui';
 import HtmlView from './HtmlView';
+
+// Timeframes, each fetching the deepest history its feed allows: Yahoo caps
+// 5m/15m at 60 days and 1h (which also feeds the 4h resample) at 2 years;
+// daily and up go back 5-10+ years.
+const TFS: { k: string; interval: string; period: string; barSec: number }[] = [
+  { k: '5m', interval: '5m', period: '60d', barSec: 300 },
+  { k: '15m', interval: '15m', period: '60d', barSec: 900 },
+  { k: '1h', interval: '1h', period: '2y', barSec: 3600 },
+  { k: '4h', interval: '4h', period: '2y', barSec: 14400 },
+  { k: '1D', interval: '1d', period: '5y', barSec: 86400 },
+  { k: '1W', interval: '1wk', period: '10y', barSec: 604800 },
+  { k: '1M', interval: '1mo', period: 'max', barSec: 2592000 },
+];
+
+// TradingView deep link for the symbol (indices map to TV's index tickers).
+const TV_MAP: Record<string, string> = {
+  'NIFTY 50': 'NSE:NIFTY', 'NIFTY': 'NSE:NIFTY',
+  'NIFTY BANK': 'NSE:BANKNIFTY', 'BANKNIFTY': 'NSE:BANKNIFTY',
+  'BSE SENSEX': 'BSE:SENSEX', 'SENSEX': 'BSE:SENSEX',
+  'NIFTY IT': 'NSE:CNXIT', 'NIFTY 100': 'NSE:CNX100', 'NIFTY 500': 'NSE:CNX500',
+  'NIFTY MIDCAP 100': 'NSE:NIFTYMIDCAP100', 'NIFTY SMALLCAP 100': 'NSE:NIFTYSMLCAP100',
+};
+const tvUrl = (sym: string) => {
+  const s = sym.trim().toUpperCase();
+  const tv = TV_MAP[s] || 'NSE:' + s.replace(/\s+/g, '');
+  return 'https://www.tradingview.com/chart/?symbol=' + encodeURIComponent(tv);
+};
 
 const num = (v: number | null | undefined, d = 2) =>
   v == null || !isFinite(v) ? '—' : v.toFixed(d);
@@ -25,40 +54,53 @@ const money = (v: number | null | undefined) =>
 // Per-stock research view: 6-month chart, live technicals from the scan row,
 // and fundamentals — the RN counterpart of the web app's report modal.
 export default function StockDetail({ row, onClose }: { row: Row; onClose: () => void }) {
+  const { isDesktop } = useResponsive();
   const [candles, setCandles] = useState<Candle[]>([]);
   const [fund, setFund] = useState<Fundamentals | null>(null);
   const [busy, setBusy] = useState(true);
   const [err, setErr] = useState<string | null>(null);
+  const [tf, setTf] = useState('1D');
   // Callers like the Recommendations / SMC lists open us with only { sym, price }
   // — no live technicals. Detect that and pull the full scan row ourselves so the
   // Technicals / Pivots / Signals sections aren't all "—".
   const [live, setLive] = useState<Row | null>(null);
   const [tries, setTries] = useState(0);
   const needsScan = row.rsi == null && row.d50 == null;
+  const tfDef = TFS.find((t) => t.k === tf) || TFS[4];
 
+  // Fundamentals + live scan row: once per symbol.
   useEffect(() => {
     let alive = true;
-    setBusy(true);
-    setErr(null);
     (async () => {
-      const [hist, f, scan] = await Promise.all([
-        api.history(row.sym, '6mo', '1d').catch(() => null),
+      const [f, scan] = await Promise.all([
         api.fundamentals(row.sym).catch(() => null),
         needsScan ? api.scan([row.sym]).catch(() => null) : Promise.resolve(null),
       ]);
       if (!alive) return;
-      if (hist && Array.isArray(hist.candles) && hist.candles.length) setCandles(hist.candles);
-      else setErr('Chart data unavailable');
       if (f && !f.error) setFund(f);
       const sr = scan?.data?.[row.sym];
       if (sr) setLive({ ...row, ...(sr as Partial<Row>) } as Row);
-      setBusy(false);
     })();
-    return () => {
-      alive = false;
-    };
+    return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [row.sym, tries]);
+  }, [row.sym]);
+
+  // Chart history: refetched per timeframe (deepest window the feed allows).
+  useEffect(() => {
+    let alive = true;
+    setBusy(true);
+    setErr(null);
+    api.history(row.sym, tfDef.period, tfDef.interval)
+      .then((hist) => {
+        if (!alive) return;
+        if (hist && Array.isArray(hist.candles) && hist.candles.length) setCandles(hist.candles);
+        else { setCandles([]); setErr('Chart data unavailable'); }
+      })
+      .catch(() => { if (alive) { setCandles([]); setErr('Chart data unavailable'); } })
+      .finally(() => { if (alive) setBusy(false); });
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [row.sym, tf, tries]);
 
   // Prefer the freshly-scanned row (full technicals) over the sparse caller row.
   const r = live || row;
@@ -89,11 +131,31 @@ export default function StockDetail({ row, onClose }: { row: Row; onClose: () =>
         </View>
 
         <ScrollView contentContainerStyle={styles.body}>
-          <View style={styles.chartBox}>
+          {/* Timeframes (deepest history each feed allows) + TradingView link */}
+          <View style={styles.tfRow}>
+            {TFS.map((t) => (
+              <TouchableOpacity
+                key={t.k}
+                style={[styles.tfChip, tf === t.k && styles.tfChipOn]}
+                onPress={() => setTf(t.k)}
+                activeOpacity={0.75}
+              >
+                <Text style={[styles.tfTxt, tf === t.k && styles.tfTxtOn]}>{t.k}</Text>
+              </TouchableOpacity>
+            ))}
+            <TouchableOpacity
+              style={[styles.tfChip, styles.tvBtn]}
+              onPress={() => Linking.openURL(tvUrl(row.sym)).catch(() => {})}
+              activeOpacity={0.75}
+            >
+              <Text style={styles.tvTxt}>TradingView ⤴</Text>
+            </TouchableOpacity>
+          </View>
+          <View style={[styles.chartBox, { height: isDesktop ? 500 : 400 }]}>
             {busy ? (
               <Loading label={`Loading ${row.sym} chart…`} />
             ) : candles.length ? (
-              <HtmlView html={chartHtml(candles, 86400)} style={styles.web} />
+              <HtmlView html={chartHtml(candles, tfDef.barSec, undefined, undefined, { panes: true })} style={styles.web} />
             ) : (
               <View style={styles.center}>
                 <EmptyState
@@ -247,6 +309,20 @@ const styles = StyleSheet.create({
   sigChip: { backgroundColor: theme.brandSoft, borderColor: theme.brand, borderWidth: 1, borderRadius: theme.radius.pill, paddingHorizontal: 11, paddingVertical: 4 },
   sigChipTxt: { color: theme.brand, fontSize: theme.fs.xs + 1, fontWeight: '700' },
   body: { padding: theme.sp.lg, paddingBottom: theme.sp.xl + 16 },
+  tfRow: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.sp.sm, marginBottom: theme.sp.sm, alignItems: 'center' },
+  tfChip: {
+    backgroundColor: theme.surface2,
+    borderColor: theme.border2,
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+  },
+  tfChipOn: { backgroundColor: theme.accent, borderColor: theme.accent },
+  tfTxt: { color: theme.muted2, fontSize: theme.fs.sm, fontFamily: theme.mono, fontWeight: '700' },
+  tfTxtOn: { color: theme.onAccent },
+  tvBtn: { marginLeft: 'auto', borderColor: theme.brand },
+  tvTxt: { color: theme.brand, fontSize: theme.fs.sm, fontWeight: '700' },
   chartBox: {
     height: 260,
     backgroundColor: theme.surface,
