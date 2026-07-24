@@ -11,6 +11,9 @@ export type Row = ScanRow & {
   exchange?: string;
   name?: string;
   _fund?: Fundamentals | null;
+  // Live chart-pattern bias, annotated by the screener when a Patterns filter
+  // is active (fetched from the pattern engine's index snapshots).
+  _patBias?: 'bullish' | 'bearish' | 'neutral' | null;
 };
 
 export type Signal = 'buy' | 'sell' | 'neutral';
@@ -179,10 +182,88 @@ export const FILTER_DEFS: FilterDef[] = [
       return (f.sector || f.industry || '') as string;
     },
   },
+  // Engine strategies — the same rule sets the Multibagger and Momentum
+  // engines rank by, exposed as one-tap toggles in the custom builder.
+  { key: 'strat_quality', label: 'Quality compounder (MB engine)', group: 'Strategies', type: 'toggle', fund: true,
+    get: (s) => (fnum(s, 'roe') ?? -1) >= 15 && (fnum(s, 'roce') ?? -1) >= 15
+      && (fnum(s, 'debt_equity') ?? 99) <= 1 && (fnum(s, 'earnings_growth_pct') ?? -99) > 8 },
+  { key: 'strat_value', label: 'Deep value (MB engine)', group: 'Strategies', type: 'toggle', fund: true,
+    get: (s) => (fnum(s, 'pe') ?? 999) > 0 && (fnum(s, 'pe') ?? 999) < 15
+      && (fnum(s, 'pb') ?? 999) < 3 && (fnum(s, 'roe') ?? -1) > 10 && (fnum(s, 'debt_equity') ?? 99) < 1.5 },
+  { key: 'strat_garp', label: 'GARP — growth at fair price (MB engine)', group: 'Strategies', type: 'toggle', fund: true,
+    get: (s) => (fnum(s, 'peg') ?? 999) > 0 && (fnum(s, 'peg') ?? 999) <= 1.5
+      && (fnum(s, 'earnings_growth_pct') ?? -99) >= 12 },
+  { key: 'strat_cash', label: 'Cash machine (MB engine)', group: 'Strategies', type: 'toggle', fund: true,
+    get: (s) => (fnum(s, 'fcf_cr') ?? -1) > 0 && (fnum(s, 'roce') ?? -1) >= 15 },
+  { key: 'strat_momo', label: 'Momentum leader (Momentum engine)', group: 'Strategies', type: 'toggle',
+    get: (s) => n(s.rsi) != null && (s.rsi as number) >= 55 && (s.rsi as number) <= 78
+      && (n(s.d50) ?? -1) > 0 && (n(s.d200) ?? -1) > 0 && (n(s.relvol) ?? 0) >= 1.2 },
+  { key: 'strat_breakout_watch', label: 'Breakout watch (Momentum engine)', group: 'Strategies', type: 'toggle',
+    get: (s) => s.sqzOn === true && (n(s.pct_from_high) ?? -99) >= -7 },
+  { key: 'strat_pullback', label: 'Pullback reversal (Momentum engine)', group: 'Strategies', type: 'toggle',
+    get: (s) => (n(s.d200) ?? -1) > 0 && (n(s.rsi) ?? 99) <= 42 && (n(s.d20) ?? 1) < 0 },
+  // Live chart patterns — bias comes from the pattern engine's index
+  // snapshots, annotated onto rows while a Patterns filter is active.
+  { key: 'pat_bull', label: 'Bullish chart pattern forming', group: 'Patterns', type: 'toggle', get: (s) => s._patBias === 'bullish' },
+  { key: 'pat_bear', label: 'Bearish chart pattern forming', group: 'Patterns', type: 'toggle', get: (s) => s._patBias === 'bearish' },
+  { key: 'pat_any', label: 'Any chart pattern forming', group: 'Patterns', type: 'toggle', get: (s) => s._patBias != null },
 ];
 
-export const TE_GROUPS = ['Signals', 'Strategies', 'Trend', 'Momentum', 'Volatility',
-  'Candlesticks', 'Volume', 'Structure', 'Fundamentals'];
+// Fundamentals and core technicals lead the picker (report request); event
+// signals, engine strategies, live patterns and candlesticks follow.
+export const TE_GROUPS = ['Fundamentals', 'Trend', 'Momentum', 'Volatility', 'Volume',
+  'Structure', 'Signals', 'Strategies', 'Patterns', 'Candlesticks'];
+
+// Predictive-search synonyms: matched (with label + key) by the metric
+// picker's search box so common trader phrasings find the right metric.
+export const FILTER_SYNONYMS: Record<string, string> = {
+  pe: 'price to earnings valuation multiple',
+  forward_pe: 'forward earnings estimate valuation',
+  pb: 'price to book',
+  eps: 'earnings per share profit',
+  dividend_yield: 'dividend payout yield income',
+  roe: 'return on equity profitability',
+  roce: 'return on capital employed profitability',
+  debt_equity: 'leverage borrowings de ratio',
+  current_ratio: 'liquidity solvency',
+  market_cap_cr: 'size market capitalisation smallcap midcap largecap',
+  peg: 'growth adjusted valuation',
+  revenue_growth_pct: 'sales topline growth',
+  earnings_growth_pct: 'profit pat bottomline growth',
+  fcf_cr: 'free cash flow fcf cash generation',
+  sector: 'industry theme',
+  rsi: 'relative strength index overbought oversold',
+  willr: 'williams percent r oscillator',
+  bollb: 'bollinger band percent b',
+  chg: 'day change percent gain loss',
+  d20: '20 day moving average dma',
+  d50: '50 day moving average dma',
+  d150: '150 day moving average dma',
+  d200: '200 day moving average long term trend dma',
+  macd_hist: 'macd histogram momentum',
+  pct_from_high: '52 week high distance breakout',
+  pct_from_low: '52 week low distance rebound',
+  volume: 'traded quantity liquidity',
+  avg_volume: 'average volume liquidity',
+  relvol: 'relative volume spike unusual activity rvol',
+  price: 'ltp last traded price cmp',
+  beta: 'volatility vs market',
+  sqz_on: 'ttm squeeze compression consolidation',
+  sqz_fired: 'ttm squeeze release breakout',
+  golden_cross: 'bullish 50 200 crossover',
+  death_cross: 'bearish 50 200 crossover',
+  minervini: 'sepa trend template stage 2',
+  strat_quality: 'multibagger quality compounder coffee can moat',
+  strat_value: 'multibagger deep value cheap undervalued graham',
+  strat_garp: 'multibagger growth at reasonable price peg lynch',
+  strat_cash: 'multibagger cash machine free cash flow dividend',
+  strat_momo: 'momentum leader relative strength leader trending',
+  strat_breakout_watch: 'momentum radar squeeze near high setup',
+  strat_pullback: 'momentum radar pullback reversal dip buy support',
+  pat_bull: 'bullish chart pattern breakout flag triangle cup handle double bottom',
+  pat_bear: 'bearish chart pattern breakdown head shoulders double top',
+  pat_any: 'any chart pattern forming live',
+};
 export const DEF_BY_KEY: Record<string, FilterDef> = {};
 FILTER_DEFS.forEach((d) => {
   DEF_BY_KEY[d.key] = d;

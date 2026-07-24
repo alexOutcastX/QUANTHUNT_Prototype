@@ -47,7 +47,9 @@ export const SECTOR_SHORT: Record<string, string> = {
   'Fast Moving Consumer Goods': 'FMCG',
   'Financial Services': 'Financials',
   'Forest Materials': 'Forest Mat.',
-  Healthcare: 'Healthcare',
+  // Display alias — the canonical bucket stays "Healthcare" everywhere the
+  // screeners filter, but users look for "Pharma" on the map.
+  Healthcare: 'Pharma & Healthcare',
   'Information Technology': 'IT',
   'Media Entertainment & Publication': 'Media',
   'Metals & Mining': 'Metals & Mining',
