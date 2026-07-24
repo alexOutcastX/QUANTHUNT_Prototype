@@ -572,7 +572,10 @@ class H(BaseHTTPRequestHandler):
                 {"symbol": "RELIANCE", "name": "Reliance Industries Ltd", "exchange": "NSE",
                  "price": 1000.0, "chg": -2.5, "turnover": 6.5e9},
                 {"symbol": "CIANAGRO", "name": "Cian Agro Industries", "exchange": "BSE",
-                 "price": 42.5, "chg": 3.2, "turnover": 1.1e7}]})
+                 "price": 42.5, "chg": 3.2, "turnover": 1.1e7}] + [
+                {"symbol": f"FILL{i:02d}", "name": f"Filler Company {i} Ltd", "exchange": "NSE",
+                 "price": 100.0 + i, "chg": round((i % 7) - 3.0, 2), "turnover": 1e7 - i}
+                for i in range(1, 31)]})
         if path == "/sectors":
             return self._json({"status": "done", "refreshing": False, "asof": 1753260000,
                                "level": "macro", "universe": 2100, "mapped": 1900,
