@@ -287,6 +287,16 @@ export type TradeScanResp = {
   indices?: string[]; asof?: number;
 };
 
+// Stocks inside one heatmap sector bucket (most-traded first).
+export type SectorMember = {
+  symbol: string; name: string; exchange: string;
+  price?: number | null; chg?: number | null; turnover?: number | null;
+};
+export type SectorMembersResp = {
+  sector: string; level: string; parent: string; count: number;
+  warming?: boolean; items: SectorMember[]; error?: string;
+};
+
 // Scan up to 60 symbols per request; caller batches larger lists.
 async function scanBatch(symbols: string[]): Promise<ScanResp> {
   return getJson<ScanResp>('/scan?symbols=' + encodeURIComponent(symbols.join(',')), 60000);
@@ -1232,6 +1242,11 @@ export const api = {
     getJson<NewsResp>('/news' + (force ? '?force=1' : '')),
   tradeScan: (refresh = false) =>
     getJson<TradeScanResp>('/patterns/trade-scan' + (refresh ? '?refresh=1' : ''), 30000),
+  sectorMembers: (sector: string, level = 'macro') =>
+    getJson<SectorMembersResp>(
+      '/sectors/members?sector=' + encodeURIComponent(sector) + '&level=' + encodeURIComponent(level),
+      30000,
+    ),
   // /returns caps at 50 symbols/call; batch and merge.
   returns: async (symbols: string[]): Promise<ReturnsResp> => {
     const merged: ReturnsResp = {};

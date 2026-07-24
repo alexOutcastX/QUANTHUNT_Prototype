@@ -551,6 +551,19 @@ class H(BaseHTTPRequestHandler):
                  "link": "https://example.com/n" + str(i), "source": "ET Markets",
                  "ts": 1753200000 + i * 3600, "sym": ""} for i in range(6)],
                 "fetched": 1753260000, "cached": False})
+        if path == "/sectors/members":
+            from urllib.parse import urlparse, parse_qs
+            sec = (parse_qs(urlparse(self.path).query).get("sector", ["Financials"])[0])
+            return self._json({"sector": sec, "level": "macro", "parent": sec, "count": 4,
+                               "items": [
+                {"symbol": "HDFCBANK", "name": "HDFC Bank Ltd", "exchange": "NSE",
+                 "price": 1275.0, "chg": -1.3, "turnover": 9.9e9},
+                {"symbol": "SBIN", "name": "State Bank of India", "exchange": "NSE",
+                 "price": 1825.0, "chg": 1.1, "turnover": 7.2e9},
+                {"symbol": "RELIANCE", "name": "Reliance Industries Ltd", "exchange": "NSE",
+                 "price": 1000.0, "chg": -2.5, "turnover": 6.5e9},
+                {"symbol": "CIANAGRO", "name": "Cian Agro Industries", "exchange": "BSE",
+                 "price": 42.5, "chg": 3.2, "turnover": 1.1e7}]})
         if path == "/sectors":
             return self._json({"status": "done", "refreshing": False, "asof": 1753260000,
                                "level": "macro", "universe": 2100, "mapped": 1900,
