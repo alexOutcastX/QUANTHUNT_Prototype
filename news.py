@@ -8,6 +8,7 @@
 # sends force=1 which bypasses the hourly TTL but still rate-limits refetches
 # to once every FORCE_MIN seconds so a click-happy user can't hammer the feeds.
 
+import html
 import threading
 import time
 import xml.etree.ElementTree as ET
@@ -43,7 +44,9 @@ def parse_feed(raw: bytes, feed_name: str, is_symbol_feed: bool = False) -> list
     except Exception:
         return items
     for it in root.iter("item"):
-        title = (it.findtext("title") or "").strip()
+        # Feeds often double-encode entities ("&amp;amp;"), which XML parsing
+        # only unwraps once — unescape so titles never show raw "&amp;".
+        title = html.unescape((it.findtext("title") or "").strip())
         link = (it.findtext("link") or "").strip()
         src = (it.findtext("source") or "").strip() or feed_name
         ts = 0
