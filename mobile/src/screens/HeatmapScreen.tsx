@@ -439,6 +439,7 @@ function SectorMap() {
           actions as a fixed chip row under the header. */}
       {pick ? (
         <Modal visible animationType="fade" transparent onRequestClose={() => setPick(null)}>
+          <View style={styles.secWrap}>
           <Pressable style={styles.secBackdrop} onPress={() => setPick(null)} />
           <View style={styles.secModal}>
             <View style={styles.pickHead}>
@@ -471,16 +472,12 @@ function SectorMap() {
                     onPress={() => setDetail({ sym: m.symbol, price: m.price ?? undefined, chg: m.chg ?? undefined } as Row)}
                     activeOpacity={0.75}
                   >
-                    <View style={{ flex: 1, minWidth: 0 }}>
-                      <Text style={styles.memSym}>{m.symbol}{m.exchange === 'BSE' ? <Text style={styles.memExch}>  BSE</Text> : null}</Text>
-                      {m.name ? <Text style={styles.memName} numberOfLines={1}>{m.name}</Text> : null}
-                    </View>
-                    <View style={{ alignItems: 'flex-end' }}>
-                      <Text style={styles.memPx}>{fmtPx(m.price)}</Text>
-                      <Text style={[styles.memChg, { color: m.chg == null ? theme.muted : m.chg >= 0 ? theme.green : theme.red }]}>
-                        {pct(m.chg)}
-                      </Text>
-                    </View>
+                    <Text style={styles.memSym}>{m.symbol}{m.exchange === 'BSE' ? <Text style={styles.memExch}> BSE</Text> : null}</Text>
+                    <Text style={styles.memName} numberOfLines={1}>{m.name || ''}</Text>
+                    <Text style={styles.memPx}>{fmtPx(m.price)}</Text>
+                    <Text style={[styles.memChg, { color: m.chg == null ? theme.muted : m.chg >= 0 ? theme.green : theme.red }]}>
+                      {pct(m.chg)}
+                    </Text>
                   </TouchableOpacity>
                 ))
               ) : (
@@ -491,6 +488,7 @@ function SectorMap() {
               Most-traded first · tap a stock for its company profile, or open a screener above with the{' '}
               {pick.parent || pick.sector} filter applied. Educational only — not investment advice.
             </Text>
+          </View>
           </View>
         </Modal>
       ) : null}
@@ -791,19 +789,20 @@ const styles = StyleSheet.create({
   secTileMeta: { fontSize: theme.fs.xs + 1, fontFamily: theme.mono, opacity: 0.9 },
   // sector → screen picker
   // centered sector popup + constituent list
+  // Flex-centred overlay: absolute %-inset positioning inside Modal is
+  // unreliable across web/native (the popup pinned to a corner and grew past
+  // the viewport, killing scroll) — a flex wrapper + maxHeight cap is not.
+  secWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: theme.sp.lg },
   secBackdrop: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.65)' },
   secModal: {
-    position: 'absolute',
-    top: '8%',
-    bottom: '8%',
-    alignSelf: 'center',
     width: '94%',
     maxWidth: 560,
+    maxHeight: '94%',
     backgroundColor: theme.surface,
     borderColor: theme.border2,
     borderWidth: 1,
     borderRadius: theme.radius.lg,
-    padding: theme.sp.lg,
+    padding: theme.sp.md + 2,
   },
   pickChips: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.sp.sm, marginBottom: theme.sp.sm },
   pickChip: {
@@ -815,20 +814,21 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   pickChipTxt: { color: theme.text, fontSize: theme.fs.sm, fontWeight: '700' },
-  memList: { flex: 1, borderTopColor: theme.border, borderTopWidth: 1 },
+  // grow-to-content but never past the modal's cap — the list scrolls inside
+  memList: { flexGrow: 0, flexShrink: 1, borderTopColor: theme.border, borderTopWidth: 1 },
   memRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: theme.sp.md,
-    paddingVertical: theme.sp.md - 3,
+    gap: theme.sp.sm,
+    paddingVertical: 6,
     borderTopColor: theme.border,
     borderTopWidth: 1,
   },
-  memSym: { color: theme.text, fontFamily: theme.mono, fontSize: theme.fs.sm + 1, fontWeight: '700' },
+  memSym: { color: theme.text, fontFamily: theme.mono, fontSize: theme.fs.sm, fontWeight: '700' },
   memExch: { color: theme.muted, fontSize: theme.fs.xs, fontFamily: theme.mono },
-  memName: { color: theme.muted, fontSize: theme.fs.xs + 1, marginTop: 1 },
-  memPx: { color: theme.text, fontFamily: theme.mono, fontSize: theme.fs.sm + 1 },
-  memChg: { fontFamily: theme.mono, fontSize: theme.fs.xs + 1, marginTop: 1 },
+  memName: { flex: 1, color: theme.muted, fontSize: theme.fs.xs + 1 },
+  memPx: { color: theme.text, fontFamily: theme.mono, fontSize: theme.fs.sm },
+  memChg: { fontFamily: theme.mono, fontSize: theme.fs.xs + 1, minWidth: 52, textAlign: 'right' },
   pickHead: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: theme.sp.sm },
   pickTitle: { color: theme.text, fontSize: theme.fs.lg, fontWeight: '800' },
   pickSub: { color: theme.muted, fontSize: theme.fs.sm, marginTop: 2 },

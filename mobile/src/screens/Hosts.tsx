@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { api } from '../api';
+import { currentMember, memberLogout } from '../member';
 import { peekNav, subscribeNav } from '../navIntent';
 import { isClassicNav, setClassicNav, subscribeNavMode } from '../navMode';
 import { useResponsive } from '../responsive';
@@ -432,6 +433,17 @@ export function MoreScreen() {
           <View style={[styles.navKnob, !classic && styles.navKnobOn]} />
         </View>
       </TouchableOpacity>
+      {currentMember() ? (
+        <TouchableOpacity style={styles.menuRow} onPress={() => memberLogout()} activeOpacity={0.75}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.menuLabel}>Sign out</Text>
+            <Text style={styles.menuHint}>
+              Signed in as {currentMember()!.username} · {currentMember()!.plan.toUpperCase()} membership
+            </Text>
+          </View>
+          <Text style={styles.menuChevron}>›</Text>
+        </TouchableOpacity>
+      ) : null}
       {version ? <Text style={styles.versionFoot}>TaurEye v{version}</Text> : null}
     </ScrollView>
   );
