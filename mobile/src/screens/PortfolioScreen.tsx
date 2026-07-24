@@ -348,6 +348,31 @@ export default function PortfolioScreen() {
     [list],
   );
 
+  // Per-group performance for the selector cards: invested, P&L (abs + %),
+  // day change — same valuation rules as `totals` (cost basis when unpriced).
+  const groupStats = useMemo(() => {
+    const stats: Record<string, { n: number; invested: number; pnl: number; pnlPct: number; dayChg: number }> = {};
+    for (const g of ['all', ...allGroups]) {
+      const hs = g === 'all' ? list : list.filter((h) => groupOf(h) === g);
+      let invested = 0;
+      let value = 0;
+      let dayChg = 0;
+      for (const h of hs) {
+        invested += h.qty * h.avg;
+        const q = quotes[h.symbol];
+        if (q?.price != null) {
+          value += h.qty * q.price;
+          if (q.absChg != null) dayChg += h.qty * q.absChg;
+        } else {
+          value += h.qty * h.avg;
+        }
+      }
+      const pnl = value - invested;
+      stats[g] = { n: hs.length, invested, pnl, pnlPct: invested > 0 ? (pnl / invested) * 100 : 0, dayChg };
+    }
+    return stats;
+  }, [list, allGroups, quotes]);
+
   const totals = useMemo(() => {
     let invested = 0;
     let value = 0;
@@ -474,32 +499,51 @@ export default function PortfolioScreen() {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.accent} />
         }
       >
-        {/* Holding groups: All + each group + create. Buys/sells scope here. */}
+        {/* Holding groups as performance cards: each shows invested, P&L and
+            day change at a glance; tapping scopes buys/sells to that group. */}
         <View style={styles.groupRow}>
           {['all', ...allGroups].map((g) => {
             const on = activeGroup === g;
+            const s = groupStats[g];
+            const col = !s || s.pnl >= 0 ? theme.green : theme.red;
             return (
               <TouchableOpacity
                 key={g}
-                style={[styles.groupChip, on && styles.groupChipOn]}
+                style={[styles.groupCard, on && styles.groupCardOn]}
                 onPress={() => pickGroup(g)}
                 activeOpacity={0.75}
               >
-                <Text style={[styles.groupChipTxt, on && styles.groupChipTxtOn]}>
-                  {g === 'all' ? 'All' : g}
-                </Text>
+                <View style={styles.groupCardHead}>
+                  <Text style={[styles.groupCardName, on && styles.groupCardNameOn]} numberOfLines={1}>
+                    {g === 'all' ? 'All holdings' : g}
+                  </Text>
+                  <Text style={styles.groupCardN}>{s?.n ?? 0}</Text>
+                </View>
+                {s && s.n ? (
+                  <>
+                    <Text style={styles.groupCardInv}>{money(s.invested)} invested</Text>
+                    <Text style={[styles.groupCardPnl, { color: col }]}>
+                      {signedMoney(s.pnl)} · {signedPct(s.pnlPct)}
+                    </Text>
+                    <Text style={[styles.groupCardDay, { color: s.dayChg >= 0 ? theme.green : theme.red }]}>
+                      {signedMoney(s.dayChg)} today
+                    </Text>
+                  </>
+                ) : (
+                  <Text style={styles.groupCardEmpty}>Empty</Text>
+                )}
               </TouchableOpacity>
             );
           })}
-          <TouchableOpacity style={styles.groupChip} onPress={() => setNewGroupOpen(true)} activeOpacity={0.75}>
-            <Text style={styles.groupChipTxt}>＋ Group</Text>
+          <TouchableOpacity style={[styles.groupCard, styles.groupCardAdd]} onPress={() => setNewGroupOpen(true)} activeOpacity={0.75}>
+            <Text style={styles.groupCardAddTxt}>＋ Group</Text>
           </TouchableOpacity>
-          {activeGroup !== 'all' && activeGroup !== DEFAULT_GROUP && !shown.length ? (
-            <TouchableOpacity onPress={() => deleteGroup(activeGroup)} activeOpacity={0.75}>
-              <Text style={styles.groupDel}>Delete group</Text>
-            </TouchableOpacity>
-          ) : null}
         </View>
+        {activeGroup !== 'all' && activeGroup !== DEFAULT_GROUP && !shown.length ? (
+          <TouchableOpacity onPress={() => deleteGroup(activeGroup)} activeOpacity={0.75}>
+            <Text style={styles.groupDel}>Delete group</Text>
+          </TouchableOpacity>
+        ) : null}
         {activeGroup !== 'all' ? (
           <Text style={styles.groupNote}>
             Working in “{activeGroup}” — buys add here and sells only touch this group's positions.
@@ -986,19 +1030,29 @@ const styles = StyleSheet.create({
   symSub: { color: theme.muted, fontFamily: theme.mono, fontSize: theme.fs.xs + 1, marginTop: 2 },
   actionsCell: { width: ACTIONS_W, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 2 },
   // holding groups
-  groupRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: theme.sp.sm, marginTop: theme.sp.md },
-  groupChip: {
-    backgroundColor: theme.surface2,
+  groupRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'stretch', gap: theme.sp.sm, marginTop: theme.sp.md },
+  groupCard: {
+    minWidth: 148,
+    maxWidth: 210,
+    backgroundColor: theme.surface,
     borderColor: theme.border2,
     borderWidth: 1,
-    borderRadius: 999,
-    paddingHorizontal: theme.sp.md + 2,
-    paddingVertical: 6,
+    borderRadius: theme.radius.md,
+    paddingHorizontal: theme.sp.md,
+    paddingVertical: theme.sp.sm + 2,
   },
-  groupChipOn: { backgroundColor: theme.accent, borderColor: theme.accent },
-  groupChipTxt: { color: theme.muted2, fontSize: theme.fs.sm, fontWeight: '600' },
-  groupChipTxtOn: { color: theme.onAccent, fontWeight: '700' },
-  groupDel: { color: theme.red, fontSize: theme.fs.sm, fontWeight: '600', marginLeft: theme.sp.sm },
+  groupCardOn: { borderColor: theme.accent, backgroundColor: theme.surface2 },
+  groupCardHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: theme.sp.sm },
+  groupCardName: { color: theme.muted2, fontSize: theme.fs.sm, fontWeight: '700', flexShrink: 1 },
+  groupCardNameOn: { color: theme.text },
+  groupCardN: { color: theme.muted, fontSize: theme.fs.xs, fontFamily: theme.mono },
+  groupCardInv: { color: theme.text, fontFamily: theme.mono, fontSize: theme.fs.sm, marginTop: 4 },
+  groupCardPnl: { fontFamily: theme.mono, fontSize: theme.fs.xs + 1, marginTop: 2 },
+  groupCardDay: { fontFamily: theme.mono, fontSize: theme.fs.xs, marginTop: 1 },
+  groupCardEmpty: { color: theme.muted, fontSize: theme.fs.xs + 1, marginTop: 4 },
+  groupCardAdd: { alignItems: 'center', justifyContent: 'center', minWidth: 90, borderStyle: 'dashed' },
+  groupCardAddTxt: { color: theme.muted2, fontSize: theme.fs.sm, fontWeight: '600' },
+  groupDel: { color: theme.red, fontSize: theme.fs.sm, fontWeight: '600', marginTop: theme.sp.sm },
   groupNote: { color: theme.muted, fontSize: theme.fs.xs + 1, marginTop: theme.sp.sm },
   miniSheet: {
     position: 'absolute',

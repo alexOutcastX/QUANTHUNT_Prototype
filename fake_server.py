@@ -554,7 +554,7 @@ class H(BaseHTTPRequestHandler):
             return self._json({"items": [
                 {"title": f"Fake market headline {i} — earnings beat estimates",
                  "link": "https://example.com/n" + str(i), "source": "ET Markets",
-                 "ts": 1753200000 + i * 3600, "sym": ""} for i in range(6)],
+                 "ts": 1753200000 + i * 3600, "sym": ""} for i in range(10)],
                 "fetched": 1753260000, "cached": False})
         if path == "/auth/member":
             if "te_member=1" in (self.headers.get("Cookie") or ""):

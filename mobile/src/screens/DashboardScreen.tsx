@@ -1,8 +1,9 @@
-// Today — the market-universe landing page (report issue 4). One glance covers
-// indices, animated breadth, movers (NIFTY 50 + SENSEX), NSE/BSE sectors,
-// primary market (G-Sec · upcoming IPOs · fixed-income yields), sliding news
-// with on-demand refresh, the user's social feeds, and Portfolio / Watchlist
-// jump-buttons with live day change. Every window degrades independently.
+// Today — the market-universe landing page (report issue 4). News leads: a
+// compact scrolling headline box with on-demand refresh and the user's social
+// feeds sit at the top, followed by Portfolio / Watchlist jump-buttons, index
+// tiles, animated breadth, movers (NIFTY 50 + SENSEX), NSE/BSE sectors and
+// the primary market (G-Sec · upcoming IPOs · fixed-income yields). Every
+// window degrades independently.
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated,
@@ -253,7 +254,7 @@ export default function DashboardScreen({ onNavigate }: { onNavigate?: (page: st
         /* button shows without live change */
       }
     })();
-    api.news().then((d) => { const n = (d.items || []).slice(0, 8); dash.news = n; setNews(n); }).catch(() => setNews((v) => v ?? []));
+    api.news().then((d) => { const n = (d.items || []).slice(0, 12); dash.news = n; setNews(n); }).catch(() => setNews((v) => v ?? []));
   }, []);
 
   useEffect(() => {
@@ -277,7 +278,7 @@ export default function DashboardScreen({ onNavigate }: { onNavigate?: (page: st
     setNewsBusy(true);
     try {
       const d = await api.news(true);
-      const n = (d.items || []).slice(0, 8);
+      const n = (d.items || []).slice(0, 12);
       dash.news = n;
       setNews(n);
     } catch {
@@ -317,22 +318,6 @@ export default function DashboardScreen({ onNavigate }: { onNavigate?: (page: st
   const sgbRows = (gsec?.items || []).filter((g) => g.kind === 'sgb');
   const bestYield = gsecRows.length ? Math.max(...gsecRows.map((g) => g.yld ?? 0)) : null;
 
-  // News slider: auto-advance every 5s, manual swipe stays in sync.
-  const [slideW, setSlideW] = useState(0);
-  const [slideIdx, setSlideIdx] = useState(0);
-  const slideRef = useRef<ScrollView>(null);
-  useEffect(() => {
-    if (!news?.length || !slideW) return;
-    const t = setInterval(() => {
-      setSlideIdx((i) => {
-        const next = (i + 1) % news.length;
-        slideRef.current?.scrollTo({ x: next * slideW, animated: true });
-        return next;
-      });
-    }, 5000);
-    return () => clearInterval(t);
-  }, [news, slideW]);
-
   if (!indices) return <Loading label="Loading market overview…" />;
 
   return (
@@ -363,6 +348,59 @@ export default function DashboardScreen({ onNavigate }: { onNavigate?: (page: st
           </View>
         ) : null}
       </View>
+      {/* ── News first: compact scrolling headline box + the user's feeds ── */}
+      <Card style={{ marginBottom: theme.sp.md }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+          <SectionTitle>Latest market news</SectionTitle>
+          <TouchableOpacity onPress={refreshNews} disabled={newsBusy} activeOpacity={0.7}>
+            <Text style={styles.moreLinkInline}>{newsBusy ? 'Updating…' : '↻ Update news'}</Text>
+          </TouchableOpacity>
+        </View>
+        {!news ? (
+          <Loading />
+        ) : news.length ? (
+          <ScrollView style={styles.newsBox} nestedScrollEnabled showsVerticalScrollIndicator>
+            {news.map((n, i) => (
+              <TouchableOpacity
+                key={i}
+                style={[styles.newsRow, i === 0 && { borderTopWidth: 0 }]}
+                onPress={() => Linking.openURL(n.link).catch(() => {})}
+                activeOpacity={0.75}
+              >
+                <Text style={styles.newsTitle} numberOfLines={2}>{n.title}</Text>
+                <Text style={styles.nmeta}>
+                  {n.source}
+                  {n.ts ? ' · ' + new Date(n.ts * 1000).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : ''}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        ) : (
+          <EmptyState title="No headlines right now" hint="Tap ↻ Update news to re-scrape the trusted feeds (ET Markets, Moneycontrol, Livemint)." />
+        )}
+        {/* Social accounts: the user's own feeds, one tap away. */}
+        <View style={styles.socialRow}>
+          <Text style={styles.socialLbl}>MY FEEDS</Text>
+          {social.map((s) => (
+            <View key={s.url} style={styles.socialChip}>
+              <TouchableOpacity onPress={() => Linking.openURL(s.url).catch(() => {})} activeOpacity={0.7}>
+                <Text style={styles.socialTxt}>{s.label}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => saveSocial(social.filter((x) => x.url !== s.url))}
+                hitSlop={8}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.socialX}>✕</Text>
+              </TouchableOpacity>
+            </View>
+          ))}
+          <TouchableOpacity style={styles.socialChip} onPress={() => setSocialOpen(true)} activeOpacity={0.7}>
+            <Text style={styles.socialTxt}>＋ Add</Text>
+          </TouchableOpacity>
+        </View>
+      </Card>
+
       <View style={styles.jumpRow}>
         <TouchableOpacity
           style={styles.jumpBtn}
@@ -622,76 +660,6 @@ export default function DashboardScreen({ onNavigate }: { onNavigate?: (page: st
         </Card>
       </View>
 
-      {/* ── News as slides + refresh ── */}
-      <Card style={{ marginTop: theme.sp.lg }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-          <SectionTitle>Latest market news</SectionTitle>
-          <TouchableOpacity onPress={refreshNews} disabled={newsBusy} activeOpacity={0.7}>
-            <Text style={styles.moreLinkInline}>{newsBusy ? 'Refreshing…' : '↻ Refresh'}</Text>
-          </TouchableOpacity>
-        </View>
-        {!news ? (
-          <Loading />
-        ) : news.length ? (
-          <View onLayout={(e) => setSlideW(e.nativeEvent.layout.width)}>
-            {slideW ? (
-              <ScrollView
-                ref={slideRef}
-                horizontal
-                pagingEnabled
-                showsHorizontalScrollIndicator={false}
-                snapToInterval={slideW}
-                decelerationRate="fast"
-                onMomentumScrollEnd={(e) => setSlideIdx(Math.round(e.nativeEvent.contentOffset.x / slideW))}
-              >
-                {news.map((n, i) => (
-                  <TouchableOpacity
-                    key={i}
-                    style={[styles.slide, { width: slideW }]}
-                    onPress={() => Linking.openURL(n.link).catch(() => {})}
-                    activeOpacity={0.75}
-                  >
-                    <Text style={styles.slideTitle} numberOfLines={3}>{n.title}</Text>
-                    <Text style={styles.nmeta}>
-                      {n.source}
-                      {n.ts ? ' · ' + new Date(n.ts * 1000).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : ''}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-            ) : null}
-            <View style={styles.dots}>
-              {news.map((_n, i) => (
-                <View key={i} style={[styles.dotSm, i === slideIdx && styles.dotSmOn]} />
-              ))}
-            </View>
-          </View>
-        ) : (
-          <EmptyState title="No headlines right now" hint="Tap ↻ Refresh to re-scrape the trusted feeds (ET Markets, Moneycontrol, Livemint)." />
-        )}
-        {/* Social accounts: the user's own feeds, one tap away. */}
-        <View style={styles.socialRow}>
-          <Text style={styles.socialLbl}>MY FEEDS</Text>
-          {social.map((s) => (
-            <View key={s.url} style={styles.socialChip}>
-              <TouchableOpacity onPress={() => Linking.openURL(s.url).catch(() => {})} activeOpacity={0.7}>
-                <Text style={styles.socialTxt}>{s.label}</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={() => saveSocial(social.filter((x) => x.url !== s.url))}
-                hitSlop={8}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.socialX}>✕</Text>
-              </TouchableOpacity>
-            </View>
-          ))}
-          <TouchableOpacity style={styles.socialChip} onPress={() => setSocialOpen(true)} activeOpacity={0.7}>
-            <Text style={styles.socialTxt}>＋ Add</Text>
-          </TouchableOpacity>
-        </View>
-      </Card>
-
       {/* Add-social sheet */}
       <Modal visible={socialOpen} animationType="fade" transparent onRequestClose={() => setSocialOpen(false)}>
         <Pressable style={styles.backdrop} onPress={() => setSocialOpen(false)} />
@@ -838,13 +806,11 @@ const styles = StyleSheet.create({
   fixedBig: { color: theme.text, fontFamily: theme.mono, fontSize: 30, fontWeight: '800' },
   fixedLbl: { color: theme.muted, fontSize: theme.fs.xs + 1, marginTop: 2, lineHeight: 16 },
   finePrint: { color: theme.muted, fontSize: theme.fs.xs, marginTop: theme.sp.md, lineHeight: 14 },
-  // news slides
-  slide: { paddingVertical: theme.sp.md, paddingRight: theme.sp.lg },
-  slideTitle: { color: theme.text, fontSize: theme.fs.md + 1, lineHeight: 22, fontWeight: '600' },
-  nmeta: { color: theme.muted, fontSize: theme.fs.xs + 1, marginTop: 6 },
-  dots: { flexDirection: 'row', gap: 5, justifyContent: 'center', marginTop: theme.sp.xs },
-  dotSm: { width: 6, height: 6, borderRadius: 3, backgroundColor: theme.border2 },
-  dotSmOn: { backgroundColor: theme.accent },
+  // news box: compact, scrolls inside its own frame
+  newsBox: { maxHeight: 170 },
+  newsRow: { paddingVertical: theme.sp.sm + 1, borderTopColor: theme.border, borderTopWidth: 1 },
+  newsTitle: { color: theme.text, fontSize: theme.fs.sm + 1, lineHeight: 19, fontWeight: '600' },
+  nmeta: { color: theme.muted, fontSize: theme.fs.xs + 1, marginTop: 2 },
   // social feeds
   socialRow: {
     flexDirection: 'row',
