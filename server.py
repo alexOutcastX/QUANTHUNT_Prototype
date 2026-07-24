@@ -2106,6 +2106,24 @@ def _ohlc_ttl(interval):
     return 600            # daily+ changes slowly within a session
 
 
+# The pattern scanner accepts index names too — "NIFTY 50", "BANKNIFTY" or
+# "SENSEX" scan the index's own chart. Mapped to Yahoo index tickers (exact
+# names only, so equities are never shadowed).
+INDEX_YF = {
+    "NIFTY": "^NSEI", "NIFTY 50": "^NSEI", "NIFTY50": "^NSEI",
+    "NIFTY 100": "^CNX100", "NIFTY 200": "^CNX200", "NIFTY 500": "^CRSLDX",
+    "NIFTY NEXT 50": "^NSMIDCP",
+    "NIFTY BANK": "^NSEBANK", "BANKNIFTY": "^NSEBANK",
+    "NIFTY IT": "^CNXIT", "NIFTY AUTO": "^CNXAUTO",
+    "NIFTY PHARMA": "^CNXPHARMA", "NIFTY FMCG": "^CNXFMCG",
+    "NIFTY METAL": "^CNXMETAL", "NIFTY ENERGY": "^CNXENERGY",
+    "NIFTY REALTY": "^CNXREALTY",
+    "NIFTY MIDCAP 100": "^CRSMID", "NIFTY MIDCAP 150": "^CRSMID",
+    "NIFTY SMALLCAP 100": "^CNXSC",
+    "SENSEX": "^BSESN", "BSE SENSEX": "^BSESN",
+}
+
+
 def _load_ohlc(sym, period, interval="1d"):
     """Resilient OHLC fetch (yfinance .NS → .BO, then tvDatafeed) for the
     chart-pattern scanner. Returns a chronological list of {t,o,h,l,c,v}.
@@ -2114,6 +2132,7 @@ def _load_ohlc(sym, period, interval="1d"):
     backoff) and, if every source fails, returns the last-good candles rather
     than an empty list that would 404/503 the whole Analyse card."""
     import ydata
+    sym = INDEX_YF.get(sym.strip().upper(), sym)
     key = (sym, period, interval)
     now = time.time()
     with _ohlc_lock:
