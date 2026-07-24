@@ -26,6 +26,13 @@ const PERIODS: { key: string; label: string }[] = [
   { key: '2y', label: '2Y' },
   { key: '5y', label: '5Y' },
 ];
+// The scanner also reads index charts (server maps these to Yahoo index
+// tickers) — one tap scans the index itself, not its constituents.
+const INDEX_CHIPS = [
+  'NIFTY 50', 'NIFTY BANK', 'SENSEX', 'NIFTY IT', 'NIFTY 100', 'NIFTY 500',
+  'NIFTY MIDCAP 100', 'NIFTY SMALLCAP 100', 'NIFTY AUTO', 'NIFTY PHARMA',
+  'NIFTY FMCG', 'NIFTY METAL', 'NIFTY ENERGY', 'NIFTY REALTY',
+];
 
 const biasColor = (b: string) => (b === 'bullish' ? theme.green : b === 'bearish' ? theme.red : theme.muted2);
 const fmtDate = (ts?: number) =>
@@ -1206,7 +1213,7 @@ export default function PatternScreen() {
           onChangeText={setSymbol}
           onSelect={(s) => scan(s)}
           onSubmit={() => scan()}
-          placeholder="NSE symbol — e.g. RELIANCE, TCS, HDFCBANK…"
+          placeholder="Symbol or index — e.g. RELIANCE, NIFTY 50, BANKNIFTY…"
           inputStyle={styles.input}
           containerStyle={{ flex: 1 }}
         />
@@ -1240,14 +1247,26 @@ export default function PatternScreen() {
         ) : null}
       </View>
 
+      {/* Every index is scannable as its own chart — one tap. */}
+      <View style={styles.periodRow}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.recentInner}>
+          <Text style={styles.recentLabel}>INDICES</Text>
+          {INDEX_CHIPS.map((s) => (
+            <TouchableOpacity key={s} style={styles.recentChip} onPress={() => scan(s)} activeOpacity={0.75}>
+              <Text style={styles.recentTxt}>{s}</Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      </View>
+
       <ScrollView contentContainerStyle={styles.body}>
         {busy ? <Loading label={`Scanning ${symbol.toUpperCase()} for chart patterns…`} /> : null}
         {!busy && error ? <EmptyState icon="⚠" title="Couldn't scan" hint={error} /> : null}
         {!busy && !error && !data ? (
           <EmptyState
             icon="⚏"
-            title="Pick a stock to scan"
-            hint="Type any NSE symbol — the recogniser walks the whole history and lists every chart pattern it finds (double tops, head-and-shoulders, triangles, wedges, flags, cup-and-handle and more)."
+            title="Pick a stock or index to scan"
+            hint="Type any NSE/BSE symbol or tap an index chip — the recogniser walks the whole history and lists every chart pattern it finds (double tops, head-and-shoulders, triangles, wedges, flags, cup-and-handle and more)."
           />
         ) : null}
 
