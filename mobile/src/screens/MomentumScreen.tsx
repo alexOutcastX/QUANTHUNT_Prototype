@@ -1,6 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { MomentumHit, StrategyScoresResp, TimeframesResp, api } from '../api';
+import { exportCsvRows, exportExcelRows } from '../csv';
+import { SimpleColumnMenu, SymInline } from './ScreenerScreen';
 import { openPdfPreview } from '../pdf';
 import StockDetail from '../components/StockDetail';
 import { useResponsive } from '../responsive';
@@ -90,8 +93,10 @@ const MOM_STRATEGIES: MomStrategy[] = [
 // map — but they still get their own sortable columns.
 type ColKey = keyof MomentumHit | 'sector' | 'cap';
 type ColDef = { key: ColKey; label: string; w: number; text?: boolean };
+const MOM_COLS_KEY = 'taureye.momentum.cols.v1';
 const COLS: ColDef[] = [
-  { key: 'symbol', label: 'SYMBOL', w: 92, text: true },
+  // Wide enough for the symbol plus the inline chart + watch controls.
+  { key: 'symbol', label: 'SYMBOL', w: 132, text: true },
   { key: 'name', label: 'NAME', w: 190, text: true },
   { key: 'exchange', label: 'EXCH', w: 46, text: true },
   { key: 'sector', label: 'SECTOR', w: 140, text: true },
@@ -108,7 +113,6 @@ const COLS: ColDef[] = [
   { key: 'upside_pct', label: 'UPSIDE', w: 72 },
 ];
 const ACTIONS_W = 142;
-const TABLE_W = 36 + COLS.reduce((a, c) => a + c.w, 0) + ACTIONS_W; // 36 = serial column
 
 // Mobile sort options (headers are gone on the card layout).
 const MOBILE_SORTS: { key: ColKey; label: string }[] = [
@@ -680,6 +684,47 @@ export default function MomentumScreen() {
     });
   }, [hits, enrich, setupFilter, sector, strategy, sortCol, sortDir]);
   const arrow = (col: ColKey) => (sortCol === col ? (sortDir === 1 ? ' ↑' : ' ↓') : '');
+
+  // ▤ Columns (persisted; symbol always shown) + ⇩ Export over what's visible.
+  const [colHidden, setColHidden] = useState<string[]>([]);
+  const [colMenu, setColMenu] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
+  useEffect(() => {
+    AsyncStorage.getItem(MOM_COLS_KEY)
+      .then((v) => { if (v) setColHidden(JSON.parse(v)); })
+      .catch(() => {});
+  }, []);
+  const toggleCol = (key: string) => {
+    setColHidden((prev) => {
+      const next = prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key];
+      AsyncStorage.setItem(MOM_COLS_KEY, JSON.stringify(next)).catch(() => {});
+      return next;
+    });
+  };
+  const visCols = useMemo(
+    () => COLS.filter((c) => c.key === 'symbol' || !colHidden.includes(c.key)),
+    [colHidden],
+  );
+  const tableW = 36 + visCols.reduce((a, c) => a + c.w, 0) + ACTIONS_W;
+  const exportVal = (h: MomentumHit, key: ColKey): string => {
+    switch (key) {
+      case 'symbol': return h.symbol;
+      case 'name': return h.name || '';
+      case 'sector': return enrich[h.symbol]?.sector || '';
+      case 'cap': return capBand(enrich[h.symbol]?.mcap)?.short || '';
+      case 'setup': return SETUP_LABEL[h.setup];
+      default: {
+        const v = h[key as keyof MomentumHit];
+        return v == null ? '' : String(v);
+      }
+    }
+  };
+  const doExport = (kind: 'csv' | 'excel') => {
+    const headers = visCols.map((c) => c.label);
+    const data = shown.map((h) => visCols.map((c) => exportVal(h, c.key)));
+    const fn = kind === 'csv' ? exportCsvRows : exportExcelRows;
+    fn(headers, data, 'momentum-radar').catch(() => {});
+  };
   const counts = useMemo(() => {
     const c: Record<string, number> = { breakout: 0, fired: 0, pullback: 0 };
     hits.forEach((h) => c[h.setup]++);
@@ -764,6 +809,34 @@ export default function MomentumScreen() {
                 onChange={setSector}
               />
             ) : null}
+            <View style={{ flex: 1 }} />
+            {isDesktop ? (
+              <TouchableOpacity style={styles.ctlBtn} onPress={() => setColMenu(true)} activeOpacity={0.75}>
+                <Text style={styles.ctlTxt}>▤ Columns</Text>
+              </TouchableOpacity>
+            ) : null}
+            <View>
+              <TouchableOpacity style={styles.ctlBtn} onPress={() => setExportOpen((v) => !v)} activeOpacity={0.75}>
+                <Text style={styles.ctlTxt}>⇩ Export ▾</Text>
+              </TouchableOpacity>
+              {exportOpen ? (
+                <View style={styles.exportMenu}>
+                  {(['csv', 'excel'] as const).map((kind) => (
+                    <TouchableOpacity
+                      key={kind}
+                      style={styles.exportItem}
+                      onPress={() => {
+                        setExportOpen(false);
+                        doExport(kind);
+                      }}
+                      activeOpacity={0.75}
+                    >
+                      <Text style={styles.exportItemTxt}>{kind === 'csv' ? 'CSV' : 'Excel'}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              ) : null}
+            </View>
           </View>
           {strategy !== 'all' ? (
             <Text style={styles.stratHint}>{stratDef.hint}</Text>
@@ -806,10 +879,10 @@ export default function MomentumScreen() {
 
         {shown.length && isDesktop ? (
           <ScrollView horizontal showsHorizontalScrollIndicator contentContainerStyle={{ minWidth: '100%' }}>
-            <View style={{ minWidth: TABLE_W }}>
+            <View style={{ minWidth: tableW }}>
               <View style={styles.headerRow}>
                 <Text style={[styles.thR, { width: 36 }]}>#</Text>
-                {COLS.map((col) => (
+                {visCols.map((col) => (
                   <TouchableOpacity key={col.key} style={{ width: col.w }} onPress={() => onSort(col.key)} activeOpacity={0.7}>
                     <Text style={col.text ? styles.th : styles.thR}>{col.label}{arrow(col.key)}</Text>
                   </TouchableOpacity>
@@ -818,29 +891,48 @@ export default function MomentumScreen() {
               </View>
               {shown.map((h, rowIdx) => {
                 const c = setupColor(h.setup);
+                const cell = (col: ColDef): React.ReactNode => {
+                  switch (col.key) {
+                    case 'symbol': return (
+                      <View key={col.key} style={{ width: col.w, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <Text style={styles.sym} numberOfLines={1}>{h.symbol}</Text>
+                        <SymInline
+                          starred={isWatched(h.symbol)}
+                          onChart={() => openChart(h)}
+                          onStar={() => toggleWatch(h.symbol)}
+                        />
+                      </View>
+                    );
+                    case 'name': return <Text key={col.key} style={[styles.name, { width: col.w }]} numberOfLines={1}>{h.name || '—'}</Text>;
+                    case 'exchange': return <Text key={col.key} style={[styles.exch, { width: col.w }]}>{h.exchange}</Text>;
+                    case 'sector': return <Text key={col.key} style={[styles.sector, { width: col.w }]} numberOfLines={1}>{enrich[h.symbol]?.sector || '—'}</Text>;
+                    case 'cap': return <View key={col.key} style={{ width: col.w, paddingHorizontal: theme.sp.xs }}>{capTag(enrich[h.symbol]?.mcap)}</View>;
+                    case 'setup': return (
+                      <View key={col.key} style={{ width: col.w }}>
+                        <Text style={[styles.setupBadge, { color: c, borderColor: c }]}>{SETUP_LABEL[h.setup]}</Text>
+                      </View>
+                    );
+                    case 'score': return <Text key={col.key} style={[styles.cellR, { width: col.w, color: c, fontWeight: '700' }]}>{h.score}</Text>;
+                    case 'probability': return <Text key={col.key} style={[styles.cellR, { width: col.w }]}>{h.probability}%</Text>;
+                    case 'price': return <Text key={col.key} style={[styles.cellR, { width: col.w, fontWeight: '700' }]}>{fmtIN(h.price)}</Text>;
+                    case 'chg': return <Text key={col.key} style={[styles.cellR, { width: col.w, color: (h.chg ?? 0) >= 0 ? theme.green : theme.red }]}>{pct(h.chg, 2)}</Text>;
+                    case 'rsi': return <Text key={col.key} style={[styles.cellR, { width: col.w }]}>{h.rsi != null ? h.rsi.toFixed(0) : '—'}</Text>;
+                    case 'relvol': return <Text key={col.key} style={[styles.cellR, { width: col.w }]}>{h.relvol != null ? h.relvol.toFixed(2) + 'x' : '—'}</Text>;
+                    case 'd200': return <Text key={col.key} style={[styles.cellR, { width: col.w, color: (h.d200 ?? 0) >= 0 ? theme.green : theme.red }]}>{pct(h.d200)}</Text>;
+                    case 'pct_from_high': return <Text key={col.key} style={[styles.cellR, { width: col.w, color: theme.red }]}>{pct(h.pct_from_high)}</Text>;
+                    case 'upside_pct': return (
+                      <Text key={col.key} style={[styles.cellR, { width: col.w, color: (h.upside_pct ?? 0) > 0 ? theme.green : theme.muted }]}>
+                        {h.upside_pct != null ? '+' + h.upside_pct.toFixed(1) + '%' : '—'}
+                      </Text>
+                    );
+                    default: return null;
+                  }
+                };
                 return (
                   <View key={h.symbol}>
                     <TouchableOpacity style={styles.dataRow} onPress={() => setSel(h)} activeOpacity={0.8}>
                       <Text style={[styles.exch, { width: 36, textAlign: 'right' }]}>{rowIdx + 1}</Text>
-                      <Text style={[styles.sym, { width: 92 }]} numberOfLines={1}>{h.symbol}</Text>
-                      <Text style={[styles.name, { width: 190 }]} numberOfLines={1}>{h.name || '—'}</Text>
-                      <Text style={[styles.exch, { width: 46 }]}>{h.exchange}</Text>
-                      <Text style={[styles.sector, { width: 140 }]} numberOfLines={1}>{enrich[h.symbol]?.sector || '—'}</Text>
-                      <View style={{ width: 66, paddingHorizontal: theme.sp.xs }}>{capTag(enrich[h.symbol]?.mcap)}</View>
-                      <View style={{ width: 150 }}>
-                        <Text style={[styles.setupBadge, { color: c, borderColor: c }]}>{SETUP_LABEL[h.setup]}</Text>
-                      </View>
-                      <Text style={[styles.cellR, { width: 56, color: c, fontWeight: '700' }]}>{h.score}</Text>
-                      <Text style={[styles.cellR, { width: 54 }]}>{h.probability}%</Text>
-                      <Text style={[styles.cellR, { width: 94, fontWeight: '700' }]}>{fmtIN(h.price)}</Text>
-                      <Text style={[styles.cellR, { width: 70, color: (h.chg ?? 0) >= 0 ? theme.green : theme.red }]}>{pct(h.chg, 2)}</Text>
-                      <Text style={[styles.cellR, { width: 46 }]}>{h.rsi != null ? h.rsi.toFixed(0) : '—'}</Text>
-                      <Text style={[styles.cellR, { width: 58 }]}>{h.relvol != null ? h.relvol.toFixed(2) + 'x' : '—'}</Text>
-                      <Text style={[styles.cellR, { width: 82, color: (h.d200 ?? 0) >= 0 ? theme.green : theme.red }]}>{pct(h.d200)}</Text>
-                      <Text style={[styles.cellR, { width: 68, color: theme.red }]}>{pct(h.pct_from_high)}</Text>
-                      <Text style={[styles.cellR, { width: 72, color: (h.upside_pct ?? 0) > 0 ? theme.green : theme.muted }]}>
-                        {h.upside_pct != null ? '+' + h.upside_pct.toFixed(1) + '%' : '—'}
-                      </Text>
+                      {visCols.map(cell)}
                       <View style={[styles.actions, { width: ACTIONS_W }]}>
                         <TouchableOpacity style={styles.aBtn} onPress={() => openChart(h)} activeOpacity={0.75}>
                           <Text style={styles.aTxt}>Chart</Text>
@@ -956,6 +1048,13 @@ export default function MomentumScreen() {
         />
       ) : null}
       {detail ? <StockDetail row={detail} onClose={() => setDetail(null)} /> : null}
+      <SimpleColumnMenu
+        visible={colMenu}
+        cols={COLS.map((c) => ({ key: c.key, label: c.label }))}
+        hidden={colHidden}
+        onToggle={toggleCol}
+        onClose={() => setColMenu(false)}
+      />
       {flash ? (
         <View style={styles.toast} pointerEvents="none">
           <Text style={styles.toastTxt}>{flash}</Text>
@@ -1049,7 +1148,31 @@ const styles = StyleSheet.create({
   // greedily filling the column (which left a large blank gap and vertically-
   // centred the chips).
   secScroll: { flexGrow: 0, flexShrink: 0 },
-  secRow: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.sp.sm, paddingHorizontal: theme.sp.md, paddingBottom: theme.sp.sm, alignItems: 'center' },
+  secRow: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.sp.sm, paddingHorizontal: theme.sp.md, paddingBottom: theme.sp.sm, alignItems: 'center', zIndex: 30 },
+  ctlBtn: {
+    backgroundColor: theme.surface2,
+    borderColor: theme.border2,
+    borderWidth: 1,
+    borderRadius: theme.radius.sm,
+    paddingHorizontal: theme.sp.md,
+    paddingVertical: 7,
+  },
+  ctlTxt: { color: theme.text, fontSize: theme.fs.sm, fontWeight: '600' },
+  exportMenu: {
+    position: 'absolute',
+    top: '100%',
+    right: 0,
+    marginTop: 4,
+    backgroundColor: theme.surface2,
+    borderColor: theme.border2,
+    borderWidth: 1,
+    borderRadius: theme.radius.sm,
+    zIndex: 40,
+    elevation: 8,
+    minWidth: 110,
+  },
+  exportItem: { paddingHorizontal: theme.sp.md, paddingVertical: 9 },
+  exportItemTxt: { color: theme.text, fontSize: theme.fs.sm, fontWeight: '600' },
   stratHint: { color: theme.muted, fontSize: theme.fs.xs + 1, lineHeight: 15, paddingHorizontal: theme.sp.lg, paddingBottom: theme.sp.sm },
   secChip: {
     borderColor: theme.border2,

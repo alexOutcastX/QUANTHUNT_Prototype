@@ -11,7 +11,8 @@ import { Row, sortRows } from '../screener';
 import { capBand } from '../marketcap';
 import { navigate, openStock, takeSector, takeSymbol } from '../navIntent';
 import { mergeSectors } from '../sectors';
-import { ACTIONS_W, COLS, Col, DEFAULT_HIDDEN, cellFlex, loadNames } from './ScreenerScreen';
+import { ACTIONS_W, COLS, Col, DEFAULT_HIDDEN, SYM_CELL, SimpleColumnMenu, SymInline, cellFlex, exportColsOf, loadNames } from './ScreenerScreen';
+import { ExportCol, exportCsv, exportExcel, exportPdf } from '../csv';
 import { TrackDir, TrackEntry, addTrack, loadTrack, removeTrack } from '../tracklist';
 import { addSymbol, loadWatchlist, normSymbol, removeSymbol } from '../watchlist';
 import { Btn, Card, Dropdown, EmptyState, InfoButton, InfoContent, Loading, SectionTitle, Sheet, StatTile } from '../ui';
@@ -23,6 +24,7 @@ import { getScanned, hydrateScan, isIncluded, subscribeScan, toggleInclude } fro
 const GOLD = '#f5c518';
 const BT_PREFILL_KEY = 'taureye.backtest.prefill';
 const RECENT_KEY = 'taureye.mb.recent.v1';
+const MB_COLS_KEY = 'taureye.mb.cols.v1';
 // The Multibagger list carries one extra action (the "include in scan" toggle)
 // beyond the shared screener action set, so its action cell is a touch wider.
 const MB_ACTIONS_W = ACTIONS_W + 88;
@@ -551,12 +553,39 @@ function MbList({
     }),
     [],
   );
-  const visibleCols = useMemo(() => {
+  const allCols = useMemo(() => {
     const base = COLS.filter((c) => !DEFAULT_HIDDEN.includes(c.key));
     const at = base.findIndex((c) => c.key === 'exchange') + 1;
     return [...base.slice(0, at || 3), scoreCol, probCol, capCol, ...base.slice(at || 3)];
   }, [scoreCol, probCol, capCol]);
+  // ▤ Columns: user-hidden keys, persisted (symbol can't be hidden).
+  const [colHidden, setColHidden] = useState<string[]>([]);
+  const [colMenu, setColMenu] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
+  useEffect(() => {
+    AsyncStorage.getItem(MB_COLS_KEY)
+      .then((v) => { if (v) setColHidden(JSON.parse(v)); })
+      .catch(() => {});
+  }, []);
+  const toggleCol = (key: string) => {
+    setColHidden((prev) => {
+      const next = prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key];
+      AsyncStorage.setItem(MB_COLS_KEY, JSON.stringify(next)).catch(() => {});
+      return next;
+    });
+  };
+  const visibleCols = useMemo(
+    () => allCols.filter((c) => c.key === 'sym' || !colHidden.includes(c.key)),
+    [allCols, colHidden],
+  );
   const tableW = useMemo(() => visibleCols.reduce((a, c) => a + c.w, 0) + MB_ACTIONS_W, [visibleCols]);
+  // Export uses the shared per-key getters plus the analyser-specific columns.
+  const mbExportCols = useCallback((): ExportCol[] => visibleCols.map((c) => {
+    if (c.key === 'mb_score') return { header: 'Score', get: (r: Row) => (r as MbRow).mbScore ?? '' };
+    if (c.key === 'mb_prob') return { header: 'Prob %', get: (r: Row) => (r as MbRow).mbProb ?? '' };
+    if (c.key === 'cap_band') return { header: 'Cap', get: (r: Row) => capBand((r as MbRow)._fund?.market_cap_cr)?.short ?? '' };
+    return exportColsOf([c])[0];
+  }), [visibleCols]);
 
   // Column sorting (tap a header) — defaults to analyser score, best first.
   const [sortCol, setSortCol] = useState('mb_score');
@@ -650,14 +679,42 @@ function MbList({
 
       {/* Sector filter as a dropdown (was a chip row). Column headers handle
           sorting now, so the separate SORT bar is gone. */}
-      {!loading && sectors.length ? (
+      {!loading ? (
         <View style={styles.secRow}>
-          <Dropdown
-            label="Sector"
-            value={sector}
-            options={[{ key: '', label: 'All sectors' }, ...sectors.map((s) => ({ key: s, label: s }))]}
-            onChange={setSector}
-          />
+          {sectors.length ? (
+            <Dropdown
+              label="Sector"
+              value={sector}
+              options={[{ key: '', label: 'All sectors' }, ...sectors.map((s) => ({ key: s, label: s }))]}
+              onChange={setSector}
+            />
+          ) : null}
+          <View style={{ flex: 1 }} />
+          <TouchableOpacity style={styles.ctlBtn} onPress={() => setColMenu(true)} activeOpacity={0.75}>
+            <Text style={styles.ctlTxt}>▤ Columns</Text>
+          </TouchableOpacity>
+          <View>
+            <TouchableOpacity style={styles.ctlBtn} onPress={() => setExportOpen((v) => !v)} activeOpacity={0.75}>
+              <Text style={styles.ctlTxt}>⇩ Export ▾</Text>
+            </TouchableOpacity>
+            {exportOpen ? (
+              <View style={styles.exportMenu}>
+                {([['CSV', exportCsv], ['Excel', exportExcel], ['PDF', exportPdf]] as const).map(([label, fn]) => (
+                  <TouchableOpacity
+                    key={label}
+                    style={styles.exportItem}
+                    onPress={() => {
+                      setExportOpen(false);
+                      fn(matches, 'multibagger', mbExportCols()).catch(() => {});
+                    }}
+                    activeOpacity={0.75}
+                  >
+                    <Text style={styles.exportItemTxt}>{label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            ) : null}
+          </View>
         </View>
       ) : null}
 
@@ -699,7 +756,16 @@ function MbList({
                 return (
                   <View key={item.sym} style={styles.dataRow}>
                     {visibleCols.map((c) =>
-                      c.key === 'sym' || c.key === 'name' ? (
+                      c.key === 'sym' ? (
+                        // Symbol cell: tap analyses; inline chart + watch star
+                        // (same affordance as the Custom screener).
+                        <View key={c.key} style={[styles.td, cellFlex(c), SYM_CELL]}>
+                          <TouchableOpacity onPress={() => onAnalyse(item.sym)} activeOpacity={0.75}>
+                            {c.render(item, rowIdx)}
+                          </TouchableOpacity>
+                          <SymInline starred={starred} onChart={() => onDetail(item)} onStar={() => onToggleWatch(item)} />
+                        </View>
+                      ) : c.key === 'name' ? (
                         <TouchableOpacity
                           key={c.key}
                           style={[styles.td, cellFlex(c), { alignItems: 'flex-start' }]}
@@ -788,6 +854,14 @@ function MbList({
         ))}
       </Sheet>
     ) : null}
+
+    <SimpleColumnMenu
+      visible={colMenu}
+      cols={allCols.map((c) => ({ key: c.key, label: c.label }))}
+      hidden={colHidden}
+      onToggle={toggleCol}
+      onClose={() => setColMenu(false)}
+    />
     </>
   );
 }
@@ -1210,7 +1284,31 @@ const styles = StyleSheet.create({
   segTxtOn: { color: theme.onAccent },
   // Status line under the controls: match count + build progress.
   fixedNote: { color: theme.muted, fontSize: theme.fs.sm, paddingHorizontal: 12, paddingBottom: 6 },
-  secRow: { flexDirection: 'row', paddingHorizontal: 12, paddingBottom: 8, alignItems: 'center' },
+  secRow: { flexDirection: 'row', paddingHorizontal: 12, paddingBottom: 8, alignItems: 'center', gap: theme.sp.sm, zIndex: 30 },
+  ctlBtn: {
+    backgroundColor: theme.surface2,
+    borderColor: theme.border2,
+    borderWidth: 1,
+    borderRadius: theme.radius.sm,
+    paddingHorizontal: theme.sp.md,
+    paddingVertical: 7,
+  },
+  ctlTxt: { color: theme.text, fontSize: theme.fs.sm, fontWeight: '600' },
+  exportMenu: {
+    position: 'absolute',
+    top: '100%',
+    right: 0,
+    marginTop: 4,
+    backgroundColor: theme.surface2,
+    borderColor: theme.border2,
+    borderWidth: 1,
+    borderRadius: theme.radius.sm,
+    zIndex: 40,
+    elevation: 8,
+    minWidth: 110,
+  },
+  exportItem: { paddingHorizontal: theme.sp.md, paddingVertical: 9 },
+  exportItemTxt: { color: theme.text, fontSize: theme.fs.sm, fontWeight: '600' },
   stratRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingBottom: 8, gap: 6 },
   stratInfoOn: { opacity: 1 },
   stratInfoOff: { opacity: 0.4 },

@@ -188,6 +188,75 @@ const COLS_KEY = 'taureye.screener.cols.v4';
 // Universe name/exchange lookup (fetched once per app session) so the table
 // can show full company names like the TaurEye site.
 let namesPromise: Promise<Record<string, { name: string; exchange: string }>> | null = null;
+// Inline chart + watch-star controls that sit beside the symbol in every
+// screener table (Custom, Multibagger, Momentum). Fixed same-size boxes so
+// the two glyphs centre on the same axis as the symbol text.
+export function SymInline({ starred, onChart, onStar }: { starred: boolean; onChart: () => void; onStar: () => void }) {
+  return (
+    <>
+      <TouchableOpacity style={symInlineStyles.box} onPress={onChart} hitSlop={6} activeOpacity={0.75}>
+        <Icon name="candles" size={14} color={theme.muted2} />
+      </TouchableOpacity>
+      <TouchableOpacity style={symInlineStyles.box} onPress={onStar} hitSlop={6} activeOpacity={0.75}>
+        <Text style={[symInlineStyles.star, starred && symInlineStyles.starOn]}>{starred ? '★' : '☆'}</Text>
+      </TouchableOpacity>
+    </>
+  );
+}
+// The symbol cell hosting SymInline — one row, everything centred.
+export const SYM_CELL = { flexDirection: 'row', alignItems: 'center', gap: 6, justifyContent: 'flex-start' } as const;
+const symInlineStyles = StyleSheet.create({
+  box: { width: 18, height: 18, alignItems: 'center', justifyContent: 'center' },
+  star: { color: theme.muted2, fontSize: 14, lineHeight: 18 },
+  starOn: { color: theme.green },
+  colTitle: { color: theme.text, fontSize: theme.fs.lg, fontWeight: '700', marginBottom: theme.sp.sm },
+  colRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 9 },
+  colTick: { color: theme.muted2, fontSize: 15 },
+  colLbl: { color: theme.text, fontSize: theme.fs.md },
+});
+
+// Minimal show/hide column sheet for the tables that don't need reordering
+// (Multibagger, Momentum) — same ▤ Columns affordance as the Custom screener.
+export function SimpleColumnMenu({
+  visible,
+  cols,
+  hidden,
+  onToggle,
+  onClose,
+}: {
+  visible: boolean;
+  cols: { key: string; label: string }[];
+  hidden: string[];
+  onToggle: (key: string) => void;
+  onClose: () => void;
+}) {
+  if (!visible) return null;
+  return (
+    <Sheet onClose={onClose} maxHeight="70%">
+      <Text style={symInlineStyles.colTitle}>Columns</Text>
+      <ScrollView>
+      {cols.map((c) => {
+        const off = hidden.includes(c.key);
+        const locked = c.key === 'sym' || c.key === 'symbol';
+        return (
+          <TouchableOpacity
+            key={c.key}
+            style={symInlineStyles.colRow}
+            onPress={() => (locked ? undefined : onToggle(c.key))}
+            activeOpacity={locked ? 1 : 0.75}
+          >
+            <Text style={[symInlineStyles.colTick, !off && { color: theme.green }]}>{off ? '☐' : '☑'}</Text>
+            <Text style={[symInlineStyles.colLbl, locked && { color: theme.muted }]}>
+              {c.label}{locked ? ' (always shown)' : ''}
+            </Text>
+          </TouchableOpacity>
+        );
+      })}
+      </ScrollView>
+    </Sheet>
+  );
+}
+
 export function loadNames(): Promise<Record<string, { name: string; exchange: string }>> {
   if (!namesPromise) {
     namesPromise = api
@@ -682,12 +751,7 @@ export default function ScreenerScreen() {
               <TouchableOpacity onPress={() => setDetail(item)} activeOpacity={0.75}>
                 {c.render(item, absIdx)}
               </TouchableOpacity>
-              <TouchableOpacity onPress={() => onChart(item)} hitSlop={6} activeOpacity={0.75}>
-                <Icon name="candles" size={14} color={theme.muted2} />
-              </TouchableOpacity>
-              <TouchableOpacity onPress={() => onToggleWatch(item)} hitSlop={6} activeOpacity={0.75}>
-                <Text style={[styles.starTxt, starred && styles.starOn]}>{starred ? '★' : '☆'}</Text>
-              </TouchableOpacity>
+              <SymInline starred={starred} onChart={() => onChart(item)} onStar={() => onToggleWatch(item)} />
             </View>
           ) : (
             <View key={c.key} style={[styles.td, cellFlex(c), { alignItems: c.align === 'left' ? 'flex-start' : 'flex-end' }]}>
@@ -1208,7 +1272,7 @@ const EXPORT_GET: Record<string, (r: Row, i: number) => unknown> = {
   debt_equity: (r) => fundVal(r, 'debt_equity'),
   dividend_yield: (r) => fundVal(r, 'dividend_yield'),
 };
-const exportColsOf = (cols: Col[]): ExportCol[] =>
+export const exportColsOf = (cols: Col[]): ExportCol[] =>
   cols.map((c) => ({ header: c.label, get: EXPORT_GET[c.key] ?? (() => '') }));
 
 // One tiny line describing the active filter rows for the mobile summary
