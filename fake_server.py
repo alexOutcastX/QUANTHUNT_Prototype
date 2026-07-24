@@ -9,6 +9,11 @@ import backtest_engine as bte  # stdlib-only: the REAL engine runs in the fake s
 DIST = os.path.join(os.path.dirname(__file__), "mobile", "dist")
 PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 5056
 
+_MEMBER = {"username": "Taureye", "uname": "taureye", "plan": "pro",
+           "features": ["quotes", "heatmap", "news", "universe", "screener", "patterns",
+                        "recommendations", "watchlist", "portfolio", "backtest",
+                        "trade_scan", "terminal", "dossier", "exports", "alerts"]}
+
 _BT_SYMS = ["RELIANCE", "TCS", "INFY", "HDFCBANK", "SBIN"]
 
 
@@ -551,6 +556,10 @@ class H(BaseHTTPRequestHandler):
                  "link": "https://example.com/n" + str(i), "source": "ET Markets",
                  "ts": 1753200000 + i * 3600, "sym": ""} for i in range(6)],
                 "fetched": 1753260000, "cached": False})
+        if path == "/auth/member":
+            if "te_member=1" in (self.headers.get("Cookie") or ""):
+                return self._json({"member": _MEMBER})
+            return self._json({"member": None})
         if path == "/sectors/members":
             from urllib.parse import urlparse, parse_qs
             sec = (parse_qs(urlparse(self.path).query).get("sector", ["Financials"])[0])
@@ -563,7 +572,10 @@ class H(BaseHTTPRequestHandler):
                 {"symbol": "RELIANCE", "name": "Reliance Industries Ltd", "exchange": "NSE",
                  "price": 1000.0, "chg": -2.5, "turnover": 6.5e9},
                 {"symbol": "CIANAGRO", "name": "Cian Agro Industries", "exchange": "BSE",
-                 "price": 42.5, "chg": 3.2, "turnover": 1.1e7}]})
+                 "price": 42.5, "chg": 3.2, "turnover": 1.1e7}] + [
+                {"symbol": f"FILL{i:02d}", "name": f"Filler Company {i} Ltd", "exchange": "NSE",
+                 "price": 100.0 + i, "chg": round((i % 7) - 3.0, 2), "turnover": 1e7 - i}
+                for i in range(1, 31)]})
         if path == "/sectors":
             return self._json({"status": "done", "refreshing": False, "asof": 1753260000,
                                "level": "macro", "universe": 2100, "mapped": 1900,
@@ -608,6 +620,25 @@ class H(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_POST(self):
+        if self.path.split("?")[0] == "/auth/member/login":
+            n = int(self.headers.get("Content-Length") or 0)
+            body = json.loads(self.rfile.read(n) or b"{}")
+            ok = (body.get("username", "").strip().lower() == "taureye"
+                  and body.get("password") == "TaureyePW")
+            payload = json.dumps({"member": _MEMBER} if ok
+                                 else {"error": "bad-credentials"}).encode()
+            self.send_response(200 if ok else 401)
+            self.send_header("Content-Type", "application/json")
+            if ok:
+                self.send_header("Set-Cookie", "te_member=1; Path=/")
+            self.end_headers()
+            return self.wfile.write(payload)
+        if self.path.split("?")[0] == "/auth/member/logout":
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Set-Cookie", "te_member=; Path=/; Max-Age=0")
+            self.end_headers()
+            return self.wfile.write(b'{"member": null}')
         if self.path.split("?")[0] == "/backtest/run":
             n = int(self.headers.get("Content-Length") or 0)
             cfg = json.loads(self.rfile.read(n) or b"{}")

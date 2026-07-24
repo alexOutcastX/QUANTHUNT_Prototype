@@ -1005,6 +1005,65 @@ def require_user(fn):
     return wrapper
 
 
+# ── membership gate (username/password + plan) — the paywall foundation ──────
+import members as _members
+
+
+def current_member():
+    return _members.from_cookie(request.cookies.get(_members.COOKIE, ""))
+
+
+def require_plan(*feature):
+    """Gate an API route behind a signed-in member whose plan carries the
+    feature (no feature argument = any signed-in member)."""
+    def deco(fn):
+        import functools
+
+        @functools.wraps(fn)
+        def wrapper(*a, **kw):
+            m = current_member()
+            if m is None:
+                return jsonify({"error": "member-required",
+                                "detail": "Sign in to use this feature."}), 401
+            missing = [f for f in feature if f not in m["features"]]
+            if missing:
+                return jsonify({"error": "plan-required", "plan": m["plan"],
+                                "detail": "Your membership doesn't include this "
+                                          "feature yet."}), 402
+            request.member = m
+            return fn(*a, **kw)
+        return wrapper
+    return deco
+
+
+@app.route("/auth/member/login", methods=["POST"])
+@rate_limit("member-login", 10, 300)
+def member_login():
+    body = request.get_json(silent=True) or {}
+    m = _members.check_login(body.get("username", ""), body.get("password", ""))
+    if m is None:
+        return jsonify({"error": "bad-credentials",
+                        "detail": "Wrong username or password."}), 401
+    m["features"] = _members.features_for(m["plan"])
+    resp = jsonify({"member": m})
+    resp.set_cookie(_members.COOKIE, _members.make_cookie(m), max_age=_members.TTL,
+                    httponly=True, samesite="Lax",
+                    secure=request.headers.get("X-Forwarded-Proto") == "https")
+    return resp
+
+
+@app.route("/auth/member")
+def member_me():
+    return jsonify({"member": current_member()})
+
+
+@app.route("/auth/member/logout", methods=["POST"])
+def member_logout():
+    resp = jsonify({"member": None})
+    resp.delete_cookie(_members.COOKIE)
+    return resp
+
+
 @app.route("/auth/otp/request", methods=["POST"])
 @rate_limit("otp-request", 6, 600)
 def auth_otp_request():

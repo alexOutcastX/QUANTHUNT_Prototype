@@ -5,6 +5,7 @@ import { capgoNotifyReady } from './src/capgo';
 import { initPush } from './src/push';
 import { initSystemBars } from './src/systemBars';
 import { useThemeMode } from './src/theme';
+import LoginGate from './src/components/LoginGate';
 import Shell from './src/Shell';
 import UpdateGate from './src/UpdateGate';
 
@@ -26,7 +27,9 @@ export default function App() {
           src/systemBars.ts; this is the web/Expo fallback). */}
       <StatusBar style={mode === 'dark' ? 'light' : 'dark'} />
       <UpdateGate>
-        <Shell />
+        <LoginGate>
+          <Shell />
+        </LoginGate>
       </UpdateGate>
     </SafeAreaProvider>
   );

@@ -66,6 +66,37 @@ function check(name, ok, detail) {
     const boots = await page.evaluate(() => !!document.getElementById('root')?.children.length);
     check('app boots (#root populated)', boots);
 
+    // 1b · membership gate fronts the app: wrong password is rejected, the
+    // placeholder credential signs in and unlocks the shell.
+    const gated = (await page.locator('text=Members only').count()) > 0;
+    check('login gate fronts the app', gated);
+    // Text-locator clicks are flaky on RN-web touchables — dispatch the click
+    // on the exact element instead (same workaround as the other checks).
+    const clickSignIn = () =>
+      page.evaluate(() => {
+        const el = [...document.querySelectorAll('div,span')]
+          .filter((e) => (e.textContent || '').trim() === 'SIGN IN')
+          .pop();
+        if (el) el.click();
+      });
+    if (gated) {
+      await page.fill('[data-testid="login-user"]', 'Taureye');
+      await page.fill('[data-testid="login-pw"]', 'wrong-password');
+      await clickSignIn();
+      await page.waitForTimeout(900);
+      check(
+        'wrong password rejected',
+        (await page.locator('text=Wrong username or password').count()) > 0,
+      );
+      await page.fill('[data-testid="login-pw"]', 'TaureyePW');
+      await clickSignIn();
+      await page.waitForTimeout(3000);
+      check(
+        'placeholder credentials unlock the app',
+        (await page.locator('text=Members only').count()) === 0,
+      );
+    }
+
     // 2 · five tabs
     for (const tab of ['Today', 'Screens', 'Symbol', 'Desk', 'Terminal']) {
       const n = await page.locator(`text=${tab}`).count();
