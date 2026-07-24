@@ -55,41 +55,52 @@ export type PatternDrawing = {
 };
 
 // `maSet` is the set of SMA periods to draw (default 20/50/200). StockDetail
-// calls chartHtml(candles, barSec) and gets the default overlays.
+// calls chartHtml(candles, barSec, undefined, undefined, {panes:true}) for the
+// full research view: crosshair OHLCV legend + synced RSI & MACD panes (using
+// the per-candle indicator fields /history already computes server-side).
 export function chartHtml(
   candles: Candle[],
   barSec: number,
   maSet: number[] = DEFAULT_MA,
   drawing?: PatternDrawing | null,
+  opts?: { panes?: boolean },
 ): string {
   const data = JSON.stringify(candles);
   const mas = JSON.stringify(MA_CONFIG.filter((m) => maSet.includes(m.period)));
   const draw = JSON.stringify(drawing || null);
+  const wantPanes = !!opts?.panes;
   const theme = getPalette();
   return `<!DOCTYPE html><html><head>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-  <style>html,body,#c{height:100%;margin:0;background:${theme.bg}}
+  <style>html,body{height:100%;margin:0;background:${theme.bg}}
+  #wrap{display:flex;flex-direction:column;height:100%}
+  #c{flex:13;min-height:0}
+  #rsi,#macd{display:none;min-height:0;border-top:1px solid ${theme.border}}
+  #lg{position:absolute;top:4px;left:8px;z-index:5;color:${theme.muted2};font:11px monospace;pointer-events:none;white-space:nowrap}
+  .pl{position:absolute;left:8px;z-index:5;color:${theme.muted2};font:9px monospace;letter-spacing:1px;pointer-events:none}
   #msg{color:#5e6776;font:12px monospace;position:absolute;top:50%;left:0;right:0;text-align:center;transform:translateY(-50%)}</style>
   </head><body>
   <div id="msg">Loading chart library…</div>
-  <div id="c"></div>
+  <div id="lg"></div>
+  <div id="wrap"><div id="c"></div><div id="rsi"></div><div id="macd"></div></div>
   ${LW_SCRIPT}
   <script>
   (function(){
     var msg=document.getElementById('msg');
     if(typeof LightweightCharts==='undefined'){msg.textContent='⚠ Chart library unavailable (no network).';return;}
-    var LW=LightweightCharts, candles=${data}, barSec=${barSec};
+    var LW=LightweightCharts, candles=${data}, barSec=${barSec}, wantPanes=${wantPanes};
     if(!candles.length){msg.textContent='No data for this symbol.';return;}
     msg.style.display='none';
-    var el=document.getElementById('c');
-    var chart=LW.createChart(el,{
+    var baseOpts={
       autoSize:true,
       layout:{background:{color:'${theme.bg}'},textColor:'${theme.muted2}',fontFamily:'monospace'},
       grid:{vertLines:{color:'${theme.border}'},horzLines:{color:'${theme.border}'}},
       rightPriceScale:{borderColor:'${theme.border2}',minimumWidth:60},
       timeScale:{borderColor:'${theme.border2}',timeVisible:barSec<86400,secondsVisible:false},
       crosshair:{mode:LW.CrosshairMode.Normal}
-    });
+    };
+    var el=document.getElementById('c');
+    var chart=LW.createChart(el,baseOpts);
     var cs=chart.addCandlestickSeries({upColor:'${UP}',downColor:'${DOWN}',borderUpColor:'${UP}',borderDownColor:'${DOWN}',wickUpColor:'${UP}',wickDownColor:'${DOWN}'});
     cs.setData(candles.map(function(c){return{time:c.t,open:c.o,high:c.h,low:c.l,close:c.c};}));
     // Volume panel — green/red histogram pinned to the bottom 20% of the pane.
@@ -139,7 +150,65 @@ export function chartHtml(
         ]);
       }
     }
-    chart.timeScale().fitContent();
+    // ── Crosshair legend: O H L C · chg% · volume for the hovered/last bar ──
+    var lg=document.getElementById('lg');
+    var byTime={};
+    candles.forEach(function(c){byTime[c.t]=c;});
+    function fmtV(v){if(v==null)return'—';if(v>=1e7)return (v/1e7).toFixed(1)+'Cr';if(v>=1e5)return (v/1e5).toFixed(1)+'L';if(v>=1e3)return (v/1e3).toFixed(1)+'K';return String(v);}
+    function setLegend(c,prev){
+      if(!c){lg.textContent='';return;}
+      var chg=prev&&prev.c?((c.c-prev.c)/prev.c*100):null;
+      var col=(chg==null?'${theme.muted2}':chg>=0?'${UP}':'${DOWN}');
+      lg.innerHTML='O '+c.o+'  H '+c.h+'  L '+c.l+'  C <b style="color:'+col+'">'+c.c+
+        (chg==null?'':' ('+(chg>=0?'+':'')+chg.toFixed(2)+'%)')+'</b>'+
+        (c.v?'  · V '+fmtV(c.v):'')+
+        (c.rsi!=null?'  · RSI '+Math.round(c.rsi):'');
+    }
+    setLegend(candles[candles.length-1],candles[candles.length-2]);
+    chart.subscribeCrosshairMove(function(p){
+      var c=p&&p.time!=null?byTime[p.time]:null;
+      if(!c){setLegend(candles[candles.length-1],candles[candles.length-2]);return;}
+      var i=candles.indexOf(c);
+      setLegend(c,i>0?candles[i-1]:null);
+    });
+
+    // ── RSI + MACD panes (server-computed fields), time-synced to the price ──
+    var haveInd=candles.some(function(c){return c.rsi!=null;});
+    var charts=[chart];
+    if(wantPanes&&haveInd){
+      var rsiEl=document.getElementById('rsi'),macdEl=document.getElementById('macd');
+      rsiEl.style.display='block';rsiEl.style.flex='4';
+      macdEl.style.display='block';macdEl.style.flex='5';
+      var rsiChart=LW.createChart(rsiEl,baseOpts);
+      var rs=rsiChart.addLineSeries({color:'#c9a45b',lineWidth:2,priceLineVisible:false,lastValueVisible:true});
+      rs.setData(candles.filter(function(c){return c.rsi!=null;}).map(function(c){return{time:c.t,value:+c.rsi.toFixed(1)};}));
+      rs.createPriceLine({price:70,color:'${DOWN}',lineWidth:1,lineStyle:LW.LineStyle.Dotted,axisLabelVisible:false,title:''});
+      rs.createPriceLine({price:30,color:'${UP}',lineWidth:1,lineStyle:LW.LineStyle.Dotted,axisLabelVisible:false,title:''});
+      var rl=document.createElement('div');rl.className='pl';rl.textContent='RSI 14';
+      rl.style.top=(el.offsetHeight+6)+'px';document.body.appendChild(rl);
+      var macdChart=LW.createChart(macdEl,baseOpts);
+      var mh=macdChart.addHistogramSeries({priceLineVisible:false,lastValueVisible:false});
+      mh.setData(candles.filter(function(c){return c.macd_hist!=null;}).map(function(c){
+        return{time:c.t,value:+c.macd_hist.toFixed(3),color:c.macd_hist>=0?'rgba(16,185,129,0.55)':'rgba(244,63,94,0.55)'};}));
+      var ml=macdChart.addLineSeries({color:'#5b93c7',lineWidth:1,priceLineVisible:false,lastValueVisible:false});
+      ml.setData(candles.filter(function(c){return c.macd!=null;}).map(function(c){return{time:c.t,value:+c.macd.toFixed(3)};}));
+      var sl=macdChart.addLineSeries({color:'#b48ead',lineWidth:1,priceLineVisible:false,lastValueVisible:false});
+      sl.setData(candles.filter(function(c){return c.macd_signal!=null;}).map(function(c){return{time:c.t,value:+c.macd_signal.toFixed(3)};}));
+      var ml2=document.createElement('div');ml2.className='pl';ml2.textContent='MACD 12·26·9';
+      ml2.style.top=(el.offsetHeight+rsiEl.offsetHeight+6)+'px';document.body.appendChild(ml2);
+      charts.push(rsiChart,macdChart);
+      // Keep every pane on the same visible range, whichever pane is dragged.
+      var syncing=false;
+      charts.forEach(function(src){
+        src.timeScale().subscribeVisibleLogicalRangeChange(function(r){
+          if(syncing||!r)return;
+          syncing=true;
+          charts.forEach(function(dst){if(dst!==src)dst.timeScale().setVisibleLogicalRange(r);});
+          syncing=false;
+        });
+      });
+    }
+    charts.forEach(function(ch){ch.timeScale().fitContent();});
   })();
   </script>
   </body></html>`;

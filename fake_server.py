@@ -218,15 +218,25 @@ class H(BaseHTTPRequestHandler):
 
     def _history(self):
         import math
+        from urllib.parse import urlparse, parse_qs
+        q = parse_qs(urlparse(self.path).query)
+        interval = (q.get("interval", ["1d"])[0])
+        bar = {"5m": 300, "15m": 900, "1h": 3600, "4h": 14400,
+               "1d": 86400, "1wk": 604800, "1mo": 2592000}.get(interval, 86400)
         candles = []
         px = 500.0
         for i in range(126):
             px *= 1 + 0.004 * math.sin(i / 9.0) + 0.0012
-            candles.append({"t": 1735689600 + i * 86400, "o": round(px * 0.995, 2),
+            candles.append({"t": 1735689600 + i * bar, "o": round(px * 0.995, 2),
                             "h": round(px * 1.01, 2), "l": round(px * 0.985, 2),
-                            "c": round(px, 2), "v": 100000 + i * 900})
-        self._json({"symbol": "STUB", "period": "6mo", "interval": "1d",
-                    "count": len(candles), "candles": candles})
+                            "c": round(px, 2), "v": 100000 + i * 900,
+                            # synthetic indicator fields, same keys as /history
+                            "rsi": round(50 + 25 * math.sin(i / 7.0), 1),
+                            "macd": round(2 * math.sin(i / 11.0), 3),
+                            "macd_signal": round(2 * math.sin((i - 2) / 11.0), 3),
+                            "macd_hist": round(0.8 * math.sin(i / 5.0), 3)})
+        self._json({"symbol": "STUB", "period": q.get("period", ["6mo"])[0],
+                    "interval": interval, "count": len(candles), "candles": candles})
 
     def _json(self, payload):
         self.send_response(200)
