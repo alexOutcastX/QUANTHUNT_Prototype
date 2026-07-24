@@ -125,9 +125,29 @@ type CardActions = {
   watched: boolean;
 };
 
-function CurrentCard({ p, actions }: { p: ChartPattern; actions: CardActions }) {
+// The "Explain pattern" header (title + bias chip + close) — rendered OUTSIDE
+// the scrolling body so it stays fixed while the explanation scrolls.
+function ExplainHeader({ p, onClose }: { p: ChartPattern; onClose: () => void }) {
   const c = biasColor(p.bias);
-  const [explain, setExplain] = useState(false);
+  return (
+    <View style={styles.exHead}>
+      <View style={{ flex: 1 }}>
+        <Text style={styles.exTitle}>{p.label}</Text>
+        <View style={[styles.biasChip, { borderColor: c, alignSelf: 'flex-start', marginHorizontal: 0, marginTop: 4 }]}>
+          <Text style={[styles.biasTxt, { color: c }]}>{p.bias.toUpperCase()} · {p.category} · {p.status}</Text>
+        </View>
+      </View>
+      <TouchableOpacity onPress={onClose} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+        <Text style={styles.exX}>✕</Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
+
+// The full explanation body (scrollable part) — shared by the mobile sheet and
+// the desktop side panel.
+function ExplainBody({ p }: { p: ChartPattern }) {
+  const c = biasColor(p.bias);
   const desc = describePattern(p.label);
   const bearish = p.bias === 'bearish';
   // Approximate resolution window: a measured move typically plays out over
@@ -153,6 +173,71 @@ function CurrentCard({ p, actions }: { p: ChartPattern; actions: CardActions }) 
         <Text style={styles.zoneVal}>{band(v)}</Text>
       </View>
     );
+  return (
+    <>
+      <Text style={styles.exSecTitle}>WHAT IT IS</Text>
+      <Text style={styles.exBody}>{desc.what}</Text>
+      <Text style={[styles.exBody, { marginTop: 6 }]}>{desc.implies}</Text>
+
+      <Text style={styles.exSecTitle}>PROBABILITY</Text>
+      <Text style={styles.exBody}>
+        <Text style={{ color: theme.accent, fontWeight: '800' }}>{p.confidence}% shape match</Text> — how cleanly the
+        price action fits an ideal {p.label.toLowerCase()}. Higher means a more textbook, reliable formation.
+      </Text>
+      <Text style={[styles.exBody, { marginTop: 6 }]}>
+        <Text style={{ color: c, fontWeight: '800' }}>{p.continuation}% follow-through</Text> — the indicative
+        historical odds the measured move plays out once the pattern confirms (a close beyond the key level).
+        {p.expansion_pct ? ` The textbook target is a ${signPct(p.expansion_pct)} move from here.` : ''}
+      </Text>
+
+      <Text style={styles.exSecTitle}>TIMING</Text>
+      <Text style={styles.exBody}>
+        Formed from <Text style={styles.exStrong}>{fmtDate(p.start_ts)}</Text>
+        {p.active
+          ? <> and is <Text style={{ color: c, fontWeight: '700' }}>still in play</Text> as of the latest bar.</>
+          : <> to <Text style={styles.exStrong}>{fmtDate(p.end_ts)}</Text>.</>}
+      </Text>
+      {p.active ? (
+        <Text style={[styles.exBody, { marginTop: 6 }]}>
+          A measured move typically resolves over roughly the pattern's own span, so this one would be expected to
+          play out by approximately <Text style={styles.exStrong}>{fmtDate(projTs)}</Text> — an estimate, not a
+          deadline. It confirms only on a decisive close beyond the key level; until then it can still fail.
+        </Text>
+      ) : null}
+
+      <Text style={styles.exSecTitle}>SUPPORT & RESISTANCE ZONES</Text>
+      {bearish ? (
+        <>
+          {zoneRow('Resistance / key level', 'Neckline the price must hold below — a break above invalidates the setup', p.level, true)}
+          {zoneRow('Support target', 'Measured-move objective on a confirmed breakdown', p.target, false)}
+        </>
+      ) : (
+        <>
+          {zoneRow('Resistance target', 'Measured-move objective on a confirmed breakout', p.target, true)}
+          {zoneRow('Support / key level', 'Breakout base the price must hold above — a break below invalidates the setup', p.level, false)}
+        </>
+      )}
+      {p.level == null && p.target == null ? (
+        <Text style={styles.exBody}>Level data isn't available for this formation yet.</Text>
+      ) : null}
+
+      <Text style={styles.exDisc}>
+        Chart patterns are probabilistic, not guarantees — confirmation, volume and broader context matter.
+        Educational only, not investment advice.
+      </Text>
+    </>
+  );
+}
+
+function CurrentCard({ p, actions, onExplain }: {
+  p: ChartPattern;
+  actions: CardActions;
+  // Desktop passes this to open the side-by-side explain panel; without it
+  // (mobile) the card opens its own sheet with a fixed header.
+  onExplain?: () => void;
+}) {
+  const c = biasColor(p.bias);
+  const [explain, setExplain] = useState(false);
   const Stat = ({ label, value, color }: { label: string; value: string; color?: string }) => (
     <View style={styles.cStat}>
       <Text style={styles.cStatLabel}>{label}</Text>
@@ -203,7 +288,11 @@ function CurrentCard({ p, actions }: { p: ChartPattern; actions: CardActions }) 
       </View>
 
       <View style={styles.actionsRow}>
-        <TouchableOpacity style={[styles.actBtn, styles.explainBtn]} onPress={() => setExplain(true)} activeOpacity={0.75}>
+        <TouchableOpacity
+          style={[styles.actBtn, styles.explainBtn]}
+          onPress={() => (onExplain ? onExplain() : setExplain(true))}
+          activeOpacity={0.75}
+        >
           <Text style={[styles.actTxt, { color: c }]}>ⓘ Explain pattern</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.actBtn} onPress={actions.onChart} activeOpacity={0.75}>
@@ -226,71 +315,12 @@ function CurrentCard({ p, actions }: { p: ChartPattern; actions: CardActions }) 
       </View>
     </Card>
 
-    {explain ? (
+    {explain && !onExplain ? (
       <Sheet onClose={() => setExplain(false)} maxHeight="88%">
+        {/* Header stays fixed; only the explanation scrolls. */}
+        <ExplainHeader p={p} onClose={() => setExplain(false)} />
         <ScrollView showsVerticalScrollIndicator={false}>
-          <View style={styles.exHead}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.exTitle}>{p.label}</Text>
-              <View style={[styles.biasChip, { borderColor: c, alignSelf: 'flex-start', marginHorizontal: 0, marginTop: 4 }]}>
-                <Text style={[styles.biasTxt, { color: c }]}>{p.bias.toUpperCase()} · {p.category} · {p.status}</Text>
-              </View>
-            </View>
-            <TouchableOpacity onPress={() => setExplain(false)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-              <Text style={styles.exX}>✕</Text>
-            </TouchableOpacity>
-          </View>
-
-          <Text style={styles.exSecTitle}>WHAT IT IS</Text>
-          <Text style={styles.exBody}>{desc.what}</Text>
-          <Text style={[styles.exBody, { marginTop: 6 }]}>{desc.implies}</Text>
-
-          <Text style={styles.exSecTitle}>PROBABILITY</Text>
-          <Text style={styles.exBody}>
-            <Text style={{ color: theme.accent, fontWeight: '800' }}>{p.confidence}% shape match</Text> — how cleanly the
-            price action fits an ideal {p.label.toLowerCase()}. Higher means a more textbook, reliable formation.
-          </Text>
-          <Text style={[styles.exBody, { marginTop: 6 }]}>
-            <Text style={{ color: c, fontWeight: '800' }}>{p.continuation}% follow-through</Text> — the indicative
-            historical odds the measured move plays out once the pattern confirms (a close beyond the key level).
-            {p.expansion_pct ? ` The textbook target is a ${signPct(p.expansion_pct)} move from here.` : ''}
-          </Text>
-
-          <Text style={styles.exSecTitle}>TIMING</Text>
-          <Text style={styles.exBody}>
-            Formed from <Text style={styles.exStrong}>{fmtDate(p.start_ts)}</Text>
-            {p.active
-              ? <> and is <Text style={{ color: c, fontWeight: '700' }}>still in play</Text> as of the latest bar.</>
-              : <> to <Text style={styles.exStrong}>{fmtDate(p.end_ts)}</Text>.</>}
-          </Text>
-          {p.active ? (
-            <Text style={[styles.exBody, { marginTop: 6 }]}>
-              A measured move typically resolves over roughly the pattern's own span, so this one would be expected to
-              play out by approximately <Text style={styles.exStrong}>{fmtDate(projTs)}</Text> — an estimate, not a
-              deadline. It confirms only on a decisive close beyond the key level; until then it can still fail.
-            </Text>
-          ) : null}
-
-          <Text style={styles.exSecTitle}>SUPPORT & RESISTANCE ZONES</Text>
-          {bearish ? (
-            <>
-              {zoneRow('Resistance / key level', 'Neckline the price must hold below — a break above invalidates the setup', p.level, true)}
-              {zoneRow('Support target', 'Measured-move objective on a confirmed breakdown', p.target, false)}
-            </>
-          ) : (
-            <>
-              {zoneRow('Resistance target', 'Measured-move objective on a confirmed breakout', p.target, true)}
-              {zoneRow('Support / key level', 'Breakout base the price must hold above — a break below invalidates the setup', p.level, false)}
-            </>
-          )}
-          {p.level == null && p.target == null ? (
-            <Text style={styles.exBody}>Level data isn't available for this formation yet.</Text>
-          ) : null}
-
-          <Text style={styles.exDisc}>
-            Chart patterns are probabilistic, not guarantees — confirmation, volume and broader context matter.
-            Educational only, not investment advice.
-          </Text>
+          <ExplainBody p={p} />
         </ScrollView>
       </Sheet>
     ) : null}
@@ -1090,6 +1120,9 @@ export default function PatternScreen() {
   const [error, setError] = useState('');
   const [data, setData] = useState<ChartPatternsResp | null>(null);
   const [chartPat, setChartPat] = useState<ChartPattern | null>(null);
+  // Desktop: the Explain panel opens beside the Current-Pattern card (in the
+  // previously blank space) instead of as an overlay sheet.
+  const [explainOpen, setExplainOpen] = useState(false);
   const [recent, setRecent] = useState<string[]>([]);
   const [detail, setDetail] = useState<Row | null>(null);
   const [watch, setWatch] = useState<string[]>([]);
@@ -1143,6 +1176,7 @@ export default function PatternScreen() {
           // Draw the current (most recent) pattern on the chart by default;
           // any row's ▤ toggle can swap or clear the drawing.
           setChartPat(r.current || null);
+          setExplainOpen(false);
         } else setError(r?.error || `No price history for ${sym}`);
       })
       .catch((e) => setError(e instanceof Error ? e.message : 'Pattern scan failed'))
@@ -1327,7 +1361,18 @@ export default function PatternScreen() {
 
               {isDesktop && cur ? (
                 <View style={styles.splitSide}>
-                  <CurrentCard p={cur} actions={actions} />
+                  <CurrentCard p={cur} actions={actions} onExplain={() => setExplainOpen((v) => !v)} />
+                </View>
+              ) : null}
+
+              {/* Desktop Explain panel: fills the blank space right of the
+                  card. Title + close stay fixed; the body scrolls. */}
+              {isDesktop && cur && explainOpen ? (
+                <View style={styles.splitExplain}>
+                  <ExplainHeader p={cur} onClose={() => setExplainOpen(false)} />
+                  <ScrollView style={styles.splitExplainBody} showsVerticalScrollIndicator>
+                    <ExplainBody p={cur} />
+                  </ScrollView>
                 </View>
               ) : null}
             </View>
@@ -1410,8 +1455,21 @@ const styles = StyleSheet.create({
   chart: { flex: 1 },
   // desktop two-column split (table | current-pattern card)
   split: { flexDirection: 'row', gap: theme.sp.lg, alignItems: 'flex-start' },
-  splitMain: { flex: 1, minWidth: 0 },
+  // The table hugs its content (shrinking into its own horizontal scroll when
+  // tight) so the Current-Pattern card sits right beside it — the blank space
+  // to the right hosts the Explain panel.
+  splitMain: { flexGrow: 0, flexShrink: 1, minWidth: 0 },
   splitSide: { width: 360 },
+  splitExplain: {
+    flex: 1,
+    minWidth: 280,
+    backgroundColor: theme.surface,
+    borderColor: theme.border2,
+    borderWidth: 1,
+    borderRadius: theme.radius.md,
+    padding: theme.sp.lg,
+  },
+  splitExplainBody: { maxHeight: 520 },
   // current-pattern detail card
   curCard: { borderWidth: 1, gap: theme.sp.sm },
   curHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
