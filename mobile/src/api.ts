@@ -1091,7 +1091,15 @@ export type OtpVerifyResp = { user?: { email: string }; created?: boolean; error
 export type UserDataResp = { v: unknown; ts: number };
 export type UserPutResp = { stored: boolean; ts?: number; server_newer?: boolean; v?: unknown };
 
+// ── membership gate (username/password + plan) ──
+export type Member = { username: string; uname: string; plan: string; features: string[] };
+export type MemberResp = { member: Member | null; error?: string; detail?: string };
+
 export const api = {
+  memberLogin: (username: string, password: string) =>
+    postJson<MemberResp>('/auth/member/login', { username, password }),
+  memberMe: () => getJson<MemberResp>('/auth/member'),
+  memberLogout: () => postJson<MemberResp>('/auth/member/logout', {}),
   authMe: () => getJson<MeResp>('/auth/me'),
   otpRequest: (email: string) => postJson<OtpRequestResp>('/auth/otp/request', { email }),
   otpVerify: (email: string, code: string, consent: boolean) =>
