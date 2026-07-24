@@ -1,9 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { IndexQuote, ScanRow, SectorLevel, api } from '../api';
+import { Modal, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { IndexQuote, ScanRow, SectorLevel, SectorMember, api } from '../api';
 import StockDetail from '../components/StockDetail';
 import { Row } from '../screener';
-import { EmptyState, Loading, ScreenTitle, Sheet } from '../ui';
+import { EmptyState, Loading, ScreenTitle } from '../ui';
 import { navigate } from '../navIntent';
 import { shortSector } from '../sectors';
 import { theme } from '../theme';
@@ -256,6 +256,9 @@ const SCREEN_ROUTES: { sub: string; label: string; icon: string; hint: string }[
   { sub: 'mb', label: 'Multibagger', icon: '◈', hint: 'Multibagger candidates in this sector' },
 ];
 
+const fmtPx = (v?: number | null) =>
+  v == null || !isFinite(v) ? '—' : '₹' + v.toLocaleString('en-IN', { maximumFractionDigits: 2 });
+
 function SectorMap() {
   const [level, setLevel] = useState<SectorLevel>('macro');
   const [rows, setRows] = useState<SecRow[]>(sectorCache.macro?.rows || []);
@@ -269,7 +272,24 @@ function SectorMap() {
   const [err, setErr] = useState('');
   const [gridW, setGridW] = useState(0);
   const [pick, setPick] = useState<SecRow | null>(null);
+  // The picked sector's constituent stocks (most-traded first) + a company
+  // profile popup for a tapped row.
+  const [members, setMembers] = useState<SectorMember[] | null>(null);
+  const [memErr, setMemErr] = useState('');
+  const [detail, setDetail] = useState<Row | null>(null);
   const token = useRef(0);
+
+  useEffect(() => {
+    if (!pick) return;
+    let cancelled = false;
+    setMembers(null);
+    setMemErr('');
+    api.sectorMembers(pick.sector, level)
+      .then((r) => { if (!cancelled) setMembers(r.items || []); })
+      .catch(() => { if (!cancelled) { setMembers([]); setMemErr('Stock list unavailable — the universe may still be warming.'); } });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pick?.sector, level]);
 
   useEffect(() => {
     const my = ++token.current;
@@ -414,36 +434,68 @@ function SectorMap() {
         ) : null}
       </ScrollView>
 
+      {/* Centered sector popup: the constituent stock list (most-traded
+          first, tap a row for its company profile) with the screen/reco
+          actions as a fixed chip row under the header. */}
       {pick ? (
-        <Sheet onClose={() => setPick(null)} maxHeight="70%">
-          <View style={styles.pickHead}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.pickTitle}>{pick.sector}</Text>
-              <Text style={styles.pickSub}>
-                {pick.count} stocks · avg {pct(pick.chg)} today
-                {level !== 'macro' && pick.parent ? ` · in ${pick.parent}` : ''}
-              </Text>
+        <Modal visible animationType="fade" transparent onRequestClose={() => setPick(null)}>
+          <Pressable style={styles.secBackdrop} onPress={() => setPick(null)} />
+          <View style={styles.secModal}>
+            <View style={styles.pickHead}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.pickTitle}>{pick.sector}</Text>
+                <Text style={styles.pickSub}>
+                  {pick.count} stocks · avg {pct(pick.chg)} today
+                  {level !== 'macro' && pick.parent ? ` · in ${pick.parent}` : ''}
+                </Text>
+              </View>
+              <TouchableOpacity onPress={() => setPick(null)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                <Text style={styles.pickX}>✕</Text>
+              </TouchableOpacity>
             </View>
-            <TouchableOpacity onPress={() => setPick(null)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-              <Text style={styles.pickX}>✕</Text>
-            </TouchableOpacity>
+            <View style={styles.pickChips}>
+              {SCREEN_ROUTES.map((s) => (
+                <TouchableOpacity key={s.sub} style={styles.pickChip} activeOpacity={0.8} onPress={() => route(s.sub)}>
+                  <Text style={styles.pickChipTxt}>{s.icon} {s.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <ScrollView style={styles.memList} showsVerticalScrollIndicator>
+              {members === null ? (
+                <Loading label={`Loading ${pick.sector} stocks…`} />
+              ) : members.length ? (
+                members.map((m, i) => (
+                  <TouchableOpacity
+                    key={m.symbol}
+                    style={[styles.memRow, i === 0 && { borderTopWidth: 0 }]}
+                    onPress={() => setDetail({ sym: m.symbol, price: m.price ?? undefined, chg: m.chg ?? undefined } as Row)}
+                    activeOpacity={0.75}
+                  >
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <Text style={styles.memSym}>{m.symbol}{m.exchange === 'BSE' ? <Text style={styles.memExch}>  BSE</Text> : null}</Text>
+                      {m.name ? <Text style={styles.memName} numberOfLines={1}>{m.name}</Text> : null}
+                    </View>
+                    <View style={{ alignItems: 'flex-end' }}>
+                      <Text style={styles.memPx}>{fmtPx(m.price)}</Text>
+                      <Text style={[styles.memChg, { color: m.chg == null ? theme.muted : m.chg >= 0 ? theme.green : theme.red }]}>
+                        {pct(m.chg)}
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                ))
+              ) : (
+                <EmptyState icon="◇" title="No stocks listed" hint={memErr || 'This bucket has no mapped constituents right now.'} />
+              )}
+            </ScrollView>
+            <Text style={styles.pickDisc}>
+              Most-traded first · tap a stock for its company profile, or open a screener above with the{' '}
+              {pick.parent || pick.sector} filter applied. Educational only — not investment advice.
+            </Text>
           </View>
-          <Text style={styles.pickLabel}>
-            {level === 'macro' ? 'SCREEN THIS SECTOR VIA' : `SCREEN ${(pick.parent || pick.sector).toUpperCase()} VIA`}
-          </Text>
-          {SCREEN_ROUTES.map((s) => (
-            <TouchableOpacity key={s.sub} style={styles.pickAct} activeOpacity={0.8} onPress={() => route(s.sub)}>
-              <Text style={styles.pickActTxt}>{s.icon}  {s.label}</Text>
-              <Text style={styles.pickActSub}>{s.hint}</Text>
-            </TouchableOpacity>
-          ))}
-          <Text style={styles.pickDisc}>
-            Opens the chosen screener with the {pick.parent || pick.sector} sector filter applied and its scan
-            auto-running.{level !== 'macro' ? ` Screeners filter by the 22 macro sectors, so "${pick.sector}" screens under ${pick.parent || pick.sector}.` : ''}
-            {' '}Educational only — not investment advice.
-          </Text>
-        </Sheet>
+        </Modal>
       ) : null}
+
+      {detail ? <StockDetail row={detail} onClose={() => setDetail(null)} /> : null}
     </View>
   );
 }
@@ -738,6 +790,45 @@ const styles = StyleSheet.create({
   secTileChg: { fontSize: theme.fs.lg, fontWeight: '800', fontFamily: theme.mono },
   secTileMeta: { fontSize: theme.fs.xs + 1, fontFamily: theme.mono, opacity: 0.9 },
   // sector → screen picker
+  // centered sector popup + constituent list
+  secBackdrop: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.65)' },
+  secModal: {
+    position: 'absolute',
+    top: '8%',
+    bottom: '8%',
+    alignSelf: 'center',
+    width: '94%',
+    maxWidth: 560,
+    backgroundColor: theme.surface,
+    borderColor: theme.border2,
+    borderWidth: 1,
+    borderRadius: theme.radius.lg,
+    padding: theme.sp.lg,
+  },
+  pickChips: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.sp.sm, marginBottom: theme.sp.sm },
+  pickChip: {
+    backgroundColor: theme.surface2,
+    borderColor: theme.border2,
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  pickChipTxt: { color: theme.text, fontSize: theme.fs.sm, fontWeight: '700' },
+  memList: { flex: 1, borderTopColor: theme.border, borderTopWidth: 1 },
+  memRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.sp.md,
+    paddingVertical: theme.sp.md - 3,
+    borderTopColor: theme.border,
+    borderTopWidth: 1,
+  },
+  memSym: { color: theme.text, fontFamily: theme.mono, fontSize: theme.fs.sm + 1, fontWeight: '700' },
+  memExch: { color: theme.muted, fontSize: theme.fs.xs, fontFamily: theme.mono },
+  memName: { color: theme.muted, fontSize: theme.fs.xs + 1, marginTop: 1 },
+  memPx: { color: theme.text, fontFamily: theme.mono, fontSize: theme.fs.sm + 1 },
+  memChg: { fontFamily: theme.mono, fontSize: theme.fs.xs + 1, marginTop: 1 },
   pickHead: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: theme.sp.sm },
   pickTitle: { color: theme.text, fontSize: theme.fs.lg, fontWeight: '800' },
   pickSub: { color: theme.muted, fontSize: theme.fs.sm, marginTop: 2 },

@@ -2551,6 +2551,39 @@ def multibagger_screen():
     return jsonify(mbs.snapshot())
 
 
+@app.route("/sectors/members")
+def sector_members():
+    """Constituent stocks of one heatmap bucket (symbol, name, price, day chg),
+    most-traded first — feeds the sector popup's stock list. Same universe +
+    classification as /sectors, so the count matches the tile."""
+    _ensure_sector_classification()
+    sector = (request.args.get("sector") or "").strip()
+    if not sector:
+        return jsonify({"error": "sector required"}), 400
+    level = (request.args.get("level") or "macro").strip().lower()
+    if level not in _sectors.LEVELS:
+        level = "macro"
+    universe, warming = get_universe_nonblocking()
+    want = sector.upper()
+    items, parent = [], ""
+    for it in (universe or []):
+        sym = it.get("symbol")
+        if not sym:
+            continue
+        label, macro = _sectors.label_at(sym, level, it.get("sector"))
+        if not label or label.upper() != want:
+            continue
+        parent = macro
+        items.append({"symbol": sym, "name": it.get("name") or "",
+                      "exchange": it.get("exchange") or "NSE",
+                      "price": it.get("price"), "chg": it.get("chg"),
+                      "turnover": it.get("turnover")})
+    items.sort(key=lambda x: -(x.get("turnover") or 0))
+    return jsonify(_nan_safe({"sector": sector, "level": level, "parent": parent,
+                              "count": len(items), "warming": warming,
+                              "items": items[:400]}))
+
+
 @app.route("/sectors")
 def sectors_aggregate():
     """Full NSE+BSE sectoral heatmap aggregate over the WHOLE listed universe.
