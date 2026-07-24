@@ -382,23 +382,23 @@ function SectorMap() {
 
   return (
     <View style={{ flex: 1 }}>
-      <ScrollView contentContainerStyle={styles.scrollPad}>
-        {loading ? <Loading label="Building the NSE + BSE sector map…" /> : null}
-        {!loading && err ? <EmptyState icon="⚠" title="Couldn't build sector map" hint={err} /> : null}
+      {/* Fixed header: level chips + counts + how-to stay put while the tile
+          grid scrolls underneath (report: keep these out of the scroll). */}
+      <View style={styles.mapHead}>
+        <View style={styles.levelRow}>
+          {LEVELS.map((l) => (
+            <TouchableOpacity
+              key={l.key}
+              style={[styles.levelChip, level === l.key && styles.levelChipOn]}
+              onPress={() => setLevel(l.key)}
+              activeOpacity={0.8}
+            >
+              <Text style={[styles.levelTxt, level === l.key && styles.levelTxtOn]}>{l.label}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
         {!loading && !err ? (
           <>
-            <View style={styles.levelRow}>
-              {LEVELS.map((l) => (
-                <TouchableOpacity
-                  key={l.key}
-                  style={[styles.levelChip, level === l.key && styles.levelChipOn]}
-                  onPress={() => setLevel(l.key)}
-                  activeOpacity={0.8}
-                >
-                  <Text style={[styles.levelTxt, level === l.key && styles.levelTxtOn]}>{l.label}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
             <Text style={styles.drillNote}>
               Full NSE + BSE · {meta.mapped.toLocaleString('en-IN')} stocks across{' '}
               {sectorRows.length} {level === 'macro' ? 'sectors' : level === 'industry' ? 'industries' : 'sub-industries'} ·
@@ -409,6 +409,14 @@ function SectorMap() {
                 ? 'Tap a sector to screen it — Recommendations, Momentum or Multibagger.'
                 : 'Tap any tile to screen its parent sector — Recommendations, Momentum or Multibagger.'}
             </Text>
+          </>
+        ) : null}
+      </View>
+      <ScrollView contentContainerStyle={styles.scrollPad}>
+        {loading ? <Loading label="Building the NSE + BSE sector map…" /> : null}
+        {!loading && err ? <EmptyState icon="⚠" title="Couldn't build sector map" hint={err} /> : null}
+        {!loading && !err ? (
+          <>
             <View style={styles.grid} onLayout={(e) => setGridW(e.nativeEvent.layout.width)}>
               {gridW && sectorRows.length
                 ? sectorRows.map((r) => (
@@ -444,7 +452,7 @@ function SectorMap() {
           <View style={styles.secModal}>
             <View style={styles.pickHead}>
               <View style={{ flex: 1 }}>
-                <Text style={styles.pickTitle}>{pick.sector}</Text>
+                <Text style={styles.pickTitle}>{level === 'macro' ? shortSector(pick.sector) : pick.sector}</Text>
                 <Text style={styles.pickSub}>
                   {pick.count} stocks · avg {pct(pick.chg)} today
                   {level !== 'macro' && pick.parent ? ` · in ${pick.parent}` : ''}
@@ -472,6 +480,7 @@ function SectorMap() {
                     onPress={() => setDetail({ sym: m.symbol, price: m.price ?? undefined, chg: m.chg ?? undefined } as Row)}
                     activeOpacity={0.75}
                   >
+                    <Text style={styles.memSno}>{i + 1}</Text>
                     <Text style={styles.memSym}>{m.symbol}{m.exchange === 'BSE' ? <Text style={styles.memExch}> BSE</Text> : null}</Text>
                     <Text style={styles.memName} numberOfLines={1}>{m.name || ''}</Text>
                     <Text style={styles.memPx}>{fmtPx(m.price)}</Text>
@@ -764,6 +773,8 @@ const styles = StyleSheet.create({
   legendSwatch: { width: 22, height: 12, borderRadius: 2 },
   // sectoral heatmap
   levelRow: { flexDirection: 'row', gap: theme.sp.sm, alignSelf: 'flex-start' },
+  mapHead: { paddingHorizontal: theme.sp.lg, paddingTop: theme.sp.sm, paddingBottom: theme.sp.xs },
+  memSno: { color: theme.muted, fontFamily: theme.mono, fontSize: theme.fs.xs + 1, width: 26, textAlign: 'right' },
   levelChip: {
     borderColor: theme.border2,
     borderWidth: 1,
