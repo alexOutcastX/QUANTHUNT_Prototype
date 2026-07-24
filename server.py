@@ -699,6 +699,22 @@ def _immutable(response):
     response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
     return response
 
+
+# Hot, frequently re-requested market-data endpoints: a short browser-side
+# cache (delayed data anyway) makes tab hops and re-mounts feel instant while
+# stale-while-revalidate refreshes in the background.
+_MICRO_CACHE_PREFIXES = ("/indices", "/movers", "/news", "/sectors", "/ltp",
+                         "/index", "/gsec", "/ipos", "/holidays")
+
+
+@app.after_request
+def _micro_cache(response):
+    if (request.method == "GET" and response.status_code == 200
+            and not response.headers.get("Cache-Control")
+            and request.path.startswith(_MICRO_CACHE_PREFIXES)):
+        response.headers["Cache-Control"] = "public, max-age=20, stale-while-revalidate=60"
+    return response
+
 # Exported React Native web build (Expo). When present it becomes the live UI;
 # the legacy single-file HTML stays available at /legacy and as a fallback.
 WEB_DIR = os.path.join(_BASE_DIR, "mobile", "dist")

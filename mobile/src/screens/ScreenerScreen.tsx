@@ -21,6 +21,7 @@ import {
   ExprOp,
   ExprRow,
   FILTER_DEFS,
+  FILTER_SYNONYMS,
   Row,
   Signal,
   TE_GROUPS,
@@ -257,6 +258,8 @@ export function SimpleColumnMenu({
   );
 }
 
+const CFG_MIN_KEY = 'taureye.screener.cfgmin.v1';
+
 export function loadNames(): Promise<Record<string, { name: string; exchange: string }>> {
   if (!namesPromise) {
     namesPromise = api
@@ -292,6 +295,15 @@ export default function ScreenerScreen() {
   const { isDesktop } = useResponsive();
   // Mobile: the filter builder lives in a popup so it never buries the table.
   const [filtersOpen, setFiltersOpen] = useState(false);
+  // Minimised screen settings (desktop): collapse the filter panel to one line.
+  const [cfgMin, setCfgMin] = useState(false);
+  useEffect(() => {
+    AsyncStorage.getItem(CFG_MIN_KEY).then((v) => { if (v === '1') setCfgMin(true); }).catch(() => {});
+  }, []);
+  const toggleCfgMin = () => setCfgMin((v) => {
+    AsyncStorage.setItem(CFG_MIN_KEY, v ? '0' : '1').catch(() => {});
+    return !v;
+  });
   const [fieldPickFor, setFieldPickFor] = useState<string | null>(null);
   // One or more universes; the scan runs over their deduped union.
   const [indexSel, setIndexSel] = useState<string[]>(['NIFTY 50']);
@@ -598,7 +610,30 @@ export default function ScreenerScreen() {
     load(indexSel);
   }, [indexSel, load]);
 
-  const filtered = useMemo(() => applyExpr(rows, expr), [rows, expr]);
+  // Live pattern bias per symbol — fetched from the pattern engine's index
+  // snapshots only while a Patterns filter is in the expression.
+  const [patMap, setPatMap] = useState<Record<string, 'bullish' | 'bearish' | 'neutral'>>({});
+  const patActive = expr.some((e) => e.key.startsWith('pat_'));
+  useEffect(() => {
+    if (!patActive) return;
+    let cancelled = false;
+    (async () => {
+      const map: Record<string, 'bullish' | 'bearish' | 'neutral'> = {};
+      for (const idx of indexSel) {
+        try {
+          const snap = await api.patternsScreen(idx);
+          (snap.results || []).forEach((h) => { if (h.bias) map[h.symbol] = h.bias; });
+        } catch { /* snapshot unavailable for this index — skip */ }
+      }
+      if (!cancelled) setPatMap(map);
+    })();
+    return () => { cancelled = true; };
+  }, [patActive, indexSel]);
+
+  const filtered = useMemo(() => {
+    if (patActive) rows.forEach((r) => { r._patBias = patMap[r.sym] ?? null; });
+    return applyExpr(rows, expr);
+  }, [rows, expr, patActive, patMap]);
   const sorted = useMemo(() => sortRows(filtered, sortCol, sortDir), [filtered, sortCol, sortDir]);
 
   // Visible/ordered columns from prefs (Symbol always first, hidden dropped).
@@ -818,10 +853,23 @@ export default function ScreenerScreen() {
               {expr.length ? exprSummary(expr) : 'No filters'}
             </Text>
           </>
-        ) : null}
+        ) : (
+          <>
+            {cfgMin ? (
+              <Text style={styles.filterSummary} numberOfLines={1}>
+                {expr.length ? `${expr.length} filter${expr.length === 1 ? '' : 's'} · ${exprSummary(expr)}` : 'No filters — full universe'}
+              </Text>
+            ) : (
+              <View style={{ flex: 1 }} />
+            )}
+            <TouchableOpacity style={styles.cfgMinBtn} onPress={toggleCfgMin} activeOpacity={0.75}>
+              <Text style={styles.cfgMinTxt}>{cfgMin ? '⌄ Screen settings' : '⌃ Minimise'}</Text>
+            </TouchableOpacity>
+          </>
+        )}
       </View>
 
-      {isDesktop ? (
+      {isDesktop && !cfgMin ? (
         <FilterPanel
           expr={expr}
           setExpr={setExpr}
@@ -1179,9 +1227,16 @@ function Sel({
 function FieldPicker({ onPick, onClose }: { onPick: (key: string) => void; onClose: () => void }) {
   const [q, setQ] = useState('');
   const ql = q.trim().toLowerCase();
+  // Predictive search: label, key and the synonym phrases all match, so
+  // "cheap", "fcf" or "dip buy" find the right metric.
+  const hit = (d: (typeof FILTER_DEFS)[number]) =>
+    !ql
+    || d.label.toLowerCase().includes(ql)
+    || d.key.replace(/_/g, ' ').includes(ql)
+    || (FILTER_SYNONYMS[d.key] || '').includes(ql);
   const groups = TE_GROUPS.map((g) => ({
     g,
-    defs: FILTER_DEFS.filter((d) => d.group === g && (!ql || d.label.toLowerCase().includes(ql))),
+    defs: FILTER_DEFS.filter((d) => d.group === g && hit(d)),
   })).filter((x) => x.defs.length);
   return (
     <Sheet onClose={onClose} fill>
@@ -1835,6 +1890,15 @@ const styles = StyleSheet.create({
   filterBarBtnTxt: { color: theme.text, fontSize: theme.fs.sm, fontWeight: '700' },
   filterBarBtnTxtOn: { color: theme.brand },
   filterSummary: { flex: 1, color: theme.muted, fontSize: theme.fs.xs + 1 },
+  cfgMinBtn: {
+    backgroundColor: theme.surface2,
+    borderColor: theme.border2,
+    borderWidth: 1,
+    borderRadius: theme.radius.sm,
+    paddingHorizontal: theme.sp.md,
+    paddingVertical: 6,
+  },
+  cfgMinTxt: { color: theme.muted2, fontSize: theme.fs.sm, fontWeight: '600' },
   // Universe dropdown + sheets + export menu + serial column
   idxDrop: {
     flexDirection: 'row', alignItems: 'center', gap: theme.sp.sm,
@@ -2324,16 +2388,16 @@ const styles = StyleSheet.create({
     marginTop: theme.sp.md,
     marginBottom: theme.sp.sm,
   },
-  fpGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.sp.sm },
-  fpChip: {
-    backgroundColor: theme.surface2,
-    borderColor: theme.border2,
-    borderWidth: 1,
-    borderRadius: theme.radius.sm,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+  // Word-list layout (report request): metrics read as a flowing list of
+  // tappable words rather than a wall of buttons.
+  fpGrid: { flexDirection: 'row', flexWrap: 'wrap', columnGap: theme.sp.md + 2, rowGap: 2 },
+  fpChip: { paddingVertical: 4 },
+  fpChipTxt: {
+    color: theme.text,
+    fontSize: theme.fs.sm + 1,
+    textDecorationLine: 'underline',
+    textDecorationColor: theme.border2,
   },
-  fpChipTxt: { color: theme.text, fontSize: theme.fs.sm },
   fpEmpty: { color: theme.muted, fontSize: theme.fs.sm, marginTop: theme.sp.lg, textAlign: 'center' },
   selHeader: {
     color: theme.muted,
