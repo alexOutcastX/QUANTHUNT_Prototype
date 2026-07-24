@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Candle, ChartPattern, ChartPatternsResp, PatternScreenHit, PatternScreenResp, api } from '../api';
+import { Candle, ChartPattern, ChartPatternsResp, PatternScreenHit, PatternScreenResp, TradeScanResp, TradeScanRow, api } from '../api';
 import { CapChip, Enrich, useEnrich } from '../enrich';
 import { chartHtml } from '../chartHtml';
 import HtmlView from '../components/HtmlView';
@@ -821,6 +821,132 @@ function PatternGuideSheet({ onClose }: { onClose: () => void }) {
   );
 }
 
+// ── Trade Scan: short-term index setups per timeframe (server sweep) ─────────
+// Every major index scanned on 15m / 1h / 4h / 1D; the current pattern on each
+// timeframe becomes a setup with entry, target, stop-loss and R:R, plus the
+// probability (shape match) and continuation odds. Tap a row to open the full
+// pattern page for that index.
+function TradeScanScreen({ onFullScan }: { onFullScan: (sym: string) => void }) {
+  const [snap, setSnap] = useState<TradeScanResp | null>(null);
+  const [error, setError] = useState('');
+  const [sweep, setSweep] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let misses = 0;
+    setError('');
+    const tick = async () => {
+      try {
+        const s = await api.tradeScan();
+        if (cancelled) return;
+        misses = 0;
+        setSnap(s);
+        if (s.status !== 'done' || s.refreshing) timer = setTimeout(tick, 4000);
+      } catch {
+        if (cancelled) return;
+        if (++misses > 5) { setError('Scan failed — check the connection and tap Rescan.'); return; }
+        timer = setTimeout(tick, 5000);
+      }
+    };
+    tick();
+    return () => { cancelled = true; if (timer) clearTimeout(timer); };
+  }, [sweep]);
+
+  const rows = snap?.results || [];
+  // Group by timeframe, preserving the server's short→long ordering.
+  const groups = useMemo(() => {
+    const order: string[] = [];
+    const byTf: Record<string, TradeScanRow[]> = {};
+    rows.forEach((r) => {
+      if (!byTf[r.tf]) { byTf[r.tf] = []; order.push(r.tf); }
+      byTf[r.tf].push(r);
+    });
+    return order.map((tf) => ({ tf, rows: byTf[tf] }));
+  }, [rows]);
+  const running = !snap || snap.status !== 'done' || !!snap.refreshing;
+
+  const inr = (v: number) => '₹' + v.toLocaleString('en-IN', { maximumFractionDigits: 2 });
+
+  return (
+    <ScrollView contentContainerStyle={styles.body}>
+      <View style={styles.ctlLine}>
+        <TouchableOpacity
+          style={styles.perChip}
+          onPress={() => { api.tradeScan(true).catch(() => {}); setSweep((n) => n + 1); }}
+          activeOpacity={0.75}
+        >
+          <Text style={styles.perTxt}>⟳ Rescan</Text>
+        </TouchableOpacity>
+        <InfoButton
+          title="Trade Scan"
+          content={{ about: 'Each major index is scanned on 15m, 1h, 4h and daily bars; the current chart pattern on every timeframe becomes a setup. Entry is the last price, target is the pattern\'s measured move, and the stop is the invalidation level — the key level when it sits on the right side of entry, else half the measured move (a 2:1 setup). Probability is the shape match; continuation is the indicative follow-through odds once the pattern confirms. Indicative and educational only — not investment advice.' }}
+        />
+      </View>
+      <Text style={styles.hitRecentSub}>
+        Indices only · {snap?.indices?.length || 6} indices × 4 timeframes
+        {snap?.asof ? ` · as of ${fmtDate(snap.asof)}` : ''}{running ? ' · sweeping…' : ''}
+      </Text>
+
+      {error && !rows.length ? <EmptyState icon="⚠" title="Couldn't scan" hint={error} /> : null}
+      {!error && running && !rows.length ? (
+        <Loading label="Sweeping the indices across 15m · 1h · 4h · 1D… first setups appear as they're found" />
+      ) : null}
+      {!running && !rows.length && !error ? (
+        <EmptyState
+          icon="◇"
+          title="No confident setups right now"
+          hint="No index shows a ≥55% pattern with a coherent target and stop on any timeframe. Rescan after the next few bars."
+        />
+      ) : null}
+
+      {groups.map((g) => (
+        <View key={g.tf}>
+          <SectionTitle>{g.tf}</SectionTitle>
+          {g.rows.map((r, i) => {
+            const c = biasColor(r.bias);
+            return (
+              <TouchableOpacity
+                key={r.index + r.interval}
+                style={[styles.tsRow, i === 0 && { borderTopWidth: 0 }]}
+                onPress={() => onFullScan(r.index)}
+                activeOpacity={0.75}
+              >
+                <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+                  <Text style={styles.sym}>{r.index}</Text>
+                  <Text style={[styles.mHitPat, { color: c }]} numberOfLines={1}>
+                    {r.bias === 'bullish' ? '▲' : r.bias === 'bearish' ? '▼' : '—'} {r.pattern}
+                    {' · '}{r.status === 'confirmed' ? 'confirmed' : 'forming'}{r.active ? ' · in play' : ''}
+                  </Text>
+                  <Text style={styles.mHitMeta} numberOfLines={1}>
+                    entry {inr(r.entry)} · tgt <Text style={{ color: c }}>{inr(r.target)}</Text> · SL {inr(r.stop)} · R:R {r.rr.toFixed(1)}
+                  </Text>
+                </View>
+                <View style={{ alignItems: 'flex-end', gap: 2 }}>
+                  <Text style={[styles.mHitConf, { color: c }]}>{r.confidence}%</Text>
+                  <Text style={styles.mHitMeta}>cont {r.continuation != null ? `${r.continuation}%` : '—'}</Text>
+                  <Text style={[styles.mHitTgt, { color: (r.expansion_pct ?? 0) >= 0 ? theme.green : theme.red }]}>
+                    {signPct(r.expansion_pct)}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      ))}
+
+      {rows.length ? (
+        <Text style={styles.method}>
+          Entry = last traded price of that timeframe's bars; target = the pattern's measured move; stop =
+          the invalidation level (key level on the correct side of entry, else half the measured move).
+          Setups refresh in the background every ~10 minutes. Indicative and educational only — not
+          investment advice.
+        </Text>
+      ) : null}
+    </ScrollView>
+  );
+}
+
 // Mobile hit row: everything on two dense lines — no sideways scrolling.
 function MobileHitRow({ h, enr, top, onPress }: { h: PatternScreenHit; enr?: Enrich; top?: boolean; onPress: () => void }) {
   const c = biasColor(h.bias);
@@ -1113,7 +1239,7 @@ function ScreenHitRow({ h, enr, idx, top, cols, onPress }: {
 }
 
 export default function PatternScreen() {
-  const [mode, setMode] = useState<'stock' | 'screen'>('stock');
+  const [mode, setMode] = useState<'stock' | 'screen' | 'trade'>('stock');
   const [symbol, setSymbol] = useState('');
   const [period, setPeriod] = useState('2y');
   const [busy, setBusy] = useState(false);
@@ -1228,13 +1354,16 @@ export default function PatternScreen() {
           items={[
             { key: 'stock', label: 'One stock' },
             { key: 'screen', label: 'Index screener' },
+            { key: 'trade', label: 'Trade Scan' },
           ]}
           value={mode}
-          onChange={(k) => setMode(k as 'stock' | 'screen')}
+          onChange={(k) => setMode(k as 'stock' | 'screen' | 'trade')}
         />
       </View>
 
-      {mode === 'screen' ? (
+      {mode === 'trade' ? (
+        <TradeScanScreen onFullScan={(s) => { setMode('stock'); setSymbol(s); scan(s); }} />
+      ) : mode === 'screen' ? (
         <PatternIndexScreener
           onOpenSymbol={(s) => setDetail({ sym: s } as Row)}
           onFullScan={(s) => { setMode('stock'); setSymbol(s); scan(s); }}
@@ -1584,6 +1713,11 @@ const styles = StyleSheet.create({
   mHitMeta: { color: theme.muted, fontSize: theme.fs.xs + 1, fontFamily: theme.mono },
   mHitConf: { fontSize: theme.fs.md, fontWeight: '800', fontFamily: theme.mono },
   mHitTgt: { fontSize: theme.fs.sm, fontWeight: '700', fontFamily: theme.mono },
+  // trade-scan rows
+  tsRow: {
+    flexDirection: 'row', alignItems: 'center', gap: theme.sp.md,
+    paddingVertical: theme.sp.md - 2, borderTopColor: theme.border, borderTopWidth: 1,
+  },
   // guide / glossary
   gRow: { paddingVertical: theme.sp.sm, borderBottomColor: theme.border, borderBottomWidth: 1 },
   gTerm: { color: theme.text, fontSize: theme.fs.sm, fontWeight: '800', fontFamily: theme.mono, letterSpacing: 0.4 },

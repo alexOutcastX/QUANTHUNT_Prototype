@@ -214,3 +214,40 @@ def snapshot(index: str) -> dict:
             "results": list(st.get("results", [])),
             "error": st.get("error"),
         }
+
+
+# ── Trade Scan: entry / target / stop / R:R from a detected pattern ──────────
+def trade_setup(pat: dict, price) -> dict | None:
+    """Derive a tradeable setup from a detected pattern at the current price.
+
+    Target = the pattern's measured-move objective (its own target, else the
+    expansion % projected from price). Stop = the invalidation side: the key
+    level when it sits on the correct side of entry, else half the measured
+    move (a 2:1 setup). Returns None when the geometry doesn't produce a
+    coherent setup (target/stop on the wrong side of entry)."""
+    if not pat or price is None or price <= 0:
+        return None
+    bull = pat.get("bias") != "bearish"
+    target = pat.get("target")
+    if target is None and pat.get("expansion_pct") is not None:
+        target = price * (1 + pat["expansion_pct"] / 100.0)
+    if target is None:
+        return None
+    level = pat.get("level")
+    if bull:
+        if target <= price:
+            return None
+        stop = level if (level is not None and level < price) else price - (target - price) / 2
+        if stop >= price:
+            return None
+    else:
+        if target >= price:
+            return None
+        stop = level if (level is not None and level > price) else price + (price - target) / 2
+        if stop <= price:
+            return None
+    risk = abs(price - stop)
+    if risk <= 0:
+        return None
+    return {"entry": round(price, 2), "target": round(target, 2),
+            "stop": round(stop, 2), "rr": round(abs(target - price) / risk, 2)}
