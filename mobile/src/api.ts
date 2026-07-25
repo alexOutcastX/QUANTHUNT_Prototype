@@ -31,13 +31,50 @@ export const API_BASE =
   process.env.EXPO_PUBLIC_API_BASE ??
   (inCapacitor ? VM_BASE : Platform.OS === 'web' ? '' : VM_BASE);
 
+// ── session transport ────────────────────────────────────────────────────────
+// On the web the app is same-origin, so the server's httpOnly session cookies
+// are used as-is — nothing is readable from JS, which is the safest option.
+// The Capacitor shell calls the API cross-site from https://localhost, where
+// the browser refuses to attach SameSite cookies, so there the same signed
+// session value travels as a header the shell stores itself. Web never sends
+// these headers and keeps cookie-only sessions.
+export type SessionKind = 'member' | 'user' | 'owner';
+const SESSION_HEADER: Record<SessionKind, string> = {
+  member: 'X-TE-Member',
+  user: 'X-TE-User',
+  owner: 'X-TE-Owner',
+};
+const sessionTokens: Partial<Record<SessionKind, string>> = {};
+
+/** Native shell only: remember (or clear) a session token for later requests. */
+export function setSessionToken(kind: SessionKind, token: string | null): void {
+  if (token) sessionTokens[kind] = token;
+  else delete sessionTokens[kind];
+}
+/** True when this build needs header sessions (the Android WebView). */
+export const usesHeaderSessions = inCapacitor;
+
+function authHeaders(): Record<string, string> {
+  if (!inCapacitor) return {};
+  const h: Record<string, string> = {};
+  (Object.keys(sessionTokens) as SessionKind[]).forEach((k) => {
+    const t = sessionTokens[k];
+    if (t) h[SESSION_HEADER[k]] = t;
+  });
+  return h;
+}
+
 async function getJson<T>(path: string, timeoutMs = 25000): Promise<T> {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
     // credentials: 'include' so the owner session cookie rides along (needed
     // for the broker endpoints, and cross-origin/native).
-    const res = await fetch(API_BASE + path, { signal: ctrl.signal, credentials: 'include' });
+    const res = await fetch(API_BASE + path, {
+      signal: ctrl.signal,
+      credentials: 'include',
+      headers: authHeaders(),
+    });
     if (!res.ok) {
       // Prefer the backend's JSON `error` message over a bare status code, so
       // "data source is rate-limiting, try again" reaches the user (not HTTP 502).
@@ -54,7 +91,7 @@ async function postJson<T>(path: string, body: unknown): Promise<T> {
   const res = await fetch(API_BASE + path, {
     method: 'POST',
     credentials: 'include',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
     body: JSON.stringify(body ?? {}),
   });
   const data = (await res.json().catch(() => ({}))) as T & { error?: string };
@@ -1078,7 +1115,11 @@ export type ApiKey = {
 };
 
 async function delJson<T>(path: string): Promise<T> {
-  const res = await fetch(API_BASE + path, { method: 'DELETE', credentials: 'include' });
+  const res = await fetch(API_BASE + path, {
+    method: 'DELETE',
+    credentials: 'include',
+    headers: authHeaders(),
+  });
   const data = (await res.json().catch(() => ({}))) as T & { error?: string };
   if (!res.ok) throw new Error((data as { error?: string }).error || 'HTTP ' + res.status);
   return data;
@@ -1087,13 +1128,13 @@ async function delJson<T>(path: string): Promise<T> {
 // ── user accounts (email + OTP) ──
 export type MeResp = { user: { email: string } | null };
 export type OtpRequestResp = { sent?: boolean; dev_code?: string; error?: string; detail?: string };
-export type OtpVerifyResp = { user?: { email: string }; created?: boolean; error?: string; detail?: string };
+export type OtpVerifyResp = { user?: { email: string }; created?: boolean; token?: string; error?: string; detail?: string };
 export type UserDataResp = { v: unknown; ts: number };
 export type UserPutResp = { stored: boolean; ts?: number; server_newer?: boolean; v?: unknown };
 
 // ── membership gate (username/password + plan) ──
 export type Member = { username: string; uname: string; plan: string; features: string[] };
-export type MemberResp = { member: Member | null; error?: string; detail?: string };
+export type MemberResp = { member: Member | null; token?: string; error?: string; detail?: string };
 
 export const api = {
   memberLogin: (username: string, password: string) =>
@@ -1106,7 +1147,11 @@ export const api = {
     postJson<OtpVerifyResp>('/auth/otp/verify', { email, code, consent }),
   userLogout: () => postJson<{ user: null }>('/auth/logout', {}),
   accountDelete: async (): Promise<{ deleted: boolean }> => {
-    const res = await fetch(API_BASE + '/auth/account', { method: 'DELETE', credentials: 'include' });
+    const res = await fetch(API_BASE + '/auth/account', {
+      method: 'DELETE',
+      credentials: 'include',
+      headers: authHeaders(),
+    });
     const d = (await res.json().catch(() => ({}))) as { deleted?: boolean; error?: string };
     if (!res.ok) throw new Error(d.error || 'HTTP ' + res.status);
     return { deleted: !!d.deleted };
@@ -1116,7 +1161,7 @@ export const api = {
     const res = await fetch(API_BASE + '/user/data/' + encodeURIComponent(kind), {
       method: 'PUT',
       credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
       body: JSON.stringify({ v, ts }),
     });
     const d = (await res.json().catch(() => ({}))) as UserPutResp & { error?: string };
@@ -1210,7 +1255,8 @@ export const api = {
   broadcasts: () => getJson<{ items: Broadcast[] }>('/broadcast'),
   broadcastSend: (title: string, body: string) =>
     postJson<{ ok: boolean; sent: number; configured?: boolean }>('/broadcast', { title, body }),
-  authLogin: (password: string) => postJson<{ owner: boolean }>('/auth/login', { password }),
+  authLogin: (password: string) =>
+    postJson<{ owner: boolean; token?: string }>('/auth/login', { password }),
   authLogout: () => postJson<{ owner: boolean }>('/auth/logout', {}),
   brokerStatus: () => getJson<BrokerStatus>('/broker/status'),
   brokerLtp: (symbols: string[]) =>

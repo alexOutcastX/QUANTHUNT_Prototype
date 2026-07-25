@@ -103,14 +103,53 @@ function webDownload(data: string, filename: string, mime: string): boolean {
   return true;
 }
 
+// ── native-shell downloads ───────────────────────────────────────────────────
+// Inside the Capacitor APK the bundle still reports Platform.OS === 'web', so
+// the anchor-download path above runs — and Android's System WebView ignores
+// `<a download>` on a blob: URL, which made every export a silent no-op on the
+// phone. There the file is written to app storage and handed to the Android
+// share sheet instead (same pattern as printer.ts's native print bridge).
+const isNativeShell = (): boolean => {
+  try {
+    const cap = (globalThis as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor;
+    return !!cap?.isNativePlatform?.();
+  } catch {
+    return false;
+  }
+};
+
+async function nativeSave(data: string, filename: string, mime: string): Promise<boolean> {
+  try {
+    const { Filesystem, Directory, Encoding } = await import('@capacitor/filesystem');
+    const { Share } = await import('@capacitor/share');
+    await Filesystem.writeFile({
+      path: filename,
+      data,
+      directory: Directory.Cache,
+      encoding: Encoding.UTF8,
+    });
+    const { uri } = await Filesystem.getUri({ path: filename, directory: Directory.Cache });
+    await Share.share({ title: filename, url: uri, dialogTitle: `Save ${filename}` });
+    return true;
+  } catch {
+    // Older APK without the plugins, or the user dismissed the sheet.
+    return false;
+  }
+}
+
+/** Deliver an exported file on whichever platform is running. Returns false
+ *  when the native shell could not save it, so callers can say so. */
+export async function deliverFile(data: string, filename: string, mime: string): Promise<boolean> {
+  if (isNativeShell()) return nativeSave(data, filename, mime);
+  if (Platform.OS === 'web') return webDownload(data, filename, mime);
+  await Share.share({ title: filename, message: data });
+  return true;
+}
+
 export async function exportCsv(rows: Row[], name: string, cols?: ExportCol[]): Promise<void> {
   const csv = buildCsv(rows, cols);
   const filename = `taureye-${slug(name)}.csv`;
-  if (Platform.OS === 'web') {
-    webDownload(csv, filename, 'text/csv');
-  } else {
-    await Share.share({ title: filename, message: csv });
-  }
+  await deliverFile(csv, filename, 'text/csv');
 }
 
 const htmlEsc = (v: unknown): string => {
@@ -137,19 +176,16 @@ function buildHtmlTable(rows: Row[], styled: boolean, cols: ExportCol[] = FIELDS
   return `${css}<table><thead><tr>${th}</tr></thead><tbody>${body}</tbody></table>`;
 }
 
-// Excel: no xlsx dep — emit an HTML table Excel can open, downloaded as .xls
-// (web). On native, fall back to sharing the CSV text.
+// Excel: no xlsx dep — emit an HTML table Excel can open, saved as .xls. The
+// same file goes to the browser download on web and to the Android share sheet
+// in the app shell (see deliverFile).
 export async function exportExcel(rows: Row[], name: string, cols?: ExportCol[]): Promise<void> {
   const filename = `taureye-${slug(name)}.xls`;
-  if (Platform.OS === 'web') {
-    const html =
-      '<html><head><meta charset="utf-8"></head><body>' +
-      buildHtmlTable(rows, false, cols) +
-      '</body></html>';
-    webDownload(html, filename, 'application/vnd.ms-excel');
-  } else {
-    await Share.share({ title: `taureye-${slug(name)}.csv`, message: buildCsv(rows, cols) });
-  }
+  const html =
+    '<html><head><meta charset="utf-8"></head><body>' +
+    buildHtmlTable(rows, false, cols) +
+    '</body></html>';
+  await deliverFile(html, filename, 'application/vnd.ms-excel');
 }
 
 // ── Generic, column-config-driven export ──────────────────────────────────────
@@ -173,24 +209,16 @@ function buildHtmlTableRows(headers: string[], rows: string[][]): string {
 export async function exportCsvRows(headers: string[], rows: string[][], name: string): Promise<void> {
   const csv = buildCsvRows(headers, rows);
   const filename = `taureye-${slug(name)}.csv`;
-  if (Platform.OS === 'web') {
-    webDownload(csv, filename, 'text/csv');
-  } else {
-    await Share.share({ title: filename, message: csv });
-  }
+  await deliverFile(csv, filename, 'text/csv');
 }
 
 export async function exportExcelRows(headers: string[], rows: string[][], name: string): Promise<void> {
   const filename = `taureye-${slug(name)}.xls`;
-  if (Platform.OS === 'web') {
-    const html =
-      '<html><head><meta charset="utf-8"></head><body>' +
-      buildHtmlTableRows(headers, rows) +
-      '</body></html>';
-    webDownload(html, filename, 'application/vnd.ms-excel');
-  } else {
-    await Share.share({ title: `taureye-${slug(name)}.csv`, message: buildCsvRows(headers, rows) });
-  }
+  const html =
+    '<html><head><meta charset="utf-8"></head><body>' +
+    buildHtmlTableRows(headers, rows) +
+    '</body></html>';
+  await deliverFile(html, filename, 'application/vnd.ms-excel');
 }
 
 // PDF: no jspdf dep — render a styled table and invoke the platform print /

@@ -20,7 +20,12 @@ jobs:
       - name: Python syntax (compile, no imports/network)
         run: python -m py_compile server.py fundamentals.py wsgi.py auth.py broker.py news.py ai_graph.py holidays.py scanner.py relations.py store.py ydata.py multibagger.py mb_screen.py timeframes.py screenerin.py strategy_scores.py push.py chat.py
 
-      - name: Stdlib-only unit tests (auth, holidays, store)
+      # The web stack only — engines stay stdlib-only, but route-level tests
+      # (session transport, auth) need a Flask test client to exist at all.
+      - name: Install web stack (routes under test)
+        run: pip install --quiet flask flask-cors
+
+      - name: Unit tests (engines, auth, sessions, routes)
         run: python -m unittest discover -s tests -p 'test_*.py' -v
 
       - uses: actions/setup-node@v4
@@ -77,6 +82,23 @@ jobs:
       - name: Install Chromium
         working-directory: mobile
         run: npx playwright-core install chromium
+      # The web deploy serves the COMMITTED mobile/dist, while the Android OTA
+      # job rebuilds the bundle from source on the runner. If someone edits a
+      # .tsx without re-running `npm run export:web`, the same commit ships an
+      # old web UI and a new phone UI — and every other check still passes,
+      # because they all run against the committed bundle. This is the gate.
+      - name: Committed web bundle matches source
+        working-directory: mobile
+        run: |
+          npx expo export --platform web --output-dir /tmp/dist-check >/dev/null
+          if ! diff -q <(ls dist/_expo/static/js/web | sort) \
+                       <(ls /tmp/dist-check/_expo/static/js/web | sort) >/dev/null; then
+            echo "::error::mobile/dist is stale — run 'npm run export:web' and commit the result."
+            diff <(ls dist/_expo/static/js/web | sort) \
+                 <(ls /tmp/dist-check/_expo/static/js/web | sort) || true
+            exit 1
+          fi
+          echo "committed bundle is in sync with source"
       - name: Headless smoke (boot, tabs, icons, screener, Symbol, palette)
         run: node e2e/smoke.js
 

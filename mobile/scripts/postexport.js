@@ -25,7 +25,11 @@ const META = `
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
 <meta name="apple-mobile-web-app-title" content="TaurEye"/>`;
 
-const SW = `<script>if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('/sw.js').catch(function(){})})}</script>`;
+// Register the offline shell on the WEB only. The same bundle is packaged into
+// the Capacitor APK, where a service worker would cache a copy of the shell and
+// fight Capgo's OTA swap — serving a stale index that points at chunk hashes the
+// update deleted (white screen). Capgo already provides offline + updates there.
+const SW = `<script>if('serviceWorker' in navigator&&!(window.Capacitor&&window.Capacitor.isNativePlatform&&window.Capacitor.isNativePlatform())){window.addEventListener('load',function(){navigator.serviceWorker.register('/sw.js').catch(function(){})})}</script>`;
 
 // Drop expo's default <title> so ours wins, then inject.
 html = html.replace(/<title>[^<]*<\/title>/, '');

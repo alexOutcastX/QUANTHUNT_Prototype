@@ -10,8 +10,20 @@
 //     (AsyncStorage.setItem is wrapped once, so watchlist.ts, localalerts.ts,
 //     paperTrades.ts and paperSim.ts need no changes).
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { api } from './api';
+import { api, setSessionToken, usesHeaderSessions } from './api';
 import { refreshFlags } from './flags';
+
+// Native shell only: the account session travels as a header (the WebView
+// drops cross-site cookies), so the signed token has to outlive app restarts.
+const USER_TOKEN_KEY = 'taureye.user.token.v1';
+
+/** Store (or clear) the account session token after sign-in / sign-out. */
+export async function rememberUserSession(token: string | null): Promise<void> {
+  if (!usesHeaderSessions) return;
+  setSessionToken('user', token);
+  if (token) await AsyncStorage.setItem(USER_TOKEN_KEY, token).catch(() => {});
+  else await AsyncStorage.removeItem(USER_TOKEN_KEY).catch(() => {});
+}
 
 // local AsyncStorage key -> server document kind (users.py DATA_KINDS)
 const SYNC_KEYS: Record<string, string> = {
@@ -136,6 +148,10 @@ export async function syncNow(): Promise<void> {
 
 // ── session lifecycle ────────────────────────────────────────────────────────
 export async function refreshSession(): Promise<string | null> {
+  if (usesHeaderSessions) {
+    const tok = await AsyncStorage.getItem(USER_TOKEN_KEY).catch(() => null);
+    if (tok) setSessionToken('user', tok);
+  }
   try {
     const me = await api.authMe();
     email = me.user?.email ?? null;
@@ -167,6 +183,7 @@ export async function signOut(): Promise<void> {
   } catch {
     /* clearing locally regardless */
   }
+  await rememberUserSession(null);
   email = null;
   state = 'off';
   emit();
