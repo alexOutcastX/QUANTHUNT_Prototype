@@ -9,6 +9,7 @@ import backtest_engine as bte  # stdlib-only: the REAL engine runs in the fake s
 DIST = os.path.join(os.path.dirname(__file__), "mobile", "dist")
 PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 5056
 
+_MEMBER_TOKEN = "fake-member-token"
 _MEMBER = {"username": "Taureye", "uname": "taureye", "plan": "pro",
            "features": ["quotes", "heatmap", "news", "universe", "screener", "patterns",
                         "recommendations", "watchlist", "portfolio", "backtest",
@@ -557,7 +558,10 @@ class H(BaseHTTPRequestHandler):
                  "ts": 1753200000 + i * 3600, "sym": ""} for i in range(10)],
                 "fetched": 1753260000, "cached": False})
         if path == "/auth/member":
-            if "te_member=1" in (self.headers.get("Cookie") or ""):
+            # Cookie (web) OR bearer header (the Capacitor shell, where the
+            # WebView drops cross-site cookies) — mirrors server.py.
+            hdr = (self.headers.get("X-TE-Member") or "").replace("Bearer ", "").strip()
+            if "te_member=1" in (self.headers.get("Cookie") or "") or hdr == _MEMBER_TOKEN:
                 return self._json({"member": _MEMBER})
             return self._json({"member": None})
         if path == "/sectors/members":
@@ -625,7 +629,7 @@ class H(BaseHTTPRequestHandler):
             body = json.loads(self.rfile.read(n) or b"{}")
             ok = (body.get("username", "").strip().lower() == "taureye"
                   and body.get("password") == "TaureyePW")
-            payload = json.dumps({"member": _MEMBER} if ok
+            payload = json.dumps({"member": _MEMBER, "token": _MEMBER_TOKEN} if ok
                                  else {"error": "bad-credentials"}).encode()
             self.send_response(200 if ok else 401)
             self.send_header("Content-Type", "application/json")

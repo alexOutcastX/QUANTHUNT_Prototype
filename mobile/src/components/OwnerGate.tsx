@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { StyleSheet, Text, TextInput, View } from 'react-native';
-import { api } from '../api';
+import { api, setSessionToken, usesHeaderSessions } from '../api';
 import { Btn, Card, EmptyState, Loading } from '../ui';
 import { theme } from '../theme';
 
@@ -19,7 +19,9 @@ export default function OwnerGate({ title, children }: { title: string; children
   const login = useCallback(async () => {
     setMsg('');
     try {
-      await api.authLogin(pw);
+      const r = await api.authLogin(pw);
+      // Native shell keeps the owner session as a header token (see api.ts).
+      if (usesHeaderSessions && r.token) setSessionToken('owner', r.token);
       setPw('');
       refresh();
     } catch {

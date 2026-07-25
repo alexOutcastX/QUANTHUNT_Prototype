@@ -10,9 +10,12 @@
 // offline at launch still opens for a previously signed-in member; the server
 // remains the authority the moment a request succeeds.
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { api, Member } from './api';
+import { api, Member, setSessionToken, usesHeaderSessions } from './api';
 
 const CACHE_KEY = 'taureye.member.v1';
+// Native shell only: the session travels as a header there (cross-site cookies
+// are dropped by the WebView), so the signed token has to survive app restarts.
+const TOKEN_KEY = 'taureye.member.token.v1';
 
 let member: Member | null = null;
 const listeners = new Set<() => void>();
@@ -44,6 +47,12 @@ export function hasFeature(feature: string): boolean {
 
 /** Boot check: server session first, cached member only as an offline fallback. */
 export async function restoreMember(): Promise<Member | null> {
+  // Re-arm the header session BEFORE the first request, or the check below
+  // would look anonymous on every native launch.
+  if (usesHeaderSessions) {
+    const tok = await AsyncStorage.getItem(TOKEN_KEY).catch(() => null);
+    if (tok) setSessionToken('member', tok);
+  }
   try {
     const res = await api.memberMe();
     member = res.member;
@@ -62,6 +71,10 @@ export async function memberLogin(username: string, password: string): Promise<M
   const res = await api.memberLogin(username, password);
   if (!res.member) throw new Error('bad-credentials');
   member = res.member;
+  if (usesHeaderSessions && res.token) {
+    setSessionToken('member', res.token);
+    await AsyncStorage.setItem(TOKEN_KEY, res.token).catch(() => {});
+  }
   await AsyncStorage.setItem(CACHE_KEY, JSON.stringify(member)).catch(() => {});
   emit();
   return member;
@@ -74,6 +87,7 @@ export async function memberLogout(): Promise<void> {
     /* clearing locally regardless */
   }
   member = null;
-  await AsyncStorage.removeItem(CACHE_KEY).catch(() => {});
+  setSessionToken('member', null);
+  await AsyncStorage.multiRemove([CACHE_KEY, TOKEN_KEY]).catch(() => {});
   emit();
 }

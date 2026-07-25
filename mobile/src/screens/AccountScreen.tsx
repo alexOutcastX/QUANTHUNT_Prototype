@@ -9,6 +9,7 @@ import {
   deleteAccount,
   onSignedIn,
   refreshSession,
+  rememberUserSession,
   sessionEmail,
   signOut,
   subscribeSession,
@@ -72,6 +73,9 @@ export default function AccountScreen() {
     try {
       const r = await api.otpVerify(email.trim().toLowerCase(), code.trim(), consent);
       if (r.user) {
+        // Native shell: cross-site cookies are dropped, so keep the session as
+        // a header token — otherwise cloud sync would silently never run.
+        await rememberUserSession(r.token ?? null);
         onSignedIn(r.user.email);
         setNote('');
         setStep('email');
