@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { REFRESH, REFRESHING } from '../copy';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SwingRec, api } from '../api';
 import { CapChip, Enrich, fmtCap, useEnrich } from '../enrich';
@@ -455,7 +456,7 @@ export default function ShortTermScreen() {
           <Dropdown label="Sort" value={sortKey} options={SORTS} onChange={setSortKey} />
         ) : null}
         <TouchableOpacity style={[styles.updBtn, scanning && { opacity: 0.5 }]} onPress={runScan} disabled={scanning} activeOpacity={0.75}>
-          <Text style={styles.updTxt}>{scanning ? '… Scanning' : '⟳ Update'}</Text>
+          <Text style={styles.updTxt}>{scanning ? REFRESHING : REFRESH}</Text>
         </TouchableOpacity>
         {asof && !scanning ? <Text style={styles.asofInline}>updated {timeAgo(asof)}</Text> : null}
       </View>
@@ -477,12 +478,12 @@ export default function ShortTermScreen() {
           <EmptyState
             icon="◇"
             title="No swing setups yet"
-            hint="No cached setups. Hit ⟳ Update List to scan mid/large caps for pullback-reversal & oversold-bounce trades."
+            hint="No cached setups. Hit ⟳ Refresh to scan mid/large caps for pullback-reversal & oversold-bounce trades."
           />
         ) : null}
 
         {recs.length && !shown.length ? (
-          <Text style={styles.note}>No setups match “{stratDef.name}” right now — try another strategy or ⟳ Update.</Text>
+          <Text style={styles.note}>No setups match “{stratDef.name}” right now — try another strategy or ⟳ Refresh.</Text>
         ) : null}
         <View style={isDesktop ? styles.grid2 : undefined}>
           {shown.map((r, i) => (

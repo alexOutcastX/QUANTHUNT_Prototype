@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { crore } from '../format';
+import { REFRESH, REFRESHING } from '../copy';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { MomentumHit, StrategyScoresResp, TimeframesResp, api } from '../api';
 import { exportCsvRows, exportExcelRows } from '../csv';
@@ -137,13 +139,8 @@ const fmtAsof = (epoch: number) =>
   new Date(epoch * 1000).toLocaleString('en-IN', {
     day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit',
   });
-// Compact market cap (input in ₹ crore): 123456 → "₹1.23L Cr", 12345 → "₹12.3K Cr".
-const fmtCap = (cr?: number | null) => {
-  if (cr == null || !isFinite(cr)) return null;
-  if (cr >= 100000) return '₹' + (cr / 100000).toFixed(2) + 'L Cr';
-  if (cr >= 1000) return '₹' + (cr / 1000).toFixed(1) + 'K Cr';
-  return '₹' + Math.round(cr).toLocaleString('en-IN') + ' Cr';
-};
+// Compact market cap (input in ₹ crore) — the one app-wide rule (format.ts).
+const fmtCap = (cr?: number | null) => (cr == null || !isFinite(cr) ? null : crore(cr));
 
 // Market-cap band chip (LARGE / MID / SMALL / MICRO) — shared by table + cards.
 function capTag(mcapCr?: number | null) {
@@ -785,7 +782,7 @@ export default function MomentumScreen() {
             disabled={loading}
             activeOpacity={0.75}
           >
-            <Text style={styles.updTxt}>⟳ Update list</Text>
+            <Text style={styles.updTxt}>{REFRESH}</Text>
           </TouchableOpacity>
           <Text style={styles.note} numberOfLines={1}>{note} · tap a row for the technical read</Text>
         </ScrollView>
@@ -810,11 +807,11 @@ export default function MomentumScreen() {
               />
             ) : null}
             <View style={{ flex: 1 }} />
-            {isDesktop ? (
-              <TouchableOpacity style={styles.ctlBtn} onPress={() => setColMenu(true)} activeOpacity={0.75}>
-                <Text style={styles.ctlTxt}>▤ Columns</Text>
-              </TouchableOpacity>
-            ) : null}
+            {/* Columns matters MORE on the phone (the table scrolls sideways
+                through 12 columns there), so it is offered on both. */}
+            <TouchableOpacity style={styles.ctlBtn} onPress={() => setColMenu(true)} activeOpacity={0.75}>
+              <Text style={styles.ctlTxt}>▤ Columns</Text>
+            </TouchableOpacity>
             <View>
               <TouchableOpacity style={styles.ctlBtn} onPress={() => setExportOpen((v) => !v)} activeOpacity={0.75}>
                 <Text style={styles.ctlTxt}>⇩ Export ▾</Text>
@@ -850,7 +847,7 @@ export default function MomentumScreen() {
           <EmptyState
             icon="◇"
             title="No qualifying setups right now"
-            hint="Compression and pullback windows come and go — hit ⟳ Update list or check back later."
+            hint="Compression and pullback windows come and go — hit ⟳ Refresh or check back later."
           />
         ) : null}
 

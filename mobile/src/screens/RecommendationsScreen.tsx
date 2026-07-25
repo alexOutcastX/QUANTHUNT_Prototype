@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { REFRESH, REFRESHING } from '../copy';
 import { MbScreenRow, Recommendation, api } from '../api';
 import { CapChip, Enrich, fmtCap, useEnrich } from '../enrich';
 import StockDetail from '../components/StockDetail';
@@ -659,7 +660,7 @@ function LongTermRecs() {
           <Text style={styles.updTxt}>⤓ PDF</Text>
         </TouchableOpacity> : null}
         <TouchableOpacity style={[styles.updBtn, styles.updBtnPrimary, scanning && { opacity: 0.5 }]} onPress={runScan} disabled={scanning} activeOpacity={0.75}>
-          <Text style={[styles.updTxt, { color: theme.onAccent }]}>{scanning ? '… Scanning' : '⟳ Update'}</Text>
+          <Text style={[styles.updTxt, { color: theme.onAccent }]}>{scanning ? REFRESHING : REFRESH}</Text>
         </TouchableOpacity>
         {asof && !scanning ? <Text style={styles.asofInline}>updated {timeAgo(asof)}</Text> : null}
       </View>
@@ -709,13 +710,13 @@ function LongTermRecs() {
           <EmptyState
             icon="◇"
             title="No buy setups yet"
-            hint="No cached buy setups. Hit ⟳ Update List to scan the top Multibagger candidates."
+            hint="No cached buy setups. Hit ⟳ Refresh to scan the top Multibagger candidates."
           />
         ) : null}
 
         {recs.length && !shown.length ? (
           <Text style={styles.note}>
-            {sector ? `No ${sector} candidates in this list right now — clear the sector or ⟳ Update.` : `No candidates match “${stratDef.name}” right now — try another strategy or ⟳ Update.`}
+            {sector ? `No ${sector} candidates in this list right now — clear the sector or ⟳ Refresh.` : `No candidates match “${stratDef.name}” right now — try another strategy or ⟳ Refresh.`}
           </Text>
         ) : null}
         <View style={isDesktop ? styles.grid : undefined}>

@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Platform, ScrollView, Share, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { REFRESH, REFRESHING } from '../copy';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Candle, MbScreenRow, MultibaggerReport, api } from '../api';
 import { chartHtml } from '../chartHtml';
@@ -1018,7 +1019,7 @@ export default function MultibaggerScreen() {
               disabled={mbLoading}
               activeOpacity={0.75}
             >
-              <Text style={styles.updTxt}>⟳ Update list</Text>
+              <Text style={styles.updTxt}>{REFRESH}</Text>
             </TouchableOpacity>
           ) : null}
         </View>

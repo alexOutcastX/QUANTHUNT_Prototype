@@ -4,6 +4,7 @@
 import React, { useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { API_BASE, api } from '../api';
+import { currentMember, memberLogout, subscribeMember } from '../member';
 import { Linking } from 'react-native';
 import {
   deleteAccount,
@@ -31,13 +32,21 @@ export default function AccountScreen() {
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState('');
   const [confirmDelete, setConfirmDelete] = useState(false);
+  // The membership sign-in IS the account (server auto-provisions its synced
+  // documents), so this page reports it rather than asking to sign in twice.
+  const [member, setMember] = useState(currentMember());
 
   useEffect(() => {
     refreshSession();
-    return subscribeSession(() => {
+    const unSess = subscribeSession(() => {
       setMe(sessionEmail());
       setSync(syncState());
     });
+    const unMem = subscribeMember(() => setMember(currentMember()));
+    return () => {
+      unSess();
+      unMem();
+    };
   }, []);
 
   const requestCode = async () => {
@@ -128,15 +137,27 @@ export default function AccountScreen() {
           <Card style={s.card}>
             <Text style={s.label}>SIGNED IN AS</Text>
             <Text style={s.email}>{me}</Text>
+            {member ? (
+              <Text style={s.value}>
+                {member.plan.toUpperCase()} membership{member.owner ? ' · owner' : ''}
+              </Text>
+            ) : null}
             <Text style={s.label}>CLOUD SYNC</Text>
             <Text style={s.value}>{syncLabel}</Text>
             <Text style={s.hint}>
               Watchlists, alerts, paper trades and the simulator sync to your account and follow
               you across devices.
+              {member
+                ? ' Your membership sign-in covers this — no separate account needed.'
+                : ''}
             </Text>
             <View style={s.row}>
               <Btn label="Sync now" onPress={() => syncNow()} disabled={busy} />
-              <Btn label="Sign out" kind="ghost" onPress={() => signOut()} disabled={busy} />
+              {member ? (
+                <Btn label="Sign out" kind="ghost" onPress={() => memberLogout()} disabled={busy} />
+              ) : (
+                <Btn label="Sign out" kind="ghost" onPress={() => signOut()} disabled={busy} />
+              )}
             </View>
           </Card>
           <Card style={s.card}>

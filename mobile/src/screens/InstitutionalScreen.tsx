@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { REFRESH, REFRESHING } from '../copy';
 import { InstitutionalRec, StrategyHit, api } from '../api';
 import { CapChip, Enrich, fmtCap, useEnrich } from '../enrich';
 import StockDetail from '../components/StockDetail';
@@ -477,7 +478,7 @@ export default function InstitutionalScreen() {
           <Dropdown label="Sort" value={sortKey} options={SORTS} onChange={setSortKey} />
         ) : null}
         <TouchableOpacity style={[styles.updBtn, scanning && { opacity: 0.5 }]} onPress={runScan} disabled={scanning} activeOpacity={0.75}>
-          <Text style={styles.updTxt}>{scanning ? '… Scanning' : '⟳ Update'}</Text>
+          <Text style={styles.updTxt}>{scanning ? REFRESHING : REFRESH}</Text>
         </TouchableOpacity>
         {asof && !scanning ? <Text style={styles.asofInline}>updated {timeAgo(asof)}</Text> : null}
       </View>
@@ -499,7 +500,7 @@ export default function InstitutionalScreen() {
           <EmptyState
             icon="◈"
             title="No strategy matches yet"
-            hint="Hit ⟳ Update List to screen mid/large caps against momentum, trend-following, breakout, mean-reversion and statistical-arbitrage strategies."
+            hint="Hit ⟳ Refresh to screen mid/large caps against momentum, trend-following, breakout, mean-reversion and statistical-arbitrage strategies."
           />
         ) : null}
 

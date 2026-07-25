@@ -34,7 +34,10 @@ PLAN_FEATURES = {
 }
 
 _DEFAULT_ACCOUNTS = {
-    "taureye": {"password": "TaureyePW", "plan": "pro", "name": "Taureye"},
+    # `owner` promotes the member to the instance owner: the broker, alerts and
+    # developer-key screens accept this session instead of prompting for a
+    # separate passcode, so one sign-in covers the whole app.
+    "taureye": {"password": "TaureyePW", "plan": "pro", "name": "Taureye", "owner": True},
 }
 
 
@@ -72,7 +75,8 @@ def check_login(username: str, password: str):
     if not acct or not ok:
         return None
     return {"username": acct.get("name") or uname, "uname": uname,
-            "plan": acct.get("plan") or "member"}
+            "plan": acct.get("plan") or "member",
+            "owner": bool(acct.get("owner"))}
 
 
 def features_for(plan: str):
@@ -121,4 +125,5 @@ def from_cookie(cookie_value: str):
         return None
     plan = acct.get("plan") or "member"
     return {"username": acct.get("name") or data["m"], "uname": data["m"],
-            "plan": plan, "features": features_for(plan)}
+            "plan": plan, "features": features_for(plan),
+            "owner": bool(acct.get("owner"))}
