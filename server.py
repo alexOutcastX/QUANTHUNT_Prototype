@@ -961,7 +961,7 @@ def require_owner(fn):
             return jsonify({"error": "owner-auth-required",
                             "detail": "This feature needs an owner passcode. Set "
                                       "APP_PASSWORD on the server to enable it."}), 403
-        if not _auth.is_owner(request.cookies.get(_auth.COOKIE, "")):
+        if not _owner_session():
             return jsonify({"error": "unauthorized",
                             "detail": "Owner login required."}), 401
         return fn(*a, **kw)
@@ -971,7 +971,46 @@ def require_owner(fn):
 @app.route("/auth/status")
 def auth_status():
     return jsonify({"configured": _auth.configured(),
-                    "owner": _auth.is_owner(request.cookies.get(_auth.COOKIE, ""))})
+                    "owner": _owner_session()})
+
+
+# ── session transport ────────────────────────────────────────────────────────
+# The web SPA is same-origin, so httpOnly cookies are both safe and sufficient.
+# The Android shell is a Capacitor WebView at https://localhost calling this
+# API cross-site, where the browser refuses to attach SameSite=Lax cookies —
+# so every session there would silently vanish on the next request. Each
+# session therefore ALSO travels as a bearer header the native shell stores
+# itself (`X-TE-Member` / `X-TE-User` / `X-TE-Owner`); the token is the exact
+# same signed value the cookie carries, so nothing about verification changes.
+_HDR_MEMBER = "X-TE-Member"
+_HDR_USER = "X-TE-User"
+_HDR_OWNER = "X-TE-Owner"
+
+
+def _is_https() -> bool:
+    return (request.headers.get("X-Forwarded-Proto") == "https"
+            or request.scheme == "https")
+
+
+def _session_cookie(resp, name, value, max_age):
+    """Set a session cookie with the strongest flags the transport allows.
+    Cross-site (native shell) needs SameSite=None, which browsers only accept
+    with Secure — so that combination is used only once TLS is in front."""
+    https = _is_https()
+    resp.set_cookie(name, value, max_age=max_age, httponly=True,
+                    samesite="None" if https else "Lax", secure=https)
+    return resp
+
+
+def _bearer(header_name: str) -> str:
+    """Session token from the header the native shell sends (blank on web)."""
+    raw = (request.headers.get(header_name) or "").strip()
+    return raw[7:].strip() if raw.lower().startswith("bearer ") else raw
+
+
+def _owner_session() -> bool:
+    return (_auth.is_owner(request.cookies.get(_auth.COOKIE, ""))
+            or _auth.is_owner(_bearer(_HDR_OWNER)))
 
 
 @app.route("/auth/login", methods=["POST"])
@@ -983,11 +1022,9 @@ def auth_login():
                         "detail": "No owner passcode is set on this server."}), 403
     if not _auth.check_password(body.get("password", "")):
         return jsonify({"error": "bad-password"}), 401
-    resp = jsonify({"owner": True})
-    resp.set_cookie(_auth.COOKIE, _auth.make_cookie(), max_age=_auth.TTL,
-                    httponly=True, samesite="Lax",
-                    secure=request.headers.get("X-Forwarded-Proto") == "https")
-    return resp
+    token = _auth.make_cookie()
+    resp = jsonify({"owner": True, "token": token})
+    return _session_cookie(resp, _auth.COOKIE, token, _auth.TTL)
 
 
 @app.route("/auth/logout", methods=["POST"])
@@ -1005,7 +1042,8 @@ _USER_COOKIE = "te_user"
 
 
 def current_user_id():
-    return _users.session_user_id(request.cookies.get(_USER_COOKIE, ""))
+    return (_users.session_user_id(request.cookies.get(_USER_COOKIE, ""))
+            or _users.session_user_id(_bearer(_HDR_USER)))
 
 
 def require_user(fn):
@@ -1026,7 +1064,8 @@ import members as _members
 
 
 def current_member():
-    return _members.from_cookie(request.cookies.get(_members.COOKIE, ""))
+    return (_members.from_cookie(request.cookies.get(_members.COOKIE, ""))
+            or _members.from_cookie(_bearer(_HDR_MEMBER)))
 
 
 def require_plan(*feature):
@@ -1061,11 +1100,9 @@ def member_login():
         return jsonify({"error": "bad-credentials",
                         "detail": "Wrong username or password."}), 401
     m["features"] = _members.features_for(m["plan"])
-    resp = jsonify({"member": m})
-    resp.set_cookie(_members.COOKIE, _members.make_cookie(m), max_age=_members.TTL,
-                    httponly=True, samesite="Lax",
-                    secure=request.headers.get("X-Forwarded-Proto") == "https")
-    return resp
+    token = _members.make_cookie(m)
+    resp = jsonify({"member": m, "token": token})
+    return _session_cookie(resp, _members.COOKIE, token, _members.TTL)
 
 
 @app.route("/auth/member")
@@ -1124,11 +1161,9 @@ def auth_otp_verify():
         # brand-new address without the consent checkbox ticked
         return jsonify({"error": "consent-required",
                         "detail": "Accept the Terms & Privacy Policy to create the account."}), 428
-    resp = jsonify({"user": {"email": user["email"]}, "created": created})
-    resp.set_cookie(_USER_COOKIE, _users.make_session_cookie(user["id"]),
-                    max_age=_users.SESSION_TTL, httponly=True, samesite="Lax",
-                    secure=request.headers.get("X-Forwarded-Proto") == "https")
-    return resp
+    token = _users.make_session_cookie(user["id"])
+    resp = jsonify({"user": {"email": user["email"]}, "created": created, "token": token})
+    return _session_cookie(resp, _USER_COOKIE, token, _users.SESSION_TTL)
 
 
 @app.route("/calibration")
@@ -1147,7 +1182,7 @@ def calibration():
 # ADVISORY_ALL=1 to everyone — both explicit owner decisions, never defaults.
 @app.route("/flags")
 def flags():
-    owner = _auth.is_owner(request.cookies.get(_auth.COOKIE, ""))
+    owner = _owner_session()
     signed_in = current_user_id() is not None
     advisory = (
         owner
@@ -3684,7 +3719,7 @@ def chat_read():
 def chat_delete(msg_id):
     body = request.get_json(silent=True) or {}
     uid = str(body.get("user_id", "")).strip()
-    is_owner = _auth.is_owner(request.cookies.get(_auth.COOKIE, ""))
+    is_owner = _owner_session()
     ok = _chat.delete(msg_id, uid, is_owner=is_owner)
     return jsonify({"ok": ok}), (200 if ok else 403)
 
