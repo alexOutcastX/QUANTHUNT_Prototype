@@ -1133,7 +1133,15 @@ export type UserDataResp = { v: unknown; ts: number };
 export type UserPutResp = { stored: boolean; ts?: number; server_newer?: boolean; v?: unknown };
 
 // ── membership gate (username/password + plan) ──
-export type Member = { username: string; uname: string; plan: string; features: string[] };
+export type Member = {
+  username: string;
+  uname: string;
+  plan: string;
+  features: string[];
+  // Owner-flagged members hold owner rights (broker, alerts, developer keys)
+  // without a separate passcode — one sign-in covers the whole app.
+  owner?: boolean;
+};
 export type MemberResp = { member: Member | null; token?: string; error?: string; detail?: string };
 
 export const api = {

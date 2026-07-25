@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { REFRESH, REFRESHING } from '../copy';
 import { SmcRec, StrategyHit, api } from '../api';
 import StockDetail from '../components/StockDetail';
 import StrategyScores from '../components/StrategyScores';
@@ -488,7 +489,7 @@ export default function SmcScreen() {
           <Dropdown label="Sort" value={sortKey} options={SORTS} onChange={setSortKey} />
         ) : null}
         <TouchableOpacity style={[styles.updBtn, scanning && { opacity: 0.5 }]} onPress={runScan} disabled={scanning} activeOpacity={0.75}>
-          <Text style={styles.updTxt}>{scanning ? '… Scanning' : '⟳ Update'}</Text>
+          <Text style={styles.updTxt}>{scanning ? REFRESHING : REFRESH}</Text>
         </TouchableOpacity>
         {asof && !scanning ? <Text style={styles.asofInline}>updated {timeAgo(asof)}</Text> : null}
       </View>
@@ -510,7 +511,7 @@ export default function SmcScreen() {
           <EmptyState
             icon="◈"
             title="No SMC setups yet"
-            hint="Hit ⟳ Update List to screen mid/large caps for liquidity sweeps, AMD, FVG, breakers and HVI in discount. Note: NY-Open, 1-min ping-pong and 90-min cycle models need intraday data and aren't screened here."
+            hint="Hit ⟳ Refresh to screen mid/large caps for liquidity sweeps, AMD, FVG, breakers and HVI in discount. Note: NY-Open, 1-min ping-pong and 90-min cycle models need intraday data and aren't screened here."
           />
         ) : null}
 

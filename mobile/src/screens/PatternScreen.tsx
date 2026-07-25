@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { REFRESH, REFRESHING } from '../copy';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Candle, ChartPattern, ChartPatternsResp, PatternScreenHit, PatternScreenResp, TradeScanResp, TradeScanRow, api } from '../api';
 import { CapChip, Enrich, useEnrich } from '../enrich';
@@ -563,7 +564,7 @@ function PatternIndexScreener({ onOpenSymbol, onFullScan }: {
           }}
           activeOpacity={0.75}
         >
-          <Text style={styles.perTxt}>⟳ Rescan</Text>
+          <Text style={styles.perTxt}>{REFRESH}</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.perChip} onPress={() => setGuide(true)} activeOpacity={0.75}>
           <Text style={[styles.perTxt, { color: theme.brand }]}>ⓘ Guide</Text>
@@ -809,7 +810,7 @@ function PatternGuideSheet({ onClose }: { onClose: () => void }) {
           and the symbol's last five formations.{'\n'}
           3 · From the card, open the full pattern page to see the pattern drawn on the chart with its key
           level and target, log a 2:1 paper trade, add to the watchlist, or export the read as a PDF.{'\n'}
-          4 · ⟳ Rescan forces a fresh sweep; otherwise results refresh in the background through the day.
+          4 · ⟳ Refresh forces a fresh sweep; otherwise results refresh in the background through the day.
         </Text>
 
         <Text style={styles.exDisc}>
@@ -876,7 +877,7 @@ function TradeScanScreen({ onFullScan }: { onFullScan: (sym: string) => void }) 
           onPress={() => { api.tradeScan(true).catch(() => {}); setSweep((n) => n + 1); }}
           activeOpacity={0.75}
         >
-          <Text style={styles.perTxt}>⟳ Rescan</Text>
+          <Text style={styles.perTxt}>{REFRESH}</Text>
         </TouchableOpacity>
         <InfoButton
           title="Trade Scan"

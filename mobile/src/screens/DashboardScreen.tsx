@@ -31,6 +31,7 @@ import {
   SectorAgg,
   api,
 } from '../api';
+import { REFRESH, REFRESHING } from '../copy';
 import { loadWatchlist } from '../watchlist';
 import { loadPortfolio } from '../portfolio';
 import { navigate, openStock } from '../navIntent';
@@ -353,7 +354,7 @@ export default function DashboardScreen({ onNavigate }: { onNavigate?: (page: st
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
           <SectionTitle>Latest market news</SectionTitle>
           <TouchableOpacity onPress={refreshNews} disabled={newsBusy} activeOpacity={0.7}>
-            <Text style={styles.moreLinkInline}>{newsBusy ? 'Updating…' : '↻ Update news'}</Text>
+            <Text style={styles.moreLinkInline}>{newsBusy ? REFRESHING : REFRESH}</Text>
           </TouchableOpacity>
         </View>
         {!news ? (
@@ -376,7 +377,7 @@ export default function DashboardScreen({ onNavigate }: { onNavigate?: (page: st
             ))}
           </ScrollView>
         ) : (
-          <EmptyState title="No headlines right now" hint="Tap ↻ Update news to re-scrape the trusted feeds (ET Markets, Moneycontrol, Livemint)." />
+          <EmptyState title="No headlines right now" hint="Tap ⟳ Refresh to re-scrape the trusted feeds (ET Markets, Moneycontrol, Livemint)." />
         )}
         {/* Social accounts: the user's own feeds, one tap away. */}
         <View style={styles.socialRow}>

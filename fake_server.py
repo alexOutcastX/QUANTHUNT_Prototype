@@ -10,7 +10,7 @@ DIST = os.path.join(os.path.dirname(__file__), "mobile", "dist")
 PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 5056
 
 _MEMBER_TOKEN = "fake-member-token"
-_MEMBER = {"username": "Taureye", "uname": "taureye", "plan": "pro",
+_MEMBER = {"username": "Taureye", "uname": "taureye", "plan": "pro", "owner": True,
            "features": ["quotes", "heatmap", "news", "universe", "screener", "patterns",
                         "recommendations", "watchlist", "portfolio", "backtest",
                         "trade_scan", "terminal", "dossier", "exports", "alerts"]}
@@ -557,6 +557,21 @@ class H(BaseHTTPRequestHandler):
                  "link": "https://example.com/n" + str(i), "source": "ET Markets",
                  "ts": 1753200000 + i * 3600, "sym": ""} for i in range(10)],
                 "fetched": 1753260000, "cached": False})
+        if path.startswith("/user/data/"):
+            doc = self._synced.get(path)
+            return self._json(doc or {"v": None, "ts": 0})
+        if path == "/auth/status":
+            # Mirrors server.py: an owner-flagged member IS the owner, so the
+            # broker / alerts / developer screens never prompt for a passcode.
+            hdr = (self.headers.get("X-TE-Member") or "").replace("Bearer ", "").strip()
+            signed = "te_member=1" in (self.headers.get("Cookie") or "") or hdr == _MEMBER_TOKEN
+            return self._json({"configured": True, "owner": bool(signed and _MEMBER.get("owner"))})
+        if path == "/auth/me":
+            hdr = (self.headers.get("X-TE-Member") or "").replace("Bearer ", "").strip()
+            signed = "te_member=1" in (self.headers.get("Cookie") or "") or hdr == _MEMBER_TOKEN
+            if signed:
+                return self._json({"user": {"email": _MEMBER["username"], "source": "member"}})
+            return self._json({"user": None})
         if path == "/auth/member":
             # Cookie (web) OR bearer header (the Capacitor shell, where the
             # WebView drops cross-site cookies) — mirrors server.py.
@@ -622,6 +637,20 @@ class H(BaseHTTPRequestHandler):
         self.send_header("Content-Type", ctype)
         self.end_headers()
         self.wfile.write(body)
+
+    # Cloud sync (/user/data/<kind>) is a real PUT on the server. The member
+    # session now provisions an account, so the app actually syncs — without
+    # this the stub answered 501 and every headless run logged a console error.
+    _synced = {}
+
+    def do_PUT(self):
+        path = self.path.split("?")[0]
+        if path.startswith("/user/data/"):
+            n = int(self.headers.get("Content-Length") or 0)
+            body = json.loads(self.rfile.read(n) or b"{}")
+            self._synced[path] = {"v": body.get("v"), "ts": body.get("ts") or 0}
+            return self._json({"stored": True, "ts": body.get("ts") or 0})
+        return self._json({"ok": True})
 
     def do_POST(self):
         if self.path.split("?")[0] == "/auth/member/login":
