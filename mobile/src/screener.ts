@@ -5,6 +5,7 @@
 // NOTE: the scan stores d9/d20/d50/d200 as the % DISTANCE of price from each
 // SMA (not the SMA level), so "price > 20DMA" is simply "d20 > 0".
 import { Fundamentals, ScanRow } from './api';
+import { CANONICAL_SECTORS } from './sectors';
 
 export type Row = ScanRow & {
   sym: string;
@@ -87,13 +88,13 @@ export type FilterDef = {
   get: (r: Row) => number | boolean | string | null;
 };
 
-export const TE_SECTORS = [
-  'Automobile', 'Banking', 'Capital Goods', 'Chemicals', 'Construction',
-  'Consumer Durables', 'Energy', 'FMCG', 'Financial Services', 'Healthcare',
-  'Information Technology', 'Infrastructure', 'Media', 'Metals & Mining',
-  'Oil & Gas', 'Pharmaceuticals', 'Power', 'Realty', 'Services', 'Telecom',
-  'Textiles',
-];
+// The Sector filter's options must be the SAME vocabulary the rows carry:
+// /fundamentals/bulk overlays the app's NSE macro sector onto every row (see
+// server.py), which is exactly CANONICAL_SECTORS — the list the heatmap,
+// Recommendations and Multibagger already offer. The old hand-written list
+// here ("Banking", "Pharmaceuticals", "FMCG", "Oil & Gas"…) matched none of
+// it, so those options quietly returned nothing.
+export const TE_SECTORS = CANONICAL_SECTORS;
 
 const fnum = (r: Row, k: keyof Fundamentals): number | null => {
   const f = r._fund;

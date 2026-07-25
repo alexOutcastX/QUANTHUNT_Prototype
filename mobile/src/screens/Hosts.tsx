@@ -4,7 +4,6 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { api } from '../api';
 import { currentMember, memberLogout } from '../member';
 import { peekNav, subscribeNav } from '../navIntent';
-import { isClassicNav, setClassicNav, subscribeNavMode } from '../navMode';
 import { useResponsive } from '../responsive';
 import { theme } from '../theme';
 import { lazyScreen } from '../lazyScreen';
@@ -146,7 +145,13 @@ function SubTabs({ tabs, persistKey, alias }: { tabs: SubTab[]; persistKey?: str
         // Mobile: a hamburger button showing the current section; tap for a
         // drop-down list of every section with its one-line description.
         <View style={styles.hamWrap}>
-          <TouchableOpacity style={styles.hamBtn} onPress={() => setMenuOpen(true)} activeOpacity={0.75}>
+          <TouchableOpacity
+            style={styles.hamBtn}
+            onPress={() => setMenuOpen(true)}
+            activeOpacity={0.75}
+            accessibilityRole="button"
+            accessibilityLabel={`Sections menu — currently ${cur.label}`}
+          >
             <Text style={styles.hamIcon}>☰</Text>
             <View style={{ flex: 1 }}>
               <Text style={styles.hamLabel}>{cur.label}</Text>
@@ -183,56 +188,6 @@ function SubTabs({ tabs, persistKey, alias }: { tabs: SubTab[]; persistKey?: str
 
       <View style={styles.hostBody}>{cur.render()}</View>
     </View>
-  );
-}
-
-export function AnalysisHome() {
-  return (
-    <SubTabs
-      persistKey="analysis"
-      tabs={[
-        { key: 'inst', label: 'Institutional', hint: 'Full company dossier · fundamentals, valuation, technicals, ownership, filings & investment score', render: () => <AnalysisScreen /> },
-        { key: 'shareholders', label: 'Shareholders', hint: "Institutions, promoters & political funding · every link cited", render: () => <EntityGraphScreen /> },
-        { key: 'paper', label: 'Paper trades', hint: 'Simulated outcomes of your logged setups · win-rate', render: () => <PaperTradeScreen /> },
-        { key: 'reco', label: 'Recommendations', hint: 'Ranked buy setups from the Multibagger candidates', render: () => <RecommendationsScreen /> },
-        { key: 'mb', label: 'Multibagger', hint: 'Fixed-screen candidates + one-click potential analyser', render: () => <MultibaggerScreen /> },
-        { key: 'patterns', label: 'Patterns', hint: 'Classic chart-pattern scanner with confidence & targets', render: () => <PatternScreen /> },
-        { key: 'momentum', label: 'Momentum', hint: 'Trend & thrust radar with upside-remaining', render: () => <MomentumScreen /> },
-        { key: 'risk', label: 'Risk', hint: 'Portfolio VaR · volatility · beta · drawdown · correlation', render: () => <RiskScreen /> },
-        { key: 'bt', label: 'Backtest', hint: 'Test a strategy against historical data before risking capital', render: () => <BacktestScreen /> },
-      ]}
-    />
-  );
-}
-
-export function ListsHome() {
-  return (
-    <SubTabs
-      persistKey="lists"
-      tabs={[
-        { key: 'watchlist', label: 'Watchlist', hint: 'Symbols with entry price + since-add move · live quotes', render: () => <WatchlistScreen /> },
-        { key: 'portfolio', label: 'Portfolio', hint: 'Holdings with live P&L · broker sync', render: () => <PortfolioScreen /> },
-        { key: 'alerts', label: 'Alerts', hint: 'Price / % / RSI alerts', render: () => <AlertsScreen /> },
-      ]}
-    />
-  );
-}
-
-export function ToolsHome() {
-  return (
-    <SubTabs
-      persistKey="tools"
-      tabs={[
-        { key: 'universe', label: 'Universe', hint: 'Index constituents · mcap segments · heatmap', render: () => <UniverseScreen /> },
-        { key: 'derivatives', label: 'Derivatives', hint: 'F&O option chain · PCR · max-pain · payoff builder', render: () => <DerivativesScreen /> },
-        { key: 'corporate', label: 'Corporate', hint: 'Filings, actions, shareholding, bulk/block deals', render: () => <CorporateScreen /> },
-        { key: 'entities', label: 'Shareholders', hint: "Institutions, promoters & political funding · every link cited", render: () => <EntityGraphScreen /> },
-        { key: 'calc', label: 'Calculator', hint: 'Position size · SIP · CAGR', render: () => <CalculatorScreen /> },
-        { key: 'indices', label: 'Indices', hint: 'Live index levels · day & 1Y change', render: () => <IndicesScreen /> },
-        { key: 'holidays', label: 'Holidays', hint: 'NSE holiday calendar · market open/closed', render: () => <HolidaysScreen /> },
-        { key: 'developer', label: 'API', hint: 'Issue keys · public /api/v1 quote & indices', render: () => <DeveloperScreen /> },
-      ]}
-    />
   );
 }
 
@@ -361,28 +316,26 @@ const MORE_ITEMS: { key: string; label: string; hint: string; render: () => Reac
   { key: 'calc', label: 'Calculator', hint: 'Position size · SIP · CAGR', render: () => <CalculatorScreen /> },
   { key: 'corporate', label: 'Corporate', hint: 'Filings, actions, shareholding, bulk/block deals', render: () => <CorporateScreen /> },
   { key: 'derivatives', label: 'Derivatives', hint: 'F&O option chain · PCR · max-pain · payoff builder', render: () => <DerivativesScreen /> },
-  { key: 'risk', label: 'Portfolio risk', hint: 'VaR · volatility · beta · drawdown · correlation', render: () => <RiskScreen /> },
+  { key: 'risk', label: 'Risk', hint: 'VaR · volatility · beta · drawdown · correlation', render: () => <RiskScreen /> },
   { key: 'entities', label: 'Shareholders', hint: "Institutions, promoters & political funding · every link cited", render: () => <EntityGraphScreen /> },
-  { key: 'alerts', label: 'Alerts', hint: 'Server-side price / % / RSI alerts (owner)', render: () => <AlertsScreen /> },
-  { key: 'developer', label: 'Developer API', hint: 'Issue keys · public /api/v1 quote & indices (owner)', render: () => <DeveloperScreen /> },
+  { key: 'alerts', label: 'Alerts', hint: 'Server-side price / % / RSI alerts', render: () => <AlertsScreen /> },
+  { key: 'developer', label: 'Developer API', hint: 'Issue keys · public /api/v1 quote & indices', render: () => <DeveloperScreen /> },
   { key: 'indices', label: 'Indices', hint: 'Live index levels · day & 1Y change', render: () => <IndicesScreen /> },
   { key: 'holidays', label: 'Holidays', hint: 'NSE holiday calendar · market open/closed', render: () => <HolidaysScreen /> },
 ];
 
-// Destinations that already have a first-class tab on the new shell's Screens
-// or Desk bars — More only lists them in classic navigation, where this page
-// is their sole home (report issue 12: no duplicates).
+// Destinations that already have a first-class tab on the Screens or Desk
+// bars. One home per screen, so More never lists them a second time.
 const MORE_DUP_KEYS = new Set(['account', 'heatmap', 'universe', 'portfolio', 'watchlist', 'calc', 'risk', 'entities', 'alerts']);
+const MORE_MENU = MORE_ITEMS.filter((i) => !MORE_DUP_KEYS.has(i.key));
 
 export function MoreScreen() {
   const [sel, setSel] = useState<string | null>(null);
-  const [classic, setClassic] = useState(isClassicNav());
   const [version, setVersion] = useState('');
-  useEffect(() => subscribeNavMode(() => setClassic(isClassicNav())), []);
   useEffect(() => {
     api.version().then((v) => setVersion(v.version)).catch(() => {});
   }, []);
-  const items = classic ? MORE_ITEMS : MORE_ITEMS.filter((i) => !MORE_DUP_KEYS.has(i.key));
+  const items = MORE_MENU;
   const item = items.find((i) => i.key === sel);
 
   if (item) {
@@ -416,23 +369,6 @@ export function MoreScreen() {
           <Text style={styles.menuChevron}>›</Text>
         </TouchableOpacity>
       ))}
-      <TouchableOpacity
-        style={styles.menuRow}
-        onPress={() => setClassicNav(!classic)}
-        activeOpacity={0.75}
-      >
-        <View style={{ flex: 1 }}>
-          <Text style={styles.menuLabel}>Navigation layout</Text>
-          <Text style={styles.menuHint}>
-            {classic
-              ? 'Classic — tap to switch to the new Today / Screens / Symbol / Desk / Terminal layout'
-              : 'New 5-tab layout — tap to switch back to the classic navigation'}
-          </Text>
-        </View>
-        <View style={[styles.navToggle, !classic && styles.navToggleOn]}>
-          <View style={[styles.navKnob, !classic && styles.navKnobOn]} />
-        </View>
-      </TouchableOpacity>
       {currentMember() ? (
         <TouchableOpacity style={styles.menuRow} onPress={() => memberLogout()} activeOpacity={0.75}>
           <View style={{ flex: 1 }}>

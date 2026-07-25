@@ -14,6 +14,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { api } from '../api';
 import StockDetail from '../components/StockDetail';
 import { ExportCol, exportCsv, exportExcel, exportPdf } from '../csv';
+import { crore } from '../format';
 import { parseNL } from '../nlScreen';
 import { PRESETS, Preset } from '../presets';
 import {
@@ -95,13 +96,10 @@ const fmtIN = (v: number | null | undefined) =>
     : v.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const fmtVolIN = (v: number | null | undefined) =>
   v == null || !isFinite(v) ? '—' : Math.round(v).toLocaleString('en-IN');
-// Market cap arrives in ₹ crore; render as ₹55.73k cr / ₹1.23L cr / ₹820 cr.
-const fmtMcap = (v: number | null | undefined) => {
-  if (v == null || !isFinite(v)) return '—';
-  if (v >= 1e5) return '₹' + (v / 1e5).toFixed(2) + 'L cr';
-  if (v >= 1e3) return '₹' + (v / 1e3).toFixed(2) + 'k cr';
-  return '₹' + v.toFixed(0) + ' cr';
-};
+// Market cap arrives in ₹ crore — rendered by the one app-wide rule (format.ts).
+// This screen used to print "₹1.20L cr" while Momentum printed "₹1.20L Cr" for
+// the same number, one tab apart.
+const fmtMcap = (v: number | null | undefined) => crore(v);
 const fnum2 = (r: Row, k: string, d = 1): string => {
   const f = r._fund as Record<string, unknown> | null | undefined;
   const v = f ? f[k] : null;

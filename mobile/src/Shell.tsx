@@ -6,7 +6,7 @@ import { API_BASE, api } from './api';
 import { marketState } from './format';
 import { Icon, IconName } from './icons';
 import { useResponsive } from './responsive';
-import { AnalysisHome, ChartsHome, DeskHub, ListsHome, MoreScreen, ScreensHub, ToolsHome } from './screens/Hosts';
+import { DeskHub, ScreensHub } from './screens/Hosts';
 import DashboardScreen from './screens/DashboardScreen';
 import { lazyScreen } from './lazyScreen';
 
@@ -22,7 +22,6 @@ import CommandPalette from './components/CommandPalette';
 import TickerSettings from './components/TickerSettings';
 import PdfPreview from './components/PdfPreview';
 import { navigate, peekNav, subscribeNav } from './navIntent';
-import { isClassicNav, navModeReady, subscribeNavMode } from './navMode';
 import { refreshSession } from './session';
 import { refreshFlags } from './flags';
 import { installErrorReporting } from './errorReport';
@@ -37,7 +36,9 @@ function ThemeToggle({ style }: { style?: object }) {
       style={[styles.themeBtn, style]}
       onPress={toggleThemeMode}
       activeOpacity={0.75}
+      accessibilityRole="button"
       accessibilityLabel={mode === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
     >
       <Text style={styles.themeGlyph}>{mode === 'dark' ? '☀' : '☾'}</Text>
     </TouchableOpacity>
@@ -203,7 +204,9 @@ function NewDesktopShell() {
           style={[styles.themeBtn, styles.themeBtnDesktop]}
           onPress={() => setSettings(true)}
           activeOpacity={0.75}
+          accessibilityRole="button"
           accessibilityLabel="Ticker settings"
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
           <Icon name="settings" size={16} color={theme.muted2} />
         </TouchableOpacity>
@@ -211,6 +214,9 @@ function NewDesktopShell() {
         <TouchableOpacity
           style={styles.legalBtn}
           onPress={() => Linking.openURL((API_BASE || '') + '/legal.html').catch(() => {})}
+          accessibilityRole="link"
+          accessibilityLabel="Disclaimer and legal terms"
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
           <Text style={styles.legalTxt}>DISCLAIMER</Text>
         </TouchableOpacity>
@@ -260,7 +266,9 @@ function NewMobileShell() {
             style={styles.themeBtn}
             onPress={() => setPalette(true)}
             activeOpacity={0.75}
+            accessibilityRole="button"
             accessibilityLabel="Search stocks and pages"
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
             <Icon name="search" size={16} color={theme.muted2} />
           </TouchableOpacity>
@@ -268,7 +276,9 @@ function NewMobileShell() {
             style={styles.themeBtn}
             onPress={() => setSettings(true)}
             activeOpacity={0.75}
+            accessibilityRole="button"
             accessibilityLabel="Ticker settings"
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
             <Icon name="settings" size={16} color={theme.muted2} />
           </TouchableOpacity>
@@ -296,157 +306,14 @@ function NewMobileShell() {
   );
 }
 
-// ═══════════════════════ Classic shell (opt-in fallback) ═════════════════════
-// The pre-redesign navigation, kept behind Desk → More → "Navigation layout"
-// while the new shell beds in.
-const SCREEN_BY_KEY: Record<string, (nav: (k: string) => void) => React.ReactElement> = {
-  dashboard: (nav) => <DashboardScreen onNavigate={nav} />,
-  screener: () => <ScreenerScreen />,
-  terminal: () => <TerminalScreen />,
-  analysis: () => <AnalysisHome />,
-  heatmap: () => <HeatmapScreen />,
-  charts: () => <ChartsHome />,
-  lists: () => <ListsHome />,
-  tools: () => <ToolsHome />,
-};
-
-const PAGES: { k: string; label: string }[] = [
-  { k: 'dashboard', label: 'Dashboard' },
-  { k: 'screener', label: 'Screener' },
-  { k: 'terminal', label: 'Terminal' },
-  { k: 'analysis', label: 'Analysis' },
-  { k: 'heatmap', label: 'Heatmap' },
-  { k: 'charts', label: 'Charts' },
-  { k: 'lists', label: 'Lists' },
-  { k: 'tools', label: 'Tools' },
-];
-
-const TABS: { k: string; label: string; glyph: string; render: (nav: (k: string) => void) => React.ReactElement }[] = [
-  { k: 'dashboard', label: 'Home', glyph: '◆', render: (nav) => <DashboardScreen onNavigate={nav} /> },
-  { k: 'screener', label: 'Screener', glyph: '#', render: () => <ScreenerScreen /> },
-  { k: 'terminal', label: 'Terminal', glyph: '⌘', render: () => <TerminalScreen /> },
-  { k: 'analysis', label: 'Analysis', glyph: '%', render: () => <AnalysisHome /> },
-  { k: 'more', label: 'More', glyph: '•••', render: () => <MoreScreen /> },
-];
-
-function DesktopShell({ version }: { version: string }) {
-  const [active, setActive] = useState('dashboard');
-  const nav = (k: string) => setActive(SCREEN_BY_KEY[k] ? k : 'dashboard');
-  const cur = SCREEN_BY_KEY[active] || SCREEN_BY_KEY.dashboard;
-  useEffect(
-    () =>
-      subscribeNav(() => {
-        const p = peekNav();
-        if (p && SCREEN_BY_KEY[p.page]) setActive(p.page);
-      }),
-    [],
-  );
-  return (
-    <View style={styles.desktop}>
-      <View style={styles.brandBar}>
-        <Brand version={version} big />
-        <Text style={styles.tagline}>NSE · BSE Live Screener</Text>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.navScroll}
-          contentContainerStyle={styles.pagesRow}
-        >
-          {PAGES.map((it) => {
-            const on = active === it.k;
-            return (
-              <TouchableOpacity
-                key={it.k}
-                style={[styles.pageItem, on && styles.pageItemOn]}
-                onPress={() => setActive(it.k)}
-              >
-                <Text style={[styles.pageLabel, on && styles.pageTextOn]}>{it.label}</Text>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
-        <ThemeToggle style={styles.themeBtnDesktop} />
-        <TouchableOpacity
-          style={styles.legalBtn}
-          onPress={() => Linking.openURL((API_BASE || '') + '/legal.html').catch(() => {})}
-        >
-          <Text style={styles.legalTxt}>DISCLAIMER</Text>
-        </TouchableOpacity>
-      </View>
-      <TickerStrip />
-      <View style={styles.main}>
-        {cur(nav)}
-      </View>
-    </View>
-  );
-}
-
-function MobileShell({ version }: { version: string }) {
-  const insets = useSafeAreaInsets();
-  const [active, setActive] = useState('dashboard');
-  const [hydrated, setHydrated] = useState(false);
-  const nav = (k: string) => setActive(TABS.some((t) => t.k === k) ? k : 'more');
-  const tab = TABS.find((t) => t.k === active) || TABS[0];
-  useEffect(() => {
-    AsyncStorage.getItem('taureye.nav.tab')
-      .then((v) => {
-        if (v && TABS.some((t) => t.k === v)) setActive(v);
-      })
-      .finally(() => setHydrated(true));
-  }, []);
-  useEffect(() => {
-    if (hydrated) AsyncStorage.setItem('taureye.nav.tab', active).catch(() => {});
-  }, [active, hydrated]);
-  useEffect(
-    () =>
-      subscribeNav(() => {
-        const p = peekNav();
-        if (p) setActive(TABS.some((t) => t.k === p.page) ? p.page : 'more');
-      }),
-    [],
-  );
-  return (
-    <View style={styles.mobile}>
-      <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
-        <Brand version={version} />
-        <ThemeToggle />
-      </View>
-      <View style={styles.mobileBody}>{tab.render(nav)}</View>
-      <View style={[styles.tabBar, { paddingBottom: insets.bottom || 8 }]}>
-        {TABS.map((t) => {
-          const on = active === t.k;
-          return (
-            <TouchableOpacity key={t.k} style={styles.tab} onPress={() => setActive(t.k)} activeOpacity={0.7}>
-              <View style={[styles.tabPill, on && styles.tabPillOn]}>
-                <Text style={[styles.tabGlyph, { color: on ? theme.brand : theme.muted }]}>{t.glyph}</Text>
-              </View>
-              <Text style={[styles.tabLabel, { color: on ? theme.brand : theme.muted, fontWeight: on ? '700' : '500' }]}>{t.label}</Text>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
-    </View>
-  );
-}
-
 export default function Shell() {
   const { isDesktop } = useResponsive();
-  const version = useVersion();
-  // Wait for the persisted nav-mode flag so a classic-mode user never sees the
-  // new shell flash in; re-render live when the toggle flips.
-  const [modeReady, setModeReady] = useState(false);
-  const [classic, setClassic] = useState(false);
   useEffect(() => {
-    navModeReady().then(() => {
-      setClassic(isClassicNav());
-      setModeReady(true);
-    });
     // Restore the user session (and pull cloud-synced state) on boot, and
     // learn which feature flags (advisory mode) apply to this viewer.
     refreshSession();
     refreshFlags();
     installErrorReporting();
-    return subscribeNavMode(() => setClassic(isClassicNav()));
   }, []);
   // Web: clamp browser pinch-zoom. Page-level zoom trapped users inside the
   // Terminal graph (page zoom + graph zoom stacked with no way back) — the
@@ -459,10 +326,10 @@ export default function Shell() {
     // the WebView edge-to-edge behind a transparent status bar.
     if (m) m.setAttribute('content', 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover');
   }, []);
-  if (!modeReady) return <View style={styles.mobile} />;
-  const shell = classic
-    ? (isDesktop ? <DesktopShell version={version} /> : <MobileShell version={version} />)
-    : (isDesktop ? <NewDesktopShell /> : <NewMobileShell />);
+  // One navigation system. The legacy "classic" shell (a parallel page list
+  // with its own duplicate entries in More) was retired — every screen now has
+  // exactly one home, so there is nothing to keep in sync.
+  const shell = isDesktop ? <NewDesktopShell /> : <NewMobileShell />;
   return (
     <>
       {shell}
@@ -487,8 +354,9 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
   },
   tagline: { color: theme.muted, fontSize: 10, fontFamily: theme.mono },
-  legalBtn: { marginLeft: 'auto', paddingLeft: 10 },
-  legalTxt: { color: theme.muted, fontSize: 9, fontFamily: theme.mono, letterSpacing: 1 },
+  // A legal link needs a real target, not a 10px sliver (QA finding D4).
+  legalBtn: { marginLeft: 'auto', paddingLeft: 10, paddingRight: 4, paddingVertical: 12 },
+  legalTxt: { color: theme.muted, fontSize: theme.fs.xs, fontFamily: theme.mono, letterSpacing: 1 },
   navScroll: { flexGrow: 0, marginLeft: 10 },
   pagesRow: { gap: 2, alignItems: 'center' },
   pageItem: {

@@ -957,11 +957,14 @@ def require_owner(fn):
 
     @functools.wraps(fn)
     def wrapper(*a, **kw):
-        if not _auth.configured():
-            return jsonify({"error": "owner-auth-required",
-                            "detail": "This feature needs an owner passcode. Set "
-                                      "APP_PASSWORD on the server to enable it."}), 403
+        # An owner-flagged member account is enough; the standalone passcode is
+        # only *required* when no such account can grant the rights.
         if not _owner_session():
+            if not _owner_auth_available():
+                return jsonify({"error": "owner-auth-required",
+                                "detail": "This feature is owner-only. Sign in with an "
+                                          "owner account, or set APP_PASSWORD on the "
+                                          "server."}), 403
             return jsonify({"error": "unauthorized",
                             "detail": "Owner login required."}), 401
         return fn(*a, **kw)
@@ -970,7 +973,7 @@ def require_owner(fn):
 
 @app.route("/auth/status")
 def auth_status():
-    return jsonify({"configured": _auth.configured(),
+    return jsonify({"configured": _owner_auth_available(),
                     "owner": _owner_session()})
 
 
@@ -1008,7 +1011,23 @@ def _bearer(header_name: str) -> str:
     return raw[7:].strip() if raw.lower().startswith("bearer ") else raw
 
 
+def _owner_auth_available() -> bool:
+    """True when SOME route to owner rights exists — an owner-flagged member
+    account, or the standalone passcode."""
+    if any(a.get("owner") for a in _members.accounts().values()):
+        return True
+    return _auth.configured()
+
+
 def _owner_session() -> bool:
+    """Owner rights come from ONE sign-in: a member account flagged `owner`
+    counts, so the broker / alerts / developer screens stop asking for a
+    separate passcode. The standalone passcode still works for instances that
+    have no member table configured."""
+    m = _members.from_cookie(request.cookies.get(_members.COOKIE, "")) \
+        or _members.from_cookie(_bearer(_HDR_MEMBER))
+    if m and m.get("owner"):
+        return True
     return (_auth.is_owner(request.cookies.get(_auth.COOKIE, ""))
             or _auth.is_owner(_bearer(_HDR_OWNER)))
 
@@ -1042,8 +1061,28 @@ _USER_COOKIE = "te_user"
 
 
 def current_user_id():
-    return (_users.session_user_id(request.cookies.get(_USER_COOKIE, ""))
-            or _users.session_user_id(_bearer(_HDR_USER)))
+    """The account whose synced documents (watchlists, alerts, paper trades)
+    this request owns. A member sign-in IS an account — it auto-provisions a
+    row keyed to the member, so signing in once starts cloud sync without a
+    second email login. The email/OTP identity remains for accounts created
+    that way (and for members who prefer an email they can move between
+    devices)."""
+    uid = (_users.session_user_id(request.cookies.get(_USER_COOKIE, ""))
+           or _users.session_user_id(_bearer(_HDR_USER)))
+    if uid is not None:
+        return uid
+    m = current_member()
+    if m and _users.enabled():
+        row, _created = _users.get_or_create_user(_member_account_email(m), consent=True)
+        if row:
+            return row["id"]
+    return None
+
+
+def _member_account_email(member) -> str:
+    """Stable internal address for a member's synced documents. Never emailed —
+    it exists so member and email accounts share one storage table."""
+    return f"{member['uname']}@member.taureye.local"
 
 
 def require_user(fn):
@@ -1200,7 +1239,14 @@ def auth_me():
     if uid is None:
         return jsonify({"user": None})
     u = _users.get_user(uid)
-    return jsonify({"user": {"email": u["email"]} if u else None})
+    if not u:
+        return jsonify({"user": None})
+    # A member-derived account reports the member's name, not the internal
+    # address that keys its rows (see _member_account_email).
+    m = current_member()
+    if m and u["email"] == _member_account_email(m):
+        return jsonify({"user": {"email": m["username"], "source": "member"}})
+    return jsonify({"user": {"email": u["email"], "source": "email"}})
 
 
 @app.route("/auth/account", methods=["DELETE"])
