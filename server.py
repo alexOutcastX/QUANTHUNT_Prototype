@@ -634,54 +634,150 @@ def _web_cache_dir():
     return os.path.join(_BASE_DIR, "mobile", "dist-precompressed")
 
 
+def _write_atomic(path, data):
+    """Write via a temp file + rename so readers never observe a partial file.
+
+    open(path, "wb") truncates immediately, so a request landing mid-write used
+    to receive a few bytes of a .gz — served as a 200 with Content-Encoding:
+    gzip that no browser can decode. If the write then failed outright (full
+    disk, killed process) the truncated file survived with a *fresh* mtime, so
+    the freshness check below considered it good and the blank page became
+    permanent. os.replace() is atomic, and a failed write now leaves the
+    previous good variant untouched.
+    """
+    tmp = "%s.tmp%d" % (path, os.getpid())
+    try:
+        with open(tmp, "wb") as f:
+            f.write(data)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, path)
+    except Exception:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
+
+
+# Registry of precompressed variants this process wrote (or re-verified) itself:
+#   "index.html.gz" -> (size, mtime)
+# A variant is served ONLY if it is listed here AND still matches that stat.
+# Trusting the filesystem alone is what made a corrupt .gz reachable: a
+# truncated file is still a file, and a 1-byte .gz passes any "is it empty?"
+# test while decoding to nothing.
+_WEB_VARIANTS = {}
+_WEB_VARIANTS_LOCK = threading.Lock()
+
+
+def _decompressed_len(path, enc):
+    """Byte length the variant decodes to — the only real proof it is intact."""
+    blob = open(path, "rb").read()
+    if enc == "gzip":
+        import gzip as _gzip
+        return len(_gzip.decompress(blob))
+    import brotli
+    return len(brotli.decompress(blob))
+
+
 def _precompress_web_dir():
+    """Build .br/.gz siblings for the web bundle and register the good ones.
+
+    Every variant is either written here (atomically) or decompressed and
+    checked against its source length before being registered, so a leftover
+    truncated file from an interrupted run can never be served — it simply
+    fails verification and gets rewritten.
+    """
     try:
         import brotli  # optional — gzip alone still helps
     except Exception:
         brotli = None
     import gzip as _gzip
     cache = _web_cache_dir()
+    encs = [("gzip", ".gz", lambda d: _gzip.compress(d, 9))]
+    if brotli is not None:
+        encs.append(("br", ".br", lambda d: brotli.compress(d, quality=10)))
+
+    good = {}
     for root, _dirs, files in os.walk(WEB_DIR):
         for name in files:
             if not name.endswith(_COMPRESSIBLE):
                 continue
             src = os.path.join(root, name)
-            rel = os.path.relpath(src, WEB_DIR)
-            dst_base = os.path.join(cache, rel)
+            rel = os.path.relpath(src, WEB_DIR).replace(os.sep, "/")
             try:
-                mtime = os.path.getmtime(src)
-                gz, br = dst_base + ".gz", dst_base + ".br"
-                gz_stale = not os.path.exists(gz) or os.path.getmtime(gz) < mtime
-                br_stale = brotli is not None and (
-                    not os.path.exists(br) or os.path.getmtime(br) < mtime)
-                if not gz_stale and not br_stale:
-                    continue
-                data = open(src, "rb").read()
-                os.makedirs(os.path.dirname(dst_base), exist_ok=True)
-                if gz_stale:
-                    with open(gz, "wb") as f:
-                        f.write(_gzip.compress(data, 9))
-                if br_stale:
-                    with open(br, "wb") as f:
-                        f.write(brotli.compress(data, quality=10))
+                src_stat = os.stat(src)
+                data = None
+                for enc, ext, compress in encs:
+                    dst = os.path.join(cache, rel + ext)
+                    try:
+                        # Reuse an existing variant only when it is newer than
+                        # the source AND actually decodes back to it.
+                        st = os.stat(dst)
+                        if (st.st_mtime >= src_stat.st_mtime
+                                and _decompressed_len(dst, enc) == src_stat.st_size):
+                            good[rel + ext] = (st.st_size, st.st_mtime)
+                            continue
+                    except Exception:
+                        pass  # missing, stale or corrupt — rebuild it below
+                    if data is None:
+                        data = open(src, "rb").read()
+                    os.makedirs(os.path.dirname(dst), exist_ok=True)
+                    _write_atomic(dst, compress(data))
+                    st = os.stat(dst)
+                    good[rel + ext] = (st.st_size, st.st_mtime)
             except Exception:
                 logging.debug("precompress failed for %s", src, exc_info=True)
 
+    with _WEB_VARIANTS_LOCK:
+        _WEB_VARIANTS.clear()
+        _WEB_VARIANTS.update(good)
+    logging.info("precompressed %d web variants", len(good))
+
+
+def _variant_for(fname, ext):
+    """Path of a registered, still-matching variant, or None to serve plain."""
+    with _WEB_VARIANTS_LOCK:
+        rec = _WEB_VARIANTS.get(fname + ext)
+    if rec is None:
+        return None
+    size, mtime = rec
+    path = os.path.join(_web_cache_dir(), fname + ext)
+    try:
+        st = os.stat(path)
+    except OSError:
+        return None
+    if st.st_size != size or st.st_mtime != mtime:
+        logging.warning("precompressed variant changed under us, ignoring: %s", path)
+        return None
+    return path
+
 
 def _send_web_file(fname):
-    """send_from_directory(WEB_DIR, ...) preferring a precompressed variant."""
+    """send_from_directory(WEB_DIR, ...) preferring a precompressed variant.
+
+    A variant is used only when _variant_for vouches for it. Serving a bad one
+    is uniquely nasty: the response is a 200 the browser cannot decode, so the
+    page renders blank with nothing in the console and no failed request to
+    point at — and for /_expo/* assets, which go out as `immutable, max-age=1y`,
+    the browser caches that blank result for a year. Falling back to the
+    uncompressed original always works.
+    """
     import mimetypes
     accept = request.headers.get("Accept-Encoding", "").lower()
     if fname.endswith(_COMPRESSIBLE):
-        cache = _web_cache_dir()
         for enc, ext in (("br", ".br"), ("gzip", ".gz")):
-            if enc in accept and os.path.isfile(os.path.join(cache, fname + ext)):
-                resp = send_from_directory(cache, fname + ext)
-                resp.headers["Content-Encoding"] = enc
-                resp.headers["Content-Type"] = (
-                    mimetypes.guess_type(fname)[0] or "application/octet-stream")
-                resp.headers["Vary"] = "Accept-Encoding"
-                return resp
+            if enc not in accept:
+                continue
+            path = _variant_for(fname, ext)
+            if path is None:
+                continue
+            resp = send_from_directory(os.path.dirname(path), os.path.basename(path))
+            resp.headers["Content-Encoding"] = enc
+            resp.headers["Content-Type"] = (
+                mimetypes.guess_type(fname)[0] or "application/octet-stream")
+            resp.headers["Vary"] = "Accept-Encoding"
+            return resp
     return send_from_directory(WEB_DIR, fname)
 
 
