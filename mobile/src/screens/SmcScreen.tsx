@@ -1,7 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import {
+  Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions,
+} from 'react-native';
 import { REFRESH, REFRESHING } from '../copy';
 import { SmcRec, StrategyHit, api } from '../api';
+import SmcChart from '../components/SmcChart';
 import StockDetail from '../components/StockDetail';
 import StrategyScores from '../components/StrategyScores';
 import { Row } from '../screener';
@@ -115,6 +118,13 @@ function SmcDetail({
 }) {
   const adv = useAdvisory();
   const L = lvlLabels(adv);
+  // The chart takes over the sheet body rather than opening a second window.
+  const [showChart, setShowChart] = useState(false);
+  // Older cached rows (scanned before the engine emitted geometry) have no
+  // zones — offer the button only when there is something to draw.
+  const hasGeometry = !!r.zones?.length;
+  const { width, height } = useWindowDimensions();
+  const chartH = Math.max(260, Math.min(460, Math.round(height * 0.42)));
   const Cell = ({ label, value, color, sub }: { label: string; value: string; color?: string; sub?: string }) => (
     <View style={styles.cell}>
       <Text style={styles.cellLbl}>{label}</Text>
@@ -124,6 +134,15 @@ function SmcDetail({
       {sub ? <Text style={[styles.cellSub, color ? { color } : null]}>{sub}</Text> : null}
     </View>
   );
+  if (showChart) {
+    return (
+      <Sheet onClose={onClose} maxHeight="94%">
+        <ScrollView bounces={false}>
+          <SmcChart r={r} onBack={() => setShowChart(false)} height={chartH} />
+        </ScrollView>
+      </Sheet>
+    );
+  }
   return (
     <Sheet onClose={onClose} maxHeight="94%">
         <ScrollView bounces={false}>
@@ -149,7 +168,20 @@ function SmcDetail({
           </View>
 
           {/* Which SMC models flagged the name, and why. */}
-          <Text style={styles.secTitle}>MODELS MATCHED</Text>
+          <View style={styles.secRow}>
+            <Text style={[styles.secTitle, { marginBottom: 0 }]}>MODELS MATCHED</Text>
+            {hasGeometry ? (
+              <TouchableOpacity
+                onPress={() => setShowChart(true)}
+                style={styles.markBtn}
+                activeOpacity={0.8}
+                accessibilityRole="button"
+                accessibilityLabel="View the matched models marked on the chart"
+              >
+                <Text style={styles.markBtnTxt}>◫ On chart</Text>
+              </TouchableOpacity>
+            ) : null}
+          </View>
           <View style={styles.stratList}>
             {r.strategies.map((s) => {
               const c = stratColor(s.key);
@@ -618,6 +650,16 @@ const styles = StyleSheet.create({
   actionTxt: { color: theme.onAccent, fontSize: 9, fontWeight: '800', letterSpacing: 0.5, fontFamily: theme.mono },
   primaryTag: { fontSize: theme.fs.sm, fontWeight: '700', marginTop: 3 },
   secTitle: { color: theme.muted, fontSize: theme.fs.xs + 1, fontWeight: '800', letterSpacing: 1, marginBottom: theme.sp.sm, marginTop: theme.sp.xs },
+  // heading row: section label on the left, "show me on the chart" on the right
+  secRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    marginTop: theme.sp.xs, marginBottom: theme.sp.sm,
+  },
+  markBtn: {
+    borderColor: theme.accent, borderWidth: 1, borderRadius: 999,
+    paddingHorizontal: 11, paddingVertical: 5,
+  },
+  markBtnTxt: { color: theme.accent, fontSize: theme.fs.xs + 1, fontWeight: '700' },
   stratList: { gap: theme.sp.sm, marginBottom: theme.sp.md },
   stratRow: { backgroundColor: theme.surface2, borderRadius: theme.radius.sm, padding: theme.sp.md, gap: 5 },
   stratHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },

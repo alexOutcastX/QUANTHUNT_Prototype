@@ -81,5 +81,105 @@ class SmcEngineTest(unittest.TestCase):
         self.assertLessEqual(r["score"], 100)
 
 
+class SmcGeometryTest(unittest.TestCase):
+    """The shapes the card draws.
+
+    A model that can only be described but not located is a model you cannot
+    check, so each detector emits the bars and prices it actually fired on.
+    """
+
+    def setUp(self):
+        self.candles = _candles(_sweep_series())
+        self.r = smc.analyze("SWP", self.candles)
+        self.times = {c["t"] for c in self.candles}
+
+    def test_zones_emitted_with_a_known_shape(self):
+        self.assertTrue(self.r["zones"], "no geometry emitted for a matched setup")
+        for z in self.r["zones"]:
+            self.assertIn(z["kind"], smc.ZONE_KINDS)
+            self.assertIn(z["bias"], ("bullish", "bearish", "neutral"))
+            self.assertTrue(z["label"])
+            for k in ("owner", "t0", "t1", "lo", "hi", "extend"):
+                self.assertIn(k, z)
+
+    def test_every_anchor_is_a_real_bar(self):
+        # A zone anchored off-grid cannot be positioned on the chart.
+        for z in self.r["zones"]:
+            for t in (z["t0"], z["t1"]):
+                if t is not None:
+                    self.assertIn(t, self.times, f"{z['kind']} anchored off-grid")
+
+    def test_bands_are_ordered_low_to_high(self):
+        for z in self.r["zones"]:
+            if z["lo"] is not None and z["hi"] is not None:
+                self.assertLessEqual(z["lo"], z["hi"], f"{z['kind']} band is inverted")
+
+    def test_open_ended_zones_are_marked_extend(self):
+        for z in self.r["zones"]:
+            if z["t1"] is None:
+                self.assertTrue(z["extend"], f"{z['kind']} has no end and no extend flag")
+
+    def test_matched_models_own_their_shapes(self):
+        keys = {m["key"] for m in self.r["strategies"]}
+        owners = {z["owner"] for z in self.r["zones"]} - {"context"}
+        self.assertTrue(owners, "no model-owned zones")
+        self.assertTrue(owners <= keys, f"zones owned by unmatched models: {owners - keys}")
+
+    def test_context_geometry_always_present(self):
+        kinds = {z["kind"] for z in self.r["zones"] if z["owner"] == "context"}
+        for k in ("range", "equilibrium", "discount", "premium", "ote"):
+            self.assertIn(k, kinds, f"missing context zone: {k}")
+
+    def test_ote_band_matches_the_scored_band(self):
+        # The drawn OTE must be the same 62–79% the in_ote flag is computed
+        # from, or the picture disagrees with the score.
+        rng = next(z for z in self.r["zones"] if z["owner"] == "context" and z["kind"] == "range")
+        ote = next(z for z in self.r["zones"] if z["kind"] == "ote")
+        span = rng["hi"] - rng["lo"]
+        self.assertAlmostEqual(ote["lo"], rng["lo"] + 0.205 * span, places=1)
+        self.assertAlmostEqual(ote["hi"], rng["lo"] + 0.385 * span, places=1)
+
+    def test_focus_window_is_bounded_and_inside_the_series(self):
+        first, last = self.candles[0]["t"], self.candles[-1]["t"]
+        for m in self.r["strategies"]:
+            f = m.get("focus")
+            self.assertIsNotNone(f, f"{m['key']} has no focus window")
+            self.assertGreaterEqual(f["from"], first)
+            self.assertEqual(f["to"], last)
+            bars = (f["to"] - f["from"]) // 86400
+            self.assertLessEqual(bars, smc.FOCUS_MAX_BARS,
+                                 f"{m['key']} focus is wider than the cap")
+            self.assertGreaterEqual(bars, smc.FOCUS_MIN_BARS,
+                                    f"{m['key']} focus is too narrow to read")
+
+    def test_levels_are_the_trade_plan(self):
+        got = {lv["kind"]: lv["price"] for lv in self.r["levels"]}
+        self.assertEqual(got["entry"], self.r["entry"])
+        self.assertEqual(got["stop"], self.r["stop"])
+        self.assertEqual(got["target"], self.r["target"])
+        self.assertEqual(got["target2"], self.r["target2"])
+
+    def test_without_timestamps_geometry_is_skipped_not_faked(self):
+        # Callers may pass bare OHLC. Scores must be unchanged and no zone may
+        # be invented with a null anchor the client would try to plot.
+        bare = [{k: v for k, v in c.items() if k != "t"} for c in self.candles]
+        r = smc.analyze("SWP", bare)
+        self.assertEqual(r["zones"], [])
+        self.assertEqual(r["levels"], [])
+        self.assertEqual([m["score"] for m in r["strategies"]],
+                         [m["score"] for m in self.r["strategies"]])
+        self.assertTrue(all("focus" not in m for m in r["strategies"]))
+
+    def test_volume_imbalance_requires_overlapping_wicks(self):
+        # A true price gap (no wick overlap) is not a VI — that is an FVG.
+        opens = [10, 12]
+        highs = [10.5, 12.5]
+        lows = [9.5, 11.5]          # lows[1] > highs[0] → no overlap
+        closes = [10, 12]
+        cs = [{"t": 1}, {"t": 2}]
+        self.assertEqual(
+            smc._volume_imbalances(cs, opens, highs, lows, closes, atr=1.0), [])
+
+
 if __name__ == "__main__":
     unittest.main()

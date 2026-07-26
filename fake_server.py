@@ -229,6 +229,18 @@ class H(BaseHTTPRequestHandler):
         interval = (q.get("interval", ["1d"])[0])
         bar = {"5m": 300, "15m": 900, "1h": 3600, "4h": 14400,
                "1d": 86400, "1wk": 604800, "1mo": 2592000}.get(interval, 86400)
+        sym = (q.get("symbol", ["STUB"])[0]).upper()
+        if interval == "1d":
+            # Same bars /smc analysed, so SMC zones land on the right candles.
+            out = []
+            for i, c in enumerate(self._smc_series(sym)):
+                out.append(dict(c,
+                                rsi=round(50 + 25 * math.sin(i / 7.0), 1),
+                                macd=round(2 * math.sin(i / 11.0), 3),
+                                macd_signal=round(2 * math.sin((i - 2) / 11.0), 3),
+                                macd_hist=round(0.8 * math.sin(i / 5.0), 3)))
+            return self._json({"symbol": sym, "period": q.get("period", ["2y"])[0],
+                               "interval": interval, "count": len(out), "candles": out})
         candles = []
         px = 500.0
         for i in range(126):
@@ -452,12 +464,11 @@ class H(BaseHTTPRequestHandler):
         res["symbol"] = sym
         self._json(res)
 
-    def _smc(self):
-        from urllib.parse import urlparse, parse_qs
-        import smc as S
-        q = parse_qs(urlparse(self.path).query)
-        sym = (q.get("symbol", ["STUB"])[0]).upper()
-        name = q.get("name", [None])[0]
+    # Daily series the SMC engine is run against. /history serves the SAME bars
+    # for interval=1d so the card's chart sits on the exact timeline the zones
+    # were measured on — otherwise the model's focus window clips to nothing
+    # and no overlay can be verified end to end.
+    def _smc_series(self, sym):
         base = 100 + (hash(sym) % 40)
         # uptrend → confirmed swing low → drift up → sweep it and reclaim (discount)
         up = [base + i * 0.5 for i in range(120)]
@@ -474,7 +485,15 @@ class H(BaseHTTPRequestHandler):
             o = vals[i - 1] if i else cc
             cndls.append({"t": 1700000000 + i * 86400, "o": round(o, 2), "h": round(max(o, cc) * 1.006, 2),
                           "l": round(min(o, cc) * 0.994, 2), "c": round(cc, 2), "v": vv[i]})
-        res = S.analyze(sym, cndls, name)
+        return cndls
+
+    def _smc(self):
+        from urllib.parse import urlparse, parse_qs
+        import smc as S
+        q = parse_qs(urlparse(self.path).query)
+        sym = (q.get("symbol", ["STUB"])[0]).upper()
+        name = q.get("name", [None])[0]
+        res = S.analyze(sym, self._smc_series(sym), name)
         res["symbol"] = sym
         self._json(res)
 

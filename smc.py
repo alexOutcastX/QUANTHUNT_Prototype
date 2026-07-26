@@ -49,6 +49,116 @@ STRATEGIES = {
 }
 
 
+# ── chart geometry ───────────────────────────────────────────────────────────
+# Every detector below already knows exactly which candles formed its model; it
+# used to discard that at the `add()` boundary and keep only a score and a
+# sentence. Each one now also emits the *shape* it found — a price band and the
+# bar span it lives on — so the card can draw the model instead of describing
+# it. Zones are keyed by epoch timestamp, never by bar index: `cs` is a filtered
+# copy of the caller's candles, so an index into it is meaningless to a client
+# holding a different history window.
+#
+# kinds, in ICT/SMC terms:
+#   liquidity  resting BSL/SSL — a level price is expected to reach for
+#   sweep      the wick that took that liquidity and closed back inside
+#   fvg        3-candle fair-value gap (wick-to-wick imbalance)
+#   vi         volume imbalance — body-to-body gap where the wicks still overlap
+#   ob         order block — last opposing candle before displacement
+#   breaker    a broken high now expected to hold as support
+#   structure  the swing whose break shifted structure (BOS / CHoCH)
+#   displace   the expansion candle itself (the institutional footprint)
+#   range      a dealing/accumulation range box
+#   equilibrium / premium / discount / ote  — where price sits inside that range
+#   divergence a two-point line between the diverging swing lows
+ZONE_KINDS = ("liquidity", "sweep", "fvg", "vi", "ob", "breaker", "structure",
+              "displace", "range", "equilibrium", "premium", "discount", "ote",
+              "divergence")
+
+# How much history a focused model may show. Wide enough to read the structure
+# around the setup, tight enough that "limit the chart to the model" means it.
+FOCUS_MAX_BARS = 90
+FOCUS_MIN_BARS = 25
+
+
+def _zone(owner, kind, label, bias, t0, t1, lo, hi, extend=False, note=None):
+    """One drawable object. t1=None with extend=True runs to the right edge."""
+    z = {
+        "owner": owner, "kind": kind, "label": label, "bias": bias,
+        "t0": t0, "t1": t1,
+        "lo": round(float(lo), 2) if lo is not None else None,
+        "hi": round(float(hi), 2) if hi is not None else None,
+        "extend": bool(extend),
+    }
+    if note:
+        z["note"] = note
+    return z
+
+
+def _volume_imbalances(cs, opens, highs, lows, closes, atr, lookback=40, limit=4):
+    """Body-to-body gaps the wicks still cover — ICT's volume imbalance.
+
+    Distinct from a fair-value gap, and the distinction matters when you draw
+    them: an FVG needs clear air between candle 1's high and candle 3's low,
+    while a VI is a gap between two consecutive *bodies* that the wicks trade
+    through. If the wicks don't overlap either, it isn't a VI at all — that's a
+    true opening gap, and it is left to the FVG detector.
+    """
+    out = []
+    n = len(cs)
+    for i in range(n - 1, max(1, n - lookback), -1):
+        prev_close, cur_open = closes[i - 1], opens[i]
+        lo, hi = min(prev_close, cur_open), max(prev_close, cur_open)
+        if hi - lo < 0.05 * atr:          # bodies touch (or as good as)
+            continue
+        wicks_overlap = highs[i - 1] >= lows[i] and highs[i] >= lows[i - 1]
+        if not wicks_overlap:
+            continue                       # true price gap, not a VI
+        # unfilled = nothing since has traded the whole band away
+        if any(lows[j] <= lo and highs[j] >= hi for j in range(i + 1, n)):
+            continue
+        out.append(_zone("context", "vi", "Volume imbalance",
+                         "bullish" if cur_open > prev_close else "bearish",
+                         _ts(cs, i - 1), _ts(cs, i), lo, hi, extend=True))
+        if len(out) >= limit:
+            break
+    return out
+
+
+def _order_blocks(cs, opens, highs, lows, closes, atr, lookback=40, limit=2):
+    """Last opposing candle before a displacement leg, extended right until tapped.
+
+    Bullish OB = the last down-close candle before an up-move that displaces
+    (range > 1.2 ATR) and takes out the OB candle's high.
+    """
+    out = []
+    n = len(cs)
+    for i in range(n - 2, max(1, n - lookback), -1):
+        if closes[i] >= opens[i]:
+            continue                                   # need a down candle
+        nxt = i + 1
+        if nxt >= n:
+            continue
+        displaced = (highs[nxt] - lows[nxt]) > 1.2 * atr and closes[nxt] > opens[nxt]
+        if not displaced or highs[nxt] <= highs[i]:
+            continue
+        # still unmitigated: price has not closed below the block since
+        if any(closes[j] < lows[i] for j in range(nxt + 1, n)):
+            continue
+        out.append(_zone("context", "ob", "Bullish order block", "bullish",
+                         _ts(cs, i), None, lows[i], highs[i], extend=True))
+        if len(out) >= limit:
+            break
+    return out
+
+
+def _ts(cs, i):
+    """Epoch seconds of bar i, or None when the caller gave us no timestamps."""
+    if i is None or i < 0 or i >= len(cs):
+        return None
+    t = cs[i].get("t")
+    return int(t) if t else None
+
+
 def _pivots(highs, lows, k=2):
     """Swing highs (buy-side liquidity) and lows (sell-side liquidity) as
     (index, price). A pivot needs k bars on each side lower/higher."""
@@ -124,12 +234,39 @@ def analyze(symbol, candles, name=None):
 
     matched: list[dict] = []
     confl: list[str] = []
+    zones: list[dict] = []
+    # Timestamps are optional in the input (unit tests build bare OHLC). Without
+    # them nothing can be placed on a time axis, so geometry is simply skipped
+    # and the models degrade to exactly what they returned before.
+    has_ts = bool(cs) and all(c.get("t") for c in cs)
+    last_i = len(cs) - 1
 
-    def add(key, score, note):
-        matched.append({"key": key, "label": STRATEGIES[key],
-                        "score": max(0, min(100, round(score))), "note": note})
+    def add(key, score, note, shapes=(), since=None):
+        """Record a model hit plus the shape it found and the bars it spans.
+
+        `since` is the earliest bar the model depends on; it becomes the left
+        edge of the chart when you focus this model, so a gap from last week
+        opens on last week rather than on two years of history. It is clamped
+        both ways: never wider than FOCUS_MAX_BARS (a model anchored on an old
+        pivot would otherwise show everything and defeat the point — the level
+        still extends to the right edge, so it stays visible), and never
+        narrower than FOCUS_MIN_BARS (a handful of candles is unreadable).
+        """
+        m = {"key": key, "label": STRATEGIES[key],
+             "score": max(0, min(100, round(score))), "note": note}
+        if has_ts:
+            for z in shapes:
+                if z:
+                    zones.append(z)
+            i0 = last_i - 30 if since is None else since
+            i0 = max(0, last_i - FOCUS_MAX_BARS, min(i0, last_i - FOCUS_MIN_BARS))
+            start = _ts(cs, i0)
+            if start:
+                m["focus"] = {"from": start, "to": _ts(cs, last_i)}
+        matched.append(m)
 
     last3_low = min(lows[-3:])
+    last3_i = len(cs) - 3 + lows[-3:].index(last3_low)     # the bar that took it
     # ── A. Liquidity Sweep Reversal ──────────────────────────────────────────
     sweep_wick = None
     ssl = max([p for p in prior_lows if p[1] < price], key=lambda p: p[1], default=None)  # nearest below
@@ -137,7 +274,16 @@ def analyze(symbol, candles, name=None):
         sweep_wick = last3_low
         confl.append("HTF liquidity sweep (sell-side)")
         sc = 55 + (12 if in_discount else 0) + (10 if rsi <= 45 else 0) + (8 if relvol >= 1.3 else 0)
-        add("sweep", sc, "Swept sell-side liquidity below the prior swing low and closed back inside")
+        add("sweep", sc, "Swept sell-side liquidity below the prior swing low and closed back inside",
+            shapes=[
+                # the resting liquidity, drawn from the swing that built it
+                _zone("sweep", "liquidity", "Sell-side liquidity (SSL)", "bearish",
+                      _ts(cs, ssl[0]), None, ssl[1], ssl[1], extend=True),
+                # and the wick that ran it, from the level down to the low
+                _zone("sweep", "sweep", "Sweep", "bullish",
+                      _ts(cs, last3_i), _ts(cs, last3_i), last3_low, ssl[1]),
+            ],
+            since=ssl[0] - 5)
 
     # ── B. AMD / Power of 3 ──────────────────────────────────────────────────
     if len(cs) >= 20:
@@ -148,7 +294,19 @@ def analyze(symbol, candles, name=None):
         if last3_low < base_lo and price > base_mid:
             confl.append("Accumulation range swept then reclaimed")
             add("amd", 55 + (12 if in_discount else 0) + (8 if price > base_hi else 0),
-                "Accumulation → manipulation (downside sweep) → reclaim (Power of 3)")
+                "Accumulation → manipulation (downside sweep) → reclaim (Power of 3)",
+                shapes=[
+                    # A: the accumulation box, exactly the bars it was measured on
+                    _zone("amd", "range", "Accumulation", "neutral",
+                          _ts(cs, len(cs) - 18), _ts(cs, len(cs) - 4), base_lo, base_hi),
+                    # M: the manipulation leg below it
+                    _zone("amd", "sweep", "Manipulation", "bullish",
+                          _ts(cs, last3_i), _ts(cs, last3_i), last3_low, base_lo),
+                    # D: the reclaim, from mid-range up
+                    _zone("amd", "equilibrium", "Range mid (reclaimed)", "bullish",
+                          _ts(cs, len(cs) - 18), None, base_mid, base_mid, extend=True),
+                ],
+                since=len(cs) - 22)
 
     # ── C. Market-Maker Buy Model (engineered dip reclaimed through structure) ─
     lower_high = min([p for p in prior_highs if p[1] > price], key=lambda p: p[1], default=None)
@@ -156,33 +314,66 @@ def analyze(symbol, candles, name=None):
     if sweep_wick is not None and reclaimed_lh:
         confl.append("Structure shift through the last lower-high")
         add("mmxm", 58 + (10 if in_discount else 0),
-            "Market-maker buy model — engineered dip reclaimed back through the range")
+            "Market-maker buy model — engineered dip reclaimed back through the range",
+            shapes=[
+                # the swing whose close-through shifted structure (CHoCH)
+                _zone("mmxm", "structure", "Lower high — CHoCH", "bullish",
+                      _ts(cs, lower_high[0]), None, lower_high[1], lower_high[1], extend=True),
+                _zone("mmxm", "sweep", "Engineered dip", "bullish",
+                      _ts(cs, last3_i), _ts(cs, last3_i), lows[last3_i], highs[last3_i]),
+            ],
+            since=lower_high[0] - 5)
 
     # ── D. Algo Candle / FVG (bullish fair-value gap being mitigated) ─────────
     fvg = None
+    fvg_i = None
     for i in range(len(cs) - 3, max(2, len(cs) - 34), -1):
         gap_bot, gap_top = highs[i - 2], lows[i]
         if gap_top > gap_bot:                                    # bullish imbalance
             mitigated_below = any(closes[j] < gap_bot for j in range(i + 1, len(cs)))
             if not mitigated_below and lows[-1] <= gap_top * 1.005 and price >= gap_bot:
                 fvg = (round(gap_bot, 2), round(gap_top, 2))
+                fvg_i = i
                 break
     if fvg:
         confl.append("FVG / Algo-Candle at entry")
+        # how deep price has traded back into the gap since it formed (0 = still
+        # untouched, 1 = fully rebalanced) — the shading tells you at a glance
+        # whether there is any imbalance left to fill.
+        deepest = min(lows[fvg_i + 1:]) if fvg_i + 1 < len(cs) else fvg[1]
+        filled = (fvg[1] - deepest) / max(fvg[1] - fvg[0], 1e-9)
         add("fvg", 52 + (10 if in_discount else 0) + (8 if relvol >= 1.3 else 0),
-            f"Price mitigating a bullish fair-value gap ₹{fvg[0]:,}–₹{fvg[1]:,}")
+            f"Price mitigating a bullish fair-value gap ₹{fvg[0]:,}–₹{fvg[1]:,}",
+            shapes=[
+                dict(_zone("fvg", "fvg", "Bullish FVG", "bullish",
+                           _ts(cs, fvg_i - 2), None, fvg[0], fvg[1], extend=True),
+                     mitigated=round(max(0.0, min(1.0, filled)), 2)),
+                # the three bars that built it, so the formation is visible
+                _zone("fvg", "displace", "Algo candle", "bullish",
+                      _ts(cs, fvg_i - 1), _ts(cs, fvg_i - 1), lows[fvg_i - 1], highs[fvg_i - 1]),
+            ],
+            since=fvg_i - 6)
 
     # ── E. Breaker / Rejection Block (retest of broken structure) ─────────────
     breaker_lvl = None
+    breaker_i = None
     for idx, hp in reversed(prior_highs):
         broke = any(closes[j] > hp for j in range(idx + 1, len(cs)))
         if broke and abs(price - hp) <= 1.2 * atr and price >= hp * 0.98:
             breaker_lvl = hp
+            breaker_i = idx
             break
     if breaker_lvl:
         confl.append("Breaker / broken structure retest")
         add("breaker", 54 + (8 if in_discount else 0),
-            f"Retesting a bullish breaker — broken structure (₹{breaker_lvl:,.0f}) now support")
+            f"Retesting a bullish breaker — broken structure (₹{breaker_lvl:,.0f}) now support",
+            shapes=[
+                # resistance-turned-support: a band one ATR deep under the level
+                _zone("breaker", "breaker", "Breaker (was resistance)", "bullish",
+                      _ts(cs, breaker_i), None, breaker_lvl - 0.25 * atr, breaker_lvl,
+                      extend=True),
+            ],
+            since=breaker_i - 5)
 
     # ── F. High-Volume Imbalance (displacement / rejection on high volume) ────
     hvi_low = None
@@ -198,7 +389,17 @@ def analyze(symbol, candles, name=None):
             confl.append("High-volume imbalance (HVI)")
             add("hvi", 52 + min(16, (rv - 1.8) * 20),
                 f"High-volume {'displacement' if displaced else 'rejection'} candle "
-                f"({rv:.1f}× volume) — institutional footprint")
+                f"({rv:.1f}× volume) — institutional footprint",
+                shapes=[
+                    # the footprint candle itself — one bar, full range
+                    _zone("hvi", "displace",
+                          f"{'Displacement' if displaced else 'Rejection'} · {rv:.1f}× vol",
+                          "bullish", _ts(cs, j), _ts(cs, j), lows[j], highs[j]),
+                    # its low is where the structural stop goes
+                    _zone("hvi", "liquidity", "HVI low", "bullish",
+                          _ts(cs, j), None, lows[j], lows[j], extend=True),
+                ],
+                since=j - 10)
             break
 
     # ── G. Divergence (bullish momentum divergence across two swing lows) ─────
@@ -209,7 +410,14 @@ def analyze(symbol, candles, name=None):
             r2 = _rsi(closes[:i2 + 1]) or 50
             if r2 > r1:
                 confl.append("Bullish momentum divergence")
-                add("divergence", 48, "Bullish divergence — price made a lower low, momentum a higher low")
+                add("divergence", 48,
+                    "Bullish divergence — price made a lower low, momentum a higher low",
+                    shapes=[
+                        # two-point line: (t0,lo) → (t1,hi) are the diverging lows
+                        _zone("divergence", "divergence", "Lower low, higher RSI", "bullish",
+                              _ts(cs, i1), _ts(cs, i2), l1, l2),
+                    ],
+                    since=i1 - 5)
 
     # extra confluences (each = 1 point in the book's scorer)
     if in_discount:
@@ -263,6 +471,30 @@ def analyze(symbol, candles, name=None):
     else:
         action = "AVOID"
 
+    # ── context geometry: the dealing range every model is read against ──────
+    # These carry owner="context" so they stay on the chart whichever model you
+    # focus — a sweep means nothing without knowing you're in discount.
+    if has_ts:
+        rng_t0 = _ts(cs, max(0, len(cs) - win))
+        mid = (rng_hi + rng_lo) / 2
+        zones.extend([
+            _zone("context", "range", "Dealing range", "neutral",
+                  rng_t0, None, rng_lo, rng_hi, extend=True),
+            _zone("context", "equilibrium", "Equilibrium (50%)", "neutral",
+                  rng_t0, None, mid, mid, extend=True),
+            _zone("context", "discount", "Discount", "bullish",
+                  rng_t0, None, rng_lo, mid, extend=True),
+            _zone("context", "premium", "Premium", "bearish",
+                  rng_t0, None, mid, rng_hi, extend=True),
+            # OTE = the 62–79% retracement band of the up-leg, measured off the
+            # range low. Same 0.205/0.385 bounds the `in_ote` flag uses, so the
+            # band you see is the band the score was computed from.
+            _zone("context", "ote", "OTE 62–79%", "bullish",
+                  rng_t0, None, rng_lo + 0.205 * span, rng_lo + 0.385 * span, extend=True),
+        ])
+        zones.extend(_volume_imbalances(cs, opens, highs, lows, closes, atr))
+        zones.extend(_order_blocks(cs, opens, highs, lows, closes, atr))
+
     primary = matched[0] if matched else None
     reasons = [m["note"] for m in matched]
     reasons.append(f"{zone.title()} zone — {pos * 100:.0f}% of the dealing range"
@@ -305,4 +537,17 @@ def analyze(symbol, candles, name=None):
         "max_dd": max_dd,
         "reasons": reasons,
         "not_automated": NOT_AUTOMATED,
+        # ── chart geometry ──────────────────────────────────────────────────
+        # Every drawable shape, tagged with the model that produced it
+        # (owner="context" = dealing range / OTE / VIs / order blocks, which
+        # apply to all of them). Empty when the caller passed candles without
+        # timestamps, since nothing can be placed on a time axis.
+        "zones": zones,
+        # the trade plan as horizontal lines, in draw order
+        "levels": [
+            {"kind": "entry", "label": "Entry", "price": entry},
+            {"kind": "stop", "label": "Stop", "price": round(stop, 2)},
+            {"kind": "target", "label": "TP1 (weak high)", "price": target},
+            {"kind": "target2", "label": "TP2 (external liq.)", "price": target2},
+        ] if has_ts else [],
     }
