@@ -177,6 +177,8 @@ export default function DashboardScreen({ onNavigate }: { onNavigate?: (page: st
   const [watch, setWatch] = useState<{ symbol: string; q?: Quote }[] | null>(dash.watch ?? null);
   const [news, setNews] = useState<NewsItem[] | null>(dash.news ?? null);
   const [newsBusy, setNewsBusy] = useState(false);
+  // Headline tapped → read it here first; the publisher's page is one more tap.
+  const [article, setArticle] = useState<NewsItem | null>(null);
   const [sectors2, setSectors2] = useState<SectorAgg[] | null>(dash.sectors ?? null);
   const [gsec, setGsec] = useState<GsecResp | null>(dash.gsec ?? null);
   const [ipos, setIpos] = useState<IpoResp | null>(dash.ipos ?? null);
@@ -365,8 +367,10 @@ export default function DashboardScreen({ onNavigate }: { onNavigate?: (page: st
               <TouchableOpacity
                 key={i}
                 style={[styles.newsRow, i === 0 && { borderTopWidth: 0 }]}
-                onPress={() => Linking.openURL(n.link).catch(() => {})}
+                onPress={() => setArticle(n)}
                 activeOpacity={0.75}
+                accessibilityRole="button"
+                accessibilityLabel={`Open headline: ${n.title}`}
               >
                 <Text style={styles.newsTitle} numberOfLines={2}>{n.title}</Text>
                 <Text style={styles.nmeta}>
@@ -700,6 +704,65 @@ export default function DashboardScreen({ onNavigate }: { onNavigate?: (page: st
           </TouchableOpacity>
         </View>
       </Modal>
+
+      {/* Article popup — read the headline here, leave for the publisher on demand. */}
+      {article ? (
+        <Modal visible animationType="fade" transparent onRequestClose={() => setArticle(null)}>
+          <View style={styles.artWrap}>
+            <Pressable
+              style={styles.artBackdrop}
+              onPress={() => setArticle(null)}
+              accessibilityRole="button"
+              accessibilityLabel="Close article"
+            />
+            <View style={styles.artModal}>
+              <View style={styles.artHead}>
+                <Text style={styles.artSrc} numberOfLines={1}>
+                  {article.source}
+                  {article.ts
+                    ? ' · ' + new Date(article.ts * 1000).toLocaleString('en-IN',
+                        { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
+                    : ''}
+                </Text>
+                <TouchableOpacity
+                  onPress={() => setArticle(null)}
+                  hitSlop={10}
+                  activeOpacity={0.7}
+                  accessibilityRole="button"
+                  accessibilityLabel="Close"
+                >
+                  <Text style={styles.artX}>✕</Text>
+                </TouchableOpacity>
+              </View>
+              <ScrollView style={styles.artBody} showsVerticalScrollIndicator>
+                <Text style={styles.artTitle}>{article.title}</Text>
+                {article.summary ? (
+                  <Text style={styles.artSummary}>{article.summary}</Text>
+                ) : (
+                  <Text style={styles.artNoSummary}>
+                    This publisher's feed carries the headline only. Open the full article to read it.
+                  </Text>
+                )}
+                <Text style={styles.artHost} numberOfLines={1}>
+                  {article.link.replace(/^https?:\/\//, '').split('/')[0]}
+                </Text>
+              </ScrollView>
+              <TouchableOpacity
+                style={styles.artBtn}
+                onPress={() => Linking.openURL(article.link).catch(() => {})}
+                activeOpacity={0.85}
+                accessibilityRole="link"
+                accessibilityLabel={`Read the full article at ${article.source}. Opens outside TaurEye.`}
+              >
+                <Text style={styles.artBtnTxt}>Read full article ↗</Text>
+              </TouchableOpacity>
+              <Text style={styles.artNote}>
+                Opens {article.source} in your browser — you're leaving TaurEye.
+              </Text>
+            </View>
+          </View>
+        </Modal>
+      ) : null}
     </ScrollView>
   );
 }
@@ -812,6 +875,52 @@ const styles = StyleSheet.create({
   newsRow: { paddingVertical: theme.sp.sm + 1, borderTopColor: theme.border, borderTopWidth: 1 },
   newsTitle: { color: theme.text, fontSize: theme.fs.sm + 1, lineHeight: 19, fontWeight: '600' },
   nmeta: { color: theme.muted, fontSize: theme.fs.xs + 1, marginTop: 2 },
+  // article popup: flex-centred overlay (absolute %-inset inside Modal pins to
+  // a corner and outgrows the viewport on web — same trap as the heatmap
+  // sector popup), with the body capped so long standfirsts scroll.
+  artWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: theme.sp.lg },
+  artBackdrop: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.65)' },
+  artModal: {
+    width: '94%',
+    maxWidth: 560,
+    maxHeight: '88%',
+    backgroundColor: theme.surface,
+    borderColor: theme.border2,
+    borderWidth: 1,
+    borderRadius: theme.radius.lg,
+    padding: theme.sp.md + 2,
+  },
+  artHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: theme.sp.sm,
+    borderBottomColor: theme.border,
+    borderBottomWidth: 1,
+    paddingBottom: theme.sp.sm,
+  },
+  artSrc: { color: theme.muted2, fontSize: theme.fs.xs + 1, fontFamily: theme.mono, letterSpacing: 0.6, flex: 1 },
+  artX: { color: theme.muted, fontSize: theme.fs.md },
+  artBody: { flexGrow: 0, flexShrink: 1, marginTop: theme.sp.md },
+  artTitle: { color: theme.text, fontSize: theme.fs.lg, lineHeight: 26, fontWeight: '700' },
+  artSummary: { color: theme.muted2, fontSize: theme.fs.sm + 1, lineHeight: 21, marginTop: theme.sp.md },
+  artNoSummary: {
+    color: theme.muted,
+    fontSize: theme.fs.sm,
+    lineHeight: 19,
+    marginTop: theme.sp.md,
+    fontStyle: 'italic',
+  },
+  artHost: { color: theme.muted, fontSize: theme.fs.xs, fontFamily: theme.mono, marginTop: theme.sp.md },
+  artBtn: {
+    backgroundColor: theme.accent,
+    borderRadius: theme.radius.md,
+    paddingVertical: theme.sp.sm + 3,
+    alignItems: 'center',
+    marginTop: theme.sp.md,
+  },
+  artBtnTxt: { color: theme.onAccent, fontSize: theme.fs.sm + 1, fontWeight: '700' },
+  artNote: { color: theme.muted, fontSize: theme.fs.xs, textAlign: 'center', marginTop: theme.sp.sm },
   // social feeds
   socialRow: {
     flexDirection: 'row',

@@ -9,6 +9,7 @@
 # to once every FORCE_MIN seconds so a click-happy user can't hammer the feeds.
 
 import html
+import re
 import threading
 import time
 import xml.etree.ElementTree as ET
@@ -32,8 +33,35 @@ FORCE_MIN = 120     # minimum seconds between forced refetches per key
 MAX_ITEMS = 40
 FEED_TIMEOUT = 8
 
+SUMMARY_MAX = 400   # characters kept from the feed's standfirst
+
 _cache: dict = {}   # key -> {"ts": epoch, "items": [...]}
 _lock = threading.Lock()
+
+_TAG_RE = re.compile(r"<[^>]+>")
+_WS_RE = re.compile(r"\s+")
+
+
+def clean_summary(raw: str) -> str:
+    """Feed <description> reduced to plain text for the article popup.
+
+    Publisher descriptions arrive as HTML fragments — a thumbnail <img>, a
+    wrapping <p>, sometimes a trailing "Read more" anchor — and are often
+    double-escaped, so entities need unwrapping both before and after tags are
+    stripped. Anything left is collapsed to a single paragraph and truncated on
+    a word boundary; the popup is a preview, not a reader.
+    """
+    if not raw:
+        return ""
+    txt = html.unescape(raw)
+    txt = _TAG_RE.sub(" ", txt)
+    txt = html.unescape(txt)          # entities that were themselves escaped
+    txt = _WS_RE.sub(" ", txt).strip()
+    if len(txt) > SUMMARY_MAX:
+        cut = txt[:SUMMARY_MAX]
+        sp = cut.rfind(" ")
+        txt = (cut[:sp] if sp > SUMMARY_MAX // 2 else cut).rstrip(" ,;:.") + "…"
+    return txt
 
 
 def parse_feed(raw: bytes, feed_name: str, is_symbol_feed: bool = False) -> list:
@@ -56,9 +84,20 @@ def parse_feed(raw: bytes, feed_name: str, is_symbol_feed: bool = False) -> list
                 ts = int(parsedate_to_datetime(pub).timestamp())
             except Exception:
                 ts = 0
+        # Standfirst for the article popup. Atom calls it <summary>; a few
+        # feeds only carry the body in content:encoded.
+        summary = clean_summary(
+            it.findtext("description")
+            or it.findtext("summary")
+            or it.findtext("{http://purl.org/rss/1.0/modules/content/}encoded")
+            or "")
+        # Google News descriptions are just a list of links to the same story —
+        # markup with no prose, which strips down to the headline again.
+        if summary and summary.lower() == title.lower():
+            summary = ""
         if title and link:
             items.append({"title": title, "link": link, "source": src,
-                          "ts": ts, "sym": is_symbol_feed})
+                          "ts": ts, "sym": is_symbol_feed, "summary": summary})
     return items
 
 
