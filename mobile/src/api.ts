@@ -886,7 +886,38 @@ export type SwingRec = {
 };
 
 // Institutional / algorithmic strategy screen (from /institutional).
-export type StrategyHit = { key: string; label: string; score: number; note: string };
+export type StrategyHit = {
+  key: string;
+  label: string;
+  score: number;
+  note: string;
+  /** Bar window this model spans (epoch secs) — the chart clips to it (/smc only). */
+  focus?: { from: number; to: number };
+};
+
+// ── ICT / SMC chart geometry (from /smc) ─────────────────────────────────────
+// A price band over a bar span. `t1: null` with `extend` runs to the right edge
+// (a level still in play); `lo === hi` is a line, not a box. `owner` is the
+// model key that produced it, or 'context' for the dealing range / OTE /
+// volume imbalances / order blocks, which apply to every model.
+export type SmcZone = {
+  owner: string;
+  kind: 'liquidity' | 'sweep' | 'fvg' | 'vi' | 'ob' | 'breaker' | 'structure'
+      | 'displace' | 'range' | 'equilibrium' | 'premium' | 'discount' | 'ote'
+      | 'divergence';
+  label: string;
+  bias: 'bullish' | 'bearish' | 'neutral';
+  t0: number;
+  t1: number | null;
+  lo: number | null;
+  hi: number | null;
+  extend?: boolean;
+  /** FVG only: 0 = untouched, 1 = fully rebalanced. */
+  mitigated?: number;
+  note?: string;
+};
+
+export type SmcLevel = { kind: string; label: string; price: number };
 export type InstitutionalRec = {
   symbol: string;
   name?: string | null;
@@ -953,6 +984,10 @@ export type SmcRec = {
   max_dd: number;
   reasons: string[];
   not_automated?: string[];
+  /** Drawable ICT/SMC geometry: FVGs, liquidity, order blocks, the dealing range. */
+  zones?: SmcZone[];
+  /** Entry / stop / TP1 / TP2 as horizontal lines. */
+  levels?: SmcLevel[];
   note?: string;
   error?: string;
 };
