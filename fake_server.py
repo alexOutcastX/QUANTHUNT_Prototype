@@ -552,10 +552,16 @@ class H(BaseHTTPRequestHandler):
                                "breadth": {"up": 293, "down": 182, "flat": 25, "total": 500, "ratio": 1.61},
                                "gainers": rows[:3], "losers": rows[3:], "asof": "2026-07-23T15:30:00"})
         if path == "/news":
+            # Item 3 deliberately carries no summary so the popup's
+            # headline-only branch is exercised by the checks.
             return self._json({"items": [
                 {"title": f"Fake market headline {i} — earnings beat estimates",
                  "link": "https://example.com/n" + str(i), "source": "ET Markets",
-                 "ts": 1753200000 + i * 3600, "sym": ""} for i in range(10)],
+                 "ts": 1753200000 + i * 3600, "sym": "",
+                 "summary": ("" if i == 3 else
+                             f"Standfirst {i}: benchmark indices rallied as banking "
+                             "stocks led the gains and auto followed.")}
+                for i in range(10)],
                 "fetched": 1753260000, "cached": False})
         if path.startswith("/user/data/"):
             doc = self._synced.get(path)

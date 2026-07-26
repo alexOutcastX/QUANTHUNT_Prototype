@@ -308,7 +308,15 @@ export type GsecItem = {
   coupon?: number | null; maturity: string;
 };
 export type GsecResp = { items: GsecItem[]; asof?: string; stale?: boolean; error?: string };
-export type NewsItem = { title: string; link: string; source: string; ts?: number | null; sym?: string };
+export type NewsItem = {
+  title: string;
+  link: string;
+  source: string;
+  ts?: number | null;
+  sym?: string;
+  /** Feed standfirst, plain text. Empty when the publisher ships none. */
+  summary?: string;
+};
 export type NewsResp = { items: NewsItem[]; fetched?: number; cached?: boolean };
 
 // Trade Scan: short-term pattern setups on the major indices, per timeframe.

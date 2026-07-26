@@ -90,6 +90,20 @@ function graphHtml(data: GraphResp, quotes: LtpResp, centre: string, openIdx: st
   .nt{color:${theme.text};font-size:12px;line-height:1.55}
   .nm{color:${theme.muted};font-size:10px;margin-top:5px}
   .ntag{color:${theme.accent};font-weight:700}
+  /* article popup — read the headline in-panel, leave for the publisher on demand */
+  .artov{position:fixed;inset:0;background:rgba(0,0,0,0.65);display:none;align-items:center;justify-content:center;z-index:60;padding:18px}
+  .artov.on{display:flex}
+  .artbox{width:94%;max-width:560px;max-height:88%;display:flex;flex-direction:column;background:${theme.surface};border:1px solid ${theme.border2};border-radius:12px;padding:14px}
+  .arthead{display:flex;align-items:center;justify-content:space-between;gap:8px;border-bottom:1px solid ${theme.border};padding-bottom:8px}
+  .artsrc{color:${theme.muted2};font-size:10px;letter-spacing:0.6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .artx{color:${theme.muted};font-size:16px;cursor:pointer;line-height:1;padding:0 4px}
+  .artbody{overflow:auto;margin-top:12px;flex:0 1 auto}
+  .arttitle{color:${theme.text};font-size:16px;line-height:1.45;font-weight:700}
+  .artsum{color:${theme.muted2};font-size:12px;line-height:1.65;margin-top:12px}
+  .artsum.none{color:${theme.muted};font-style:italic}
+  .arthost{color:${theme.muted};font-size:10px;margin-top:12px}
+  .artbtn{display:block;background:${theme.accent};color:${theme.onAccent};border-radius:8px;padding:11px;text-align:center;font-size:12px;font-weight:700;margin-top:12px;cursor:pointer;text-decoration:none}
+  .artnote{color:${theme.muted};font-size:10px;text-align:center;margin-top:8px}
   .wfull{position:absolute;top:8px;right:10px;z-index:5;background:${theme.surface2};border:1px solid ${theme.border2};color:${theme.muted2};font-size:10px;letter-spacing:1px;padding:4px 8px;border-radius:4px;cursor:pointer}
   .wfull:hover{color:${theme.text}}
   /* News/Chart tabs — hidden on desktop (chart stays in the window there),
@@ -193,6 +207,21 @@ function graphHtml(data: GraphResp, quotes: LtpResp, centre: string, openIdx: st
     <div id="newsmeta"></div>
     <div id="newsbody"><div class="wmsg">Loading news…</div></div>
     <div id="newschart"></div>
+  </div>
+  <div class="artov" id="artov" onclick="if(event.target===this)closeArticle()">
+    <div class="artbox">
+      <div class="arthead">
+        <span class="artsrc" id="art-src"></span>
+        <span class="artx" title="Close" onclick="closeArticle()">✕</span>
+      </div>
+      <div class="artbody">
+        <div class="arttitle" id="art-title"></div>
+        <div class="artsum" id="art-sum"></div>
+        <div class="arthost" id="art-host"></div>
+      </div>
+      <a class="artbtn" id="art-btn" target="_blank" rel="noopener noreferrer">Read full article ↗</a>
+      <div class="artnote" id="art-note"></div>
+    </div>
   </div>
   <div id="gfx">
     <div id="gwrap">
@@ -919,7 +948,31 @@ ${LW_SCRIPT}
     var h = Math.round(m / 60);
     return h < 48 ? h + 'h ago' : Math.round(h / 24) + 'd ago';
   }
-  window.openLink = function(u){ try { window.open(u, '_blank'); } catch (e) {} };
+  // Tapping a headline opens it here first; "Read full article" is the only
+  // thing that leaves the site. Items are held in an array and addressed by
+  // index, so no URL is ever interpolated into an onclick attribute.
+  W.newsItems = [];
+  window.openArticle = function(i) {
+    var it = W.newsItems[i];
+    if (!it) return;
+    var host = String(it.link || '').replace(/^https?:\\/\\//, '').split('/')[0];
+    var when = it.ts ? ' · ' + timeAgo(it.ts) : '';
+    document.getElementById('art-src').textContent = (it.source || '') + when;
+    document.getElementById('art-title').textContent = it.title || '';
+    var sum = document.getElementById('art-sum');
+    sum.textContent = it.summary || "This publisher's feed carries the headline only. Open the full article to read it.";
+    sum.className = 'artsum' + (it.summary ? '' : ' none');
+    document.getElementById('art-host').textContent = host;
+    var btn = document.getElementById('art-btn');
+    btn.href = it.link || '#';
+    document.getElementById('art-note').textContent =
+      'Opens ' + (it.source || 'the publisher') + ' in a new tab — you are leaving TaurEye.';
+    document.getElementById('artov').classList.add('on');
+  };
+  window.closeArticle = function() { document.getElementById('artov').classList.remove('on'); };
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') closeArticle();
+  });
   window.loadNews = function(force) {
     if (!W.newsOn) return;
     var meta = document.getElementById('newsmeta');
@@ -928,9 +981,10 @@ ${LW_SCRIPT}
       .then(function(r){ return r.json(); })
       .then(function(d) {
         var items = (d && d.items) || [];
+        W.newsItems = items;
         var h = '';
-        items.forEach(function(it) {
-          h += '<div class="nitem" onclick="openLink(\\'' + String(it.link || '').replace(/['"\\\\]/g, '') + '\\')">' +
+        items.forEach(function(it, i) {
+          h += '<div class="nitem" onclick="openArticle(' + i + ')">' +
                '<div class="nt">' + esc(it.title) + '</div>' +
                '<div class="nm">' + (it.sym ? '<span class="ntag">' + esc(centre) + '</span> · ' : '') +
                esc(it.source || '') + (it.ts ? ' · ' + timeAgo(it.ts) : '') + '</div></div>';
