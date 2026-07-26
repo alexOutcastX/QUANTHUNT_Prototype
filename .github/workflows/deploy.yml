@@ -120,15 +120,36 @@ jobs:
           H: ${{ secrets.VM_HOST }}
         run: |
           # Give gunicorn a moment to rebind, then confirm nginx -> app answers.
+          # NOTE: every curl below uses --compressed, so it asks for gzip/br and
+          # *fails* if the body will not decode. Plain `curl -fsS` sends no
+          # Accept-Encoding and therefore only ever exercised the uncompressed
+          # path — it would happily pass while real browsers got an undecodable
+          # 200 and rendered a blank page.
           ssh -i ~/.ssh/id_deploy "$U@$H" '
             for i in $(seq 1 10); do
               if curl -fsS http://127.0.0.1/ping >/dev/null; then
                 echo "OK: /ping responded on attempt $i"
-                # Confirm the web UI shell is being served (RN-web build present)
-                if curl -fsS http://127.0.0.1/ | grep -q "id=\"root\""; then
-                  echo "OK: RN-web shell served at /"; exit 0
-                fi
-                echo "FAIL: / did not serve the web shell (is mobile/dist present?)"; exit 1
+                shell=$(curl -fsS --compressed http://127.0.0.1/) || {
+                  echo "FAIL: / did not decode (corrupt precompressed variant?)"; exit 1; }
+                case "$shell" in
+                  *id=\"root\"*) echo "OK: RN-web shell served at /" ;;
+                  *) echo "FAIL: / did not serve the web shell (is mobile/dist present?)"; exit 1 ;;
+                esac
+                # Every JS chunk the shell references must fetch AND decode.
+                # These ship as immutable/max-age=1y, so a bad one poisons the
+                # visitor browser cache for a year.
+                # Check the DECODED byte count, not curl exit status: curl exits
+                # 0 on a body it failed to unencode and just writes 0 bytes.
+                chunks=$(printf "%s" "$shell" | grep -o "_expo/static/js/web/[^\"]*\.js" | sort -u)
+                [ -n "$chunks" ] || { echo "FAIL: shell referenced no JS chunks"; exit 1; }
+                for c in $chunks; do
+                  sz=$(curl -fsS --compressed "http://127.0.0.1/$c" | wc -c)
+                  if [ "${sz:-0}" -lt 100 ]; then
+                    echo "FAIL: chunk empty or undecodable (${sz} bytes): $c"; exit 1
+                  fi
+                done
+                echo "OK: $(printf "%s\n" "$chunks" | wc -l) JS chunks fetch and decode"
+                exit 0
               fi
               sleep 2
             done
