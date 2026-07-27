@@ -1,5 +1,5 @@
 """Throwaway static server for headless verification. Serves mobile/dist; stubs API as empty."""
-import json, math, os, sys
+import json, math, os, sys, time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
@@ -16,6 +16,42 @@ _MEMBER = {"username": "Taureye", "uname": "taureye", "plan": "pro", "owner": Tr
                         "trade_scan", "terminal", "dossier", "exports", "alerts"]}
 
 _BT_SYMS = ["RELIANCE", "TCS", "INFY", "HDFCBANK", "SBIN"]
+
+# Fundamentals warm sweep: a clock-driven fake so the developer portal's
+# progress bar actually moves under the headless checks. 20 symbols/second, so
+# a 120-symbol sweep finishes in 6 s — long enough to observe mid-flight.
+_WARM = {"running": False, "cancel": False, "total": 0, "started": 0.0, "universe": ""}
+_WARM_RATE = 20.0
+
+
+def _warm_begin(scope):
+    if _WARM["running"]:
+        return {"started": False, "reason": "already running"}
+    _WARM.update({"running": True, "cancel": False, "total": 120,
+                  "started": time.time(), "universe": scope.upper()})
+    return {"started": True, "total": 120, "universe": scope.upper()}
+
+
+def _warm_snapshot():
+    total = _WARM["total"]
+    elapsed = (time.time() - _WARM["started"]) if _WARM["started"] else 0.0
+    done = min(total, int(elapsed * _WARM_RATE)) if _WARM["started"] else 0
+    if _WARM["running"] and done >= total:
+        _WARM["running"] = False
+    running = _WARM["running"]
+    ok = max(0, done - done // 6 - done // 20)
+    return {
+        "running": running, "cancel": _WARM["cancel"], "total": total, "done": done,
+        "ok": ok, "failed": done // 20, "skipped": done // 6,
+        "started": _WARM["started"], "updated": time.time(),
+        "finished": 0.0 if running else time.time(),
+        "universe": _WARM["universe"], "last_error": "",
+        "rate_per_min": round(_WARM_RATE * 60, 1) if running else 0.0,
+        "eta_sec": int((total - done) / _WARM_RATE) if running else None,
+        "elapsed_sec": int(elapsed), "pct": round(done / total * 100, 1) if total else 0.0,
+        "cache_size": 40 + done, "cache_fresh": 40 + ok, "inflight": 4 if running else 0,
+        "schema": "5237f2e7", "workers": 4,
+    }
 
 
 def _bt_candles(sym, period, interval):
@@ -562,6 +598,8 @@ class H(BaseHTTPRequestHandler):
             return self._scan()
         if path == "/fundamentals/bulk":
             return self._fund_bulk()
+        if path == "/fundamentals/warm":
+            return self._json(_warm_snapshot())
         if path == "/graph":
             return self._graph()
         if path == "/entity-graph":
@@ -706,6 +744,16 @@ class H(BaseHTTPRequestHandler):
             self.send_header("Set-Cookie", "te_member=; Path=/; Max-Age=0")
             self.end_headers()
             return self.wfile.write(b'{"member": null}')
+        if self.path.split("?")[0] == "/fundamentals/warm":
+            n = int(self.headers.get("Content-Length") or 0)
+            body = json.loads(self.rfile.read(n) or b"{}")
+            res = _warm_begin(body.get("scope") or "ALL")
+            res["progress"] = _warm_snapshot()
+            return self._json(res)
+        if self.path.split("?")[0] == "/fundamentals/warm/stop":
+            _WARM["cancel"] = True
+            _WARM["running"] = False
+            return self._json({"stopping": True, "progress": _warm_snapshot()})
         if self.path.split("?")[0] == "/backtest/run":
             n = int(self.headers.get("Content-Length") or 0)
             cfg = json.loads(self.rfile.read(n) or b"{}")

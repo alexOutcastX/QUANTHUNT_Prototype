@@ -1153,6 +1153,30 @@ export type Alert = {
 };
 
 // Public-API keys (owner-only).
+export type FundWarm = {
+  running: boolean;
+  cancel: boolean;
+  total: number;
+  done: number;
+  ok: number;
+  failed: number;
+  skipped: number;
+  started: number;
+  updated: number;
+  finished: number;
+  universe: string;
+  last_error: string;
+  rate_per_min: number;
+  eta_sec: number | null;
+  elapsed_sec: number;
+  pct: number;
+  cache_size: number;
+  cache_fresh: number;
+  inflight: number;
+  schema: string;
+  workers: number;
+};
+
 export type ApiKey = {
   id: string;
   label: string;
@@ -1234,6 +1258,11 @@ export const api = {
   apiKeysList: () => getJson<{ keys: ApiKey[] }>('/apikeys'),
   apiKeysIssue: (label: string) => postJson<{ key: string; record: ApiKey }>('/apikeys', { label }),
   apiKeysRevoke: (id: string) => delJson<{ revoked: boolean }>('/apikeys/' + encodeURIComponent(id)),
+  fundWarmStatus: () => getJson<FundWarm>('/fundamentals/warm'),
+  fundWarmStart: (scope: string) =>
+    postJson<{ started: boolean; total?: number; universe?: string; reason?: string; progress?: FundWarm }>(
+      '/fundamentals/warm', { scope }),
+  fundWarmStop: () => postJson<{ stopping: boolean; progress?: FundWarm }>('/fundamentals/warm/stop', {}),
   entityGraph: () => getJson<EntityGraph>('/entity-graph', 30000),
   entityPositions: (entity: string) =>
     getJson<EntityView>('/entity-graph?entity=' + encodeURIComponent(entity), 30000),

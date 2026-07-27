@@ -327,7 +327,7 @@ const MORE_ITEMS: { key: string; label: string; hint: string; render: () => Reac
   { key: 'risk', label: 'Risk', hint: 'VaR · volatility · beta · drawdown · correlation', render: () => <RiskScreen /> },
   { key: 'entities', label: 'Shareholders', hint: "Institutions, promoters & political funding · every link cited", render: () => <EntityGraphScreen /> },
   { key: 'alerts', label: 'Alerts', hint: 'Server-side price / % / RSI alerts', render: () => <AlertsScreen /> },
-  { key: 'developer', label: 'Developer API', hint: 'Issue keys · public /api/v1 quote & indices', render: () => <DeveloperScreen /> },
+  { key: 'developer', label: 'Developer', hint: 'Fundamentals cache · API keys · public /api/v1', render: () => <DeveloperScreen /> },
   { key: 'indices', label: 'Indices', hint: 'Live index levels · day & 1Y change', render: () => <IndicesScreen /> },
   { key: 'holidays', label: 'Holidays', hint: 'NSE holiday calendar · market open/closed', render: () => <HolidaysScreen /> },
 ];
