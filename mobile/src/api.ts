@@ -177,6 +177,11 @@ export type Fundamentals = {
   peg?: number | null;
   revenue_growth_pct?: number | null;
   earnings_growth_pct?: number | null;
+  // Sequential quarter and EPS growth — screener.in only (see fundamentals.py).
+  revenue_qoq_pct?: number | null;
+  earnings_qoq_pct?: number | null;
+  eps_growth_yoy_pct?: number | null;
+  eps_ttm_growth_pct?: number | null;
   fcf_cr?: number | null;
   pct_from_high_pct?: number | null;
   description?: string;

@@ -223,7 +223,11 @@ class H(BaseHTTPRequestHandler):
                     "market_cap_cr": mcaps[i % 6], "sector": secs[i % 6],
                     "eps": round(5 + (i % 20) * 1.5, 2),
                     "revenue_growth_pct": round(-8 + (i % 11) * 4.5, 1),
-                    "earnings_growth_pct": round(-14 + (i % 13) * 5.0, 1)}
+                    "earnings_growth_pct": round(-14 + (i % 13) * 5.0, 1),
+                    "revenue_qoq_pct": round(-5 + (i % 9) * 3.2, 1),
+                    "earnings_qoq_pct": round(-9 + (i % 10) * 4.1, 1),
+                    "eps_growth_yoy_pct": round(-6 + (i % 12) * 3.8, 1),
+                    "eps_ttm_growth_pct": round(-4 + (i % 8) * 4.4, 1)}
                 for i, s in enumerate(self.SYMS)}
         self._json({"data": data, "pending": [], "provider": "stub", "cached": len(data), "total": len(data)})
 

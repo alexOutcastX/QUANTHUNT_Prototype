@@ -46,12 +46,15 @@ FIELDS = ("pe", "forward_pe", "pb", "eps", "dividend_yield", "roe", "roce",
           # most-recent-quarter vs the same quarter a year earlier (that is what
           # both providers report) — quarterly YoY, not full-year FY vs FY.
           #
-          # There is deliberately no eps_growth_* here. Neither provider exposes
-          # EPS growth in the cheap per-symbol payload, and deriving it needs the
-          # quarterly income statement — one more network round trip per symbol,
-          # which does not fit a 200-symbol bulk scan. Adding the key unpopulated
-          # would recreate exactly the bug this commit fixes.
-          "revenue_growth_pct", "earnings_growth_pct")
+          # QoQ and EPS growth come from screener.in's quarterly / annual
+          # tables, which are in the SAME page already fetched for #top-ratios —
+          # so they cost no extra request. EODHD and yfinance expose neither in
+          # their per-symbol payloads and leave them null; screener.in is first
+          # in the provider chain ahead of yfinance, so in practice they are
+          # populated.
+          "revenue_growth_pct", "earnings_growth_pct",
+          "revenue_qoq_pct", "earnings_qoq_pct",
+          "eps_growth_yoy_pct", "eps_ttm_growth_pct")
 
 
 # ---------- persistence ----------
@@ -119,6 +122,13 @@ def _map_eodhd(fund: dict) -> dict:
         "industry": gen.get("Industry"),
         "revenue_growth_pct": _pct(hi.get("QuarterlyRevenueGrowthYOY")),
         "earnings_growth_pct": _pct(hi.get("QuarterlyEarningsGrowthYOY")),
+        # Sequential-quarter and EPS growth need the full quarterly/annual
+        # series, which this provider's per-symbol payload does not carry.
+        # screener.in fills them (see _screener_growth).
+        "revenue_qoq_pct": None,
+        "earnings_qoq_pct": None,
+        "eps_growth_yoy_pct": None,
+        "eps_ttm_growth_pct": None,
         "source": "EODHD",
     }
 
@@ -142,6 +152,13 @@ def _map_yf(info: dict) -> dict:
         # _pct fields above. earningsGrowth is PAT growth, not EPS growth.
         "revenue_growth_pct": _pct(info.get("revenueGrowth")),
         "earnings_growth_pct": _pct(info.get("earningsGrowth")),
+        # Sequential-quarter and EPS growth need the full quarterly/annual
+        # series, which this provider's per-symbol payload does not carry.
+        # screener.in fills them (see _screener_growth).
+        "revenue_qoq_pct": None,
+        "earnings_qoq_pct": None,
+        "eps_growth_yoy_pct": None,
+        "eps_ttm_growth_pct": None,
         "source": "yfinance",
     }
 
@@ -220,6 +237,8 @@ def _parse_screener(html: str) -> dict | None:
         "market_cap_cr": first("market cap"),
         "sector": None,
         "industry": None,
+        # Growth straight off the quarterly + annual tables on the same page.
+        **_screener_growth(soup),
         "source": "screener.in",
     }
 
@@ -248,6 +267,96 @@ def _screener_de(soup):
     except Exception:
         pass
     return None
+
+
+def _series(soup, section_id) -> dict:
+    """{row label: [oldest … latest]} for a screener.in financial table.
+
+    Unlike _screener_de, which only needs the latest column, growth needs the
+    whole row: QoQ compares the last two periods and YoY the last and the
+    fourth-from-last.
+    """
+    out: dict = {}
+    sec = soup.find(id=section_id)
+    table = sec.find("table") if sec else None
+    if not table:
+        return out
+    for tr in table.find_all("tr"):
+        cells = tr.find_all(["td", "th"])
+        if len(cells) < 3:
+            continue
+        label = cells[0].get_text(" ", strip=True).lower().rstrip("+").strip()
+        vals = [_snum(c.get_text()) for c in cells[1:]]
+        vals = [v for v in vals if v is not None]
+        if label and len(vals) >= 2:
+            out[label] = vals
+    return out
+
+
+def _row(series: dict, *names):
+    """First matching row — screener.in says 'Sales' for most companies and
+    'Revenue' for banks/NBFCs, and suffixes some labels."""
+    for want in names:
+        for label, vals in series.items():
+            if label.startswith(want):
+                return vals
+    return None
+
+
+def _growth(new, old):
+    """Percent change, or None where a percentage would be a lie.
+
+    A negative or zero base makes growth meaningless — a swing from -10 cr to
+    +5 cr is not "150% growth", and printing that would let it pass a
+    ">= 10%" screen. Those cases return None so the filter skips the row
+    instead of admitting it on a fake number.
+    """
+    if new is None or old is None or old <= 0:
+        return None
+    return round((new - old) / old * 100, 1)
+
+
+def _screener_growth(soup) -> dict:
+    """Revenue / profit / EPS growth from the quarterly and annual tables.
+
+    Both tables are already in the page we fetched for #top-ratios, so this is
+    free — no extra request per symbol. That is what makes QoQ and real EPS
+    growth affordable in a 200-symbol scan, which the yfinance path could not
+    do (its `info` payload carries neither).
+    """
+    out = {
+        "revenue_growth_pct": None, "earnings_growth_pct": None,
+        "revenue_qoq_pct": None, "earnings_qoq_pct": None,
+        "eps_growth_yoy_pct": None, "eps_ttm_growth_pct": None,
+    }
+    try:
+        q = _series(soup, "quarters")
+        sales = _row(q, "sales", "revenue")
+        profit = _row(q, "net profit")
+        eps_q = _row(q, "eps in rs", "eps")
+        # QoQ = latest quarter vs the one before it (sequential).
+        # YoY = latest quarter vs the same quarter a year earlier (4 back),
+        # which is the comparison that strips Indian seasonality.
+        if sales and len(sales) >= 2:
+            out["revenue_qoq_pct"] = _growth(sales[-1], sales[-2])
+        if sales and len(sales) >= 5:
+            out["revenue_growth_pct"] = _growth(sales[-1], sales[-5])
+        if profit and len(profit) >= 2:
+            out["earnings_qoq_pct"] = _growth(profit[-1], profit[-2])
+        if profit and len(profit) >= 5:
+            out["earnings_growth_pct"] = _growth(profit[-1], profit[-5])
+        # TTM EPS vs the four quarters before it — a same-quarter EPS pair is
+        # noisy, four-quarter sums are what people mean by "EPS is growing".
+        if eps_q and len(eps_q) >= 8:
+            out["eps_ttm_growth_pct"] = _growth(sum(eps_q[-4:]), sum(eps_q[-8:-4]))
+
+        p = _series(soup, "profit-loss")
+        eps_y = _row(p, "eps in rs", "eps")
+        if eps_y and len(eps_y) >= 2:
+            out["eps_growth_yoy_pct"] = _growth(eps_y[-1], eps_y[-2])
+    except Exception:
+        pass
+    return out
 
 
 def _fetch_screener(sym: str):
