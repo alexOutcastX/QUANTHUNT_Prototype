@@ -1,6 +1,6 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { ApiKey, API_BASE, api } from '../api';
+import { ApiKey, API_BASE, FundWarm, api } from '../api';
 import OwnerGate from '../components/OwnerGate';
 import { Btn, Card, EmptyState, Loading, ScreenTitle, SectionTitle } from '../ui';
 import { theme } from '../theme';
@@ -8,10 +8,181 @@ import { theme } from '../theme';
 export default function DeveloperScreen() {
   return (
     <View style={styles.container}>
-      <ScreenTitle title="Developer API" sub="Public data API · key-gated /api/v1/*" />
-      <OwnerGate title="Developer API">
+      <ScreenTitle title="Developer portal" sub="Fundamentals cache · public data API" />
+      <OwnerGate title="Developer portal">
         <DevInner />
       </OwnerGate>
+    </View>
+  );
+}
+
+// ── Fundamentals scrape + cache ──────────────────────────────────────────────
+const SCOPES = ['ALL', 'NIFTY 500', 'NIFTY 200', 'NIFTY 50'];
+
+function dur(sec: number | null | undefined): string {
+  if (sec == null || !isFinite(sec) || sec < 0) return '—';
+  const s = Math.round(sec);
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ${s % 60}s`;
+  return `${Math.floor(m / 60)}h ${m % 60}m`;
+}
+
+function FundWarmPanel() {
+  const [p, setP] = useState<FundWarm | null>(null);
+  const [err, setErr] = useState('');
+  const [scope, setScope] = useState('ALL');
+  const [busy, setBusy] = useState(false);
+  // Held in a ref so the poll interval closes over live state without being
+  // torn down and rebuilt on every tick.
+  const running = useRef(false);
+
+  const poll = useCallback(() => {
+    api
+      .fundWarmStatus()
+      .then((r) => {
+        setP(r);
+        running.current = r.running;
+        setErr('');
+      })
+      .catch((e) => setErr(String((e as Error)?.message || e)));
+  }, []);
+
+  useEffect(() => {
+    poll();
+    // 2 s while a sweep is live, 15 s when idle — the snapshot is cheap, but
+    // there is no reason to hammer it when nothing is moving.
+    let fast = 0;
+    const id = setInterval(() => {
+      fast += 1;
+      if (running.current || fast % 8 === 0) poll();
+    }, 2000);
+    return () => clearInterval(id);
+  }, [poll]);
+
+  const start = async () => {
+    setBusy(true);
+    try {
+      const r = await api.fundWarmStart(scope);
+      if (!r.started) setErr(r.reason || 'could not start');
+      else setErr('');
+      if (r.progress) {
+        setP(r.progress);
+        running.current = r.progress.running;
+      }
+      poll();
+    } catch (e) {
+      setErr(String((e as Error)?.message || e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const stop = async () => {
+    setBusy(true);
+    try {
+      const r = await api.fundWarmStop();
+      if (r.progress) setP(r.progress);
+      poll();
+    } catch (e) {
+      setErr(String((e as Error)?.message || e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (!p) return <Loading />;
+
+  const pct = Math.max(0, Math.min(100, p.pct));
+  const stopped = !p.running && p.cancel && p.done < p.total;
+  const state = p.running
+    ? `Scraping ${p.universe}`
+    : stopped
+      ? `Stopped at ${p.done}/${p.total}`
+      : p.total
+        ? `Last sweep of ${p.universe} finished`
+        : 'Idle — no sweep run yet';
+
+  return (
+    <Card>
+      <View style={styles.warmHead}>
+        <Text style={styles.warmState}>{state}</Text>
+        <View style={{ flex: 1 }} />
+        <Text style={[styles.warmPct, { color: p.running ? theme.green : theme.muted2 }]}>
+          {p.total ? `${pct.toFixed(1)}%` : ''}
+        </Text>
+      </View>
+
+      <View style={styles.barTrack}>
+        <View
+          style={[
+            styles.barFill,
+            { width: `${pct}%`, backgroundColor: p.running ? theme.green : theme.muted },
+          ]}
+        />
+      </View>
+
+      <Text style={styles.warmCounts}>
+        {p.done}/{p.total} processed · {p.ok} scraped · {p.skipped} already fresh
+        {p.failed ? ` · ${p.failed} failed` : ''}
+      </Text>
+
+      <View style={styles.statGrid}>
+        <Stat k="Rate" v={p.running ? `${p.rate_per_min}/min` : '—'} />
+        <Stat k="ETA" v={p.running ? dur(p.eta_sec) : '—'} />
+        <Stat k="Elapsed" v={dur(p.elapsed_sec)} />
+        <Stat k="Workers" v={String(p.workers)} />
+        <Stat k="Cached" v={`${p.cache_fresh}/${p.cache_size} fresh`} />
+        <Stat k="Schema" v={p.schema} />
+      </View>
+
+      <Text style={styles.scopeLabel}>Scope</Text>
+      <View style={styles.chipRow}>
+        {SCOPES.map((s) => (
+          <TouchableOpacity
+            key={s}
+            onPress={() => setScope(s)}
+            disabled={p.running}
+            activeOpacity={0.7}
+            style={[
+              styles.chip,
+              scope === s && styles.chipOn,
+              p.running && { opacity: 0.45 },
+            ]}
+          >
+            <Text style={[styles.chipTxt, scope === s && styles.chipTxtOn]}>
+              {s === 'ALL' ? 'All listed' : s}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      <View style={styles.warmBtns}>
+        {p.running ? (
+          <Btn label={busy ? '…' : 'Stop sweep'} onPress={stop} disabled={busy} />
+        ) : (
+          <Btn label={busy ? '…' : 'Scrape now'} onPress={start} disabled={busy} />
+        )}
+      </View>
+
+      {p.last_error ? <Text style={styles.warmErr}>Last failure — {p.last_error}</Text> : null}
+      {err ? <Text style={styles.warmErr}>{err}</Text> : null}
+
+      <Text style={styles.note}>
+        Fundamentals are scraped from screener.in (with a yfinance gap-fill) and cached for 7 days,
+        so the valuation and growth filters answer instantly. A sweep also runs ~45 s after each
+        deploy when FUND_WARM is set. Symbols already fresh under the current schema are skipped;
+        changing the field list changes the schema hash and re-scrapes everything.
+      </Text>
+    </Card>
+  );
+}
+
+function Stat({ k, v }: { k: string; v: string }) {
+  return (
+    <View style={styles.stat}>
+      <Text style={styles.statK}>{k}</Text>
+      <Text style={styles.statV}>{v}</Text>
     </View>
   );
 }
@@ -43,6 +214,9 @@ function DevInner() {
 
   return (
     <ScrollView contentContainerStyle={styles.body}>
+      <SectionTitle>Fundamentals cache</SectionTitle>
+      <FundWarmPanel />
+
       <SectionTitle>Issue a key</SectionTitle>
       <Card>
         <View style={styles.issueRow}>
@@ -151,4 +325,55 @@ const styles = StyleSheet.create({
     marginBottom: theme.sp.sm,
   },
   note: { color: theme.muted, fontSize: theme.fs.sm, marginTop: theme.sp.sm, lineHeight: 18 },
+  warmHead: { flexDirection: 'row', alignItems: 'center', marginBottom: theme.sp.sm },
+  warmState: { color: theme.text, fontSize: theme.fs.md, fontWeight: '700' },
+  warmPct: { fontFamily: theme.mono, fontSize: theme.fs.md, fontWeight: '700' },
+  barTrack: {
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: theme.surface2,
+    overflow: 'hidden',
+  },
+  barFill: { height: 8, borderRadius: 4 },
+  warmCounts: {
+    color: theme.muted2,
+    fontFamily: theme.mono,
+    fontSize: theme.fs.xs + 1,
+    marginTop: theme.sp.sm,
+  },
+  statGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: theme.sp.sm,
+    marginTop: theme.sp.md,
+  },
+  stat: {
+    backgroundColor: theme.surface2,
+    borderRadius: theme.radius.sm,
+    paddingHorizontal: theme.sp.md,
+    paddingVertical: theme.sp.sm,
+    minWidth: 104,
+  },
+  statK: { color: theme.muted, fontSize: theme.fs.xs, textTransform: 'uppercase' },
+  statV: { color: theme.text, fontFamily: theme.mono, fontSize: theme.fs.sm, marginTop: 2 },
+  scopeLabel: {
+    color: theme.muted,
+    fontSize: theme.fs.xs,
+    textTransform: 'uppercase',
+    marginTop: theme.sp.lg,
+    marginBottom: theme.sp.sm,
+  },
+  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.sp.sm },
+  chip: {
+    borderWidth: 1,
+    borderColor: theme.border2,
+    borderRadius: theme.radius.sm,
+    paddingHorizontal: theme.sp.md,
+    paddingVertical: theme.sp.sm - 2,
+  },
+  chipOn: { borderColor: theme.green, backgroundColor: theme.surface2 },
+  chipTxt: { color: theme.muted2, fontSize: theme.fs.sm },
+  chipTxtOn: { color: theme.green, fontWeight: '700' },
+  warmBtns: { flexDirection: 'row', gap: theme.sp.sm, marginTop: theme.sp.md },
+  warmErr: { color: theme.red, fontSize: theme.fs.sm, marginTop: theme.sp.sm },
 });

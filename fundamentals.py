@@ -464,6 +464,120 @@ def enqueue(symbols) -> list:
     return todo
 
 
+# ---------- bulk warm (scrape the whole universe up front) ----------
+# On-demand fetching means the first person to open a fundamental screen pays
+# for every symbol, and a large universe can look empty for minutes. Warming
+# walks the list in the background so the cache is already hot.
+#
+# It gets its OWN pool: pushing 1500 symbols through the shared _pool would put
+# every interactive /fundamentals/bulk request behind them in the queue. Fewer
+# workers than the on-demand pool, deliberately — this is the job that can wait.
+WARM_WORKERS = int(os.environ.get("FUND_WARM_WORKERS", "4"))
+
+_warm = {
+    "running": False, "cancel": False,
+    "total": 0, "done": 0, "ok": 0, "failed": 0, "skipped": 0,
+    "started": 0.0, "updated": 0.0, "finished": 0.0,
+    "universe": "", "last_error": "",
+}
+_warm_lock = threading.Lock()
+_warm_thread = None
+
+
+def warm_progress() -> dict:
+    """Snapshot for the developer portal. Cheap enough to poll every 2 s."""
+    with _warm_lock:
+        w = dict(_warm)
+    done, total = w["done"], w["total"]
+    # While running, elapsed must track the wall clock — using `updated` would
+    # freeze the ETA whenever a slow provider stalls every worker at once.
+    end = time.time() if w["running"] else (w["finished"] or w["updated"])
+    elapsed = (end - w["started"]) if w["started"] else 0
+    rate = (done / elapsed) if elapsed > 0 and done else 0
+    w["rate_per_min"] = round(rate * 60, 1)
+    w["eta_sec"] = int((total - done) / rate) if rate > 0 and total > done else None
+    w["elapsed_sec"] = int(elapsed)
+    w["pct"] = round(done / total * 100, 1) if total else 0.0
+    with _lock:
+        w["cache_size"] = len(_cache)
+        w["cache_fresh"] = sum(1 for s in _cache if _fresh(s))
+        w["inflight"] = len(_inflight)
+    w["schema"] = SCHEMA_V
+    w["workers"] = WARM_WORKERS
+    return w
+
+
+def _warm_run(symbols):
+    ex = ThreadPoolExecutor(max_workers=WARM_WORKERS)
+
+    def one(sym):
+        # Cancel returns WITHOUT touching `done`, so a stopped sweep reads as
+        # "stopped at 412/1455", not as a completed one.
+        with _warm_lock:
+            if _warm["cancel"]:
+                return
+        try:
+            if _fresh(sym):
+                with _warm_lock:
+                    _warm["skipped"] += 1
+                    _warm["done"] += 1
+                    _warm["updated"] = time.time()
+                return
+            with _lock:
+                _inflight.add(sym)
+            _fetch_one(sym)                      # writes the cache + stamps it
+            with _lock:
+                got = bool((_cache.get(sym) or {}).get("data"))
+            with _warm_lock:
+                _warm["ok" if got else "failed"] += 1
+        except Exception as e:                   # one bad symbol must not stop the sweep
+            with _lock:
+                _inflight.discard(sym)
+            with _warm_lock:
+                _warm["failed"] += 1
+                _warm["last_error"] = "%s: %s" % (sym, e)
+                _warm["last_error"] = _warm["last_error"][:200]
+        with _warm_lock:
+            _warm["done"] += 1
+            _warm["updated"] = time.time()
+
+    try:
+        list(ex.map(one, symbols))
+    finally:
+        ex.shutdown(wait=False)
+        _save()                                  # persist what we gathered
+        with _warm_lock:
+            _warm["running"] = False
+            _warm["finished"] = time.time()
+            _warm["updated"] = time.time()
+
+
+def warm_start(symbols, label="universe") -> dict:
+    """Kick off a background sweep. No-op if one is already running."""
+    global _warm_thread
+    syms = [s.strip().upper() for s in symbols if s and s.strip()]
+    with _warm_lock:
+        if _warm["running"]:
+            return {"started": False, "reason": "already running"}
+        _warm.update({
+            "running": True, "cancel": False,
+            "total": len(syms), "done": 0, "ok": 0, "failed": 0, "skipped": 0,
+            "started": time.time(), "updated": time.time(), "finished": 0.0,
+            "universe": label, "last_error": "",
+        })
+    _warm_thread = threading.Thread(target=_warm_run, args=(syms,),
+                                    name="fund-warm", daemon=True)
+    _warm_thread.start()
+    return {"started": True, "total": len(syms), "universe": label}
+
+
+def warm_stop() -> dict:
+    with _warm_lock:
+        was = _warm["running"]
+        _warm["cancel"] = True
+    return {"stopping": was}
+
+
 # ---------- public API ----------
 def bulk(symbols) -> dict:
     """Return cached fundamentals for `symbols`, and kick off background fetches
