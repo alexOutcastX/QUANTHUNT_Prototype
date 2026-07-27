@@ -255,6 +255,38 @@ class FetchShapeTest(unittest.TestCase):
         self.assertEqual(d["source"], "NSE")
 
 
+class DividendYieldUnitsTest(unittest.TestCase):
+    """yfinance is inconsistent with its own units: returnOnAssets comes back as
+    a ratio (0.153) while dividendYield comes back as a percent (4.8). Scaling
+    both by 100 gave Infosys a 480% dividend yield on the production VM — a
+    number that passes every 'yield > 3%' screen ever written."""
+
+    def test_percent_shaped_input_is_left_alone(self):
+        import fundamentals as F
+        self.assertEqual(F._pct_loose(4.8), 4.8)      # not 480.0
+        self.assertEqual(F._pct_loose(2.75), 2.75)
+
+    def test_ratio_shaped_input_is_scaled(self):
+        import fundamentals as F
+        self.assertEqual(F._pct_loose(0.028), 2.8)
+
+    def test_zero_and_non_numbers(self):
+        import fundamentals as F
+        self.assertEqual(F._pct_loose(0), 0)
+        self.assertIsNone(F._pct_loose(None))
+        self.assertIsNone(F._pct_loose("4.8"))
+
+    def test_yf_mapping_uses_it_for_yield_but_not_for_returns(self):
+        """ROE/ROCE really are ratios from this provider, so they must keep the
+        strict x100 — swapping them would silently divide them by 100."""
+        import fundamentals as F
+        m = F._map_yf({"dividendYield": 4.8, "returnOnEquity": 0.3667,
+                       "returnOnAssets": 0.153})
+        self.assertEqual(m["dividend_yield"], 4.8)
+        self.assertEqual(m["roe"], 36.67)
+        self.assertEqual(m["roce"], 15.3)
+
+
 class ProviderWiringTest(unittest.TestCase):
     def test_exchange_is_ahead_of_yfinance_in_the_default_chain(self):
         import fundamentals as F
