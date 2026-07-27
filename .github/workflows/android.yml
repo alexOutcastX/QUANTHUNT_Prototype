@@ -1,21 +1,20 @@
 name: Android APK + Capgo OTA
 
-# Two automated paths:
-#  • OTA (ota job): on every push to `production` that touches mobile/**, publish
-#    an over-the-air bundle to Capgo so installed phones auto-update — this runs
-#    alongside the web deploy, keeping the app in sync with what's live.
-#    Best-effort: it no-ops without a CAPGO_TOKEN, skips entirely when the repo
-#    variable CAPGO_ENABLED=false, and downgrades a failed publish to a warning
-#    rather than failing the promotion.
-#  • APK (apk job): on manual dispatch, build a debug APK artifact for the first
-#    install / version bumps (the container that ships this has no Android SDK,
-#    so the APK is built here on a runner that does).
+# PHONE UPDATES SHIP AS APKs. The Capgo subscription has ended, so there is no
+# over-the-air path: installed phones stay on whatever bundle they last pulled,
+# however many times you promote to production. To update a phone, run this
+# workflow (Actions → Android APK + Capgo OTA → Run workflow), download the
+# `taureye-android-debug` artifact and install it over the existing app — same
+# signing key, so it upgrades in place and keeps your sign-in and data.
 #
-# WITHOUT AN ACTIVE CAPGO PLAN there is no over-the-air path: installed phones
-# stay on whatever bundle they last pulled, however many times you promote to
-# production. Shipping to a phone then means running the apk job and installing
-# the artifact. The web app at the deployed host is unaffected either way — it
-# is served fresh by the VM on every load.
+# The web app is unaffected and always current: the VM serves it fresh on every
+# load, with no Capgo in the path.
+#
+#  • APK (apk job): manual dispatch, builds the installable artifact. This is
+#    the delivery mechanism.
+#  • OTA (ota job): runs on production pushes touching mobile/** but is OPT-IN —
+#    it skips unless the repo variable CAPGO_ENABLED=true. Re-enable it by
+#    setting that variable once a plan is active again.
 on:
   push:
     branches: [production]
@@ -90,24 +89,24 @@ jobs:
         run: npx expo export --platform web --output-dir dist
         env:
           EXPO_PUBLIC_API_BASE: ${{ vars.TAUREYE_API_BASE || 'http://161.118.174.177' }}
-      # OTA delivery is best-effort: it must never fail a production promotion.
-      # The web deploy is what actually goes live; a lapsed or disabled Capgo
-      # plan turning this red on every ship would train us to ignore the one
-      # signal that matters. A failed publish emits a ::warning:: instead, so it
-      # is visible on the run summary without burying real breakage.
+      # OTA is OPT-IN. The Capgo subscription has ended, so phone updates ship
+      # as APKs: run this workflow manually and install the artifact. Attempting
+      # a publish against a lapsed plan just burns CI time on a call that cannot
+      # succeed, so the default is to skip.
       #
-      # Set the repo variable CAPGO_ENABLED=false to skip the attempt entirely
-      # (no plan → no point paying 20s of CI for a call that cannot succeed).
-      # When OTA is off, ship phone builds with the `apk` job (Run workflow →
-      # Android APK + Capgo OTA) and install the artifact directly.
+      # To turn OTA back on, set the repo variable CAPGO_ENABLED=true (Settings →
+      # Secrets and variables → Actions → Variables) with a live plan and a valid
+      # CAPGO_TOKEN. It stays best-effort even then: a failed publish warns
+      # rather than failing the promotion, because the web deploy is a separate
+      # workflow that has already gone live by this point.
       - name: Publish OTA bundle to Capgo
         env:
           CAPGO_TOKEN: ${{ secrets.CAPGO_TOKEN }}
           CAPGO_ENABLED: ${{ vars.CAPGO_ENABLED }}
         run: |
-          if [ "$CAPGO_ENABLED" = "false" ]; then
-            echo "CAPGO_ENABLED=false — OTA publish disabled for this repo."
-            echo "::notice::OTA skipped. Phones update via a fresh APK, not over the air."
+          if [ "$CAPGO_ENABLED" != "true" ]; then
+            echo "OTA is off (set repo variable CAPGO_ENABLED=true to enable)."
+            echo "::notice::OTA skipped — phones update by installing a new APK, not over the air."
             exit 0
           fi
           if [ -z "$CAPGO_TOKEN" ]; then
@@ -122,5 +121,5 @@ jobs:
           else
             echo "::warning::OTA publish FAILED for $VER (expired plan, revoked token or Capgo outage). \
           The web deploy is unaffected. Installed phones stay on their current bundle until you ship a new APK. \
-          Set the repo variable CAPGO_ENABLED=false to stop attempting this."
+          Unset CAPGO_ENABLED to stop attempting this."
           fi
