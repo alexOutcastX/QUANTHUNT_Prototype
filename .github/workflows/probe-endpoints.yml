@@ -85,5 +85,12 @@ jobs:
               "https://api.bseindia.com/BseIndiaAPI/api/ComHeadernew/w?quotetype=EQ&scripcode=$CODE&seriesid=" bse
           hit "BSE StockTrading (mcap)" \
               "https://api.bseindia.com/BseIndiaAPI/api/StockTrading/w?flag=&quotetype=EQ&scripcode=$CODE" bse
+          # yfinance is the gap-fill for the three fields neither exchange
+          # publishes — ROCE, debt/equity and the current ratio. It bot-walls
+          # datacentre IPs, so whether those filters can ever answer in
+          # production is exactly this line.
+          echo "--- yfinance (gap-fill: roce / debt-equity / current ratio) ---"
+          hit "yahoo quoteSummary" \
+              "https://query2.finance.yahoo.com/v10/finance/quoteSummary/$SYM.NS?modules=financialData"
           echo "=== done"
           REMOTE

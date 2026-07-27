@@ -1,6 +1,7 @@
 """Bulk fundamentals cache — instant fundamental screening.
 
-Fetches per-symbol fundamentals from EODHD (when EODHD_API_KEY is set) with a
+Fetches per-symbol fundamentals from the exchanges (BSE ratios + NSE quarterly
+XBRL filings — see exchange_fund), from EODHD when EODHD_API_KEY is set, with a
 yfinance fallback, normalizes them to one compact schema, and caches them in
 memory + on disk. The screener requests them in bulk (`/fundamentals/bulk`), so
 after a background warm-up fundamental filters run client-side with no per-filter
@@ -20,8 +21,9 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 
 EODHD_KEY = (os.environ.get("EODHD_API_KEY") or "").strip()
-# Provider order. 'auto' = [eodhd if key] -> screener.in -> yfinance. Override with
-# FUND_SOURCE (e.g. "screener", "yfinance", "screener,yfinance", "eodhd").
+# Provider order. 'auto' = [eodhd if key] -> exchange (BSE+NSE) -> yfinance.
+# Override with FUND_SOURCE (e.g. "exchange", "yfinance", "exchange,yfinance").
+# screener.in is reachable only by naming it explicitly — see _provider_chain.
 FUND_SOURCE = (os.environ.get("FUND_SOURCE") or "auto").strip().lower()
 TTL = int(os.environ.get("FUND_TTL_SEC", str(7 * 24 * 3600)))   # fundamentals move slowly → 7 days
 # A failed lookup caches an empty payload; without a shorter TTL that blank would
@@ -47,12 +49,11 @@ FIELDS = ("pe", "forward_pe", "pb", "eps", "dividend_yield", "roe", "roce",
           # most-recent-quarter vs the same quarter a year earlier (that is what
           # both providers report) — quarterly YoY, not full-year FY vs FY.
           #
-          # QoQ and EPS growth come from screener.in's quarterly / annual
-          # tables, which are in the SAME page already fetched for #top-ratios —
-          # so they cost no extra request. EODHD and yfinance expose neither in
-          # their per-symbol payloads and leave them null; screener.in is first
-          # in the provider chain ahead of yfinance, so in practice they are
-          # populated.
+          # QoQ and EPS growth come from NSE's quarterly XBRL filings via the
+          # 'exchange' provider (see exchange_fund). EODHD and yfinance expose
+          # neither in their per-symbol payloads and leave them null; exchange
+          # sits ahead of yfinance in the chain, so in practice they are
+          # populated for any company that files with the NSE.
           "revenue_growth_pct", "earnings_growth_pct",
           "revenue_qoq_pct", "earnings_qoq_pct",
           "eps_growth_yoy_pct", "eps_ttm_growth_pct")
@@ -134,9 +135,9 @@ def _map_eodhd(fund: dict) -> dict:
         "industry": gen.get("Industry"),
         "revenue_growth_pct": _pct(hi.get("QuarterlyRevenueGrowthYOY")),
         "earnings_growth_pct": _pct(hi.get("QuarterlyEarningsGrowthYOY")),
-        # Sequential-quarter and EPS growth need the full quarterly/annual
-        # series, which this provider's per-symbol payload does not carry.
-        # screener.in fills them (see _screener_growth).
+        # Sequential-quarter and EPS growth need the full quarterly series,
+        # which this provider's per-symbol payload does not carry. The exchange
+        # provider fills them from NSE's quarterly filings.
         "revenue_qoq_pct": None,
         "earnings_qoq_pct": None,
         "eps_growth_yoy_pct": None,
@@ -385,33 +386,45 @@ def _fetch_screener(sym: str):
     return None
 
 
-_FETCHERS = {"eodhd": _fetch_eodhd, "screener": _fetch_screener, "yfinance": _fetch_yf}
+def _fetch_exchange(sym: str):
+    """BSE ratios + NSE quarterly filings — the first-party replacement for the
+    screener.in scrape. Imported lazily so a broken exchange module can never
+    stop fundamentals from loading."""
+    import exchange_fund
+    return exchange_fund.fetch(sym)
+
+
+_FETCHERS = {"eodhd": _fetch_eodhd, "exchange": _fetch_exchange,
+             "screener": _fetch_screener, "yfinance": _fetch_yf}
 
 
 def _provider_chain() -> list:
-    """Default chain. screener.in is deliberately NOT in it.
+    """Default chain: the exchanges first, yfinance behind them.
 
-    It is a derived source — a re-publication of filings the exchanges publish
-    themselves — and pulling a company page per symbol is automated access its
-    terms do not allow. NSE (quarterly XBRL filings via nsearchives) and BSE
-    (ComHeadernew: EPS/PE/PB/ROE/OPM/NPM/sector) publish the same numbers
-    first-hand, and we are already an NSE client for prices and bhavcopy.
+    screener.in is deliberately NOT in it. It is a derived source — a
+    re-publication of filings the exchanges publish themselves — and pulling a
+    company page per symbol is automated access its terms do not allow. The
+    'exchange' provider reads the same numbers first-hand (BSE ComHeadernew for
+    ratios, NSE quarterly XBRL for growth), and we are already an NSE client for
+    prices and bhavcopy.
 
-    The fetcher stays wired so FUND_SOURCE=screener still works for local
-    one-off use, but nothing reaches for it on its own.
+    The screener fetcher stays wired so FUND_SOURCE=screener still works for
+    local one-off use, but nothing reaches for it on its own.
     """
     if FUND_SOURCE and FUND_SOURCE != "auto":
         return [p.strip() for p in FUND_SOURCE.split(",") if p.strip() in _FETCHERS]
     chain = []
     if EODHD_KEY:
         chain.append("eodhd")
-    chain.append("yfinance")
+    chain += ["exchange", "yfinance"]
     return chain
 
 
-# Fields screener.in can't provide from its public page — filled from yfinance
-# in 'auto' mode so those filters still work.
-_GAP_FILL = ("current_ratio", "forward_pe", "debt_equity", "sector", "industry")
+# Fields the primary source can't supply — filled from yfinance in 'auto' mode
+# so those filters still work. The exchange provider adds roce (BSE publishes
+# ROE, not ROCE) and dividend_yield to what the screener path already needed.
+_GAP_FILL = ("current_ratio", "forward_pe", "debt_equity", "sector", "industry",
+             "roce", "dividend_yield")
 
 
 def _fetch_one(sym: str) -> None:
