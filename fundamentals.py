@@ -389,12 +389,23 @@ _FETCHERS = {"eodhd": _fetch_eodhd, "screener": _fetch_screener, "yfinance": _fe
 
 
 def _provider_chain() -> list:
+    """Default chain. screener.in is deliberately NOT in it.
+
+    It is a derived source — a re-publication of filings the exchanges publish
+    themselves — and pulling a company page per symbol is automated access its
+    terms do not allow. NSE (quarterly XBRL filings via nsearchives) and BSE
+    (ComHeadernew: EPS/PE/PB/ROE/OPM/NPM/sector) publish the same numbers
+    first-hand, and we are already an NSE client for prices and bhavcopy.
+
+    The fetcher stays wired so FUND_SOURCE=screener still works for local
+    one-off use, but nothing reaches for it on its own.
+    """
     if FUND_SOURCE and FUND_SOURCE != "auto":
         return [p.strip() for p in FUND_SOURCE.split(",") if p.strip() in _FETCHERS]
     chain = []
     if EODHD_KEY:
         chain.append("eodhd")
-    chain += ["screener", "yfinance"]
+    chain.append("yfinance")
     return chain
 
 
