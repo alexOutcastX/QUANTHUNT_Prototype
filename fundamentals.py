@@ -12,6 +12,7 @@ Without a key we fall back to yfinance, which works from residential/Mumbai IPs.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import threading
@@ -57,6 +58,17 @@ FIELDS = ("pe", "forward_pe", "pb", "eps", "dividend_yield", "roe", "roce",
           "eps_growth_yoy_pct", "eps_ttm_growth_pct")
 
 
+# Cache entries are stamped with a fingerprint of FIELDS. fund_cache.json has a
+# 7-day TTL and is deliberately excluded from the deploy rsync, so it outlives
+# releases — which means adding a field to the schema is NOT enough to make it
+# appear: every symbol cached under the old shape keeps answering without the
+# new key until its TTL expires. A screener filter reading that missing key gets
+# null and matches nothing, which is exactly how the growth filters shipped
+# looking broken. Deriving the stamp from FIELDS makes this automatic: change
+# the schema, and every stale-shaped entry is refetched on next use.
+SCHEMA_V = hashlib.md5(",".join(sorted(FIELDS)).encode()).hexdigest()[:8]
+
+
 # ---------- persistence ----------
 def _load() -> None:
     try:
@@ -85,7 +97,7 @@ def _save() -> None:
 
 def _fresh(sym: str) -> bool:
     e = _cache.get(sym)
-    if not e:
+    if not e or e.get("v") != SCHEMA_V:
         return False
     # A populated result is good for the full TTL; an empty (failed) result only
     # for the short negative TTL, so outages self-heal instead of sticking.
@@ -420,7 +432,7 @@ def _fetch_one(sym: str) -> None:
                     data[k] = yf[k]
             data["source"] = (data.get("source") or "") + "+yfinance"
     with _lock:
-        _cache[sym] = {"data": data or {}, "ts": time.time()}
+        _cache[sym] = {"data": data or {}, "ts": time.time(), "v": SCHEMA_V}
         _inflight.discard(sym)
         _dirty = True
 
@@ -463,7 +475,7 @@ def bulk(symbols) -> dict:
     with _lock:
         for s in symbols:
             e = _cache.get(s)
-            if e and (now - e["ts"] < TTL):
+            if e and e.get("v") == SCHEMA_V and (now - e["ts"] < TTL):
                 out[s] = e["data"]
             else:
                 pending.append(s)
