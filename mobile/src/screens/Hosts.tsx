@@ -140,6 +140,14 @@ function SubTabs({ tabs, persistKey, alias }: { tabs: SubTab[]; persistKey?: str
               ))}
             </View>
           )}
+          {/* The one-line explanation of each section used to render on mobile
+              only, so desktop users never saw copy like "the honesty page". It
+              is the same `hint`, shown for the active section. */}
+          {shown.find((t) => t.key === active)?.hint ? (
+            <Text style={styles.subBarHint} numberOfLines={1}>
+              {shown.find((t) => t.key === active)?.hint}
+            </Text>
+          ) : null}
         </View>
       ) : (
         // Mobile: a hamburger button showing the current section; tap for a
@@ -391,6 +399,7 @@ const styles = StyleSheet.create({
   subNav: { paddingTop: theme.sp.md },
   subNavHint: { color: theme.muted, fontSize: theme.fs.xs + 1, paddingHorizontal: theme.sp.lg, marginTop: 2 },
   subBarWrap: { paddingHorizontal: theme.sp.lg, paddingTop: theme.sp.md, paddingBottom: theme.sp.sm },
+  subBarHint: { color: theme.muted, fontSize: theme.fs.xs + 1, textAlign: 'center', marginTop: 6 },
   subBar: {
     flexDirection: 'row',
     backgroundColor: theme.surface2,

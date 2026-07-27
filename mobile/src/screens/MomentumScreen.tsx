@@ -116,18 +116,10 @@ const COLS: ColDef[] = [
 ];
 const ACTIONS_W = 142;
 
-// Mobile sort options (headers are gone on the card layout).
-const MOBILE_SORTS: { key: ColKey; label: string }[] = [
-  { key: 'score', label: 'Score' },
-  { key: 'probability', label: 'Prob' },
-  { key: 'chg', label: '% Chg' },
-  { key: 'relvol', label: 'RVol' },
-  { key: 'rsi', label: 'RSI' },
-  { key: 'price', label: 'LTP' },
-  { key: 'upside_pct', label: 'Upside' },
-  { key: 'cap', label: 'Cap' },
-  { key: 'sector', label: 'Sector' },
-];
+// The card layout has no column headers to tap, so sorting is exposed as chips.
+// They are derived from the same COLS the desktop table sorts by rather than a
+// hand-kept subset: the old list covered 9 of 15 columns, so six of them could
+// be sorted on a laptop and not on a phone.
 
 const pct = (v: number | null | undefined, d = 1) =>
   v == null || !isFinite(v) ? '—' : (v >= 0 ? '+' : '') + v.toFixed(d) + '%';
@@ -716,6 +708,9 @@ export default function MomentumScreen() {
       }
     }
   };
+  // One source of truth for "is this metric on screen": the table, the card and
+  // the export all read it.
+  const showCol = (k: ColKey) => visCols.some((c) => c.key === k);
   const doExport = (kind: 'csv' | 'excel') => {
     const headers = visCols.map((c) => c.label);
     const data = shown.map((h) => visCols.map((c) => exportVal(h, c.key)));
@@ -855,7 +850,7 @@ export default function MomentumScreen() {
           <View style={styles.mSortRow}>
             <Text style={styles.mSortLabel}>SORT</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.mSortInner}>
-              {MOBILE_SORTS.map((s) => {
+              {visCols.filter((c) => c.key !== 'symbol').map((s) => {
                 const on = sortCol === s.key;
                 return (
                   <TouchableOpacity
@@ -973,16 +968,30 @@ export default function MomentumScreen() {
                         <Text style={styles.cardProb}>{h.probability}% prob</Text>
                       </View>
                     </View>
+                    {/* Stats follow the user's column selection, exactly as the
+                        desktop table and the CSV export do. The card used to
+                        render a fixed set, so hiding a column on a phone changed
+                        your export but not the list in front of you. Formatting
+                        stays bespoke — a card is not a table. */}
                     <View style={styles.cardStats}>
-                      <Text style={styles.cardStat}>₹{fmtIN(h.price)}</Text>
-                      <Text style={[styles.cardStat, { color: (h.chg ?? 0) >= 0 ? theme.green : theme.red }]}>{pct(h.chg, 2)}</Text>
-                      {fmtCap(enrich[h.symbol]?.mcap) ? (
+                      {showCol('price') ? <Text style={styles.cardStat}>₹{fmtIN(h.price)}</Text> : null}
+                      {showCol('chg') ? (
+                        <Text style={[styles.cardStat, { color: (h.chg ?? 0) >= 0 ? theme.green : theme.red }]}>{pct(h.chg, 2)}</Text>
+                      ) : null}
+                      {showCol('cap') && fmtCap(enrich[h.symbol]?.mcap) ? (
                         <Text style={[styles.cardStat, { color: theme.muted2 }]}>{fmtCap(enrich[h.symbol]?.mcap)}</Text>
                       ) : null}
-                      <Text style={styles.cardStat}>RSI {h.rsi != null ? h.rsi.toFixed(0) : '—'}</Text>
-                      <Text style={styles.cardStat}>{h.relvol != null ? h.relvol.toFixed(2) + 'x' : '—'}</Text>
-                      <Text style={[styles.cardStat, { color: (h.d200 ?? 0) >= 0 ? theme.green : theme.red }]}>200DMA {pct(h.d200)}</Text>
-                      {h.upside_pct != null ? (
+                      {showCol('rsi') ? <Text style={styles.cardStat}>RSI {h.rsi != null ? h.rsi.toFixed(0) : '—'}</Text> : null}
+                      {showCol('relvol') ? (
+                        <Text style={styles.cardStat}>{h.relvol != null ? h.relvol.toFixed(2) + 'x' : '—'}</Text>
+                      ) : null}
+                      {showCol('d200') ? (
+                        <Text style={[styles.cardStat, { color: (h.d200 ?? 0) >= 0 ? theme.green : theme.red }]}>200DMA {pct(h.d200)}</Text>
+                      ) : null}
+                      {showCol('pct_from_high') && h.pct_from_high != null ? (
+                        <Text style={[styles.cardStat, { color: theme.muted2 }]}>{pct(h.pct_from_high)} off high</Text>
+                      ) : null}
+                      {showCol('upside_pct') && h.upside_pct != null ? (
                         <Text style={[styles.cardStat, { color: h.upside_pct > 0 ? theme.green : theme.muted }]}>
                           ▲ {h.upside_pct > 0 ? '+' + h.upside_pct.toFixed(1) + '%' : 'extended'} upside
                         </Text>

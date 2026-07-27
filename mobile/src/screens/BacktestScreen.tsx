@@ -161,6 +161,11 @@ ${cell('Avg holding', s.avg_hold_days + ' days')}${cell('Total charges', money(s
 </body></html>`;
 }
 
+// How much of the trade log renders inline. Used to be 400 on desktop and 150
+// on phones, which silently hid a third of a 300-trade result from the phone
+// with no indication the two devices disagreed. One number, both widths.
+const TRADE_ROWS = 400;
+
 export default function BacktestScreen() {
   const { isDesktop } = useResponsive();
   const [metas, setMetas] = useState<BtStrategyMeta[]>(FALLBACK_STRATS);
@@ -859,7 +864,7 @@ export default function BacktestScreen() {
                     </Text>
                   ))}
               </View>
-              {result.trades.slice(0, isDesktop ? 400 : 150).map((t) => (
+              {result.trades.slice(0, TRADE_ROWS).map((t) => (
                 <View key={t.id} style={styles.mRow}>
                   <Text style={[styles.mCell, { width: 34 }]}>{t.id}</Text>
                   <Text style={[styles.mCell, { width: 96, textAlign: 'left', fontWeight: '700', color: theme.text }]}>{t.symbol}</Text>
@@ -879,8 +884,8 @@ export default function BacktestScreen() {
               ))}
             </View>
           </ScrollView>
-          {result.trades.length > (isDesktop ? 400 : 150) ? (
-            <Text style={styles.note}>Showing the first {isDesktop ? 400 : 150} trades — export CSV/Excel for the full log.</Text>
+          {result.trades.length > TRADE_ROWS ? (
+            <Text style={styles.note}>Showing the first {TRADE_ROWS} trades — export CSV/Excel for the full log.</Text>
           ) : null}
           </Fold>
         </View>

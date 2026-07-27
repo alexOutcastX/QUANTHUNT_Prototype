@@ -39,7 +39,19 @@ _dirty = False
 
 # The compact schema the screener's fundamental filters read.
 FIELDS = ("pe", "forward_pe", "pb", "eps", "dividend_yield", "roe", "roce",
-          "debt_equity", "current_ratio", "market_cap_cr", "sector", "industry")
+          "debt_equity", "current_ratio", "market_cap_cr", "sector", "industry",
+          # Growth. The Custom screener has offered Revenue Growth / Earnings
+          # Growth filters for a while, but this payload never carried them, so
+          # every row read null and the filters matched nothing. Both are
+          # most-recent-quarter vs the same quarter a year earlier (that is what
+          # both providers report) — quarterly YoY, not full-year FY vs FY.
+          #
+          # There is deliberately no eps_growth_* here. Neither provider exposes
+          # EPS growth in the cheap per-symbol payload, and deriving it needs the
+          # quarterly income statement — one more network round trip per symbol,
+          # which does not fit a 200-symbol bulk scan. Adding the key unpopulated
+          # would recreate exactly the bug this commit fixes.
+          "revenue_growth_pct", "earnings_growth_pct")
 
 
 # ---------- persistence ----------
@@ -105,6 +117,8 @@ def _map_eodhd(fund: dict) -> dict:
         "market_cap_cr": round(mc / 1e7, 2) if isinstance(mc, (int, float)) and mc else None,
         "sector": gen.get("Sector"),
         "industry": gen.get("Industry"),
+        "revenue_growth_pct": _pct(hi.get("QuarterlyRevenueGrowthYOY")),
+        "earnings_growth_pct": _pct(hi.get("QuarterlyEarningsGrowthYOY")),
         "source": "EODHD",
     }
 
@@ -124,6 +138,10 @@ def _map_yf(info: dict) -> dict:
         "market_cap_cr": round(mc / 1e7, 2) if isinstance(mc, (int, float)) and mc else None,
         "sector": info.get("sector"),
         "industry": info.get("industry"),
+        # yfinance reports these as ratios (0.275 = +27.5%), same as the other
+        # _pct fields above. earningsGrowth is PAT growth, not EPS growth.
+        "revenue_growth_pct": _pct(info.get("revenueGrowth")),
+        "earnings_growth_pct": _pct(info.get("earningsGrowth")),
         "source": "yfinance",
     }
 

@@ -550,11 +550,18 @@ function PatternIndexScreener({ onOpenSymbol, onFullScan }: {
         <TouchableOpacity style={styles.perChip} onPress={() => setSortOpen(true)} activeOpacity={0.75}>
           <Text style={styles.perTxt}>⇅ {sortLabel}{sortDir === -1 ? ' ↓' : ' ↑'}</Text>
         </TouchableOpacity>
-        {isDesktop ? (
-          <TouchableOpacity style={styles.perChip} onPress={() => setColOpen(true)} activeOpacity={0.75}>
-            <Text style={styles.perTxt}>▤ Columns</Text>
-          </TouchableOpacity>
-        ) : null}
+        {/* Offered at every width. Momentum already does this — its own comment
+            says columns matter MORE on a phone, where the table scrolls
+            sideways — so hiding it here made the two screens contradict. */}
+        <TouchableOpacity
+          style={styles.perChip}
+          onPress={() => setColOpen(true)}
+          activeOpacity={0.75}
+          accessibilityRole="button"
+          accessibilityLabel="Choose which columns to show"
+        >
+          <Text style={styles.perTxt}>▤ Columns</Text>
+        </TouchableOpacity>
         <TouchableOpacity
           style={styles.perChip}
           onPress={() => {
