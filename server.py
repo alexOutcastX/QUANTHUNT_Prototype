@@ -3046,6 +3046,81 @@ def fundamentals_bulk():
     return jsonify(out)
 
 
+# ── Fundamentals warm sweep (owner-operated, surfaced in the developer portal) ──
+def _warm_symbols(scope: str) -> tuple:
+    """Resolve a warm scope to (symbols, label). 'all' walks the whole listed
+    universe; anything else is treated as an index / custom group name."""
+    scope = (scope or "").strip().upper()
+    if scope in ("", "ALL", "UNIVERSE"):
+        # NSE only: the provider chain is keyed by NSE symbol (screener.in's
+        # company page, then SYM.NS on yfinance), so sweeping the ~2600 BSE-only
+        # scrips would just cache empty results — and a cached empty result is
+        # 'fresh' for the full TTL, so they would not be retried for a week.
+        items = get_universe() or []
+        return ([x["symbol"] for x in items
+                 if x.get("symbol") and x.get("exchange") == "NSE"], "ALL NSE")
+    if scope not in NSE_INDEX_MAP and scope not in CUSTOM_GROUPS:
+        return [], scope
+    rows, _src = _get_constituents(scope)
+    return [r.get("symbol") for r in (rows or []) if r.get("symbol")], scope
+
+
+@app.route("/fundamentals/warm", methods=["GET"])
+@require_owner
+def fundamentals_warm_status():
+    return jsonify(_fund.warm_progress())
+
+
+@app.route("/fundamentals/warm", methods=["POST"])
+@require_owner
+def fundamentals_warm_start():
+    b = request.get_json(silent=True) or {}
+    scope = b.get("scope") or "ALL"
+    syms, label = _warm_symbols(scope)
+    if not syms:
+        return jsonify({"started": False,
+                        "reason": f"no symbols for '{label}' — unknown index, or the "
+                                  f"universe sweep hasn't populated it yet",
+                        "scopes": ["ALL"] + list(NSE_INDEX_MAP) + list(CUSTOM_GROUPS)}), 400
+    res = _fund.warm_start(syms, label)
+    res["progress"] = _fund.warm_progress()
+    return jsonify(res)
+
+
+@app.route("/fundamentals/warm/stop", methods=["POST"])
+@require_owner
+def fundamentals_warm_stop():
+    res = _fund.warm_stop()
+    res["progress"] = _fund.warm_progress()
+    return jsonify(res)
+
+
+# Warm the fundamentals cache on boot so the growth/valuation filters have data
+# before anyone opens a screen. Off by default (FUND_WARM=off) because it is a
+# long scrape; the deploy sets it to an index name or ALL.
+FUND_WARM = os.environ.get("FUND_WARM", "off").strip()
+
+
+def start_fund_warm():
+    """Start the boot-time fundamentals sweep once (called from __main__/wsgi)."""
+    if not FUND_WARM or FUND_WARM.lower() in ("0", "off", "false", "no"):
+        return
+
+    def _go():
+        time.sleep(45)   # after the universe list and the scan warm have settled
+        try:
+            syms, label = _warm_symbols(FUND_WARM)
+            if not syms:
+                log.warning("Fundamentals warm: no symbols for scope %r", FUND_WARM)
+                return
+            _fund.warm_start(syms, label)
+            log.info("Fundamentals warm started: %s (%d symbols)", label, len(syms))
+        except Exception as e:
+            log.warning("Fundamentals warm failed to start: %s", e)
+
+    threading.Thread(target=_go, name="fund-warm-boot", daemon=True).start()
+
+
 @app.route("/returns")
 def returns():
     """Bulk 1Y/3Y/5Y return calculator — per-symbol with threading."""
@@ -4613,6 +4688,7 @@ if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     threading.Thread(target=_prefetch_universe, daemon=True).start()
     start_scan_warm()
+    start_fund_warm()
     start_alert_loop()
     print("\n" + "=" * 60)
     print("  QuantHunt — NSE Direct + YF fallback")
