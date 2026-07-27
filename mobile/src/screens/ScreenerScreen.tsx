@@ -318,6 +318,16 @@ export default function ScreenerScreen() {
   const [sortDir, setSortDir] = useState<1 | -1>(-1);
   const [track, setTrack] = useState<TrackEntry[]>([]);
   const [fundBusy, setFundBusy] = useState(false);
+
+  // Rows whose financials have not arrived yet (undefined = never fetched;
+  // null = fetched and unavailable, which is a real "no" and must still fail
+  // the filter). Only meaningful while a ·f filter is active — otherwise
+  // fundamentals are decoration and their absence changes nothing.
+  const fundWaiting = useMemo(() => {
+    const usesFund = expr.some((e) => DEF_BY_KEY[e.key]?.fund);
+    if (!usesFund) return 0;
+    return rows.reduce((n, r) => n + (r._fund === undefined ? 1 : 0), 0);
+  }, [expr, rows]);
   const [detail, setDetail] = useState<Row | null>(null);
   const [restored, setRestored] = useState(false);
   // Column show/hide + order prefs.
@@ -880,6 +890,7 @@ export default function ScreenerScreen() {
       <View style={styles.statsRow}>
         <Text style={styles.statsTxt} numberOfLines={1}>
           <Text style={styles.statsN}>{stats.total}</Text> matches
+          {fundWaiting ? <Text style={{ color: '#f5c518' }}>{` · ${fundWaiting} awaiting financials`}</Text> : null}
           {stats.total ? ` · ${showFrom}–${showTo}` : ''}{'   '}
           <Text style={{ color: theme.green }}>{stats.buy}▲</Text>{'  '}
           <Text style={{ color: theme.red }}>{stats.sell}▼</Text>{'  '}
@@ -967,10 +978,18 @@ export default function ScreenerScreen() {
             }
           >
             {pageRows.length === 0 ? (
+              /* A fundamental filter compares against data fetched per symbol.
+                 Until it arrives the row cannot satisfy the filter, so a big
+                 universe reads "0 matches" while it is merely still loading —
+                 say so instead of blaming the filter. */
               <EmptyState
-                icon="⌕"
-                title="No matches"
-                hint="Loosen or clear a filter to see more of this index."
+                icon={fundWaiting ? '↻' : '⌕'}
+                title={fundWaiting ? 'Fetching company financials…' : 'No matches'}
+                hint={
+                  fundWaiting
+                    ? `${fundWaiting} of ${rows.length} symbols still to load. Fundamental filters (·f) can only match once a symbol's financials arrive — results will fill in as they do.`
+                    : 'Loosen or clear a filter to see more of this index.'
+                }
               />
             ) : (
               pageRows.map(renderRow)
