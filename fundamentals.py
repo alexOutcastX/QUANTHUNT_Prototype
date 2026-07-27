@@ -115,6 +115,24 @@ def _pct(x):
     return round(x * 100, 2) if isinstance(x, (int, float)) else None
 
 
+def _pct_loose(x):
+    """Percent from a provider that is inconsistent about its own units.
+
+    yfinance returns returnOnAssets as a ratio (0.153) but dividendYield already
+    as a percent (4.8) — multiplying both by 100 gave Infosys a 480% dividend
+    yield, which sailed straight through any 'yield > 3%' screen. Above 1 the
+    number is already a percentage; at or below 1 it is a ratio.
+
+    The ambiguous case is a genuine sub-1% yield reported as a percent, which
+    this reads as a ratio and inflates. That is the rarer error and the less
+    harmful one — it lifts a near-zero yield into range rather than making a
+    normal payer look extraordinary.
+    """
+    if not isinstance(x, (int, float)):
+        return None
+    return round(x if x > 1 else x * 100, 2)
+
+
 def _map_eodhd(fund: dict) -> dict:
     hi = fund.get("Highlights") or {}
     val = fund.get("Valuation") or {}
@@ -153,7 +171,7 @@ def _map_yf(info: dict) -> dict:
         "forward_pe": _n(info.get("forwardPE")),
         "pb": _n(info.get("priceToBook")),
         "eps": info.get("trailingEps"),
-        "dividend_yield": _pct(info.get("dividendYield")),
+        "dividend_yield": _pct_loose(info.get("dividendYield")),
         "roe": _pct(info.get("returnOnEquity")),
         "roce": _pct(info.get("returnOnAssets")),
         "debt_equity": _n(info.get("debtToEquity")),
