@@ -172,8 +172,11 @@ export const FILTER_DEFS: FilterDef[] = [
   { key: 'current_ratio', label: 'Current Ratio', group: 'Fundamentals', type: 'range', fund: true, get: (s) => fnum(s, 'current_ratio') },
   { key: 'market_cap_cr', label: 'Market Cap', group: 'Fundamentals', type: 'range', unit: '₹cr', fund: true, get: (s) => fnum(s, 'market_cap_cr') },
   { key: 'peg', label: 'PEG Ratio', group: 'Fundamentals', type: 'range', fund: true, get: (s) => fnum(s, 'peg') },
-  { key: 'revenue_growth_pct', label: 'Revenue Growth', group: 'Fundamentals', type: 'range', unit: '%', fund: true, get: (s) => fnum(s, 'revenue_growth_pct') },
-  { key: 'earnings_growth_pct', label: 'Earnings Growth', group: 'Fundamentals', type: 'range', unit: '%', fund: true, get: (s) => fnum(s, 'earnings_growth_pct') },
+  // Both providers report these as latest quarter vs the same quarter a year
+  // earlier, so the label says YoY rather than leaving you to assume it is a
+  // full-year figure.
+  { key: 'revenue_growth_pct', label: 'Revenue Growth (YoY)', group: 'Fundamentals', type: 'range', unit: '%', fund: true, get: (s) => fnum(s, 'revenue_growth_pct') },
+  { key: 'earnings_growth_pct', label: 'Earnings Growth (YoY)', group: 'Fundamentals', type: 'range', unit: '%', fund: true, get: (s) => fnum(s, 'earnings_growth_pct') },
   { key: 'fcf_cr', label: 'Free Cash Flow', group: 'Fundamentals', type: 'range', unit: '₹cr', fund: true, get: (s) => fnum(s, 'fcf_cr') },
   {
     key: 'sector', label: 'Sector', group: 'Fundamentals', type: 'select', options: TE_SECTORS, fund: true,

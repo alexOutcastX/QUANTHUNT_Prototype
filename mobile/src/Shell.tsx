@@ -85,29 +85,82 @@ function useVersion() {
 // (the user's own workspace) and Terminal. Every legacy navigate() key still
 // resolves — mapTarget translates old page names to their new home, and the
 // hubs reuse the legacy sub-tab keys verbatim.
+// ONE navigation set for every width. The two shells used to expose different
+// tabs — desktop dropped Symbol and promoted Backtest, mobile did the reverse —
+// so the same product had two information architectures, the same navigate()
+// call landed on different screens depending on window width, and resizing past
+// the breakpoint silently moved things. Layout still adapts (a top row on
+// desktop, a bottom bar on phones); the destinations no longer do.
 const NAV: { k: string; label: string; icon: IconName; render: (nav: (k: string) => void) => React.ReactElement }[] = [
   { k: 'today', label: 'Today', icon: 'home', render: (nav) => <DashboardScreen onNavigate={nav} /> },
   { k: 'screens', label: 'Screens', icon: 'screens', render: () => <ScreensHub /> },
   { k: 'stock', label: 'Symbol', icon: 'stock', render: () => <StockScreen /> },
   { k: 'desk', label: 'Desk', icon: 'desk', render: () => <DeskHub /> },
+  { k: 'backtest', label: 'Backtest', icon: 'flask', render: () => <BacktestScreen /> },
   { k: 'terminal', label: 'Terminal', icon: 'terminal', render: () => <TerminalScreen /> },
 ];
-
-// Desktop repartitions the same routes: Symbol leaves the tab row — the wide
-// search box is the way into a stock — and Backtest is promoted out of Desk to
-// a flagship top-level destination beside Terminal.
-const NAV_BY_KEY = Object.fromEntries(NAV.map((t) => [t.k, t]));
-const BACKTEST_TAB: (typeof NAV)[number] = { k: 'backtest', label: 'Backtest', icon: 'flask', render: () => <BacktestScreen /> };
-const NAV_DESKTOP = [NAV_BY_KEY.today, NAV_BY_KEY.screens, NAV_BY_KEY.desk, BACKTEST_TAB, NAV_BY_KEY.terminal];
-// 'stock' stays renderable (openStock routes there); it's just not a tab.
-const ROUTES_DESKTOP = [...NAV_DESKTOP, NAV_BY_KEY.stock];
 
 // Analysis sub-tabs that moved into the Desk hub; the rest went to Screens.
 const DESK_ANALYSIS_SUBS = new Set(['inst', 'shareholders', 'paper', 'risk', 'bt']);
 
-function mapTarget(page: string, sub?: string, desktop?: boolean): string {
-  // Backtest lives at top level on desktop but stays a Desk sub-tab on mobile.
-  const bt = desktop ? 'backtest' : 'desk';
+// Shared by both shells so a reload — or dragging a browser window across the
+// breakpoint, which swaps one shell component for the other — puts you back
+// where you were instead of on Today.
+const TAB_KEY = 'taureye.nav.tab2';
+
+function usePersistedTab() {
+  const [active, setActive] = useState('today');
+  const [hydrated, setHydrated] = useState(false);
+  useEffect(() => {
+    AsyncStorage.getItem(TAB_KEY)
+      .then((v) => {
+        if (v && NAV.some((t) => t.k === v)) setActive(v);
+      })
+      .finally(() => setHydrated(true));
+  }, []);
+  useEffect(() => {
+    if (hydrated) AsyncStorage.setItem(TAB_KEY, active).catch(() => {});
+  }, [active, hydrated]);
+  return [active, setActive] as const;
+}
+
+// ⌘K / Ctrl+K anywhere. Registered at every width: a keyboard is a property of
+// the input device, not of the window size, and tablets and phone-width browser
+// windows can both have one attached.
+function usePaletteHotkey(setPalette: (fn: (v: boolean) => boolean) => void) {
+  useEffect(() => {
+    if (typeof document === 'undefined') return undefined;
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K')) {
+        e.preventDefault();
+        setPalette((v) => !v);
+      }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [setPalette]);
+}
+
+// The disclaimer is a regulatory obligation, not desktop chrome — it renders at
+// every width. Mobile puts it under the content rather than in the crowded
+// header, where a full word would not fit beside the icon row.
+function LegalLink({ style }: { style?: object }) {
+  return (
+    <TouchableOpacity
+      style={[styles.legalBtn, style]}
+      onPress={() => Linking.openURL((API_BASE || '') + '/legal.html').catch(() => {})}
+      accessibilityRole="link"
+      accessibilityLabel="Disclaimer and legal terms"
+      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+    >
+      <Text style={styles.legalTxt}>DISCLAIMER</Text>
+    </TouchableOpacity>
+  );
+}
+
+function mapTarget(page: string, sub?: string): string {
+  // Backtest is a top-level destination at every width now.
+  const bt = 'backtest';
   switch (page) {
     case 'today':
     case 'dashboard':
@@ -146,30 +199,19 @@ function legacyNav(k: string, setActive: (k: string) => void) {
 }
 
 function NewDesktopShell() {
-  const [active, setActive] = useState('today');
+  const [active, setActive] = usePersistedTab();
   const [palette, setPalette] = useState(false);
   const [settings, setSettings] = useState(false);
-  const cur = ROUTES_DESKTOP.find((t) => t.k === active) || NAV_DESKTOP[0];
+  const cur = NAV.find((t) => t.k === active) || NAV[0];
   useEffect(
     () =>
       subscribeNav(() => {
         const p = peekNav();
-        if (p) setActive(mapTarget(p.page, p.sub, true));
+        if (p) setActive(mapTarget(p.page, p.sub));
       }),
     [],
   );
-  // ⌘K / Ctrl+K opens the palette anywhere (web only).
-  useEffect(() => {
-    if (typeof document === 'undefined') return;
-    const onKey = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K')) {
-        e.preventDefault();
-        setPalette((v) => !v);
-      }
-    };
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  }, []);
+  usePaletteHotkey(setPalette);
   return (
     <View style={styles.desktop}>
       <View style={styles.brandBar}>
@@ -186,7 +228,7 @@ function NewDesktopShell() {
           style={styles.navScroll}
           contentContainerStyle={styles.pagesRow}
         >
-          {NAV_DESKTOP.map((it) => {
+          {NAV.map((it) => {
             const on = active === it.k;
             return (
               <TouchableOpacity
@@ -211,15 +253,7 @@ function NewDesktopShell() {
           <Icon name="settings" size={16} color={theme.muted2} />
         </TouchableOpacity>
         <ThemeToggle />
-        <TouchableOpacity
-          style={styles.legalBtn}
-          onPress={() => Linking.openURL((API_BASE || '') + '/legal.html').catch(() => {})}
-          accessibilityRole="link"
-          accessibilityLabel="Disclaimer and legal terms"
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-        >
-          <Text style={styles.legalTxt}>DISCLAIMER</Text>
-        </TouchableOpacity>
+        <LegalLink />
       </View>
       <TickerStrip />
       <View style={styles.main}>{cur.render((k) => legacyNav(k, setActive))}</View>
@@ -231,23 +265,11 @@ function NewDesktopShell() {
 
 function NewMobileShell() {
   const insets = useSafeAreaInsets();
-  const [active, setActive] = useState('today');
+  const [active, setActive] = usePersistedTab();
   const [palette, setPalette] = useState(false);
   const [settings, setSettings] = useState(false);
-  const [hydrated, setHydrated] = useState(false);
   const tab = NAV.find((t) => t.k === active) || NAV[0];
-  // Restore the last tab so backgrounding the app and returning doesn't dump
-  // you back on Today. (Separate key from the classic shell's.)
-  useEffect(() => {
-    AsyncStorage.getItem('taureye.nav.tab2')
-      .then((v) => {
-        if (v && NAV.some((t) => t.k === v)) setActive(v);
-      })
-      .finally(() => setHydrated(true));
-  }, []);
-  useEffect(() => {
-    if (hydrated) AsyncStorage.setItem('taureye.nav.tab2', active).catch(() => {});
-  }, [active, hydrated]);
+  usePaletteHotkey(setPalette);
   useEffect(
     () =>
       subscribeNav(() => {
@@ -267,7 +289,7 @@ function NewMobileShell() {
             onPress={() => setPalette(true)}
             activeOpacity={0.75}
             accessibilityRole="button"
-            accessibilityLabel="Search stocks and pages"
+            accessibilityLabel="Search symbols and pages"
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
             <Icon name="search" size={16} color={theme.muted2} />
@@ -287,6 +309,7 @@ function NewMobileShell() {
       </View>
       <TickerStrip />
       <View style={styles.mobileBody}>{tab.render((k) => legacyNav(k, setActive))}</View>
+      <LegalLink style={styles.legalBtnMobile} />
       <CommandPalette open={palette} onClose={() => setPalette(false)} />
       {settings ? <TickerSettings onClose={() => setSettings(false)} /> : null}
       <View style={[styles.tabBar, { paddingBottom: insets.bottom || 8 }]}>
@@ -356,6 +379,17 @@ const styles = StyleSheet.create({
   tagline: { color: theme.muted, fontSize: 10, fontFamily: theme.mono },
   // A legal link needs a real target, not a 10px sliver (QA finding D4).
   legalBtn: { marginLeft: 'auto', paddingLeft: 10, paddingRight: 4, paddingVertical: 12 },
+  // Mobile: a full-width strip above the tab bar, centred, so it reads as a
+  // footer rather than as another action crowding the header.
+  legalBtnMobile: {
+    marginLeft: 0,
+    paddingLeft: 0,
+    paddingRight: 0,
+    paddingVertical: 7,
+    alignItems: 'center',
+    borderTopColor: theme.border,
+    borderTopWidth: 1,
+  },
   legalTxt: { color: theme.muted, fontSize: theme.fs.xs, fontFamily: theme.mono, letterSpacing: 1 },
   navScroll: { flexGrow: 0, marginLeft: 10 },
   pagesRow: { gap: 2, alignItems: 'center' },

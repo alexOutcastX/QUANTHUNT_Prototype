@@ -216,9 +216,14 @@ class H(BaseHTTPRequestHandler):
     def _fund_bulk(self):
         secs = ["Industrials", "Financials", "Technology", "Healthcare", "Energy", "Consumer"]
         mcaps = [900, 22000, 65000, 4500, 120000, 800]  # micro/small/mid/large spread
+        # Growth spans negative → strongly positive so a ">= 10%" screen picks a
+        # real subset rather than everything or nothing.
         data = {s: {"pe": 20 + i, "pb": 2 + i * 0.3, "roe": 10 + (i % 12) * 2, "roce": 14 + i,
                     "debt_equity": round(0.1 + (i % 7) * 0.12, 2), "dividend_yield": round(0.5 + i * 0.2, 1),
-                    "market_cap_cr": mcaps[i % 6], "sector": secs[i % 6]}
+                    "market_cap_cr": mcaps[i % 6], "sector": secs[i % 6],
+                    "eps": round(5 + (i % 20) * 1.5, 2),
+                    "revenue_growth_pct": round(-8 + (i % 11) * 4.5, 1),
+                    "earnings_growth_pct": round(-14 + (i % 13) * 5.0, 1)}
                 for i, s in enumerate(self.SYMS)}
         self._json({"data": data, "pending": [], "provider": "stub", "cached": len(data), "total": len(data)})
 
