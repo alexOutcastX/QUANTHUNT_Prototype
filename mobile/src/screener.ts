@@ -177,6 +177,13 @@ export const FILTER_DEFS: FilterDef[] = [
   // full-year figure.
   { key: 'revenue_growth_pct', label: 'Revenue Growth (YoY)', group: 'Fundamentals', type: 'range', unit: '%', fund: true, get: (s) => fnum(s, 'revenue_growth_pct') },
   { key: 'earnings_growth_pct', label: 'Earnings Growth (YoY)', group: 'Fundamentals', type: 'range', unit: '%', fund: true, get: (s) => fnum(s, 'earnings_growth_pct') },
+  // Sequential quarter-on-quarter and EPS growth, parsed from screener.in's
+  // quarterly/annual tables. QoQ catches a turn earlier than YoY; YoY is the
+  // one that strips seasonality. Both are useful, so both are offered.
+  { key: 'revenue_qoq_pct', label: 'Revenue Growth (QoQ)', group: 'Fundamentals', type: 'range', unit: '%', fund: true, get: (s) => fnum(s, 'revenue_qoq_pct') },
+  { key: 'earnings_qoq_pct', label: 'Earnings Growth (QoQ)', group: 'Fundamentals', type: 'range', unit: '%', fund: true, get: (s) => fnum(s, 'earnings_qoq_pct') },
+  { key: 'eps_growth_yoy_pct', label: 'EPS Growth (YoY, annual)', group: 'Fundamentals', type: 'range', unit: '%', fund: true, get: (s) => fnum(s, 'eps_growth_yoy_pct') },
+  { key: 'eps_ttm_growth_pct', label: 'EPS Growth (TTM)', group: 'Fundamentals', type: 'range', unit: '%', fund: true, get: (s) => fnum(s, 'eps_ttm_growth_pct') },
   { key: 'fcf_cr', label: 'Free Cash Flow', group: 'Fundamentals', type: 'range', unit: '₹cr', fund: true, get: (s) => fnum(s, 'fcf_cr') },
   {
     key: 'sector', label: 'Sector', group: 'Fundamentals', type: 'select', options: TE_SECTORS, fund: true,
@@ -234,6 +241,10 @@ export const FILTER_SYNONYMS: Record<string, string> = {
   peg: 'growth adjusted valuation',
   revenue_growth_pct: 'sales topline growth',
   earnings_growth_pct: 'profit pat bottomline growth',
+  revenue_qoq_pct: 'sales sequential quarter over quarter topline',
+  earnings_qoq_pct: 'profit pat sequential quarter over quarter',
+  eps_growth_yoy_pct: 'earnings per share annual yearly growth',
+  eps_ttm_growth_pct: 'earnings per share trailing twelve month growth',
   fcf_cr: 'free cash flow fcf cash generation',
   sector: 'industry theme',
   rsi: 'relative strength index overbought oversold',
