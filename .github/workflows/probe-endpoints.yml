@@ -86,11 +86,33 @@ jobs:
           hit "BSE StockTrading (mcap)" \
               "https://api.bseindia.com/BseIndiaAPI/api/StockTrading/w?flag=&quotetype=EQ&scripcode=$CODE" bse
           # yfinance is the gap-fill for the three fields neither exchange
-          # publishes — ROCE, debt/equity and the current ratio. It bot-walls
-          # datacentre IPs, so whether those filters can ever answer in
-          # production is exactly this line.
-          echo "--- yfinance (gap-fill: roce / debt-equity / current ratio) ---"
-          hit "yahoo quoteSummary" \
-              "https://query2.finance.yahoo.com/v10/finance/quoteSummary/$SYM.NS?modules=financialData"
+          # publishes — ROCE, debt/equity and the current ratio.
+          #
+          # Curling Yahoo directly would be a bad test: v10/quoteSummary answers
+          # 401 to any request without a crumb token, which the yfinance library
+          # negotiates for itself. So run the real library, through the real
+          # code path, in the deployed venv — that is the only thing that
+          # actually tells us whether those three filters can answer.
+          echo "--- yfinance gap-fill (roce / debt-equity / current ratio) ---"
+          if [ -x /opt/quanthunt/venv/bin/python ]; then
+            cd /opt/quanthunt && ./venv/bin/python - "$SYM" <<'PYEOF' 2>&1 | tail -5
+          import sys
+          import fundamentals as F
+          sym = sys.argv[1]
+          try:
+              d = F._fetch_yf(sym)
+          except Exception as e:
+              print("yfinance RAISED: %s: %s" % (type(e).__name__, str(e)[:160]))
+          else:
+              if not d:
+                  print("yfinance returned nothing")
+              else:
+                  print("yfinance OK: " + ", ".join(
+                      "%s=%s" % (k, d.get(k)) for k in
+                      ("roce", "debt_equity", "current_ratio", "dividend_yield")))
+          PYEOF
+          else
+            echo "no venv at /opt/quanthunt — cannot test the library"
+          fi
           echo "=== done"
           REMOTE
