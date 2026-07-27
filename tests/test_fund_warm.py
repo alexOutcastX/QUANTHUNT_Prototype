@@ -221,6 +221,26 @@ class WarmRunTest(unittest.TestCase):
         self.assertEqual(sorted(seen), ["AAA", "BBB"])
 
 
+class ProviderChainTest(unittest.TestCase):
+    """screener.in is a derived source and its terms do not allow automated
+    access. The exchanges publish the same numbers first-hand, so nothing may
+    reach for it on its own — pin that so it cannot drift back in."""
+
+    def test_default_chain_excludes_screener(self):
+        self.assertNotIn("screener", F._provider_chain())
+
+    def test_default_chain_still_has_yfinance(self):
+        self.assertIn("yfinance", F._provider_chain())
+
+    def test_explicit_opt_in_still_works(self):
+        real = F.FUND_SOURCE
+        try:
+            F.FUND_SOURCE = "screener,yfinance"
+            self.assertEqual(F._provider_chain(), ["screener", "yfinance"])
+        finally:
+            F.FUND_SOURCE = real
+
+
 class WarmRouteTest(unittest.TestCase):
     """The routes are owner-gated — an unauthenticated caller must not be able
     to kick off a 1500-symbol scrape."""

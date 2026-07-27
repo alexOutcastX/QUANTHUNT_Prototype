@@ -1,0 +1,89 @@
+name: Probe data endpoints (from the VM)
+
+# Answers one question: which public NSE/BSE endpoints actually respond from the
+# production VM's IP? NSE Direct routinely 401/403s cloud datacentre ranges, and
+# a sandbox or a GitHub runner is a *different* IP — so the only honest place to
+# test is the box that will do the fetching.
+#
+# Read-only: it curls public endpoints and prints status codes. It changes
+# nothing on the VM and touches no application state.
+#
+# Run: Actions → Probe data endpoints (from the VM) → Run workflow.
+on:
+  workflow_dispatch:
+    inputs:
+      symbol:
+        description: 'NSE symbol to probe'
+        required: false
+        default: 'RELIANCE'
+      scripcode:
+        description: 'BSE scrip code for the same company'
+        required: false
+        default: '500325'
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Configure SSH
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.VM_SSH_KEY }}" > ~/.ssh/id_deploy
+          chmod 600 ~/.ssh/id_deploy
+          ssh-keyscan -H "${{ secrets.VM_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Probe from the VM
+        env:
+          U: ${{ secrets.VM_USER }}
+          H: ${{ secrets.VM_HOST }}
+          SYM: ${{ github.event.inputs.symbol || 'RELIANCE' }}
+          CODE: ${{ github.event.inputs.scripcode || '500325' }}
+        run: |
+          ssh -i ~/.ssh/id_deploy "$U@$H" "SYM='$SYM' CODE='$CODE' bash -s" <<'REMOTE'
+          set -u
+          UA='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36'
+          TMP=$(mktemp -d); trap 'rm -rf "$TMP"' EXIT
+
+          # NSE hands out its cookie on the homepage; API calls without it 403 even
+          # from IPs that are otherwise fine, so a cold curl would under-report.
+          curl -s -c "$TMP/cj" -H "User-Agent: $UA" -H 'Accept-Language: en-US,en;q=0.9' \
+            -o /dev/null --max-time 25 https://www.nseindia.com/ || true
+
+          hit() {  # label url [nse|bse]
+            label="$1"; url="$2"; mode="${3:-}"
+            args=(-s -o "$TMP/body" -w '%{http_code}' --max-time 30
+                  -H "User-Agent: $UA" -H 'Accept-Language: en-US,en;q=0.9')
+            # NSE needs its session cookie + a same-origin Referer; BSE's API
+            # needs only the Referer. Neither needs auth.
+            [ "$mode" = nse ] && args+=(-b "$TMP/cj" -H 'Referer: https://www.nseindia.com/')
+            [ "$mode" = bse ] && args+=(-H 'Referer: https://www.bseindia.com/')
+            code=$(curl "${args[@]}" "$url" || echo 000)
+            size=$(wc -c < "$TMP/body" | tr -d ' ')
+            printf '%-34s HTTP %-4s %8s bytes\n' "$label" "$code" "$size"
+            if [ "$code" = "200" ] && [ "${size:-0}" -gt 200 ]; then
+              head -c 220 "$TMP/body" | tr -d '\n'; echo; echo
+            fi
+          }
+
+          echo "=== probing from $(hostname) / egress IP $(curl -s --max-time 15 https://api.ipify.org || echo unknown)"
+          echo "=== symbol=$SYM  bse-code=$CODE"
+          echo
+          echo "--- NSE (needs the homepage cookie) ---"
+          hit "quote-equity"          "https://www.nseindia.com/api/quote-equity?symbol=$SYM" nse
+          hit "quote-equity trade_info" "https://www.nseindia.com/api/quote-equity?symbol=$SYM&section=trade_info" nse
+          hit "corporates-financial-results" \
+              "https://www.nseindia.com/api/corporates-financial-results?index=equities&symbol=$SYM&period=Quarterly" nse
+          echo "--- nsearchives (plain archive host, no cookie) ---"
+          XB=$(grep -o 'https://nsearchives.nseindia.com/corporate/xbrl/[^"]*\.xml' "$TMP/body" | head -1)
+          if [ -n "$XB" ]; then
+            hit "XBRL filing" "$XB"
+          else
+            echo "XBRL filing                        SKIPPED (no link in the results payload above)"
+          fi
+          echo "--- BSE (no cookie, needs a Referer) ---"
+          hit "BSE ComHeadernew" \
+              "https://api.bseindia.com/BseIndiaAPI/api/ComHeadernew/w?quotetype=EQ&scripcode=$CODE&seriesid=" bse
+          hit "BSE StockTrading (mcap)" \
+              "https://api.bseindia.com/BseIndiaAPI/api/StockTrading/w?flag=&quotetype=EQ&scripcode=$CODE" bse
+          echo "=== done"
+          REMOTE
