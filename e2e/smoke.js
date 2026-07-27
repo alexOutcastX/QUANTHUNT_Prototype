@@ -128,7 +128,7 @@ function check(name, ok, detail) {
     check('Symbol page shows the tab set', /Overview/.test(symText) && /Technicals/.test(symText));
 
     // 6 · command palette opens from the header search button
-    await page.locator('[aria-label="Search stocks and pages"]').first().click({ timeout: 5000 })
+    await page.locator('[aria-label="Search symbols and pages"]').first().click({ timeout: 5000 })
       .catch(() => {});
     await page.waitForTimeout(800);
     const palette = await page
