@@ -1296,8 +1296,18 @@ ${LW_SCRIPT}
 </script></body></html>`;
 }
 
-const AI_KEY_STORE = 'taureye.aikey.v2';
-const AI_KEY_STORE_V1 = 'taureye.aikey.v1'; // legacy: a bare Anthropic key string
+// AI keys are SESSION-ONLY. They live in component state and nothing else — no
+// AsyncStorage, no localStorage, no cloud sync. Close or reload the app and the
+// key is gone.
+//
+// A provider key is a live billing credential. Persisting it left it readable on
+// the device (and in browser localStorage on the web build) indefinitely, for a
+// feature most people use once. The cost of that trade is retyping a key per
+// session; the cost the other way is somebody else's token bill.
+//
+// These two names are the OLD storage slots, kept ONLY so anything already
+// written can be purged on next launch. Never write to them.
+const AI_KEY_STORE_LEGACY = ['taureye.aikey.v2', 'taureye.aikey.v1'];
 
 // Bring-your-own-key providers the user can pick from.
 type Provider = { id: string; label: string; ph: string; get: string };
@@ -1326,7 +1336,8 @@ export default function TerminalScreen() {
   const [generating, setGenerating] = useState<string | null>(null);
   const [genErr, setGenErr] = useState<string | null>(null);
   const [idxCmd, setIdxCmd] = useState<{ name: string; n: number } | null>(null);
-  // BYOK: the visitor's own key + chosen provider, kept only in local storage.
+  // BYOK: the visitor's own key + chosen provider, held in memory for this
+  // session only — see AI_KEY_STORE_LEGACY above.
   const [aiKey, setAiKey] = useState('');
   const [aiProvider, setAiProvider] = useState('anthropic');
   const [aiModel, setAiModel] = useState('');
@@ -1347,31 +1358,15 @@ export default function TerminalScreen() {
 
   useEffect(() => {
     (async () => {
-      try {
-        const raw = await AsyncStorage.getItem(AI_KEY_STORE);
-        if (raw) {
-          const v = JSON.parse(raw) as { key?: string; provider?: string; model?: string };
-          if (v.key) {
-            setAiKey(v.key);
-            setKeyDraft(v.key);
-            const p = v.provider && providerOf(v.provider).id === v.provider ? v.provider : 'anthropic';
-            setAiProvider(p);
-            setProviderDraft(p);
-            setAiModel(v.model || '');
-            setModelDraft(v.model || '');
-          }
-        } else {
-          // Migrate the legacy v1 bare Anthropic key, if any.
-          const legacy = await AsyncStorage.getItem(AI_KEY_STORE_V1);
-          if (legacy) {
-            setAiKey(legacy);
-            setKeyDraft(legacy);
-            AsyncStorage.setItem(AI_KEY_STORE, JSON.stringify({ key: legacy, provider: 'anthropic', model: '' })).catch(() => {});
-            AsyncStorage.removeItem(AI_KEY_STORE_V1).catch(() => {});
-          }
+      // Purge any key written by an earlier build. Deliberately NOT read into
+      // state first — the point is that it stops existing, not that it carries
+      // over one last time.
+      for (const slot of AI_KEY_STORE_LEGACY) {
+        try {
+          await AsyncStorage.removeItem(slot);
+        } catch {
+          /* storage unavailable — nothing was persisted anyway */
         }
-      } catch {
-        /* storage unavailable — key just won't persist */
       }
       try {
         // Load the curated set (for the fallback universe + server AI flag),
@@ -1393,7 +1388,7 @@ export default function TerminalScreen() {
     setAiKey(k);
     setAiProvider(p);
     setAiModel(m);
-    AsyncStorage.setItem(AI_KEY_STORE, JSON.stringify({ key: k, provider: p, model: m })).catch(() => {});
+    // Intentionally not persisted — session-only, see AI_KEY_STORE_LEGACY.
     setKeyOpen(false);
     setGenErr(null);
     setNotFound(null);
@@ -1403,7 +1398,6 @@ export default function TerminalScreen() {
     setKeyDraft('');
     setAiModel('');
     setModelDraft('');
-    AsyncStorage.removeItem(AI_KEY_STORE).catch(() => {});
   };
 
   // Centre a symbol: in the loaded graph → recentre; known to the backend
@@ -1479,8 +1473,8 @@ export default function TerminalScreen() {
         <View style={styles.keyPanel}>
           <Text style={styles.keyLabel}>
             Bring your own AI key to generate relationship graphs for any listed company. Pick a
-            provider and paste your key — stored only on this device, sent per request, never saved
-            on the server.
+            provider and paste your key — held for this session only, sent per request, never
+            written to this device and never saved on the server. Closing the app clears it.
           </Text>
           <View style={styles.provRow}>
             {PROVIDERS.map((p) => (
@@ -1517,7 +1511,7 @@ export default function TerminalScreen() {
               autoCorrect={false}
             />
             <TouchableOpacity style={styles.keySave} onPress={saveKey}>
-              <Text style={styles.keySaveTxt}>SAVE</Text>
+              <Text style={styles.keySaveTxt}>USE</Text>
             </TouchableOpacity>
             {aiKey ? (
               <TouchableOpacity style={styles.keyClear} onPress={clearKey}>
