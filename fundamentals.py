@@ -56,7 +56,13 @@ FIELDS = ("pe", "forward_pe", "pb", "eps", "dividend_yield", "roe", "roce",
           # populated for any company that files with the NSE.
           "revenue_growth_pct", "earnings_growth_pct",
           "revenue_qoq_pct", "earnings_qoq_pct",
-          "eps_growth_yoy_pct", "eps_ttm_growth_pct")
+          "eps_growth_yoy_pct", "eps_ttm_growth_pct",
+          # Cash flow, from the company's own annual filing (NSE XBRL — see
+          # exchange_fund.annual_cashflow). Profit is an opinion; cash is a
+          # fact, so these carry more weight than the earnings fields above.
+          # Free cash flow is what the discounted-cash-flow model needs, which
+          # is why it belongs in the bulk payload rather than the dossier alone.
+          "ocf_cr", "capex_cr", "fcf_cr", "fcf_yield_pct", "cash_conversion_pct")
 
 
 # Cache entries are stamped with a fingerprint of FIELDS. fund_cache.json has a
@@ -487,6 +493,25 @@ def _fetch_one(sym: str, gap_fill: bool = True) -> None:
             break
     # Gap-fill from yfinance (auto mode only) when the primary source lacks
     # fields it cannot publish. Cached for TTL, so this is one-time per symbol.
+    # Derived cash-flow ratios, computed here so every consumer sees the same
+    # arithmetic. Guarded: a zero market cap or a loss makes these meaningless.
+    if data:
+        fcf, mcap = data.get("fcf_cr"), data.get("market_cap_cr")
+        if isinstance(fcf, (int, float)) and isinstance(mcap, (int, float)) and mcap > 0:
+            data["fcf_yield_pct"] = round(fcf / mcap * 100, 2)
+        ocf = data.get("ocf_cr")
+        eps, pe = data.get("eps"), data.get("pe")
+        # Cash conversion = operating cash flow / net profit. Above 100% means
+        # the company collects more cash than it books as profit; well under
+        # means profits are not turning into cash, which is the classic early
+        # warning an earnings-only screen misses entirely.
+        if isinstance(ocf, (int, float)) and isinstance(eps, (int, float)) \
+                and isinstance(pe, (int, float)) and isinstance(mcap, (int, float)) \
+                and pe > 0 and mcap > 0:
+            pat = mcap / pe                      # market cap / PE = net profit
+            if pat > 0:
+                data["cash_conversion_pct"] = round(ocf / pat * 100, 1)
+
     filled = True
     if data and used and used != "yfinance" and FUND_SOURCE == "auto" \
             and any(data.get(k) is None for k in _GAP_FILL):

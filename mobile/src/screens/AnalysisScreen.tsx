@@ -411,6 +411,13 @@ export default function AnalysisScreen() {
                   <KV k="Dividend yield" v={num(fund?.dividend_yield != null ? fund.dividend_yield : null, 2, '%')} />
                   <KV k="EV / EBITDA" v={plain(val?.multiples.ev_ebitda ?? null, 2)} />
                   <KV k="EV / sales" v={plain(val?.multiples.ev_sales ?? null, 2)} />
+                  {/* Cash flow, from the company's own annual NSE filing. */}
+                  <KV k="Operating cash flow" v={fmtCr(fund?.ocf_cr ?? null)} />
+                  <KV k="Capital expenditure" v={fmtCr(fund?.capex_cr ?? null)} />
+                  <KV k="Free cash flow" v={fmtCr(fund?.fcf_cr ?? null)}
+                      color={dirColor(fund?.fcf_cr ?? null)} />
+                  <KV k="Cash conversion (OCF/PAT)" v={num(fund?.cash_conversion_pct ?? null, 0, '%')}
+                      color={dirColor(fund?.cash_conversion_pct != null ? fund.cash_conversion_pct - 100 : null)} />
                   <KV k="ROCE" v={num(fund?.roce != null ? fund.roce : null, 1, '%')} />
                   <KV k="vs 200-DMA" v={pctS(m.vs_200dma_pct)} color={dirColor(m.vs_200dma_pct)} />
                   <KV k="From 52-week high" v={pctS(m.pct_from_high_pct ?? tech?.pct_from_high ?? null)} color={dirColor(m.pct_from_high_pct ?? tech?.pct_from_high ?? null)} />
