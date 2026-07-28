@@ -195,3 +195,90 @@ class RouteWiringTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SectorMedianTest(unittest.TestCase):
+    """Medians come from the cached universe, so the guards that matter are the
+    ones about sample size and junk values."""
+
+    def setUp(self):
+        import fundamentals as F
+        self.F = F
+        self._saved = dict(F._cache)
+        F._cache.clear()
+        F._sector_cache["ts"] = 0.0
+        F._sector_cache["data"] = {}
+
+    def tearDown(self):
+        self.F._cache.clear()
+        self.F._cache.update(self._saved)
+        self.F._sector_cache["ts"] = 0.0
+        self.F._sector_cache["data"] = {}
+
+    def _seed(self, sector, pes, roes=None):
+        import time as _t
+        for i, pe in enumerate(pes):
+            self.F._cache["S%s%d" % (sector[:2], i)] = {
+                "data": {"sector": sector, "pe": pe,
+                         "roe": (roes[i] if roes else 20.0)},
+                "ts": _t.time(), "v": self.F.SCHEMA_V,
+            }
+
+    def test_median_not_mean(self):
+        """One 900x P/E from a barely-profitable small cap would drag a mean far
+        enough to make every peer look cheap."""
+        self._seed("Tech", [10, 12, 14, 16, 900])
+        med = self.F.sector_medians(force=True)["Tech"]
+        self.assertEqual(med["pe"], 14)
+
+    def test_small_sector_reports_no_reading(self):
+        self._seed("Tiny", [10, 12])
+        self.assertNotIn("Tiny", self.F.sector_medians(force=True))
+
+    def test_negative_pe_is_excluded(self):
+        """A negative P/E is a loss wearing a multiple's clothing."""
+        self._seed("Tech", [10, 12, 14, 16, 18, -50, -80])
+        self.assertEqual(self.F.sector_medians(force=True)["Tech"]["pe"], 14)
+
+    def test_sample_size_reported(self):
+        self._seed("Tech", [10, 12, 14, 16, 18])
+        self.assertEqual(self.F.sector_medians(force=True)["Tech"]["n"], 5)
+
+    def test_blank_sector_rows_ignored(self):
+        import time as _t
+        self.F._cache["NOSEC"] = {"data": {"sector": "", "pe": 5},
+                                  "ts": _t.time(), "v": self.F.SCHEMA_V}
+        self.assertEqual(self.F.sector_medians(force=True), {})
+
+    def test_result_is_cached_between_calls(self):
+        self._seed("Tech", [10, 12, 14, 16, 18])
+        first = self.F.sector_medians(force=True)
+        self._seed("Tech", [1, 1, 1, 1, 1])          # cache should hide this
+        self.assertIs(self.F.sector_medians(), first)
+
+
+class PeerBlockTest(unittest.TestCase):
+    PEERS = {"pe": 22.0, "pb": 6.0, "roe": 24.0, "dividend_yield": 1.8, "n": 31}
+
+    def test_peer_rows_and_direction(self):
+        r = V.value(sector="IT", peers=self.PEERS, roe_pct=52.0, **GOOD)
+        rows = {x["label"]: x for x in r["peers"]["rows"]}
+        self.assertEqual(r["peers"]["n"], 31)
+        self.assertAlmostEqual(rows["P/E"]["diff_pct"], (28.1 - 22) / 22 * 100, places=1)
+        self.assertEqual(rows["P/E"]["read"], "above sector")
+        # For ROE, higher is better — the wording must flip.
+        self.assertEqual(rows["ROE"]["read"], "above sector")
+
+    def test_cheap_vs_peers_lifts_the_verdict(self):
+        cheap = dict(GOOD, pe=12.0)
+        r = V.value(sector="IT", peers=self.PEERS, roe_pct=30.0, **cheap)
+        self.assertTrue(any("below the IT sector median" in x for x in r["reasons"]))
+
+    def test_no_peers_says_so_in_the_caveats(self):
+        r = V.value(**GOOD)
+        self.assertIsNone(r["peers"])
+        self.assertTrue(any("No peer comparison" in c for c in r["caveats"]))
+
+    def test_with_peers_the_caveat_changes(self):
+        r = V.value(sector="IT", peers=self.PEERS, roe_pct=52.0, **GOOD)
+        self.assertTrue(any("Sector medians come from" in c for c in r["caveats"]))

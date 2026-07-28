@@ -103,6 +103,76 @@ const fnum = (r: Row, k: keyof Fundamentals): number | null => {
   return typeof v === 'number' && isFinite(v) ? v : null;
 };
 
+
+// ---------- valuation, computed per row at screen time ----------
+// Sector medians come from /sector-medians (the cached fundamentals universe).
+// Held module-level so every filter can reach them without threading a context
+// through the whole evaluator.
+let SECTOR_MEDIANS: Record<string, Record<string, number | null>> = {};
+export function setSectorMedians(m: Record<string, Record<string, number | null>>) {
+  SECTOR_MEDIANS = m || {};
+}
+export function getSectorMedians() {
+  return SECTOR_MEDIANS;
+}
+
+// Same constants the dossier's engine uses (valuation.py) — kept in sync
+// deliberately rather than fetched, because these filters run over ~1500 rows
+// client-side and a per-symbol round trip is not on the table.
+const DISCOUNT = 0.13;
+const GRAHAM_FACTOR = 22.5;
+const MAX_GROWTH = 0.25;
+
+/** Book value per share, from price and P/B. */
+const bvps = (s: Row): number | null => {
+  const pb = fnum(s, 'pb');
+  const px = n(s.price);
+  return pb && px && pb > 0 ? px / pb : null;
+};
+
+/** Growth as a fraction, capped and floored the same way the engine does. */
+const growthFrac = (s: Row): number | null => {
+  const g = fnum(s, 'earnings_growth_pct');
+  if (g == null) return null;
+  return Math.max(0, Math.min(MAX_GROWTH, g / 100));
+};
+
+const upside = (fair: number | null, s: Row): number | null => {
+  const px = n(s.price);
+  return fair != null && px && px > 0 ? ((fair - px) / px) * 100 : null;
+};
+
+/** sqrt(22.5 x EPS x book value per share). Needs both positive. */
+const grahamValue = (s: Row): number | null => {
+  const eps = fnum(s, 'eps');
+  const b = bvps(s);
+  return eps && b && eps > 0 && b > 0 ? Math.sqrt(GRAHAM_FACTOR * eps * b) : null;
+};
+
+/** Current EPS capitalised at 1/discount, assuming no growth at all. */
+const epvValue = (s: Row): number | null => {
+  const eps = fnum(s, 'eps');
+  return eps && eps > 0 ? eps / DISCOUNT : null;
+};
+
+/** Gordon growth on the current dividend. Skips token payers under 0.5%. */
+const ddmValue = (s: Row): number | null => {
+  const px = n(s.price);
+  const dy = fnum(s, 'dividend_yield');
+  const g = growthFrac(s);
+  if (!px || dy == null || dy < 0.5 || g == null || g >= DISCOUNT) return null;
+  return (px * (dy / 100) * (1 + g)) / (DISCOUNT - g);
+};
+
+/** How far a row's metric sits from its sector median, in percent. */
+const vsSector = (s: Row, field: string): number | null => {
+  const sec = (s._fund?.sector || '').trim();
+  const med = sec ? SECTOR_MEDIANS[sec]?.[field] : null;
+  const mine = fnum(s, field as keyof Fundamentals);
+  if (med == null || mine == null || med === 0) return null;
+  return ((mine - med) / Math.abs(med)) * 100;
+};
+
 export const FILTER_DEFS: FilterDef[] = [
   // Trend
   { key: 'd20', label: 'Price vs 20 DMA', group: 'Trend', type: 'range', unit: '%', get: (s) => n(s.d20) },
@@ -160,18 +230,39 @@ export const FILTER_DEFS: FilterDef[] = [
   { key: 'beta', label: 'Beta', group: 'Structure', type: 'range', get: (s) => n(s.beta) },
   { key: 'above_s1', label: '% above Support S1', group: 'Structure', type: 'range', unit: '%', get: (s) => (s.s1 && s.price ? ((s.price - s.s1) / s.s1) * 100 : null) },
   { key: 'below_r1', label: '% below Resist. R1', group: 'Structure', type: 'range', unit: '%', get: (s) => (s.r1 && s.price ? ((s.r1 - s.price) / s.r1) * 100 : null) },
+  // ---- Valuation ----
+  // Three of the dossier's four models are reproducible here from price, EPS,
+  // P/B and dividend yield. The discounted cash flow is NOT: it needs free cash
+  // flow, which is a per-symbol fetch the bulk fundamentals payload does not
+  // carry — so it is offered in the dossier only, rather than silently
+  // approximated with something weaker.
+  { key: 'earnings_yield', label: 'Earnings yield', group: 'Valuation', type: 'range', unit: '%', fund: true, get: (s) => { const pe = fnum(s, 'pe'); return pe && pe > 0 ? 100 / pe : null; } },
+  { key: 'graham_upside', label: 'Upside vs Graham number', group: 'Valuation', type: 'range', unit: '%', fund: true, get: (s) => upside(grahamValue(s), s) },
+  { key: 'epv_upside', label: 'Upside vs earnings power', group: 'Valuation', type: 'range', unit: '%', fund: true, get: (s) => upside(epvValue(s), s) },
+  { key: 'ddm_upside', label: 'Upside vs dividend model', group: 'Valuation', type: 'range', unit: '%', fund: true, get: (s) => upside(ddmValue(s), s) },
+  { key: 'graham_value', label: 'Graham number', group: 'Valuation', type: 'range', unit: '₹', fund: true, get: (s) => grahamValue(s) },
+  { key: 'epv_value', label: 'Earnings power value', group: 'Valuation', type: 'range', unit: '₹', fund: true, get: (s) => epvValue(s) },
+  { key: 'below_graham', label: 'Trading below Graham number', group: 'Valuation', type: 'toggle', fund: true, get: (s) => { const g = grahamValue(s); const px = n(s.price); return !!(g && px && px < g); } },
+  { key: 'below_epv', label: 'Trading below earnings power', group: 'Valuation', type: 'toggle', fund: true, get: (s) => { const v = epvValue(s); const px = n(s.price); return !!(v && px && px < v); } },
+  // Sector-relative. A P/E is only cheap or dear against its industry, so these
+  // are the filters that make a multiple mean something.
+  { key: 'pe_vs_sector', label: 'P/E vs sector median', group: 'Valuation', type: 'range', unit: '%', fund: true, get: (s) => vsSector(s, 'pe') },
+  { key: 'pb_vs_sector', label: 'P/B vs sector median', group: 'Valuation', type: 'range', unit: '%', fund: true, get: (s) => vsSector(s, 'pb') },
+  { key: 'roe_vs_sector', label: 'ROE vs sector median', group: 'Valuation', type: 'range', unit: '%', fund: true, get: (s) => vsSector(s, 'roe') },
+  { key: 'dy_vs_sector', label: 'Dividend yield vs sector', group: 'Valuation', type: 'range', unit: '%', fund: true, get: (s) => vsSector(s, 'dividend_yield') },
+
   // Fundamentals (strict)
-  { key: 'pe', label: 'P/E', group: 'Fundamentals', type: 'range', fund: true, get: (s) => fnum(s, 'pe') },
-  { key: 'forward_pe', label: 'Forward P/E', group: 'Fundamentals', type: 'range', fund: true, get: (s) => fnum(s, 'forward_pe') },
-  { key: 'pb', label: 'P/B', group: 'Fundamentals', type: 'range', fund: true, get: (s) => fnum(s, 'pb') },
-  { key: 'eps', label: 'EPS', group: 'Fundamentals', type: 'range', fund: true, get: (s) => fnum(s, 'eps') },
+  { key: 'pe', unit: '×', label: 'P/E', group: 'Fundamentals', type: 'range', fund: true, get: (s) => fnum(s, 'pe') },
+  { key: 'forward_pe', unit: '×', label: 'Forward P/E', group: 'Fundamentals', type: 'range', fund: true, get: (s) => fnum(s, 'forward_pe') },
+  { key: 'pb', unit: '×', label: 'P/B', group: 'Fundamentals', type: 'range', fund: true, get: (s) => fnum(s, 'pb') },
+  { key: 'eps', unit: '₹', label: 'EPS', group: 'Fundamentals', type: 'range', fund: true, get: (s) => fnum(s, 'eps') },
   { key: 'dividend_yield', label: 'Dividend Yield', group: 'Fundamentals', type: 'range', unit: '%', fund: true, get: (s) => fnum(s, 'dividend_yield') },
   { key: 'roe', label: 'ROE', group: 'Fundamentals', type: 'range', unit: '%', fund: true, get: (s) => fnum(s, 'roe') },
   { key: 'roce', label: 'ROCE', group: 'Fundamentals', type: 'range', unit: '%', fund: true, get: (s) => fnum(s, 'roce') },
-  { key: 'debt_equity', label: 'Debt / Equity', group: 'Fundamentals', type: 'range', fund: true, get: (s) => fnum(s, 'debt_equity') },
-  { key: 'current_ratio', label: 'Current Ratio', group: 'Fundamentals', type: 'range', fund: true, get: (s) => fnum(s, 'current_ratio') },
+  { key: 'debt_equity', unit: '×', label: 'Debt / Equity', group: 'Fundamentals', type: 'range', fund: true, get: (s) => fnum(s, 'debt_equity') },
+  { key: 'current_ratio', unit: '×', label: 'Current Ratio', group: 'Fundamentals', type: 'range', fund: true, get: (s) => fnum(s, 'current_ratio') },
   { key: 'market_cap_cr', label: 'Market Cap', group: 'Fundamentals', type: 'range', unit: '₹cr', fund: true, get: (s) => fnum(s, 'market_cap_cr') },
-  { key: 'peg', label: 'PEG Ratio', group: 'Fundamentals', type: 'range', fund: true, get: (s) => fnum(s, 'peg') },
+  { key: 'peg', unit: '×', label: 'PEG Ratio', group: 'Fundamentals', type: 'range', fund: true, get: (s) => fnum(s, 'peg') },
   // Both providers report these as latest quarter vs the same quarter a year
   // earlier, so the label says YoY rather than leaving you to assume it is a
   // full-year figure.
