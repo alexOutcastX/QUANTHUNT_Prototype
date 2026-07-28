@@ -52,6 +52,14 @@ const fmtCr = (v: number | null | undefined) =>
     : '₹' + v.toFixed(0) + ' cr';
 const dirColor = (v: number | null | undefined) =>
   v == null ? theme.muted : v >= 0 ? theme.green : theme.red;
+// Valuation verdict → colour. 'unrated' is muted rather than given a neutral
+// colour: it means the company could not be valued at all, which is information,
+// not a middle reading between cheap and dear.
+const verdictColor = (v: string) =>
+  v === 'undervalued' ? theme.green
+    : v === 'expensive' ? theme.red
+      : v === 'unrated' ? theme.muted
+        : theme.text;
 const tierColor = (s: number) =>
   s >= 75 ? theme.green : s >= 60 ? theme.accent : s >= 45 ? '#f5c518' : theme.red;
 
@@ -221,6 +229,7 @@ export default function AnalysisScreen() {
   const fund = d?.fund;
   const tech = d?.tech;
   const rep = d?.rep;
+  const val = rep?.valuation || null;
   const bal = rep?.balance_sheet;
   const cflow = rep?.cash_flow;
   // screener.in balance figures (borrowings / reserves / equity capital) — real
@@ -391,13 +400,99 @@ export default function AnalysisScreen() {
                 <Card>
                   <KV k="P/E (trailing)" v={plain(m.pe ?? fund?.pe ?? null, 1)} />
                   <KV k="Forward P/E" v={plain(fund?.forward_pe ?? null, 1)} />
-                  <KV k="PEG" v={plain(m.peg ?? null, 2)} />
+                  <KV k="PEG" v={plain(val?.multiples.peg ?? m.peg ?? null, 2)} />
                   <KV k="Price / book" v={plain(fund?.pb ?? null, 2)} />
+                  <KV k="Book value / share" v={val?.multiples.bvps != null ? `₹${val.multiples.bvps}` : '—'} />
                   <KV k="EPS" v={plain(fund?.eps ?? null, 2)} />
+                  <KV k="Earnings yield" v={num(val?.multiples.earnings_yield_pct ?? null, 2, '%')} />
+                  <KV k="Free-cash-flow yield" v={num(val?.multiples.fcf_yield_pct ?? null, 2, '%')}
+                      color={dirColor(val?.multiples.fcf_yield_pct ?? null)} />
                   <KV k="Dividend yield" v={num(fund?.dividend_yield != null ? fund.dividend_yield : null, 2, '%')} />
+                  <KV k="EV / EBITDA" v={plain(val?.multiples.ev_ebitda ?? null, 2)} />
+                  <KV k="EV / sales" v={plain(val?.multiples.ev_sales ?? null, 2)} />
                   <KV k="ROCE" v={num(fund?.roce != null ? fund.roce : null, 1, '%')} />
                   <KV k="vs 200-DMA" v={pctS(m.vs_200dma_pct)} color={dirColor(m.vs_200dma_pct)} />
                   <KV k="From 52-week high" v={pctS(m.pct_from_high_pct ?? tech?.pct_from_high ?? null)} color={dirColor(m.pct_from_high_pct ?? tech?.pct_from_high ?? null)} />
+                </Card>
+              </>
+            ) : null}
+
+            {/* What it's worth — intrinsic value, the growth priced in, verdict */}
+            {val ? (
+              <>
+                <SectionTitle>What it&apos;s worth</SectionTitle>
+
+                <Card>
+                  <View style={styles.valHead}>
+                    <Text style={[styles.valVerdict, { color: verdictColor(val.verdict) }]}>
+                      {val.verdict.toUpperCase()}
+                    </Text>
+                    {val.fair_value?.upside_pct != null ? (
+                      <Text style={[styles.valUpside, { color: dirColor(val.fair_value.upside_pct) }]}>
+                        {pctS(val.fair_value.upside_pct)} vs fair value
+                      </Text>
+                    ) : null}
+                  </View>
+                  {val.reasons.map((r, i) => (
+                    <Text key={i} style={styles.valReason}>• {r}</Text>
+                  ))}
+                </Card>
+
+                {val.fair_value ? (
+                  <Card style={{ marginTop: theme.sp.sm }}>
+                    <Text style={styles.valSub}>Fair-value range</Text>
+                    <KV k="Low" v={val.fair_value.low != null ? `₹${val.fair_value.low}` : '—'} />
+                    <KV k="Midpoint" v={val.fair_value.mid != null ? `₹${val.fair_value.mid}` : '—'} />
+                    <KV k="High" v={val.fair_value.high != null ? `₹${val.fair_value.high}` : '—'} />
+                    <KV k="Current price" v={val.price != null ? `₹${val.price}` : '—'} />
+                    <Text style={styles.valNote}>
+                      {val.fair_value.methods
+                        ? `From ${val.fair_value.methods} method${val.fair_value.methods === 1 ? '' : 's'} that price future growth.`
+                        : 'No growth-based method could answer — this range is the no-growth floor alone.'}
+                    </Text>
+                    {val.fair_value.floor != null ? (
+                      <Text style={styles.valNote}>
+                        No-growth floor ₹{val.fair_value.floor} — what the business is worth if growth
+                        stops entirely. Below it, the market pays nothing for the future.
+                      </Text>
+                    ) : null}
+                  </Card>
+                ) : null}
+
+                <Card style={{ marginTop: theme.sp.sm }}>
+                  <Text style={styles.valSub}>Growth priced in</Text>
+                  <KV k="Implied by today's price" v={num(val.priced_in.implied_growth_pct, 1, '%')} />
+                  <KV k="Supported by the record" v={num(val.priced_in.assumed_growth_pct, 1, '%')} />
+                  <Text style={styles.valNote}>{val.priced_in.note}</Text>
+                  <Text style={styles.valNote}>Growth basis: {val.growth.basis}.</Text>
+                </Card>
+
+                <Card style={{ marginTop: theme.sp.sm }}>
+                  <Text style={styles.valSub}>How each method values it</Text>
+                  {val.estimates.map((e, i) => (
+                    <View key={i} style={styles.estRow}>
+                      <View style={styles.estHead}>
+                        <Text style={styles.estName}>{e.method}</Text>
+                        <Text style={[styles.estVal, e.value == null && { color: theme.muted }]}>
+                          {e.value != null ? `₹${e.value}` : 'n/a'}
+                        </Text>
+                      </View>
+                      <Text style={styles.estNote}>
+                        {e.kind === 'floor' && e.value != null ? 'Assumes no growth. ' : ''}{e.note}
+                      </Text>
+                    </View>
+                  ))}
+                </Card>
+
+                <Card style={{ marginTop: theme.sp.sm }}>
+                  <Text style={styles.valSub}>Assumptions &amp; limits</Text>
+                  <KV k="Discount rate" v={`${val.assumptions.discount_rate_pct}%`} />
+                  <KV k="Terminal growth" v={`${val.assumptions.terminal_growth_pct}%`} />
+                  <KV k="Forecast horizon" v={`${val.assumptions.horizon_years} years`} />
+                  <KV k="Growth capped at" v={`${val.assumptions.growth_cap_pct}%`} />
+                  {val.caveats.map((c, i) => (
+                    <Text key={i} style={styles.valNote}>• {c}</Text>
+                  ))}
                 </Card>
               </>
             ) : null}
@@ -813,6 +908,44 @@ function dossierHtml(d: Dossier): string {
     `<div class="tf-row"><span>vs EMA20</span><b style="color:${(t.vs_ema20 ?? 0) >= 0 ? green : red}">${t.vs_ema20 != null ? pctS(t.vs_ema20) : '—'}</b></div>` +
     `<div class="tf-row"><span>vs EMA50</span><b style="color:${(t.vs_ema50 ?? 0) >= 0 ? green : red}">${t.vs_ema50 != null ? pctS(t.vs_ema50) : '—'}</b></div>` +
     `</div>`;
+  // Valuation block for the export. Mirrors the on-screen section: verdict with
+  // its reasons, the fair-value range and no-growth floor, the growth the price
+  // implies, every method (including the ones that could not answer, and why),
+  // and the assumptions. A valuation printed without its assumptions is not
+  // auditable, so nothing here is dropped to save space.
+  const vl = d.rep?.valuation;
+  const valBlock = vl
+    ? `<h2>Valuation</h2>` +
+      `<p><b>Verdict: ${esc(vl.verdict)}</b>${vl.fair_value?.upside_pct != null
+        ? ` — fair value ${vl.fair_value.upside_pct >= 0 ? 'above' : 'below'} price by ${Math.abs(vl.fair_value.upside_pct)}%` : ''}</p>` +
+      (vl.reasons.length ? `<ul>${vl.reasons.map((r) => `<li>${esc(r)}</li>`).join('')}</ul>` : '') +
+      (vl.fair_value
+        ? `<table>` +
+          `<tr><td><b>Fair value low</b></td><td style="text-align:right">${vl.fair_value.low != null ? '₹' + vl.fair_value.low : '—'}</td></tr>` +
+          `<tr><td><b>Fair value midpoint</b></td><td style="text-align:right">${vl.fair_value.mid != null ? '₹' + vl.fair_value.mid : '—'}</td></tr>` +
+          `<tr><td><b>Fair value high</b></td><td style="text-align:right">${vl.fair_value.high != null ? '₹' + vl.fair_value.high : '—'}</td></tr>` +
+          `<tr><td><b>No-growth floor</b></td><td style="text-align:right">${vl.fair_value.floor != null ? '₹' + vl.fair_value.floor : '—'}</td></tr>` +
+          `<tr><td><b>Current price</b></td><td style="text-align:right">${vl.price != null ? '₹' + vl.price : '—'}</td></tr>` +
+          `</table>` +
+          `<p style="color:#666;font-size:11px">${vl.fair_value.methods
+            ? `Range from ${vl.fair_value.methods} method(s) that price future growth; the floor assumes none.`
+            : 'No growth-based method could answer — the range shown is the no-growth floor alone.'}</p>`
+        : '<p>No valuation method could produce a figure from the reported data.</p>') +
+      `<h2>Growth priced in</h2><table>` +
+      `<tr><td><b>Implied by today's price</b></td><td style="text-align:right">${vl.priced_in.implied_growth_pct != null ? vl.priced_in.implied_growth_pct + '%' : '—'}</td></tr>` +
+      `<tr><td><b>Supported by the record</b></td><td style="text-align:right">${vl.priced_in.assumed_growth_pct != null ? vl.priced_in.assumed_growth_pct + '%' : '—'}</td></tr>` +
+      `</table><p style="color:#666;font-size:11px">${esc(vl.priced_in.note)} Growth basis: ${esc(vl.growth.basis)}.</p>` +
+      `<h2>Valuation methods</h2><table><tr><td><b>Method</b></td><td style="text-align:right"><b>Value</b></td><td><b>Basis</b></td></tr>` +
+      vl.estimates.map((e) => `<tr><td>${esc(e.method)}${e.kind === 'floor' ? ' <span style="color:#888">(no-growth)</span>' : ''}</td>` +
+        `<td style="text-align:right">${e.value != null ? '₹' + e.value : 'n/a'}</td>` +
+        `<td style="color:#666;font-size:11px">${esc(e.note)}</td></tr>`).join('') +
+      `</table>` +
+      `<p style="color:#666;font-size:11px">Assumptions: ${vl.assumptions.discount_rate_pct}% discount rate, ` +
+      `${vl.assumptions.terminal_growth_pct}% terminal growth, ${vl.assumptions.horizon_years}-year horizon, ` +
+      `growth capped at ${vl.assumptions.growth_cap_pct}%.</p>` +
+      `<ul style="color:#666;font-size:11px">${vl.caveats.map((c) => `<li>${esc(c)}</li>`).join('')}</ul>`
+    : '';
+
   const tfBlock = d.tf && d.tf.timeframes?.length
     ? `<h2>Technical setup · by timeframe</h2>` +
       `<div class="tf-grid">${d.tf.timeframes.map(tfCard).join('')}</div>` +
@@ -870,6 +1003,7 @@ ${mb?.about || fund?.description ? `<h2>Business overview</h2><p>${esc(mb?.about
 ${stratBlock}
 ${chkBlock}
 ${fundRows ? `<h2>Fundamentals & valuation</h2><table>${fundRows}</table>` : ''}
+${valBlock}
 ${plRows}${qRows}${bsRows}
 ${techRows ? `<h2>In-depth technicals</h2><table>${techRows}</table>` : ''}
 ${tfBlock}
@@ -913,6 +1047,23 @@ const styles = StyleSheet.create({
   verdictLabel: { fontSize: theme.fs.lg, fontWeight: '800', letterSpacing: 0.5 },
   verdictSub: { color: theme.muted2, fontSize: theme.fs.sm },
   verdictNote: { color: theme.muted2, fontSize: theme.fs.sm, lineHeight: 19 },
+  valHead: { flexDirection: 'row', alignItems: 'baseline', marginBottom: theme.sp.sm, gap: theme.sp.md },
+  valVerdict: { fontSize: theme.fs.lg, fontWeight: '800', letterSpacing: 0.5 },
+  valUpside: { fontFamily: theme.mono, fontSize: theme.fs.sm, fontWeight: '700' },
+  valReason: { color: theme.muted2, fontSize: theme.fs.sm, lineHeight: 19, marginTop: 2 },
+  valSub: {
+    color: theme.muted, fontSize: theme.fs.xs, textTransform: 'uppercase',
+    letterSpacing: 0.6, marginBottom: theme.sp.sm,
+  },
+  valNote: { color: theme.muted, fontSize: theme.fs.sm, lineHeight: 18, marginTop: theme.sp.sm },
+  estRow: {
+    borderTopWidth: 1, borderTopColor: theme.border2,
+    paddingTop: theme.sp.sm, marginTop: theme.sp.sm,
+  },
+  estHead: { flexDirection: 'row', alignItems: 'baseline' },
+  estName: { color: theme.text, fontSize: theme.fs.md, fontWeight: '700', flex: 1 },
+  estVal: { color: theme.text, fontFamily: theme.mono, fontSize: theme.fs.md, fontWeight: '700' },
+  estNote: { color: theme.muted, fontSize: theme.fs.sm, lineHeight: 18, marginTop: 3 },
   para: { color: theme.muted2, fontSize: theme.fs.sm, lineHeight: 20 },
   tiles: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.sp.sm },
   kv: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 7, borderBottomColor: theme.border, borderBottomWidth: 1, gap: theme.sp.md },

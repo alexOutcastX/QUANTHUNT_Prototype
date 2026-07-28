@@ -5,6 +5,7 @@ from urllib.parse import parse_qs, urlparse
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import backtest_engine as bte  # stdlib-only: the REAL engine runs in the fake server
+import valuation as _val       # stdlib-only: the REAL valuation engine too
 
 DIST = os.path.join(os.path.dirname(__file__), "mobile", "dist")
 PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 5056
@@ -91,6 +92,36 @@ class H(BaseHTTPRequestHandler):
                   "edges", "strikes", "symbols"):
             payload[k] = []
         self.wfile.write(json.dumps(payload).encode())
+
+    def _report(self):
+        """Dossier payload. The valuation is computed by the real engine from
+        these fixture financials, so the headless check exercises the shipped
+        arithmetic rather than a hand-written blob that could drift from it."""
+        fin_years = [
+            {"year": "2025", "revenue": 240000, "net_income": 46000, "op_income": 60000, "ni_growth": 9.5},
+            {"year": "2024", "revenue": 225000, "net_income": 42000, "op_income": 55000, "ni_growth": 9.7},
+            {"year": "2023", "revenue": 211000, "net_income": 38300, "op_income": 50000, "ni_growth": 14.7},
+            {"year": "2022", "revenue": 191000, "net_income": 33400, "op_income": 44000, "ni_growth": 3.1},
+            {"year": "2021", "revenue": 164000, "net_income": 32400, "op_income": 42000, "ni_growth": None},
+        ]
+        bs = {"total_debt": 8000, "cash": 45000, "equity": 90000, "total_assets": 150000}
+        cf = {"ocf": 48000, "fcf": 42000, "capex": -6000}
+        val = _val.value(price=3900, eps=138.71, pe=28.1, pb=12.0, market_cap_cr=830405,
+                         fcf_cr=cf["fcf"], ocf_cr=cf["ocf"], total_debt_cr=bs["total_debt"],
+                         cash_cr=bs["cash"], revenue_cr=fin_years[0]["revenue"],
+                         op_income_cr=fin_years[0]["op_income"], dividend_yield_pct=3.2,
+                         earnings_growth_pct=9.5, fin_years=fin_years, roe_pct=52.0)
+        return self._json({
+            "symbol": "RELIANCE", "name": "Reliance Industries Limited",
+            "sector": "Energy", "industry": "Refineries", "market_cap_cr": 830405,
+            "pe": 28.1, "forward_pe": 26.0, "pb": 12.0, "eps": 138.71,
+            "dividend_yield": 3.2, "roe": 52.0, "roce": 41.0,
+            "description": "Fixture company for headless verification.",
+            "fin_years": fin_years, "fin_quarters": [],
+            "balance_sheet": bs, "cash_flow": cf,
+            "technical": {"price": 3900}, "quality_score": 72, "grade": "A",
+            "valuation": val,
+        })
 
     def _pattern_screen(self):
         hits = [
@@ -596,6 +627,8 @@ class H(BaseHTTPRequestHandler):
             return self._index_cons()
         if path == "/scan":
             return self._scan()
+        if path == "/report":
+            return self._report()
         if path == "/fundamentals/bulk":
             return self._fund_bulk()
         if path == "/fundamentals/warm":
