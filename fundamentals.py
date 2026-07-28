@@ -445,7 +445,32 @@ _GAP_FILL = ("current_ratio", "forward_pe", "debt_equity", "sector", "industry",
              "roce", "dividend_yield")
 
 
-def _fetch_one(sym: str) -> None:
+def _gap_fill(sym: str, data: dict) -> bool:
+    """Complete `data` from yfinance. True when the call actually answered."""
+    try:
+        yf = _fetch_yf(sym)
+    except Exception:
+        yf = None
+    if not yf:
+        return False
+    for k in _GAP_FILL:
+        if data.get(k) is None and yf.get(k) is not None:
+            data[k] = yf[k]
+    if "+yfinance" not in (data.get("source") or ""):
+        data["source"] = (data.get("source") or "") + "+yfinance"
+    return True
+
+
+def _fetch_one(sym: str, gap_fill: bool = True) -> None:
+    """Fetch one symbol through the provider chain and cache it.
+
+    gap_fill=False skips the yfinance completion. The bulk warm sweep passes
+    False deliberately: yfinance's .info is the endpoint Yahoo throttles hardest,
+    and every Yahoo call in this process shares ONE semaphore of 4 (ydata._sem).
+    A universe sweep calling .info per symbol holds that semaphore for its whole
+    run, so the screener's technicals — which come from the same limiter — back
+    off and return nothing. A sweep must never cost the live product its prices.
+    """
     global _dirty
     data = None
     used = None
@@ -460,36 +485,49 @@ def _fetch_one(sym: str) -> None:
         if data:
             used = prov
             break
-    # Gap-fill from yfinance (auto mode only) when the primary source is a scraper
-    # that lacks some fields. Cached for TTL, so this is a one-time cost per symbol.
+    # Gap-fill from yfinance (auto mode only) when the primary source lacks
+    # fields it cannot publish. Cached for TTL, so this is one-time per symbol.
+    filled = True
     if data and used and used != "yfinance" and FUND_SOURCE == "auto" \
             and any(data.get(k) is None for k in _GAP_FILL):
-        try:
-            yf = _fetch_yf(sym)
-        except Exception:
-            yf = None
-        if yf:
-            for k in _GAP_FILL:
-                if data.get(k) is None and yf.get(k) is not None:
-                    data[k] = yf[k]
-            data["source"] = (data.get("source") or "") + "+yfinance"
+        filled = _gap_fill(sym, data) if gap_fill else False
     with _lock:
-        _cache[sym] = {"data": data or {}, "ts": time.time(), "v": SCHEMA_V}
+        _cache[sym] = {"data": data or {}, "ts": time.time(), "v": SCHEMA_V,
+                       # False marks an entry still missing its yfinance fields,
+                       # so an on-demand open can finish the job later.
+                       "gap": bool(filled)}
         _inflight.discard(sym)
         _dirty = True
 
 
 def get_one(sym: str) -> dict:
     """Synchronous single-symbol fetch through the provider chain
-    (screener.in → yfinance gap-fill → EODHD), served from cache when fresh.
-    Blocks a few seconds on a cold symbol; instant afterwards (disk TTL)."""
+    (exchange → yfinance gap-fill → EODHD), served from cache when fresh.
+    Blocks a few seconds on a cold symbol; instant afterwards (disk TTL).
+
+    This is the ONE path that completes a warm-swept entry. The sweep skips the
+    yfinance gap-fill so it cannot starve the scanner's price data, which leaves
+    ROCE / debt-equity / current ratio blank; a user opening the symbol is a
+    single call, so it is safe to finish the job here.
+    """
     sym = sym.strip().upper()
     if not _fresh(sym):
         with _lock:
             _inflight.add(sym)
         _fetch_one(sym)
     with _lock:
-        return dict((_cache.get(sym) or {}).get("data") or {})
+        e = _cache.get(sym) or {}
+        data = dict(e.get("data") or {})
+        pending = data and not e.get("gap", True)
+    if pending and FUND_SOURCE == "auto" and any(data.get(k) is None for k in _GAP_FILL):
+        if _gap_fill(sym, data):
+            with _lock:
+                ent = _cache.get(sym)
+                if ent:
+                    ent["data"] = data
+                    ent["gap"] = True
+                    globals()["_dirty"] = True
+    return data
 
 
 def enqueue(symbols) -> list:
@@ -567,7 +605,10 @@ def _warm_run(symbols):
                 return
             with _lock:
                 _inflight.add(sym)
-            _fetch_one(sym)                      # writes the cache + stamps it
+            # gap_fill=False: exchange sources only. See _fetch_one — the
+            # yfinance completion shares one global Yahoo semaphore with the
+            # scanner, and a universe sweep holding it blanks the live prices.
+            _fetch_one(sym, gap_fill=False)      # writes the cache + stamps it
             with _lock:
                 got = bool((_cache.get(sym) or {}).get("data"))
             with _warm_lock:

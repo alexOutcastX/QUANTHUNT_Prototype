@@ -110,7 +110,7 @@ class WarmRunTest(unittest.TestCase):
         return False
 
     def test_sweep_populates_the_cache_and_counts_ok(self):
-        def fake(sym):
+        def fake(sym, gap_fill=True):
             with F._lock:
                 F._cache[sym] = {"data": {"pe": 12.0}, "ts": time.time(), "v": F.SCHEMA_V}
                 F._inflight.discard(sym)
@@ -130,7 +130,7 @@ class WarmRunTest(unittest.TestCase):
 
     def test_already_fresh_symbols_are_skipped_not_refetched(self):
         calls = []
-        F._fetch_one = lambda s: calls.append(s)
+        F._fetch_one = lambda s, gap_fill=True: calls.append(s)
         with F._lock:
             F._cache["FRESH"] = {"data": {"pe": 9}, "ts": time.time(), "v": F.SCHEMA_V}
 
@@ -141,7 +141,7 @@ class WarmRunTest(unittest.TestCase):
         self.assertEqual((p["skipped"], p["done"], p["ok"]), (1, 1, 0))
 
     def test_one_bad_symbol_does_not_stop_the_sweep(self):
-        def fake(sym):
+        def fake(sym, gap_fill=True):
             if sym == "BOOM":
                 raise RuntimeError("provider exploded")
             with F._lock:
@@ -160,7 +160,7 @@ class WarmRunTest(unittest.TestCase):
             self.assertNotIn("BOOM", F._inflight)
 
     def test_empty_result_counts_as_failed_not_ok(self):
-        def fake(sym):
+        def fake(sym, gap_fill=True):
             with F._lock:
                 F._cache[sym] = {"data": {}, "ts": time.time(), "v": F.SCHEMA_V}
                 F._inflight.discard(sym)
@@ -173,7 +173,7 @@ class WarmRunTest(unittest.TestCase):
     def test_stop_leaves_done_below_total(self):
         """A stopped sweep must read 'stopped at N/total', never as complete —
         the portal decides between the two by comparing done to total."""
-        def slow(sym):
+        def slow(sym, gap_fill=True):
             time.sleep(0.05)
             with F._lock:
                 F._cache[sym] = {"data": {"pe": 1.0}, "ts": time.time(), "v": F.SCHEMA_V}
@@ -195,7 +195,7 @@ class WarmRunTest(unittest.TestCase):
                 F._cache.pop(s, None)
 
     def test_second_start_is_refused_while_one_runs(self):
-        def slow(sym):
+        def slow(sym, gap_fill=True):
             time.sleep(0.05)
             with F._lock:
                 F._inflight.discard(sym)
@@ -213,9 +213,27 @@ class WarmRunTest(unittest.TestCase):
                 with F._lock:
                     F._cache.pop(s, None)
 
+    def test_sweep_does_not_run_the_yfinance_gap_fill(self):
+        """The gap-fill calls yfinance .info, and every Yahoo request in this
+        process shares one semaphore of 4 with the scanner. A universe sweep
+        holding it blanks the live prices — which is exactly what happened in
+        production. The sweep must ask for exchange data only."""
+        seen = []
+
+        def fake(sym, gap_fill=True):
+            seen.append(gap_fill)
+            with F._lock:
+                F._cache[sym] = {"data": {"pe": 1.0}, "ts": time.time(),
+                                 "v": F.SCHEMA_V, "gap": False}
+                F._inflight.discard(sym)
+        F._fetch_one = fake
+        F.warm_start(["AAA", "BBB"], "TESTIDX")
+        self.assertTrue(self._wait())
+        self.assertEqual(seen, [False, False])
+
     def test_blank_symbols_are_dropped_and_case_normalised(self):
         seen = []
-        F._fetch_one = lambda s: seen.append(s)
+        F._fetch_one = lambda s, gap_fill=True: seen.append(s)
         F.warm_start(["aaa", "", "  ", " bbb "], "TESTIDX")
         self.assertTrue(self._wait())
         self.assertEqual(sorted(seen), ["AAA", "BBB"])
