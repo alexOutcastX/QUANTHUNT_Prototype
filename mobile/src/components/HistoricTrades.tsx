@@ -23,6 +23,13 @@ const days = (n?: number | null) => (n == null ? '—' : n === 1 ? '1 day' : `${
 
 type SrcFilter = TradeSource | 'all';
 type StFilter = TradeStatus | 'all';
+type OriginFilter = 'all' | 'live' | 'backfilled';
+
+const ORIGINS: { key: OriginFilter; label: string }[] = [
+  { key: 'all', label: 'Everything' },
+  { key: 'live', label: 'Called live' },
+  { key: 'backfilled', label: 'Replayed' },
+];
 
 const SOURCES: { key: SrcFilter; label: string }[] = [
   { key: 'all', label: 'All' },
@@ -56,6 +63,7 @@ export default function HistoricTrades() {
   const [data, setData] = useState<TradeLogResp | null>(null);
   const [src, setSrc] = useState<SrcFilter>('all');
   const [st, setSt] = useState<StFilter>('all');
+  const [origin, setOrigin] = useState<OriginFilter>('all');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const [openId, setOpenId] = useState<number | null>(null);
@@ -64,13 +72,13 @@ export default function HistoricTrades() {
     setBusy(true);
     setErr('');
     try {
-      setData(await api.tradeLog(src, st));
+      setData(await api.tradeLog(src, st, origin));
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'Could not load the track record');
     } finally {
       setBusy(false);
     }
-  }, [src, st]);
+  }, [src, st, origin]);
 
   useEffect(() => {
     load();
@@ -147,6 +155,50 @@ export default function HistoricTrades() {
           <ChipBtn key={o.key} label={o.label} on={st === o.key} onPress={() => setSt(o.key)} />
         ))}
       </View>
+      {(data?.by_origin?.backfilled ?? 0) > 0 ? (
+        <View style={styles.filters}>
+          {ORIGINS.map((o) => (
+            <ChipBtn
+              key={o.key}
+              label={
+                o.key === 'all'
+                  ? o.label
+                  : `${o.label} (${o.key === 'live' ? data?.by_origin.live ?? 0 : data?.by_origin.backfilled ?? 0})`
+              }
+              on={origin === o.key}
+              onPress={() => setOrigin(o.key)}
+            />
+          ))}
+        </View>
+      ) : null}
+
+      {/* The replay is a simulation. Never let its win rate pass as the live one. */}
+      {(data?.by_origin?.backfilled ?? 0) > 0 && origin === 'all' ? (
+        <Card style={styles.split}>
+          <Text style={styles.splitHead}>Two different claims</Text>
+          <Text style={styles.splitTxt}>
+            {data?.by_origin.backfilled} of these trades were <Text style={styles.splitB}>replayed</Text> — the
+            engine's rules run over the last {data?.backfill?.total ? '30 trading days' : 'month'} of real
+            prices to fill the page from day one. That is a simulation of what it would have said, not a
+            record of what it did say: the rules were written knowing how that month turned out.
+          </Text>
+          <Text style={styles.splitTxt}>
+            {data?.live_summary.total
+              ? `Called live so far: ${data.live_summary.total} trades` +
+                (data.live_summary.win_rate != null
+                  ? `, ${data.live_summary.win_rate.toFixed(0)}% win rate over ${data.live_summary.settled} settled.`
+                  : ' — none settled yet.')
+              : 'Nothing has been called live yet. The live record starts from this release and is the only one that counts.'}
+          </Text>
+        </Card>
+      ) : null}
+      {origin === 'backfilled' ? (
+        <Text style={styles.warn}>
+          Replayed only — a simulation of the engine's rules over past prices, filled at the next day's
+          open, and settled against the actual highs and lows. When a single day's range covered both
+          the stop and the target, the stop was taken, so the numbers can't flatter themselves.
+        </Text>
+      ) : null}
 
       {err ? <Text style={styles.err}>{err}</Text> : null}
 
@@ -174,6 +226,7 @@ export default function HistoricTrades() {
                       <Text style={styles.meta}>
                         {t.source_label}
                         {t.strategy ? ` · ${t.strategy}` : ''}
+                        {t.backfilled ? <Text style={styles.replayTag}> · REPLAYED</Text> : null}
                       </Text>
                     </View>
                     <View style={{ alignItems: 'flex-end' }}>
@@ -276,6 +329,12 @@ const styles = StyleSheet.create({
   extremeSym: { color: theme.text, fontFamily: theme.mono, fontWeight: '700' },
   filters: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.sp.sm, marginTop: theme.sp.md },
   err: { color: theme.red, fontSize: theme.fs.sm, marginTop: theme.sp.md },
+  warn: { color: theme.muted2, fontSize: theme.fs.xs + 1, marginTop: theme.sp.md, lineHeight: 17 },
+  split: { marginTop: theme.sp.md, gap: 6 },
+  splitHead: { color: theme.muted, fontSize: theme.fs.xs + 1, fontWeight: '800', letterSpacing: 1 },
+  splitTxt: { color: theme.muted2, fontSize: theme.fs.sm, lineHeight: 19 },
+  splitB: { color: theme.text, fontWeight: '800' },
+  replayTag: { color: theme.muted, fontWeight: '800', letterSpacing: 0.4 },
   row: { marginBottom: theme.sp.sm, gap: theme.sp.sm },
   rowTop: { flexDirection: 'row', alignItems: 'flex-start', gap: theme.sp.sm },
   sym: { color: theme.text, fontFamily: theme.mono, fontSize: theme.fs.md + 1, fontWeight: '800' },

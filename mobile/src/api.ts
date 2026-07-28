@@ -384,6 +384,9 @@ export type LoggedTrade = {
   pl_amt?: number | null;
   rationale: string[];
   meta: Record<string, string | number | null>;
+  // True when the trade came from the historical replay rather than a live
+  // call. The two are never summed into one win rate without saying so.
+  backfilled: boolean;
 };
 export type TradeLogSummary = {
   total: number; open: number; settled: number;
@@ -402,8 +405,11 @@ export type TradeLogSummary = {
 export type TradeLogResp = {
   trades: LoggedTrade[];
   summary: TradeLogSummary;
+  live_summary: TradeLogSummary;
   by_source: Partial<Record<TradeSource, number>>;
+  by_origin: { live: number; backfilled: number };
   marked_at?: number | null;
+  backfill?: BackfillProgress;
   rules: {
     notional: number;
     horizon_days: Record<string, number>;
@@ -411,6 +417,48 @@ export type TradeLogResp = {
     momentum_top: number;
     multibagger_top: number;
   };
+};
+export type BackfillProgress = {
+  status: string; running: boolean; done: number; total: number;
+  opened: number; settled: number; pct: number; symbol?: string;
+  finished?: number; error?: string | null;
+};
+
+// Cases — TaurEye's own investment baskets. Built from the analyser's scored
+// universe, struck once a year, managed by the engine in between (see cases.py).
+export type CaseKind = 'multibagger' | 'sector' | 'cap' | 'strategy';
+export type CaseSummary = {
+  id: string; name: string; kind: CaseKind; theme?: string | null; blurb?: string | null;
+  vintage: number; min_investment: number; count: number;
+  return_pct?: number | null; cagr_pct?: number | null;
+  held_since?: number | null; top: string[];
+};
+export type CaseLeg = {
+  symbol: string; name?: string | null; weight: number;
+  entry: number; entry_ts: number; price?: number | null; pl_pct?: number | null;
+  shares: number; value: number; status: string;
+  score?: number | null; sector?: string | null;
+  alloc_shares?: number; alloc_value?: number; alloc_weight?: number;
+};
+export type CaseAction = {
+  id: number; case_id: string; ts: number; action: 'add' | 'book' | 'exit' | 'rebalance';
+  symbol?: string | null; price?: number | null; qty_pct?: number | null;
+  pl_pct?: number | null; note?: string | null;
+};
+export type CaseDetail = {
+  id: string; name: string; kind: CaseKind; theme?: string | null; blurb?: string | null;
+  vintage: number; created: number; rebalanced: number; min_investment: number;
+  constituents: CaseLeg[];
+  reserve: { symbol: string; name?: string; score?: number | null; price?: number | null }[];
+  return_pct?: number | null; cagr_pct?: number | null; held_since?: number | null;
+  actions: CaseAction[];
+  allocation?: { invested: number; cash: number; amount: number };
+  rules: Record<string, number>;
+};
+export type CasesResp = {
+  cases: CaseSummary[]; count: number; kinds: CaseKind[]; asof?: number;
+  status?: string; progress?: { status: string; running: boolean; error?: string | null };
+  rules: Record<string, number | string>;
 };
 
 // Scan up to 60 symbols per request; caller batches larger lists.
@@ -1362,14 +1410,27 @@ export const api = {
   sectorMedians: () =>
     getJson<{ sectors: Record<string, Record<string, number | null>>; count: number; min_sample: number }>(
       '/sector-medians', 30000),
-  tradeLog: (source?: TradeSource | 'all', status?: TradeStatus | 'all') => {
+  tradeLog: (
+    source?: TradeSource | 'all',
+    status?: TradeStatus | 'all',
+    origin?: 'live' | 'backfilled' | 'all',
+  ) => {
     const q: string[] = [];
     if (source && source !== 'all') q.push('source=' + source);
     if (status && status !== 'all') q.push('status=' + status);
+    if (origin && origin !== 'all') q.push('origin=' + origin);
     return getJson<TradeLogResp>('/tradelog' + (q.length ? '?' + q.join('&') : ''), 30000);
   },
   tradeLogReconcile: () =>
     postJson<{ started: boolean; open: number }>('/tradelog/reconcile', {}),
+  tradeLogBackfill: (force = false) =>
+    postJson<{ started: boolean; progress: BackfillProgress }>('/tradelog/backfill', { force }),
+  cases: (refresh = false) => getJson<CasesResp>('/cases' + (refresh ? '?refresh=1' : ''), 30000),
+  caseDetail: (id: string, amount?: number) =>
+    getJson<CaseDetail>(
+      '/cases/' + encodeURIComponent(id) + (amount ? '?amount=' + Math.round(amount) : ''),
+      30000,
+    ),
   fundWarmStatus: () => getJson<FundWarm>('/fundamentals/warm'),
   fundWarmStart: (scope: string) =>
     postJson<{ started: boolean; total?: number; universe?: string; reason?: string; progress?: FundWarm }>(

@@ -12,8 +12,8 @@ from __future__ import annotations
 
 import threading
 
-from server import (_prefetch_universe, app, start_alert_loop, start_fund_warm,
-                    start_scan_warm)
+from server import (_prefetch_universe, app, start_alert_loop, start_backfill,
+                    start_fund_warm, start_scan_warm)
 
 # Warm the universe cache in the background so the first /universe request is
 # fast, mirroring server.py's __main__ behaviour. Daemon so it never blocks
@@ -34,5 +34,10 @@ start_fund_warm()
 # Evaluate server-side price/technical alerts on a background loop so they fire
 # (→ webhook + FCM push) without the app open (see server.start_alert_loop).
 start_alert_loop()
+
+# Seed the Historic track record by replaying the engines over the last 30
+# trading days, once ever (see server.start_backfill / backfill.py). Every
+# replayed row is flagged so it is never mixed with a live call.
+start_backfill()
 
 __all__ = ["app"]

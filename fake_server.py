@@ -13,6 +13,7 @@ import valuation as _val       # stdlib-only: the REAL valuation engine too
 os.environ.setdefault("DB_PATH", os.path.join(
     os.environ.get("TMPDIR", "/tmp"), "taureye-fake-tradelog.db"))
 import tradelog as _tlog       # noqa: E402  (must follow the DB_PATH default)
+import cases as _tcases        # noqa: E402  the REAL case engine too
 
 DIST = os.path.join(os.path.dirname(__file__), "mobile", "dist")
 PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 5056
@@ -78,6 +79,87 @@ def _seed_tradelog():
     _tlog.store.execute("UPDATE tradelog SET opened=? WHERE symbol='RELIANCE'",
                         (now - 200 * day,))
     _tlog.reconcile({"RELIANCE": 3010.0})
+    # A couple of replayed rows so the live-vs-simulated split renders.
+    _tlog.record("reco", [
+        {"symbol": "ITC", "name": "ITC", "entry": 430.0, "stop": 408.0, "target": 495.0,
+         "strategy": "BUY · 63% confidence", "backfilled": True,
+         "rationale": ["Reclaimed the 50-DMA", "RSI 57 in the momentum zone"],
+         "meta": {"confidence": 63}},
+    ], now=now - 26 * day)
+    _tlog.record("momentum", [
+        {"symbol": "LT", "name": "Larsen & Toubro", "entry": 3500.0, "target": 3900.0,
+         "strategy": "Pullback reversal", "backfilled": True,
+         "rationale": ["Orderly pullback — 3.2% under the 20-DMA, not a breakdown."],
+         "meta": {"score": 71}},
+    ], now=now - 18 * day)
+    _tlog.reconcile({"ITC": 495.0, "LT": 3610.0})
+
+
+_cases_seeded = [False]
+
+# A scored universe for the case engine — the same shape mb_screen publishes.
+_IT = "Information Technology"
+_FIN = "Financial Services"
+_HC = "Healthcare"
+_AUTO = "Automobile and Auto Components"
+# Real symbol → real sector, so the sector cases in a screenshot read as they
+# would in production rather than shuffling names into the wrong bucket.
+_CASE_NAMES = [
+    ("TCS", _IT), ("INFY", _IT), ("WIPRO", _IT), ("HCLTECH", _IT), ("LTIM", _IT),
+    ("HDFCBANK", _FIN), ("ICICIBANK", _FIN), ("SBIN", _FIN), ("AXISBANK", _FIN),
+    ("KOTAKBANK", _FIN),
+    ("SUNPHARMA", _HC), ("CIPLA", _HC), ("DRREDDY", _HC), ("LUPIN", _HC), ("DIVISLAB", _HC),
+    ("MARUTI", _AUTO), ("M&M", _AUTO), ("TATAMOTORS", _AUTO), ("BAJAJ-AUTO", _AUTO),
+    ("EICHERMOT", _AUTO),
+]
+
+
+def _case_universe():
+    rows = []
+    for i, (sym, sector) in enumerate(_CASE_NAMES):
+        rows.append({
+            "symbol": sym, "name": sym.title(), "score": 86 - i * 1.4, "tier": "Tier A",
+            "price": round(300 + (i * 371) % 3200, 2),
+            "market_cap_cr": [180000, 45000, 12000][i % 3],
+            "roe": 24 - (i % 10), "debt_equity": 0.08 + (i % 4) * 0.18,
+            "sector": sector, "vs_200dma": 12 - (i % 18),
+            "pct_from_high": -(i % 20),
+            "metrics": {"pe": 11 + (i % 18), "pb": 1.4 + (i % 4) * 0.7,
+                        "dividend_yield": round((i % 5) * 0.7, 2)},
+        })
+    return rows
+
+
+def _seed_cases():
+    """Build the real cases from a fixture universe, then let the engine act on
+    one of them so the action ledger has something in it."""
+    if _cases_seeded[0]:
+        return
+    _cases_seeded[0] = True
+    rows = _case_universe()
+    _tcases.build_and_review(rows)
+    cid = "multibagger-flagship"
+    hs = _tcases.holdings_of(cid)
+    if not hs:
+        return
+    quotes = {h["symbol"]: h["entry"] for h in hs}
+    quotes[hs[0]["symbol"]] = hs[0]["entry"] * 1.8          # a runner to book
+    scores = {r["symbol"]: r["score"] for r in rows}
+    scores[hs[1]["symbol"]] = 20                            # a broken thesis to exit
+    acts = _tcases.review_actions(hs, quotes, scores)
+    bench = [{"symbol": "TITAN", "name": "Titan", "score": 68, "price": 3400.0}]
+    _tcases.apply_actions(cid, acts, bench)
+
+
+def _case_quotes(syms):
+    """Fixture prices: every holding up ~9% on its entry so the cards show a
+    live P/L rather than a row of zeros."""
+    out = {}
+    for c in _tcases.all_cases():
+        for h in _tcases.holdings_of(c["id"]):
+            if h["symbol"] in syms and h["entry"]:
+                out[h["symbol"]] = round(h["entry"] * 1.09, 2)
+    return out
 
 # Fundamentals warm sweep: a clock-driven fake so the developer portal's
 # progress bar actually moves under the headless checks. 20 symbols/second, so
@@ -414,6 +496,37 @@ class H(BaseHTTPRequestHandler):
         self._json(_tlog.ledger(source=(q.get("source") or [None])[0],
                                 status=(q.get("status") or [None])[0]))
 
+    def _cases(self):
+        _seed_cases()
+        syms = []
+        for c in _tcases.all_cases():
+            syms += [h["symbol"] for h in _tcases.holdings_of(c["id"])]
+        payload = _tcases.overview(_case_quotes(set(syms)))
+        payload["progress"] = _tcases.progress()
+        self._json(payload)
+
+    def _case_detail(self, case_id):
+        _seed_cases()
+        holds = _tcases.holdings_of(case_id)
+        detail = _tcases.case_detail(case_id, _case_quotes({h["symbol"] for h in holds}))
+        if not detail:
+            return self._json({"error": f"Unknown case '{case_id}'"})
+        q = parse_qs(urlparse(self.path).query)
+        try:
+            amount = float((q.get("amount") or ["0"])[0])
+        except ValueError:
+            amount = 0.0
+        if amount > 0:
+            legs = detail["constituents"]
+            alloc = _tcases.allocate(amount, [l["price"] for l in legs],
+                                     [l["weight"] for l in legs])
+            for leg, a in zip(legs, alloc["legs"]):
+                leg["alloc_shares"] = a["shares"]
+                leg["alloc_value"] = a["value"]
+                leg["alloc_weight"] = a["actual_weight"]
+            detail["allocation"] = {k: alloc[k] for k in ("invested", "cash", "amount")}
+        self._json(detail)
+
     def _json(self, payload):
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
@@ -671,6 +784,10 @@ class H(BaseHTTPRequestHandler):
             return self._ltp()
         if path == "/tradelog":
             return self._tradelog()
+        if path == "/cases":
+            return self._cases()
+        if path.startswith("/cases/"):
+            return self._case_detail(path[len("/cases/"):])
         if path == "/momentum/screen":
             return self._mom_screen()
         if path == "/multibagger/screen":
