@@ -13,6 +13,7 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { api } from '../api';
 import StockDetail from '../components/StockDetail';
+import { InfoDot } from '../components/InfoCard';
 import { ExportCol, exportCsv, exportExcel, exportPdf } from '../csv';
 import { crore } from '../format';
 import { parseNL } from '../nlScreen';
@@ -31,6 +32,7 @@ import {
   defaultOpFor,
   exprId,
   filtersToExpr,
+  setSectorMedians,
   sortRows,
 } from '../screener';
 import {
@@ -297,6 +299,14 @@ export default function ScreenerScreen() {
   const [cfgMin, setCfgMin] = useState(false);
   useEffect(() => {
     AsyncStorage.getItem(CFG_MIN_KEY).then((v) => { if (v === '1') setCfgMin(true); }).catch(() => {});
+  }, []);
+
+  // Sector medians for the 'vs sector' valuation filters. One small fetch,
+  // cached server-side for an hour. Failing is not an error worth surfacing:
+  // those filters simply return null and match nothing, which the picker's
+  // info card explains.
+  useEffect(() => {
+    api.sectorMedians().then((r) => setSectorMedians(r.sectors || {})).catch(() => {});
   }, []);
   const toggleCfgMin = () => setCfgMin((v) => {
     AsyncStorage.setItem(CFG_MIN_KEY, v ? '0' : '1').catch(() => {});
@@ -1280,12 +1290,18 @@ function FieldPicker({ onPick, onClose }: { onPick: (key: string) => void; onClo
               <Text style={styles.fpGroup}>{g.toUpperCase()}</Text>
               <View style={styles.fpGrid}>
                 {defs.map((d) => (
-                  <TouchableOpacity key={d.key} style={styles.fpChip} onPress={() => onPick(d.key)} activeOpacity={0.7}>
-                    <Text style={styles.fpChipTxt}>
-                      {d.label}
-                      {d.fund ? <Text style={{ color: theme.muted }}> ·f</Text> : null}
-                    </Text>
-                  </TouchableOpacity>
+                  <View key={d.key} style={styles.fpChipWrap}>
+                    <TouchableOpacity style={styles.fpChip} onPress={() => onPick(d.key)} activeOpacity={0.7}>
+                      <Text style={styles.fpChipTxt}>
+                        {d.label}
+                        {/* Unit, so a bare ratio is not mistaken for a percentage. */}
+                        {d.unit ? <Text style={{ color: theme.muted2 }}> {d.unit}</Text> : null}
+                        {d.fund ? <Text style={{ color: theme.muted }}> ·f</Text> : null}
+                      </Text>
+                    </TouchableOpacity>
+                    {/* Only renders where an explanation exists (see INFO). */}
+                    <InfoDot id={d.key} size={15} />
+                  </View>
                 ))}
               </View>
             </View>
@@ -2408,6 +2424,7 @@ const styles = StyleSheet.create({
   // Word-list layout (report request): metrics read as a flowing list of
   // tappable words rather than a wall of buttons.
   fpGrid: { flexDirection: 'row', flexWrap: 'wrap', columnGap: theme.sp.md + 2, rowGap: 2 },
+  fpChipWrap: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   fpChip: { paddingVertical: 4 },
   fpChipTxt: {
     color: theme.text,
