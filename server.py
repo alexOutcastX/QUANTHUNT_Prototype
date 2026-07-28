@@ -12,6 +12,7 @@ from flask_cors import CORS
 import requests, logging, time, threading, os, io, csv, datetime, json, math, sys
 import pandas as pd
 import fundamentals as _fund   # bulk fundamentals cache (EODHD + yfinance fallback)
+import valuation as _valuation  # dossier valuation section (pure arithmetic, no I/O)
 import scanner as _scanner     # live per-symbol technical scan for the screener
 import relations as _relations # curated company-relationship graph (Terminal tab)
 import news as _news           # RSS news aggregation (Terminal news panel)
@@ -4334,6 +4335,28 @@ def report():
         mcap_cat = ("Large Cap" if mcap_cr and mcap_cr > 20000 else
                     "Mid Cap"   if mcap_cr and mcap_cr > 5000  else "Small Cap")
 
+        # Valuation is computed here, from values already in hand, so the
+        # dossier gets it without a second round trip. Best-effort: a valuation
+        # that cannot be built must never cost the reader the rest of the report.
+        try:
+            _px = r2(info.get("currentPrice") or info.get("regularMarketPrice")) \
+                or (tech or {}).get("price")
+            _latest = (fin_years or [{}])[0] if fin_years else {}
+            valuation = _valuation.value(
+                price=_px, eps=r2(info.get("trailingEps")), pe=pe, pb=pb,
+                market_cap_cr=mcap_cr,
+                fcf_cr=(cf or {}).get("fcf"), ocf_cr=(cf or {}).get("ocf"),
+                total_debt_cr=(bs or {}).get("total_debt"),
+                cash_cr=(bs or {}).get("cash"),
+                revenue_cr=_latest.get("revenue"),
+                op_income_cr=_latest.get("op_income"),
+                dividend_yield_pct=dy,
+                earnings_growth_pct=pct(info.get("earningsGrowth")),
+                fin_years=fin_years, roe_pct=roe)
+        except Exception as e:
+            log.warning("Valuation failed for %s: %s", sym, e)
+            valuation = None
+
         return _no_cache(jsonify({
             "symbol": sym,
             "name": info.get("longName") or info.get("shortName", sym),
@@ -4391,6 +4414,7 @@ def report():
             "grade": grade,
             "recommendation": rec,
             "rec_color": rec_color,
+            "valuation": valuation,
         }))
     except Exception as e:
         log.error("Report error for %s: %s", sym, e)
