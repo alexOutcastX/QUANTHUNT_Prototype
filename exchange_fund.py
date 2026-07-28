@@ -222,6 +222,10 @@ _XBRL_END = "DateOfEndOfReportingPeriod"
 # current quarter. Picking the wrong one would silently compare a quarter against
 # a nine-month total and report growth that never happened.
 _QUARTER_CTX = "OneD"
+# Full-year column. Annual filings report the cash flow statement only here —
+# there is no three-month cash flow, because SEBI requires the statement
+# half-yearly and annually, not quarterly.
+_ANNUAL_CTX = "FourD"
 
 
 def _facts(text: str, tag: str) -> list:
@@ -236,15 +240,83 @@ def _facts(text: str, tag: str) -> list:
     return out
 
 
-def _xbrl_value(text: str, tag: str):
-    """Quarter value for a tag: the OneD context, else the first occurrence."""
+def _xbrl_value(text: str, tag: str, ctx_pref: str = _QUARTER_CTX):
+    """Value for a tag under the preferred context, else the first occurrence."""
     facts = _facts(text, tag)
     if not facts:
         return None
     for ctx, val in facts:
-        if ctx == _QUARTER_CTX:
+        if ctx == ctx_pref:
             return val
     return facts[0][1]
+
+
+# ---------- annual cash flow ----------
+# Cash flow is the part of the accounts hardest to massage: profit is an opinion,
+# cash is a fact. It lives only in the ANNUAL filing (SEBI does not require a
+# quarterly cash flow statement), so it needs its own index call and document.
+_CF_TAGS = {
+    "ocf": ("CashFlowsFromUsedInOperatingActivities",),
+    "investing": ("CashFlowsFromUsedInInvestingActivities",),
+    "financing": ("CashFlowsFromUsedInFinancingActivities",),
+    # Reported as a positive magnitude under investing outflows, not a negative.
+    "capex": ("PurchaseOfPropertyPlantAndEquipmentClassifiedAsInvestingActivities",),
+    "depreciation": ("DepreciationDepletionAndAmortisationExpense",),
+}
+# Rupees in the filing; crore everywhere in this app.
+_CR = 1e7
+
+
+def annual_cashflow(sym: str, sess=None) -> dict:
+    """Latest annual cash flow, in crore. {} when nothing usable was filed.
+
+    Free cash flow is operating cash flow minus capital expenditure — what is
+    left for shareholders after keeping the business running. It is the input
+    the discounted cash flow needs, and the reason this function exists.
+    """
+    sess = sess or _nse_session()
+    rows = None
+    for attempt in (0, 1):
+        s = sess if attempt == 0 else _nse_session(force=True)
+        try:
+            r = s.get(_NSE_BASE + "/api/corporates-financial-results",
+                      params={"index": "equities", "symbol": sym, "period": "Annual"},
+                      timeout=TIMEOUT)
+            if r.status_code == 200:
+                rows = r.json()
+                break
+        except Exception as e:
+            log.debug("NSE annual %s attempt %d failed: %s", sym, attempt + 1, e)
+    if not isinstance(rows, list):
+        return {}
+
+    # Newest first, standalone for consistency with the quarterly series.
+    for row in rows:
+        if not isinstance(row, dict) or not row.get("xbrl"):
+            continue
+        if (row.get("consolidated") or "").strip().lower() != "non-consolidated":
+            continue
+        try:
+            x = _nse_session().get(row["xbrl"], timeout=TIMEOUT)
+            if x.status_code != 200:
+                continue
+            text = x.text
+        except Exception:
+            continue
+        out = {}
+        for key, tags in _CF_TAGS.items():
+            for tag in tags:
+                v = _num(_xbrl_value(text, tag, _ANNUAL_CTX))
+                if v is not None:
+                    out[key] = round(v / _CR, 2)
+                    break
+        if out.get("ocf") is None:
+            continue                       # not a filing with a cash flow statement
+        if out.get("capex") is not None:
+            out["fcf"] = round(out["ocf"] - abs(out["capex"]), 2)
+        out["year"] = (row.get("toDate") or "").strip()
+        return out
+    return {}
 
 
 def _parse_xbrl(text: str) -> dict:
@@ -457,6 +529,19 @@ def fetch(sym: str):
         data["quarters"] = len(qs)
         if qs[0].get("eps") is not None and data.get("eps") is None:
             data["eps"] = qs[0]["eps"]     # BSE silent → take it from the filing
+
+    try:
+        cf = annual_cashflow(sym)
+    except Exception as e:
+        log.debug("NSE cash flow %s failed: %s", sym, e)
+        cf = {}
+    if cf:
+        data["ocf_cr"] = cf.get("ocf")
+        data["capex_cr"] = cf.get("capex")
+        data["fcf_cr"] = cf.get("fcf")
+        data["cashflow_year"] = cf.get("year")
+        if "NSE" not in used:
+            used.append("NSE")
 
     if not used:
         return None

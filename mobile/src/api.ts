@@ -177,12 +177,20 @@ export type Fundamentals = {
   peg?: number | null;
   revenue_growth_pct?: number | null;
   earnings_growth_pct?: number | null;
-  // Sequential quarter and EPS growth — screener.in only (see fundamentals.py).
+  // Sequential quarter and EPS growth — from NSE quarterly filings.
   revenue_qoq_pct?: number | null;
   earnings_qoq_pct?: number | null;
   eps_growth_yoy_pct?: number | null;
   eps_ttm_growth_pct?: number | null;
+  // Annual cash flow, in crore, from the company's own NSE filing.
+  // fcf_cr predates the rest — it was seeded by the multibagger screen; it is
+  // now also populated for every symbol by the exchange provider.
   fcf_cr?: number | null;
+  ocf_cr?: number | null;
+  capex_cr?: number | null;
+  fcf_yield_pct?: number | null;
+  cash_conversion_pct?: number | null;
+  cashflow_year?: string | null;
   pct_from_high_pct?: number | null;
   description?: string;
   error?: string;
