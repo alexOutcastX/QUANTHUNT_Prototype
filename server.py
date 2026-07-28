@@ -32,6 +32,7 @@ import apikeys as _apikeys      # public-API key issue/verify (hashed, store-bac
 import push as _push            # FCM push delivery + device-token registry + broadcasts
 import chat as _chat            # in-app messaging: global room + channels + DMs
 import sectors as _sectors      # app-wide NSE sector classification + heatmap aggregate
+import tradelog as _tradelog    # append-only record of every trade the engines recommended
 
 # Support both normal run and PyInstaller frozen exe
 _BASE_DIR = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
@@ -2672,6 +2673,14 @@ def recommendation():
                             "note": f"No price history for {sym}"}), 404
         rec = analyze(sym, candles, fund_score, name)
         rec["symbol"] = sym
+        # Every BUY the engine publishes enters the track record, at the levels
+        # it published, dated now. Recording here (not in the client) is what
+        # makes the Historic tab a record of the engine rather than a record of
+        # what one device happened to render.
+        try:
+            _tradelog.record_reco(rec)
+        except Exception as e:
+            log.warning("tradelog: could not record %s (%s)", sym, e)
         return jsonify(rec)
     except Exception as e:
         log.error("Recommendation error for %s: %s", sym, e)
@@ -3130,6 +3139,51 @@ def sector_medians_route():
     return jsonify({"sectors": data, "count": len(data),
                     "min_sample": _fund.SECTOR_MIN_N,
                     "fields": list(_fund.SECTOR_FIELDS)})
+
+
+def _quote_prices(symbols):
+    """{symbol: last price} for the trade ledger's mark-to-market pass. Reuses
+    the quote cache and the one batched Yahoo call the /ltp route uses — the
+    ledger must never open its own per-symbol fan-out, which is exactly what
+    starved the scanner when the fundamentals sweep did it."""
+    out = {}
+    now = time.time()
+    pending = []
+    for s in symbols:
+        hit = _LTP_CACHE.get(s)
+        if hit and now - hit[0] < _LTP_TTL and hit[1].get("price"):
+            out[s] = hit[1]["price"]
+        else:
+            pending.append(s)
+    if pending:
+        for s, entry in _yf_batch(pending).items():
+            _LTP_CACHE[s] = (now, entry)
+            if entry.get("price"):
+                out[s] = entry["price"]
+    return out
+
+
+@app.route("/tradelog")
+def tradelog_route():
+    """The track record: every trade the recommendation, momentum and
+    multibagger engines called, with its outcome marked to market. Filter with
+    ?source=reco|momentum|multibagger and ?status=open|won|lost|closed."""
+    try:
+        _tradelog.ensure_marked(_quote_prices)
+    except Exception as e:
+        log.warning("tradelog: mark-to-market could not start (%s)", e)
+    return jsonify(_tradelog.ledger(
+        source=request.args.get("source"),
+        status=request.args.get("status"),
+        limit=request.args.get("limit", 500),
+    ))
+
+
+@app.route("/tradelog/reconcile", methods=["POST"])
+def tradelog_reconcile():
+    """Force an immediate mark-to-market pass (developer portal)."""
+    started = _tradelog.ensure_marked(_quote_prices, force=True)
+    return jsonify({"started": started, "open": len(_tradelog.open_symbols())})
 
 
 @app.route("/returns")

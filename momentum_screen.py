@@ -341,6 +341,14 @@ def _run(universe_fn):
             _state.update({"status": "done", "asof": int(time.time()),
                            "results": results, "progress": ""})
             _save_disk()
+        # The strongest setups of this sweep enter the permanent track record
+        # (see tradelog.py). Best-effort — a ledger failure must never lose a
+        # completed sweep.
+        try:
+            import tradelog
+            tradelog.record_momentum(results)
+        except Exception as e:
+            log.warning("momentum_screen: could not record picks (%s)", e)
         log.info("momentum_screen done: %d setups over %d NSE + %d BSE",
                  len(results), len(nse), len(bse))
     except Exception as e:

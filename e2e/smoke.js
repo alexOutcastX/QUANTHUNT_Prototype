@@ -137,7 +137,36 @@ function check(name, ok, detail) {
       .catch(() => 0);
     check('command palette opens', palette > 0);
 
-    // 7 · no uncaught page errors during the whole run
+    // 7 · Paper trades → Historic renders the server's track record. The fake
+    // server serves this from the REAL ledger, so a settlement regression shows
+    // up here as a missing outcome badge rather than as a wrong number nobody
+    // notices.
+    const tap = async (t) =>
+      page.evaluate((txt) => {
+        const el = [...document.querySelectorAll('div,span,a,button')].filter(
+          (n) => (n.textContent || '').trim() === txt && n.offsetParent !== null,
+        );
+        const last = el.pop();
+        if (last) last.click();
+        return !!last;
+      }, t);
+    // At phone width the Desk sub-tabs live behind the drawer, so route through
+    // the command palette that check 6 just opened.
+    await page.locator('input[placeholder*="Search a stock"]').first().fill('Paper trades');
+    await page.waitForTimeout(700);
+    await tap('Paper trades');
+    await page.waitForTimeout(2500);
+    await tap('Historic');
+    await page.waitForTimeout(2200);
+    const hist = await page.evaluate(() => document.body.innerText);
+    check('Historic tab lists the recorded trades', /TARGET HIT/.test(hist) && /STOPPED/.test(hist), hist.slice(0, 200));
+    check('Historic reports the record', /win rate/i.test(hist) && /total p\/l/i.test(hist));
+    check(
+      'Historic covers all three engines',
+      /Recommendations/.test(hist) && /Momentum/.test(hist) && /Multibagger/.test(hist),
+    );
+
+    // 8 · no uncaught page errors during the whole run
     check('no uncaught page errors', errors.length === 0, errors[0]);
   } finally {
     await browser.close();

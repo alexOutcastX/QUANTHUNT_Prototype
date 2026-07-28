@@ -34,7 +34,7 @@ const DESTS: Dest[] = [
   { label: 'Universe', hint: 'Market overview — the Today landing page', icon: 'home', page: 'today' },
   { label: 'Watchlist', hint: 'Your tracked symbols', icon: 'desk', page: 'desk', sub: 'watchlist' },
   { label: 'Portfolio', hint: 'Holdings & live P&L', icon: 'desk', page: 'desk', sub: 'portfolio' },
-  { label: 'Paper trades', hint: 'Simulated setups & win-rate', icon: 'desk', page: 'desk', sub: 'paper' },
+  { label: 'Paper trades', hint: 'Logged setups, simulator & historic track record', icon: 'desk', page: 'desk', sub: 'paper' },
   { label: 'Alerts', hint: 'Price / % / RSI alerts', icon: 'desk', page: 'desk', sub: 'alerts' },
   { label: 'Dossier', hint: 'Institutional company report', icon: 'desk', page: 'desk', sub: 'inst' },
   { label: 'Shareholders', hint: 'Ownership & entity graph', icon: 'desk', page: 'desk', sub: 'shareholders' },
