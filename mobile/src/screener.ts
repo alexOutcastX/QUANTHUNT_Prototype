@@ -155,6 +155,28 @@ const epvValue = (s: Row): number | null => {
   return eps && eps > 0 ? eps / DISCOUNT : null;
 };
 
+/** Two-stage DCF per share, from the filed free cash flow. Mirrors valuation.py.
+ *  Now screenable because free cash flow reaches the bulk payload from NSE's
+ *  annual filings — it no longer needs a per-symbol yfinance fetch. */
+const DCF_YEARS = 10;
+const TERMINAL = 0.04;
+const dcfValue = (s: Row): number | null => {
+  const fcf = fnum(s, 'fcf_cr');
+  const mcap = fnum(s, 'market_cap_cr');
+  const px = n(s.price);
+  const g = growthFrac(s);
+  if (!fcf || fcf <= 0 || !mcap || !px || px <= 0 || g == null) return null;
+  const shares = mcap / px;                    // crore shares
+  let pv = 0;
+  let cf = fcf;
+  for (let y = 1; y <= DCF_YEARS; y++) {
+    cf *= 1 + g;
+    pv += cf / Math.pow(1 + DISCOUNT, y);
+  }
+  pv += (cf * (1 + TERMINAL)) / (DISCOUNT - TERMINAL) / Math.pow(1 + DISCOUNT, DCF_YEARS);
+  return pv / shares;
+};
+
 /** Gordon growth on the current dividend. Skips token payers under 0.5%. */
 const ddmValue = (s: Row): number | null => {
   const px = n(s.price);
@@ -230,13 +252,26 @@ export const FILTER_DEFS: FilterDef[] = [
   { key: 'beta', label: 'Beta', group: 'Structure', type: 'range', get: (s) => n(s.beta) },
   { key: 'above_s1', label: '% above Support S1', group: 'Structure', type: 'range', unit: '%', get: (s) => (s.s1 && s.price ? ((s.price - s.s1) / s.s1) * 100 : null) },
   { key: 'below_r1', label: '% below Resist. R1', group: 'Structure', type: 'range', unit: '%', get: (s) => (s.r1 && s.price ? ((s.r1 - s.price) / s.r1) * 100 : null) },
+  // ---- Cash flow ----
+  // Profit is an opinion; cash is a fact. These come from the company's own
+  // annual filing with the NSE, not from a data vendor's derived figure.
+  { key: 'fcf_cr', label: 'Free cash flow', group: 'Cash flow', type: 'range', unit: '₹cr', fund: true, get: (s) => fnum(s, 'fcf_cr') },
+  { key: 'ocf_cr', label: 'Operating cash flow', group: 'Cash flow', type: 'range', unit: '₹cr', fund: true, get: (s) => fnum(s, 'ocf_cr') },
+  { key: 'capex_cr', label: 'Capital expenditure', group: 'Cash flow', type: 'range', unit: '₹cr', fund: true, get: (s) => fnum(s, 'capex_cr') },
+  { key: 'fcf_yield_pct', label: 'Free-cash-flow yield', group: 'Cash flow', type: 'range', unit: '%', fund: true, get: (s) => fnum(s, 'fcf_yield_pct') },
+  { key: 'cash_conversion_pct', label: 'Cash conversion (OCF / PAT)', group: 'Cash flow', type: 'range', unit: '%', fund: true, get: (s) => fnum(s, 'cash_conversion_pct') },
+  { key: 'fcf_positive', label: 'Free cash flow positive', group: 'Cash flow', type: 'toggle', fund: true, get: (s) => { const v = fnum(s, 'fcf_cr'); return v != null && v > 0; } },
+  { key: 'cash_gt_profit', label: 'Cash conversion above 100%', group: 'Cash flow', type: 'toggle', fund: true, get: (s) => { const v = fnum(s, 'cash_conversion_pct'); return v != null && v >= 100; } },
+  { key: 'capex_light', label: 'Capex under 30% of OCF', group: 'Cash flow', type: 'toggle', fund: true, get: (s) => { const c = fnum(s, 'capex_cr'); const o = fnum(s, 'ocf_cr'); return !!(c != null && o && o > 0 && Math.abs(c) / o < 0.3); } },
+
   // ---- Valuation ----
-  // Three of the dossier's four models are reproducible here from price, EPS,
-  // P/B and dividend yield. The discounted cash flow is NOT: it needs free cash
-  // flow, which is a per-symbol fetch the bulk fundamentals payload does not
-  // carry — so it is offered in the dossier only, rather than silently
-  // approximated with something weaker.
+  // All four of the dossier's models are reproducible here. The discounted cash
+  // flow used to be the exception — it needs free cash flow, which the bulk
+  // payload did not carry — but that now arrives from the company's own annual
+  // NSE filing, so it screens like the rest.
   { key: 'earnings_yield', label: 'Earnings yield', group: 'Valuation', type: 'range', unit: '%', fund: true, get: (s) => { const pe = fnum(s, 'pe'); return pe && pe > 0 ? 100 / pe : null; } },
+  { key: 'dcf_upside', label: 'Upside vs DCF', group: 'Valuation', type: 'range', unit: '%', fund: true, get: (s) => upside(dcfValue(s), s) },
+  { key: 'dcf_value', label: 'DCF fair value', group: 'Valuation', type: 'range', unit: '₹', fund: true, get: (s) => dcfValue(s) },
   { key: 'graham_upside', label: 'Upside vs Graham number', group: 'Valuation', type: 'range', unit: '%', fund: true, get: (s) => upside(grahamValue(s), s) },
   { key: 'epv_upside', label: 'Upside vs earnings power', group: 'Valuation', type: 'range', unit: '%', fund: true, get: (s) => upside(epvValue(s), s) },
   { key: 'ddm_upside', label: 'Upside vs dividend model', group: 'Valuation', type: 'range', unit: '%', fund: true, get: (s) => upside(ddmValue(s), s) },

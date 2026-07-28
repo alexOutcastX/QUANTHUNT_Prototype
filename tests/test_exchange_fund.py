@@ -305,3 +305,71 @@ class ProviderWiringTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+# Annual filings carry the cash flow statement; quarterly ones do not, because
+# SEBI requires it half-yearly and annually. The facts sit in the FULL-YEAR
+# context, so the quarter-preferring reader would take the wrong one.
+ANNUAL_CF = """<?xml version="1.0" encoding="UTF-8"?>
+<xbrli:xbrl xmlns:xbrli="http://www.xbrl.org/2003/instance"
+            xmlns:in-bse-fin="http://www.bseindia.com/xbrl/fin/2020-03-31/in-bse-fin">
+ <in-bse-fin:CashFlowsFromUsedInOperatingActivities contextRef="FourD" unitRef="INR">739980000000.00</in-bse-fin:CashFlowsFromUsedInOperatingActivities>
+ <in-bse-fin:CashFlowsFromUsedInInvestingActivities contextRef="FourD" unitRef="INR">-1143010000000.00</in-bse-fin:CashFlowsFromUsedInInvestingActivities>
+ <in-bse-fin:CashFlowsFromUsedInFinancingActivities contextRef="FourD" unitRef="INR">-166460000000.00</in-bse-fin:CashFlowsFromUsedInFinancingActivities>
+ <in-bse-fin:PurchaseOfPropertyPlantAndEquipmentClassifiedAsInvestingActivities contextRef="FourD" unitRef="INR">342580000000.00</in-bse-fin:PurchaseOfPropertyPlantAndEquipmentClassifiedAsInvestingActivities>
+ <in-bse-fin:DepreciationDepletionAndAmortisationExpense contextRef="OneD" unitRef="INR">135690000000.00</in-bse-fin:DepreciationDepletionAndAmortisationExpense>
+ <in-bse-fin:DepreciationDepletionAndAmortisationExpense contextRef="FourD" unitRef="INR">508320000000.00</in-bse-fin:DepreciationDepletionAndAmortisationExpense>
+</xbrli:xbrl>"""
+
+
+class CashFlowParseTest(unittest.TestCase):
+    def test_annual_context_is_preferred_for_cash_flow(self):
+        """Depreciation exists in both contexts. The quarter reader would take
+        the 3-month figure and understate the year by ~4x."""
+        self.assertEqual(E._xbrl_value(ANNUAL_CF, "DepreciationDepletionAndAmortisationExpense",
+                                       E._ANNUAL_CTX), "508320000000.00")
+        self.assertEqual(E._xbrl_value(ANNUAL_CF, "DepreciationDepletionAndAmortisationExpense",
+                                       E._QUARTER_CTX), "135690000000.00")
+
+    def test_operating_and_investing_parse(self):
+        self.assertEqual(E._num(E._xbrl_value(ANNUAL_CF, "CashFlowsFromUsedInOperatingActivities",
+                                              E._ANNUAL_CTX)), 739980000000.0)
+        self.assertEqual(E._num(E._xbrl_value(ANNUAL_CF, "CashFlowsFromUsedInInvestingActivities",
+                                              E._ANNUAL_CTX)), -1143010000000.0)
+
+    def test_capex_is_reported_as_a_positive_magnitude(self):
+        """It is an outflow, but the filing states it positive under investing —
+        so free cash flow must subtract its absolute value, not add it."""
+        capex = E._num(E._xbrl_value(ANNUAL_CF,
+                                     "PurchaseOfPropertyPlantAndEquipmentClassifiedAsInvestingActivities",
+                                     E._ANNUAL_CTX))
+        self.assertGreater(capex, 0)
+        ocf = E._num(E._xbrl_value(ANNUAL_CF, "CashFlowsFromUsedInOperatingActivities",
+                                   E._ANNUAL_CTX))
+        self.assertAlmostEqual((ocf - abs(capex)) / 1e7, 39740.0, places=1)
+
+    def test_rupees_convert_to_crore(self):
+        self.assertEqual(E._CR, 1e7)
+
+
+class CashFlowDerivedTest(unittest.TestCase):
+    """The derived ratios live in fundamentals._fetch_one, and their guards
+    matter: a zero market cap or a loss makes both meaningless."""
+
+    def test_fcf_yield_and_cash_conversion(self):
+        import fundamentals as F
+        data = {"fcf_cr": 37422.0, "ocf_cr": 39142.0, "market_cap_cr": 867545.0,
+                "pe": 17.29, "eps": 138.71}
+        # Mirror the arithmetic _fetch_one applies.
+        self.assertAlmostEqual(round(data["fcf_cr"] / data["market_cap_cr"] * 100, 2), 4.31, places=2)
+        pat = data["market_cap_cr"] / data["pe"]
+        self.assertGreater(round(data["ocf_cr"] / pat * 100, 1), 70)
+        self.assertIn("fcf_yield_pct", F.FIELDS)
+        self.assertIn("cash_conversion_pct", F.FIELDS)
+
+    def test_cash_flow_fields_are_in_the_bulk_schema(self):
+        """They must be in FIELDS, or the screener's cash-flow filters read null
+        for every row — the exact failure the growth filters had."""
+        import fundamentals as F
+        for k in ("ocf_cr", "capex_cr", "fcf_cr", "fcf_yield_pct", "cash_conversion_pct"):
+            self.assertIn(k, F.FIELDS, k)

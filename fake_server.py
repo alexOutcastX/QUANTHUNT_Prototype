@@ -297,7 +297,16 @@ class H(BaseHTTPRequestHandler):
                     "revenue_qoq_pct": round(-5 + (i % 9) * 3.2, 1),
                     "earnings_qoq_pct": round(-9 + (i % 10) * 4.1, 1),
                     "eps_growth_yoy_pct": round(-6 + (i % 12) * 3.8, 1),
-                    "eps_ttm_growth_pct": round(-4 + (i % 8) * 4.4, 1)}
+                    "eps_ttm_growth_pct": round(-4 + (i % 8) * 4.4, 1),
+                    # Cash flow, so the Cash flow filter group has data to bite
+                    # on. Every third symbol burns cash, so the "FCF positive"
+                    # toggle actually excludes something.
+                    "ocf_cr": round(500 + i * 137.0, 1),
+                    "capex_cr": round(90 + i * 21.0, 1),
+                    "fcf_cr": round((500 + i * 137.0) - (90 + i * 21.0), 1) * (-1 if i % 3 == 2 else 1),
+                    "fcf_yield_pct": round(1.2 + (i % 7) * 1.3, 2),
+                    "cash_conversion_pct": round(60 + (i % 9) * 12.0, 1),
+                    "cashflow_year": "31-Mar-2024"}
                 for i, s in enumerate(self.SYMS)}
         self._json({"data": data, "pending": [], "provider": "stub", "cached": len(data), "total": len(data)})
 
