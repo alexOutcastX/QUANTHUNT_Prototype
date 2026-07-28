@@ -110,7 +110,10 @@ class H(BaseHTTPRequestHandler):
                          fcf_cr=cf["fcf"], ocf_cr=cf["ocf"], total_debt_cr=bs["total_debt"],
                          cash_cr=bs["cash"], revenue_cr=fin_years[0]["revenue"],
                          op_income_cr=fin_years[0]["op_income"], dividend_yield_pct=3.2,
-                         earnings_growth_pct=9.5, fin_years=fin_years, roe_pct=52.0)
+                         earnings_growth_pct=9.5, fin_years=fin_years, roe_pct=52.0,
+                         sector="Information Technology",
+                         peers={"pe": 22.0, "pb": 6.0, "roe": 24.0,
+                                "dividend_yield": 1.8, "n": 31})
         return self._json({
             "symbol": "RELIANCE", "name": "Reliance Industries Limited",
             "sector": "Energy", "industry": "Refineries", "market_cap_cr": 830405,
@@ -627,6 +630,12 @@ class H(BaseHTTPRequestHandler):
             return self._index_cons()
         if path == "/scan":
             return self._scan()
+        if path == "/sector-medians":
+            return self._json({"sectors": {"Information Technology":
+                                           {"pe": 22.0, "pb": 6.0, "roe": 24.0,
+                                            "dividend_yield": 1.8, "n": 31}},
+                               "count": 1, "min_sample": 5,
+                               "fields": ["pe", "pb", "roe", "dividend_yield"]})
         if path == "/report":
             return self._report()
         if path == "/fundamentals/bulk":

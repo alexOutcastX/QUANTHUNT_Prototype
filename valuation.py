@@ -225,10 +225,46 @@ def dividend_discount(price, dividend_yield_pct, growth, discount=DISCOUNT_RATE)
 
 
 # ---------- public ----------
+def _peer_block(multiples, roe_pct, sector, peers):
+    """Where each multiple sits against its sector median.
+
+    This is the context a raw multiple cannot carry: 28x is dear for a bank and
+    ordinary for a consumer brand. `peers` comes from the cached universe (see
+    fundamentals.sector_medians), so it costs nothing to include and is simply
+    absent when too few companies in the sector have been scraped.
+    """
+    if not peers:
+        return None
+    rows = []
+    pairs = (("pe", "P/E", multiples.get("pe"), True),
+             ("pb", "P/B", multiples.get("pb"), True),
+             ("roe", "ROE", _f(roe_pct), False),
+             ("dividend_yield", "Dividend yield", multiples.get("dividend_yield_pct"), False))
+    for key, label, mine, lower_is_cheaper in pairs:
+        med = _f(peers.get(key))
+        if mine is None or med is None or med == 0:
+            continue
+        diff = (mine - med) / abs(med) * 100.0
+        rows.append({
+            "label": label,
+            "value": _round(mine),
+            "sector": _round(med),
+            "diff_pct": _round(diff, 1),
+            # "cheaper" is only meaningful for valuation multiples; for ROE and
+            # yield, higher is simply better, so the wording differs.
+            "read": (("below" if diff < 0 else "above") + " sector")
+            if lower_is_cheaper else (("above" if diff > 0 else "below") + " sector"),
+        })
+    if not rows:
+        return None
+    return {"sector": sector, "n": peers.get("n"), "rows": rows}
+
+
 def value(*, price=None, eps=None, pe=None, pb=None, market_cap_cr=None,
           fcf_cr=None, ocf_cr=None, total_debt_cr=None, cash_cr=None,
           revenue_cr=None, op_income_cr=None, dividend_yield_pct=None,
-          earnings_growth_pct=None, fin_years=None, roe_pct=None) -> dict:
+          earnings_growth_pct=None, fin_years=None, roe_pct=None,
+          sector=None, peers=None) -> dict:
     """Full valuation for one company. Every argument optional; whatever is
     missing simply narrows the output rather than failing it."""
     price = _pos(price)
@@ -368,7 +404,8 @@ def value(*, price=None, eps=None, pe=None, pb=None, market_cap_cr=None,
                  "Needs free cash flow and market cap."),
     }
 
-    verdict, reasons = _verdict(price, fair, multiples, priced_in, growth)
+    peer_block = _peer_block(multiples, roe_pct, sector, peers)
+    verdict, reasons = _verdict(price, fair, multiples, priced_in, growth, peer_block)
 
     return {
         "price": _round(price),
@@ -378,21 +415,24 @@ def value(*, price=None, eps=None, pe=None, pb=None, market_cap_cr=None,
         "estimates": estimates,
         "fair_value": fair,
         "priced_in": priced_in,
+        "peers": peer_block,
         "verdict": verdict,
         "reasons": reasons,
         "assumptions": ASSUMPTIONS,
         "caveats": [
             "Every figure is derived from reported financials and today's price — "
             "it is arithmetic, not a forecast, and not investment advice.",
-            "No peer or sector comparison is applied: a P/E is only cheap or dear "
-            "relative to an industry, and that context is not in this data.",
+            ("Sector medians come from companies scraped into the cache, not the "
+             "full index — treat them as indicative." if peer_block else
+             "No peer comparison was available: too few companies in this sector "
+             "have been scraped, so a P/E here has no industry context."),
             "Estimates assume the business keeps working as it has. They cannot "
             "see competition, regulation, promoter conduct or accounting quality.",
         ],
     }
 
 
-def _verdict(price, fair, multiples, priced_in, growth):
+def _verdict(price, fair, multiples, priced_in, growth, peers=None):
     """Cheap / fair / expensive, with the reasons that drove it.
 
     Reasons are returned whether or not they agree, so a mixed picture reads as
@@ -451,6 +491,18 @@ def _verdict(price, fair, multiples, priced_in, growth):
             score += 1
             reasons.append("Price assumes only %.1f%% growth against the %.1f%% the record supports."
                            % (ig, ag))
+
+    if peers:
+        for r in peers["rows"]:
+            if r["label"] == "P/E" and r["diff_pct"] is not None:
+                if r["diff_pct"] <= -30:
+                    score += 1
+                    reasons.append("P/E of %s is %.0f%% below the %s sector median of %s."
+                                   % (r["value"], abs(r["diff_pct"]), peers["sector"], r["sector"]))
+                elif r["diff_pct"] >= 50:
+                    score -= 1
+                    reasons.append("P/E of %s is %.0f%% above the %s sector median of %s."
+                                   % (r["value"], r["diff_pct"], peers["sector"], r["sector"]))
 
     fcy = multiples.get("fcf_yield_pct")
     if fcy is not None and fcy < 0:

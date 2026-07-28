@@ -28,6 +28,7 @@ import {
 } from '../api';
 import { Assessment, assess } from '../analysis';
 import SymbolInput from '../components/SymbolInput';
+import { InfoDot } from '../components/InfoCard';
 import StrategyScores from '../components/StrategyScores';
 import ChecklistPanel from '../components/ChecklistPanel';
 import { openPdfPreview } from '../pdf';
@@ -467,12 +468,35 @@ export default function AnalysisScreen() {
                   <Text style={styles.valNote}>Growth basis: {val.growth.basis}.</Text>
                 </Card>
 
+                {val.peers ? (
+                  <Card style={{ marginTop: theme.sp.sm }}>
+                    <Text style={styles.valSub}>Versus the {val.peers.sector} sector</Text>
+                    {val.peers.rows.map((r, i) => (
+                      <KV
+                        key={i}
+                        k={`${r.label} — sector ${r.sector}`}
+                        v={`${r.value} (${pctS(r.diff_pct)})`}
+                        color={dirColor(r.label === 'P/E' || r.label === 'P/B'
+                          ? (r.diff_pct == null ? null : -r.diff_pct)
+                          : r.diff_pct)}
+                      />
+                    ))}
+                    <Text style={styles.valNote}>
+                      Median across {val.peers.n} cached companies in this sector. A multiple only
+                      means cheap or dear against its industry — this is that context.
+                    </Text>
+                  </Card>
+                ) : null}
+
                 <Card style={{ marginTop: theme.sp.sm }}>
                   <Text style={styles.valSub}>How each method values it</Text>
                   {val.estimates.map((e, i) => (
                     <View key={i} style={styles.estRow}>
                       <View style={styles.estHead}>
                         <Text style={styles.estName}>{e.method}</Text>
+                        <View style={{ marginRight: theme.sp.sm }}>
+                          <InfoDot id={e.method} />
+                        </View>
                         <Text style={[styles.estVal, e.value == null && { color: theme.muted }]}>
                           {e.value != null ? `₹${e.value}` : 'n/a'}
                         </Text>
@@ -935,6 +959,16 @@ function dossierHtml(d: Dossier): string {
       `<tr><td><b>Implied by today's price</b></td><td style="text-align:right">${vl.priced_in.implied_growth_pct != null ? vl.priced_in.implied_growth_pct + '%' : '—'}</td></tr>` +
       `<tr><td><b>Supported by the record</b></td><td style="text-align:right">${vl.priced_in.assumed_growth_pct != null ? vl.priced_in.assumed_growth_pct + '%' : '—'}</td></tr>` +
       `</table><p style="color:#666;font-size:11px">${esc(vl.priced_in.note)} Growth basis: ${esc(vl.growth.basis)}.</p>` +
+      (vl.peers
+        ? `<h2>Versus the ${esc(vl.peers.sector || '')} sector</h2><table>` +
+          `<tr><td><b>Metric</b></td><td style="text-align:right"><b>This</b></td>` +
+          `<td style="text-align:right"><b>Sector median</b></td><td style="text-align:right"><b>Diff</b></td></tr>` +
+          vl.peers.rows.map((r) => `<tr><td>${esc(r.label)}</td>` +
+            `<td style="text-align:right">${r.value ?? '—'}</td>` +
+            `<td style="text-align:right">${r.sector ?? '—'}</td>` +
+            `<td style="text-align:right">${r.diff_pct != null ? (r.diff_pct >= 0 ? '+' : '') + r.diff_pct + '%' : '—'}</td></tr>`).join('') +
+          `</table><p style="color:#666;font-size:11px">Median across ${vl.peers.n} cached companies in this sector.</p>`
+        : '') +
       `<h2>Valuation methods</h2><table><tr><td><b>Method</b></td><td style="text-align:right"><b>Value</b></td><td><b>Basis</b></td></tr>` +
       vl.estimates.map((e) => `<tr><td>${esc(e.method)}${e.kind === 'floor' ? ' <span style="color:#888">(no-growth)</span>' : ''}</td>` +
         `<td style="text-align:right">${e.value != null ? '₹' + e.value : 'n/a'}</td>` +

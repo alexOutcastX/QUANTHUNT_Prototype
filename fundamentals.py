@@ -661,6 +661,90 @@ def warm_stop() -> dict:
     return {"stopping": was}
 
 
+# ---------- sector medians ----------
+# The missing context for every multiple. A P/E of 28 is dear for a bank and
+# cheap for a consumer brand, so a valuation without a peer figure can only ever
+# say "this is what the arithmetic gives", never "this is expensive".
+#
+# Computed from the warm cache we already hold — no fetching. Median, not mean,
+# because a single 900x P/E from a barely-profitable small cap would drag a mean
+# far enough to make every peer look cheap.
+SECTOR_FIELDS = ("pe", "pb", "roe", "roce", "debt_equity", "dividend_yield",
+                 "eps_growth_yoy_pct", "revenue_growth_pct", "earnings_growth_pct")
+# Below this many usable values a "median" is one or two companies wearing a
+# statistic's clothing, so the sector is reported as having no reading.
+SECTOR_MIN_N = 5
+SECTOR_TTL = int(os.environ.get("FUND_SECTOR_TTL_SEC", "3600"))
+
+_sector_cache = {"ts": 0.0, "data": {}}
+_sector_lock = threading.Lock()
+
+
+def _median(vals):
+    v = sorted(vals)
+    n = len(v)
+    if not n:
+        return None
+    return v[n // 2] if n % 2 else round((v[n // 2 - 1] + v[n // 2]) / 2.0, 2)
+
+
+def sector_medians(force=False) -> dict:
+    """{sector: {field: median, ..., "n": count}} across every cached symbol.
+
+    Recomputed at most once an hour: the inputs only move when the warm sweep
+    writes, and walking the whole cache on every dossier open would be wasted
+    work for a number that barely changes.
+    """
+    now = time.time()
+    with _sector_lock:
+        if not force and _sector_cache["data"] and (now - _sector_cache["ts"]) < SECTOR_TTL:
+            return _sector_cache["data"]
+
+    buckets: dict = {}
+    with _lock:
+        snapshot = [(e.get("data") or {}) for e in _cache.values()
+                    if e.get("v") == SCHEMA_V]
+    for row in snapshot:
+        sec = (row.get("sector") or "").strip()
+        if not sec:
+            continue
+        b = buckets.setdefault(sec, {f: [] for f in SECTOR_FIELDS})
+        for f in SECTOR_FIELDS:
+            v = row.get(f)
+            # Zero is "not reported" for most of these, and a negative P/E is a
+            # loss dressed as a multiple — neither belongs in a peer median.
+            if isinstance(v, (int, float)) and not isinstance(v, bool):
+                if f in ("pe", "pb") and v <= 0:
+                    continue
+                b[f].append(float(v))
+
+    out = {}
+    for sec, fields in buckets.items():
+        row = {}
+        counted = 0
+        for f, vals in fields.items():
+            if len(vals) >= SECTOR_MIN_N:
+                row[f] = _median(vals)
+                counted = max(counted, len(vals))
+            else:
+                row[f] = None
+        if counted:
+            row["n"] = counted
+            out[sec] = row
+
+    with _sector_lock:
+        _sector_cache["data"] = out
+        _sector_cache["ts"] = now
+    return out
+
+
+def sector_for(sym: str):
+    """Cached sector for one symbol, without triggering a fetch."""
+    with _lock:
+        e = _cache.get((sym or "").strip().upper()) or {}
+    return ((e.get("data") or {}).get("sector") or "").strip() or None
+
+
 # ---------- public API ----------
 def bulk(symbols) -> dict:
     """Return cached fundamentals for `symbols`, and kick off background fetches

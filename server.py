@@ -3122,6 +3122,16 @@ def start_fund_warm():
     threading.Thread(target=_go, name="fund-warm-boot", daemon=True).start()
 
 
+@app.route("/sector-medians")
+def sector_medians_route():
+    """Peer medians per sector, from the cached fundamentals. Feeds the dossier's
+    valuation context and the screener's 'vs sector' filters."""
+    data = _fund.sector_medians(force=request.args.get("force") == "1")
+    return jsonify({"sectors": data, "count": len(data),
+                    "min_sample": _fund.SECTOR_MIN_N,
+                    "fields": list(_fund.SECTOR_FIELDS)})
+
+
 @app.route("/returns")
 def returns():
     """Bulk 1Y/3Y/5Y return calculator — per-symbol with threading."""
@@ -4342,6 +4352,7 @@ def report():
             _px = r2(info.get("currentPrice") or info.get("regularMarketPrice")) \
                 or (tech or {}).get("price")
             _latest = (fin_years or [{}])[0] if fin_years else {}
+            _sec_name = _sectors.sector_of(sym, info.get("sector")) or info.get("sector")
             valuation = _valuation.value(
                 price=_px, eps=r2(info.get("trailingEps")), pe=pe, pb=pb,
                 market_cap_cr=mcap_cr,
@@ -4352,7 +4363,8 @@ def report():
                 op_income_cr=_latest.get("op_income"),
                 dividend_yield_pct=dy,
                 earnings_growth_pct=pct(info.get("earningsGrowth")),
-                fin_years=fin_years, roe_pct=roe)
+                fin_years=fin_years, roe_pct=roe,
+                sector=_sec_name, peers=(_fund.sector_medians() or {}).get(_sec_name))
         except Exception as e:
             log.warning("Valuation failed for %s: %s", sym, e)
             valuation = None

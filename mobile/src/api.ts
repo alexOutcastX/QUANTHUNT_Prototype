@@ -536,6 +536,10 @@ export type Valuation = {
     floor: number | null; floor_methods: number;
   } | null;
   priced_in: { implied_growth_pct: number | null; assumed_growth_pct: number | null; note: string };
+  peers: {
+    sector: string | null; n: number | null;
+    rows: { label: string; value: number | null; sector: number | null; diff_pct: number | null; read: string }[];
+  } | null;
   verdict: 'undervalued' | 'fairly valued' | 'expensive' | 'unrated';
   reasons: string[];
   assumptions: { discount_rate_pct: number; terminal_growth_pct: number; horizon_years: number; growth_cap_pct: number };
@@ -1289,6 +1293,9 @@ export const api = {
   apiKeysList: () => getJson<{ keys: ApiKey[] }>('/apikeys'),
   apiKeysIssue: (label: string) => postJson<{ key: string; record: ApiKey }>('/apikeys', { label }),
   apiKeysRevoke: (id: string) => delJson<{ revoked: boolean }>('/apikeys/' + encodeURIComponent(id)),
+  sectorMedians: () =>
+    getJson<{ sectors: Record<string, Record<string, number | null>>; count: number; min_sample: number }>(
+      '/sector-medians', 30000),
   fundWarmStatus: () => getJson<FundWarm>('/fundamentals/warm'),
   fundWarmStart: (scope: string) =>
     postJson<{ started: boolean; total?: number; universe?: string; reason?: string; progress?: FundWarm }>(
