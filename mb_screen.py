@@ -223,6 +223,14 @@ def _run(universe_fn):
             _save_disk()
         log.info("mb_screen done: %d/%d score %d+", len(results), len(syms),
                  CRITERIA["min_score"])
+        # Best analyser scores of this sweep enter the permanent track record
+        # (see tradelog.py). Best-effort — never lose a completed screen to a
+        # ledger error.
+        try:
+            import tradelog
+            tradelog.record_multibagger(results)
+        except Exception as e:
+            log.warning("mb_screen: could not record picks (%s)", e)
     except Exception as e:
         log.error("mb_screen failed: %s", e)
         with _lock:

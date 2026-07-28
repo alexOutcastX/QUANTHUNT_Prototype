@@ -7,6 +7,13 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import backtest_engine as bte  # stdlib-only: the REAL engine runs in the fake server
 import valuation as _val       # stdlib-only: the REAL valuation engine too
 
+# The Historic tab is served by the REAL ledger, seeded into a throwaway DB —
+# so what the headless run verifies is the shipping settlement logic, not a
+# hand-written JSON blob that could drift from it.
+os.environ.setdefault("DB_PATH", os.path.join(
+    os.environ.get("TMPDIR", "/tmp"), "taureye-fake-tradelog.db"))
+import tradelog as _tlog       # noqa: E402  (must follow the DB_PATH default)
+
 DIST = os.path.join(os.path.dirname(__file__), "mobile", "dist")
 PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 5056
 
@@ -17,6 +24,60 @@ _MEMBER = {"username": "Taureye", "uname": "taureye", "plan": "pro", "owner": Tr
                         "trade_scan", "terminal", "dossier", "exports", "alerts"]}
 
 _BT_SYMS = ["RELIANCE", "TCS", "INFY", "HDFCBANK", "SBIN"]
+
+_tl_seeded = [False]
+
+
+def _seed_tradelog():
+    """Put one trade of each outcome into the throwaway ledger, then settle them
+    through the real reconcile() — a winner, a stopped loser, a horizon close and
+    two still running, spread across all three sources."""
+    if _tl_seeded[0]:
+        return
+    _tl_seeded[0] = True
+    try:
+        _tlog.store.execute("DELETE FROM tradelog")
+    except Exception:
+        pass
+    day = _tlog.DAY
+    now = int(time.time())
+    _tlog.record("reco", [
+        {"symbol": "TCS", "name": "Tata Consultancy Services", "entry": 3200.0,
+         "stop": 3040.0, "target": 3680.0, "strategy": "BUY · 74% confidence",
+         "rationale": ["Trading above the 50 & 200-DMA — uptrend intact",
+                       "RSI 61 in the momentum zone",
+                       "Setup ≈ 3.0:1 reward-to-risk to ₹3,680"],
+         "meta": {"confidence": 74, "momentum_score": 71, "rr": 3.0}},
+        {"symbol": "HDFCBANK", "name": "HDFC Bank", "entry": 1700.0, "stop": 1615.0,
+         "target": 1950.0, "strategy": "BUY · 66% confidence",
+         "rationale": ["Reclaimed the 50-DMA", "Volume 1.6× average — participation building"],
+         "meta": {"confidence": 66, "momentum_score": 58}},
+    ], now=now - 40 * day)
+    _tlog.record("reco", [
+        {"symbol": "RELIANCE", "name": "Reliance Industries", "entry": 2900.0,
+         "stop": 2755.0, "target": 3300.0, "strategy": "BUY · 69% confidence",
+         "rationale": ["EMAs stacked 20 > 50 > 200", "4.1% from the 52-week high — near breakout"],
+         "meta": {"confidence": 69, "momentum_score": 74}},
+    ], now=now - 6 * day)
+    _tlog.record_momentum([
+        {"symbol": "INFY", "name": "Infosys", "price": 1500.0, "target": 1720.0,
+         "score": 82, "probability": 63, "setup": "fired", "rsi": 64.0, "relvol": 2.1,
+         "signals": ["TTM squeeze just FIRED with positive momentum — compression is releasing upward.",
+                     "Volume 2.1× average — institutions participating.",
+                     "Fresh 52-week high on the latest bar — breakout in progress."]},
+    ])
+    _tlog.record_multibagger([
+        {"symbol": "SBIN", "name": "State Bank of India", "price": 780.0, "score": 74,
+         "tier": "Tier A", "probability_pct": 58, "coverage_pct": 88, "roe": 17.4,
+         "debt_equity": 0.32, "vs_200dma": 8.6, "sector": "Financial Services"},
+    ])
+    # Settle: TCS runs through its target, HDFCBANK takes out its stop, the two
+    # newest stay open. RELIANCE is aged past its horizon so a timed-out close
+    # renders too.
+    _tlog.reconcile({"TCS": 3720.0, "HDFCBANK": 1590.0, "INFY": 1585.0, "SBIN": 812.0})
+    _tlog.store.execute("UPDATE tradelog SET opened=? WHERE symbol='RELIANCE'",
+                        (now - 200 * day,))
+    _tlog.reconcile({"RELIANCE": 3010.0})
 
 # Fundamentals warm sweep: a clock-driven fake so the developer portal's
 # progress bar actually moves under the headless checks. 20 symbols/second, so
@@ -344,6 +405,15 @@ class H(BaseHTTPRequestHandler):
         self._json({"symbol": "STUB", "period": q.get("period", ["6mo"])[0],
                     "interval": interval, "count": len(candles), "candles": candles})
 
+    def _tradelog(self):
+        """Track record, computed by the real ledger from a seeded fixture: a
+        settled winner, a stopped loser, a horizon close, and two still
+        running — one per source — so every branch of the page renders."""
+        _seed_tradelog()
+        q = parse_qs(urlparse(self.path).query)
+        self._json(_tlog.ledger(source=(q.get("source") or [None])[0],
+                                status=(q.get("status") or [None])[0]))
+
     def _json(self, payload):
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
@@ -599,6 +669,8 @@ class H(BaseHTTPRequestHandler):
             return self._chart_patterns()
         if path == "/ltp":
             return self._ltp()
+        if path == "/tradelog":
+            return self._tradelog()
         if path == "/momentum/screen":
             return self._mom_screen()
         if path == "/multibagger/screen":
