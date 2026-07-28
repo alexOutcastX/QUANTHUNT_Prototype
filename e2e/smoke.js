@@ -166,7 +166,25 @@ function check(name, ok, detail) {
       /Recommendations/.test(hist) && /Momentum/.test(hist) && /Multibagger/.test(hist),
     );
 
-    // 8 · no uncaught page errors during the whole run
+    // 8 · Cases — the engine's baskets, served by the real case engine in the
+    // fixture server, so a construction or management regression shows up as a
+    // missing basket or a missing action rather than a silently wrong weight.
+    await tap('Cases');
+    await page.waitForTimeout(2500);
+    const cases = await page.evaluate(() => document.body.innerText);
+    check('Cases tab lists baskets', /CASES/i.test(cases) && /flagship|leaders|core/i.test(cases), cases.slice(0, 200));
+    check('Cases show a minimum investment', /min investment/i.test(cases));
+    check('Cases cover every kind', /Sector/.test(cases) && /Market cap/.test(cases) && /Strategy/.test(cases));
+
+    await tap('Multibagger');
+    await page.waitForTimeout(1200);
+    await tap('Tap for constituents, allocation & the engine log');
+    await page.waitForTimeout(2000);
+    const one = await page.evaluate(() => document.body.innerText);
+    check('a case opens its constituents', /CONSTITUENTS/i.test(one) && /WEIGHT/i.test(one));
+    check('the engine action log renders', /What the engine has done/i.test(one) && /BOOKED|EXITED|ADDED|REBALANCED/.test(one));
+
+    // 9 · no uncaught page errors during the whole run
     check('no uncaught page errors', errors.length === 0, errors[0]);
   } finally {
     await browser.close();

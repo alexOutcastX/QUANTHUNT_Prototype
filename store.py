@@ -70,9 +70,61 @@ def _migrate(conn):
         );
         CREATE INDEX IF NOT EXISTS ix_tl_status ON tradelog (status, symbol);
         CREATE INDEX IF NOT EXISTS ix_tl_src ON tradelog (source, opened);
+        CREATE TABLE IF NOT EXISTS cases (
+            id       TEXT PRIMARY KEY,     -- slug, e.g. 'sector-information-technology'
+            name     TEXT NOT NULL,
+            kind     TEXT NOT NULL,        -- multibagger | sector | cap | strategy
+            theme    TEXT,
+            blurb    TEXT,
+            vintage  INTEGER,              -- year this basket was struck
+            created  INTEGER,
+            rebalanced INTEGER,
+            min_investment REAL,
+            meta     TEXT                  -- JSON: reserve bench, deployed/cash
+        );
+        CREATE TABLE IF NOT EXISTS case_holdings (
+            id       INTEGER PRIMARY KEY AUTOINCREMENT,
+            case_id  TEXT NOT NULL,
+            symbol   TEXT NOT NULL,
+            name     TEXT,
+            weight   REAL,                 -- target weight, 0-1
+            entry    REAL,
+            entry_ts INTEGER,
+            shares   INTEGER,              -- at the case's minimum investment
+            status   TEXT NOT NULL,        -- held | booked | exited | rebalanced
+            exit     REAL,
+            exit_ts  INTEGER,
+            score    REAL,
+            sector   TEXT,
+            meta     TEXT
+        );
+        CREATE INDEX IF NOT EXISTS ix_ch_case ON case_holdings (case_id, status);
+        CREATE TABLE IF NOT EXISTS case_actions (
+            id       INTEGER PRIMARY KEY AUTOINCREMENT,
+            case_id  TEXT NOT NULL,
+            ts       INTEGER NOT NULL,
+            action   TEXT NOT NULL,        -- add | book | exit | rebalance
+            symbol   TEXT,
+            price    REAL,
+            qty_pct  REAL,
+            pl_pct   REAL,
+            note     TEXT
+        );
+        CREATE INDEX IF NOT EXISTS ix_ca_case ON case_actions (case_id, ts);
         """
     )
+    # Columns added after the table shipped. CREATE TABLE IF NOT EXISTS won't
+    # touch a database that already has the table, so each one needs its own
+    # guarded ALTER.
+    _add_column(conn, "tradelog", "backfilled", "INTEGER NOT NULL DEFAULT 0")
     conn.commit()
+
+
+def _add_column(conn, table: str, column: str, decl: str) -> None:
+    """Add a column unless it's already there. Idempotent across restarts."""
+    have = {r["name"] for r in conn.execute(f"PRAGMA table_info({table})").fetchall()}
+    if column not in have:
+        conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {decl}")
 
 
 # ── generic SQL access (schema lives above; semantics live in the caller) ──

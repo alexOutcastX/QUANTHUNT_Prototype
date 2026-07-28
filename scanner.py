@@ -167,7 +167,6 @@ def _compute_row(sym, idx_ret, suffix=".NS"):
     """Compute the technical snapshot for one symbol. Returns dict or None.
     `suffix` selects the exchange feed (".NS" NSE, ".BO" BSE-only listings)."""
     try:
-        import ta
         import ydata
     except Exception:
         return None
@@ -176,6 +175,19 @@ def _compute_row(sym, idx_ret, suffix=".NS"):
     # Route through ydata so the 8-worker scan fan-out shares the global outbound
     # Yahoo cap + rate-limit backoff with every other endpoint.
     df = ydata.history(yf_sym, "1y", "1d")
+    return row_from_frame(df, idx_ret)
+
+
+def row_from_frame(df, idx_ret=None):
+    """The technical snapshot for an OHLCV frame — every value read off the LAST
+    bar of whatever frame it is handed. Split out from _compute_row so a
+    historical replay can pass df.iloc[:i] and get the snapshot exactly as it
+    stood on that day, with no knowledge of later bars. Returns None when the
+    frame is too short to compute anything meaningful."""
+    try:
+        import ta
+    except Exception:
+        return None
     if df is None or df.empty or len(df) < 20:
         return None
 

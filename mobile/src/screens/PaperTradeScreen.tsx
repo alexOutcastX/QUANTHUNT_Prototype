@@ -21,6 +21,7 @@ import {
 } from '../paperSim';
 import { Card, EmptyState, ScreenTitle, SectionTitle, Segmented, StatTile } from '../ui';
 import HistoricTrades from '../components/HistoricTrades';
+import CasesPanel from '../components/CasesPanel';
 import { theme } from '../theme';
 
 const money = (v?: number | null) => (v == null ? '—' : '₹' + v.toLocaleString('en-IN', { maximumFractionDigits: 2 }));
@@ -32,7 +33,7 @@ const ago = (t: number) => {
   return `${Math.floor(s / 86400)}d ago`;
 };
 
-type Mode = 'tracker' | 'sim' | 'historic';
+type Mode = 'tracker' | 'sim' | 'historic' | 'cases';
 
 export default function PaperTradeScreen() {
   const [mode, setMode] = useState<Mode>('tracker');
@@ -76,9 +77,11 @@ export default function PaperTradeScreen() {
         sub={
           mode === 'historic'
             ? 'Every trade the engines recommended, marked to market'
-            : mode === 'sim'
-              ? 'A virtual cash account you trade yourself'
-              : 'Simulated outcomes from your logged setups'
+            : mode === 'cases'
+              ? 'Baskets built and managed by the TaurEye engine'
+              : mode === 'sim'
+                ? 'A virtual cash account you trade yourself'
+                : 'Simulated outcomes from your logged setups'
         }
       />
       <Segmented
@@ -86,12 +89,15 @@ export default function PaperTradeScreen() {
           { key: 'tracker', label: 'Outcome tracker' },
           { key: 'sim', label: 'Full simulator' },
           { key: 'historic', label: 'Historic' },
+          { key: 'cases', label: 'Cases' },
         ]}
         value={mode}
         onChange={setMode}
       />
 
-      {mode === 'historic' ? (
+      {mode === 'cases' ? (
+        <CasesPanel />
+      ) : mode === 'historic' ? (
         <HistoricTrades />
       ) : mode === 'sim' ? (
         <Simulator />
