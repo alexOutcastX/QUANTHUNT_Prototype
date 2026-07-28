@@ -512,7 +512,38 @@ export type ReportFinYear = {
 export type ReportFinQuarter = {
   period: string; revenue: number | null; net_income: number | null; op_income?: number | null;
 };
+export type ValuationEstimate = {
+  method: string;
+  /** 'growth' prices the future (DCF, dividend); 'floor' assumes none (Graham, EPV). */
+  kind: 'growth' | 'floor';
+  value: number | null;
+  note: string;
+  inputs: Record<string, number | string | null>;
+};
+export type Valuation = {
+  price: number | null;
+  multiples: {
+    pe: number | null; pb: number | null; ev_cr: number | null;
+    ev_ebitda: number | null; ev_sales: number | null;
+    earnings_yield_pct: number | null; fcf_yield_pct: number | null;
+    dividend_yield_pct: number | null; peg: number | null; bvps: number | null;
+  };
+  growth: { used_pct: number | null; basis: string };
+  estimates: ValuationEstimate[];
+  fair_value: {
+    low: number | null; mid: number | null; high: number | null;
+    methods: number; upside_pct: number | null;
+    floor: number | null; floor_methods: number;
+  } | null;
+  priced_in: { implied_growth_pct: number | null; assumed_growth_pct: number | null; note: string };
+  verdict: 'undervalued' | 'fairly valued' | 'expensive' | 'unrated';
+  reasons: string[];
+  assumptions: { discount_rate_pct: number; terminal_growth_pct: number; horizon_years: number; growth_cap_pct: number };
+  caveats: string[];
+};
+
 export type ReportResp = {
+  valuation?: Valuation | null;
   fin_years?: ReportFinYear[];
   fin_quarters?: ReportFinQuarter[];
   shareholding?: { insiders_pct?: number | null; institutions_pct?: number | null };
