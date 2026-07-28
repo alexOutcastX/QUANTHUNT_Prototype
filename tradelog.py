@@ -102,6 +102,24 @@ def _open_symbols(source: str) -> set:
     return {r["symbol"] for r in rows}
 
 
+def open_trade(source: str, p: dict, now: int) -> int:
+    """Insert one open trade, returning its row id. The low-level primitive —
+    callers are responsible for the one-open-per-symbol rule (record() applies
+    it live; the historical replay tracks it along its own timeline)."""
+    sym = str(p.get("symbol") or "").strip().upper()
+    entry = _num(p.get("entry"))
+    return store.execute(
+        "INSERT INTO tradelog (source, symbol, name, side, strategy, entry, stop, "
+        "target, horizon_days, opened, status, last, marked, rationale, meta, backfilled) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?,'open',?,?,?,?,?)",
+        (source, sym, p.get("name") or None, p.get("side") or "long",
+         p.get("strategy") or None, entry, _num(p.get("stop")), _num(p.get("target")),
+         int(p.get("horizon_days") or HORIZON.get(source, 60)), now, entry, now,
+         json.dumps([str(x) for x in (p.get("rationale") or [])]),
+         json.dumps(p.get("meta") or {}), 1 if p.get("backfilled") else 0),
+    )
+
+
 def record(source: str, picks: list, now: float = None) -> int:
     """Append picks to the ledger. One OPEN trade per (source, symbol) — a name
     that is recommended again while its earlier call is still live does not get
@@ -118,16 +136,7 @@ def record(source: str, picks: list, now: float = None) -> int:
         if not sym or not entry or entry <= 0 or sym in have:
             continue
         have.add(sym)
-        store.execute(
-            "INSERT INTO tradelog (source, symbol, name, side, strategy, entry, stop, "
-            "target, horizon_days, opened, status, last, marked, rationale, meta) "
-            "VALUES (?,?,?,?,?,?,?,?,?,?,'open',?,?,?,?)",
-            (source, sym, p.get("name") or None, p.get("side") or "long",
-             p.get("strategy") or None, entry, _num(p.get("stop")), _num(p.get("target")),
-             int(p.get("horizon_days") or HORIZON.get(source, 60)), now, entry, now,
-             json.dumps([str(x) for x in (p.get("rationale") or [])]),
-             json.dumps(p.get("meta") or {})),
-        )
+        open_trade(source, p, now)
         added += 1
     if added:
         log.info("tradelog: recorded %d new %s trade(s)", added, source)
@@ -273,10 +282,19 @@ def reconcile(prices: dict, now: float = None) -> dict:
             "open": len(rows), "priced": len([1 for r in rows if _num((prices or {}).get(r["symbol"])) is not None])}
 
 
-def _settle(trade_id: int, status: str, exit_px, when: int) -> None:
+def settle(trade_id: int, status: str, exit_px, when: int) -> None:
+    """Close a trade at a price on a date. Used by the live mark-to-market pass
+    and by the historical replay, so both settle through identical code."""
     store.execute(
         "UPDATE tradelog SET status=?, exit=?, closed=?, last=?, marked=? WHERE id=?",
         (status, exit_px, when, exit_px, when, trade_id))
+
+
+def mark(trade_id: int, price, when: int) -> None:
+    store.execute("UPDATE tradelog SET last=?, marked=? WHERE id=?", (price, when, trade_id))
+
+
+_settle = settle   # historical name, kept for the existing call sites below
 
 
 def ensure_marked(price_fn, force: bool = False) -> bool:
@@ -351,6 +369,10 @@ def _row(r: dict, now: int) -> dict:
         "pl_amt": round(NOTIONAL * pl / 100, 2) if pl is not None else None,
         "rationale": _loads(r["rationale"], []),
         "meta": _loads(r["meta"], {}),
+        # A replayed call is a simulation of what the engine would have said on
+        # that date; a live one is what it actually did say. Never merge them
+        # silently — the page separates the two.
+        "backfilled": bool(r.get("backfilled")),
     }
 
 
@@ -386,9 +408,11 @@ def summary(rows: list) -> dict:
     }
 
 
-def ledger(source: str = None, status: str = None, limit: int = 500) -> dict:
+def ledger(source: str = None, status: str = None, limit: int = 500,
+           origin: str = None) -> dict:
     """The record, newest first. `source` filters to one engine; `status` to
-    open/won/lost/closed. The summary always covers the same filtered set."""
+    open/won/lost/closed; `origin` to live/backfilled. The summary always covers
+    the same filtered set."""
     sql = "SELECT * FROM tradelog"
     where, params = [], []
     if source in SOURCES:
@@ -397,6 +421,9 @@ def ledger(source: str = None, status: str = None, limit: int = 500) -> dict:
     if status in ("open", "won", "lost", "closed"):
         where.append("status=?")
         params.append(status)
+    if origin in ("live", "backfilled"):
+        where.append("backfilled=?")
+        params.append(1 if origin == "backfilled" else 0)
     if where:
         sql += " WHERE " + " AND ".join(where)
     sql += " ORDER BY opened DESC, id DESC LIMIT ?"
@@ -407,10 +434,19 @@ def ledger(source: str = None, status: str = None, limit: int = 500) -> dict:
     by_source = {}
     for r in store.query("SELECT source, COUNT(*) n FROM tradelog GROUP BY source"):
         by_source[r["source"]] = r["n"]
+    by_origin = {"live": 0, "backfilled": 0}
+    for r in store.query("SELECT backfilled, COUNT(*) n FROM tradelog GROUP BY backfilled"):
+        by_origin["backfilled" if r["backfilled"] else "live"] = r["n"]
+    # The two populations are summarised apart as well as together: a replayed
+    # win rate and a live one are different claims and must never be quoted as
+    # one number without saying so.
+    live_rows = [t for t in rows if not t["backfilled"]]
     return {
         "trades": rows,
         "summary": summary(rows),
+        "live_summary": summary(live_rows),
         "by_source": by_source,
+        "by_origin": by_origin,
         "marked_at": _last_mark or None,
         "rules": {
             "notional": NOTIONAL,

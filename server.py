@@ -33,6 +33,8 @@ import push as _push            # FCM push delivery + device-token registry + br
 import chat as _chat            # in-app messaging: global room + channels + DMs
 import sectors as _sectors      # app-wide NSE sector classification + heatmap aggregate
 import tradelog as _tradelog    # append-only record of every trade the engines recommended
+import backfill as _backfill    # historical replay that seeds that record (clearly labelled)
+import cases as _cases          # TaurEye-built investment baskets (sector/cap/strategy/multibagger)
 
 # Support both normal run and PyInstaller frozen exe
 _BASE_DIR = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
@@ -3172,11 +3174,14 @@ def tradelog_route():
         _tradelog.ensure_marked(_quote_prices)
     except Exception as e:
         log.warning("tradelog: mark-to-market could not start (%s)", e)
-    return jsonify(_tradelog.ledger(
+    payload = _tradelog.ledger(
         source=request.args.get("source"),
         status=request.args.get("status"),
         limit=request.args.get("limit", 500),
-    ))
+        origin=request.args.get("origin"),
+    )
+    payload["backfill"] = _backfill.progress()
+    return jsonify(payload)
 
 
 @app.route("/tradelog/reconcile", methods=["POST"])
@@ -3184,6 +3189,96 @@ def tradelog_reconcile():
     """Force an immediate mark-to-market pass (developer portal)."""
     started = _tradelog.ensure_marked(_quote_prices, force=True)
     return jsonify({"started": started, "open": len(_tradelog.open_symbols())})
+
+
+@app.route("/tradelog/backfill", methods=["GET"])
+def tradelog_backfill_status():
+    return jsonify(_backfill.progress())
+
+
+@app.route("/tradelog/backfill", methods=["POST"])
+def tradelog_backfill_start():
+    """Replay the engines over recent history to seed the record (developer
+    portal). Runs once by default; ?force=1 re-runs it."""
+    force = (request.json or {}).get("force") if request.is_json else False
+    started = _backfill.ensure_started(get_universe_nonblocking, force=bool(force))
+    return jsonify({"started": started, "progress": _backfill.progress()})
+
+
+def start_backfill():
+    """Seed the track record on boot, once ever (the completion marker lives in
+    the store, so a redeploy doesn't refill and double it). Off with
+    TRADELOG_BACKFILL=0."""
+    if os.environ.get("TRADELOG_BACKFILL", "1") in ("0", "", "off", "false"):
+        return
+
+    def _go():
+        time.sleep(90)          # let the universe + scan caches warm first
+        try:
+            if _backfill.ensure_started(get_universe_nonblocking):
+                log.info("Track-record backfill started (%d days)", _backfill.DAYS)
+        except Exception as e:
+            log.warning("Track-record backfill failed to start: %s", e)
+
+    threading.Thread(target=_go, name="tradelog-backfill-boot", daemon=True).start()
+
+
+def _case_rows():
+    """The scored universe the case engine builds from — the multibagger screen's
+    own results, so a case can only ever hold something the analyser rated."""
+    import mb_screen as mbs
+    mbs.ensure_started(get_universe)
+    return mbs.snapshot().get("results") or []
+
+
+@app.route("/cases")
+def cases_overview():
+    """Every TaurEye case with its headline numbers. ?refresh=1 forces the
+    engine to re-run its build/review pass."""
+    try:
+        _cases.ensure_built(_case_rows, _quote_prices,
+                            force=request.args.get("refresh") == "1")
+    except Exception as e:
+        log.warning("cases: build could not start (%s)", e)
+    syms = []
+    for c in _cases.all_cases():
+        syms += [h["symbol"] for h in _cases.holdings_of(c["id"])]
+    quotes = _quote_prices(sorted(set(syms))[:200]) if syms else {}
+    payload = _cases.overview(quotes)
+    payload["progress"] = _cases.progress()
+    return jsonify(payload)
+
+
+@app.route("/cases/<case_id>")
+def case_detail_route(case_id):
+    """One case in full: constituents with live P/L, the allocation at a given
+    investment (?amount=), CAGR, and the engine's action ledger."""
+    holds = _cases.holdings_of(case_id)
+    quotes = _quote_prices([h["symbol"] for h in holds]) if holds else {}
+    detail = _cases.case_detail(case_id, quotes)
+    if not detail:
+        return jsonify({"error": f"Unknown case '{case_id}'"}), 404
+    try:
+        amount = float(request.args.get("amount") or 0)
+    except (TypeError, ValueError):
+        amount = 0.0
+    if amount > 0:
+        legs = detail["constituents"]
+        alloc = _cases.allocate(amount, [l["price"] for l in legs],
+                                [l["weight"] for l in legs])
+        for leg, a in zip(legs, alloc["legs"]):
+            leg["alloc_shares"] = a["shares"]
+            leg["alloc_value"] = a["value"]
+            leg["alloc_weight"] = a["actual_weight"]
+        detail["allocation"] = {k: alloc[k] for k in ("invested", "cash", "amount")}
+    return jsonify(detail)
+
+
+@app.route("/cases/rebuild", methods=["POST"])
+def cases_rebuild():
+    """Force a build/review pass (developer portal)."""
+    started = _cases.ensure_built(_case_rows, _quote_prices, force=True)
+    return jsonify({"started": started, "progress": _cases.progress()})
 
 
 @app.route("/returns")
@@ -4780,6 +4875,7 @@ if __name__ == "__main__":
     start_scan_warm()
     start_fund_warm()
     start_alert_loop()
+    start_backfill()
     print("\n" + "=" * 60)
     print("  QuantHunt — NSE Direct + YF fallback")
     print("  Universe: bhavcopy EQ/BE + NIFTY MICROCAP 250")
