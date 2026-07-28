@@ -355,6 +355,64 @@ export type SectorMembersResp = {
   warming?: boolean; items: SectorMember[]; error?: string;
 };
 
+// The track record — every trade the engines recommended, marked to market on
+// the server. Recorded when the call is published, so the history can't be
+// curated after the fact. See tradelog.py.
+export type TradeSource = 'reco' | 'momentum' | 'multibagger';
+export type TradeStatus = 'open' | 'won' | 'lost' | 'closed';
+export type LoggedTrade = {
+  id: number;
+  source: TradeSource;
+  source_label: string;
+  symbol: string;
+  name?: string | null;
+  side: 'long' | 'short';
+  strategy?: string | null;
+  entry: number;
+  stop?: number | null;
+  target?: number | null;
+  exit?: number | null;
+  last?: number | null;
+  price?: number | null;
+  status: TradeStatus;
+  opened: number;                 // epoch seconds
+  closed?: number | null;
+  marked?: number | null;
+  horizon_days: number;
+  hold_days: number;
+  pl_pct?: number | null;
+  pl_amt?: number | null;
+  rationale: string[];
+  meta: Record<string, string | number | null>;
+};
+export type TradeLogSummary = {
+  total: number; open: number; settled: number;
+  won: number; lost: number; closed: number;
+  wins: number; losses: number;
+  win_rate?: number | null;
+  avg_pl_pct?: number | null;
+  total_pl_amt: number;
+  open_pl_amt: number;
+  open_avg_pl_pct?: number | null;
+  avg_hold_days?: number | null;
+  best?: { symbol: string; pl_pct: number | null } | null;
+  worst?: { symbol: string; pl_pct: number | null } | null;
+  notional: number;
+};
+export type TradeLogResp = {
+  trades: LoggedTrade[];
+  summary: TradeLogSummary;
+  by_source: Partial<Record<TradeSource, number>>;
+  marked_at?: number | null;
+  rules: {
+    notional: number;
+    horizon_days: Record<string, number>;
+    momentum_min_score: number;
+    momentum_top: number;
+    multibagger_top: number;
+  };
+};
+
 // Scan up to 60 symbols per request; caller batches larger lists.
 async function scanBatch(symbols: string[]): Promise<ScanResp> {
   return getJson<ScanResp>('/scan?symbols=' + encodeURIComponent(symbols.join(',')), 60000);
@@ -1304,6 +1362,14 @@ export const api = {
   sectorMedians: () =>
     getJson<{ sectors: Record<string, Record<string, number | null>>; count: number; min_sample: number }>(
       '/sector-medians', 30000),
+  tradeLog: (source?: TradeSource | 'all', status?: TradeStatus | 'all') => {
+    const q: string[] = [];
+    if (source && source !== 'all') q.push('source=' + source);
+    if (status && status !== 'all') q.push('status=' + status);
+    return getJson<TradeLogResp>('/tradelog' + (q.length ? '?' + q.join('&') : ''), 30000);
+  },
+  tradeLogReconcile: () =>
+    postJson<{ started: boolean; open: number }>('/tradelog/reconcile', {}),
   fundWarmStatus: () => getJson<FundWarm>('/fundamentals/warm'),
   fundWarmStart: (scope: string) =>
     postJson<{ started: boolean; total?: number; universe?: string; reason?: string; progress?: FundWarm }>(

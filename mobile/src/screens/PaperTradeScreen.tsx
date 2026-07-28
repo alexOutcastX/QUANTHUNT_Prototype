@@ -20,6 +20,7 @@ import {
   sell as simSell,
 } from '../paperSim';
 import { Card, EmptyState, ScreenTitle, SectionTitle, Segmented, StatTile } from '../ui';
+import HistoricTrades from '../components/HistoricTrades';
 import { theme } from '../theme';
 
 const money = (v?: number | null) => (v == null ? '—' : '₹' + v.toLocaleString('en-IN', { maximumFractionDigits: 2 }));
@@ -31,7 +32,7 @@ const ago = (t: number) => {
   return `${Math.floor(s / 86400)}d ago`;
 };
 
-type Mode = 'tracker' | 'sim';
+type Mode = 'tracker' | 'sim' | 'historic';
 
 export default function PaperTradeScreen() {
   const [mode, setMode] = useState<Mode>('tracker');
@@ -70,17 +71,29 @@ export default function PaperTradeScreen() {
 
   return (
     <View style={styles.container}>
-      <ScreenTitle title="Paper trades" sub="Simulated outcomes from your logged setups" />
+      <ScreenTitle
+        title="Paper trades"
+        sub={
+          mode === 'historic'
+            ? 'Every trade the engines recommended, marked to market'
+            : mode === 'sim'
+              ? 'A virtual cash account you trade yourself'
+              : 'Simulated outcomes from your logged setups'
+        }
+      />
       <Segmented
         items={[
           { key: 'tracker', label: 'Outcome tracker' },
           { key: 'sim', label: 'Full simulator' },
+          { key: 'historic', label: 'Historic' },
         ]}
         value={mode}
         onChange={setMode}
       />
 
-      {mode === 'sim' ? (
+      {mode === 'historic' ? (
+        <HistoricTrades />
+      ) : mode === 'sim' ? (
         <Simulator />
       ) : (
         <ScrollView

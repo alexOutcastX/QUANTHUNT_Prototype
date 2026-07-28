@@ -48,9 +48,47 @@ def _migrate(conn):
             data TEXT NOT NULL           -- JSON payload
         );
         CREATE INDEX IF NOT EXISTS ix_snap ON snapshots (kind, key, ts);
+        CREATE TABLE IF NOT EXISTS tradelog (
+            id       INTEGER PRIMARY KEY AUTOINCREMENT,
+            source   TEXT NOT NULL,        -- reco | momentum | multibagger
+            symbol   TEXT NOT NULL,
+            name     TEXT,
+            side     TEXT NOT NULL DEFAULT 'long',
+            strategy TEXT,                 -- the engine's own label for the pick
+            entry    REAL NOT NULL,
+            stop     REAL,                 -- null when the engine publishes no stop
+            target   REAL,
+            horizon_days INTEGER,
+            opened   INTEGER NOT NULL,     -- epoch seconds
+            status   TEXT NOT NULL,        -- open | won | lost | closed
+            exit     REAL,
+            closed   INTEGER,
+            last     REAL,                 -- last mark-to-market price
+            marked   INTEGER,              -- when that mark was taken
+            rationale TEXT,                -- JSON list of strings
+            meta     TEXT                  -- JSON dict (scores, sector, …)
+        );
+        CREATE INDEX IF NOT EXISTS ix_tl_status ON tradelog (status, symbol);
+        CREATE INDEX IF NOT EXISTS ix_tl_src ON tradelog (source, opened);
         """
     )
     conn.commit()
+
+
+# ── generic SQL access (schema lives above; semantics live in the caller) ──
+def execute(sql: str, params=()) -> int:
+    """Run one statement. Returns lastrowid for INSERTs, rowcount otherwise."""
+    with _lock:
+        c = _connect()
+        cur = c.execute(sql, params)
+        c.commit()
+        return cur.lastrowid if cur.lastrowid else cur.rowcount
+
+
+def query(sql: str, params=()) -> list:
+    with _lock:
+        rows = _connect().execute(sql, params).fetchall()
+    return [dict(r) for r in rows]
 
 
 # ── key/value ──

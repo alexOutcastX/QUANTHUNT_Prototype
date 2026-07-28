@@ -280,7 +280,7 @@ export function DeskHub() {
       tabs={[
         { key: 'watchlist', label: 'Watchlist', hint: 'Symbols with entry price + since-add move · live quotes', render: () => <WatchlistScreen /> },
         { key: 'portfolio', label: 'Portfolio', hint: 'Holdings with live P&L · broker sync', render: () => <PortfolioScreen /> },
-        { key: 'paper', label: 'Paper trades', hint: 'Simulated outcomes of your logged setups · win-rate', render: () => <PaperTradeScreen /> },
+        { key: 'paper', label: 'Paper trades', hint: 'Your logged setups, a virtual portfolio, and the engines’ own track record', render: () => <PaperTradeScreen /> },
         { key: 'calibration', label: 'Calibration', hint: 'Realised hit-rate & avg R per engine — the honesty page', render: () => <CalibrationScreen /> },
         { key: 'alerts', label: 'Alerts', hint: 'Price / % / RSI alerts', render: () => <AlertsScreen /> },
         { key: 'inst', label: 'Dossier', hint: 'Full company dossier · fundamentals, valuation, ownership, filings', render: () => <AnalysisScreen /> },
