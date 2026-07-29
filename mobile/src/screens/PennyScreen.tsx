@@ -6,7 +6,7 @@
 // with what you can actually trade. Nothing is hidden — an illiquid shell still
 // appears, labelled as one.
 import React, { useCallback, useEffect, useState } from 'react';
-import { RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 import { PennyLiquidity, PennyResp, PennyRiskGrade, PennyRow, api } from '../api';
 import { Card, ChipBtn, Dropdown, EmptyState, ErrorState, Loading, SectionTitle, Sheet, StatTile } from '../ui';
 import { theme } from '../theme';
@@ -305,6 +305,14 @@ function PennyTable({ rows, onOpen }: { rows: PennyRow[]; onOpen: (s: string) =>
   // Default order is the server's — most tradeable first, the only sensible
   // landing state on a screen full of things you may not be able to sell.
   const [sort, setSort] = useState<{ key: string; dir: 1 | -1 } | null>(null);
+  // Rows scroll INSIDE the table, not by growing the page. 300 rows made the
+  // document ~11,000px tall, which pushed the footer note out of reach and —
+  // before the Sheet was made viewport-fixed — opened the detail card at the
+  // very bottom of the content. Bounding it to the window keeps the header,
+  // the filters and the tiles on screen while you read the rows, which is how
+  // the other screeners already behave.
+  const { height } = useWindowDimensions();
+  const bodyMax = Math.max(280, height - 200);
 
   const sorted = React.useMemo(() => {
     const col = sort && PCOLS.find((c) => c.key === sort.key);
@@ -354,20 +362,22 @@ function PennyTable({ rows, onOpen }: { rows: PennyRow[]; onOpen: (s: string) =>
             </TouchableOpacity>
           ))}
         </View>
-        {sorted.map((r, i) => (
-          <TouchableOpacity
-            key={r.symbol}
-            style={styles.tRow}
-            onPress={() => onOpen(r.symbol)}
-            activeOpacity={0.7}
-          >
-            {PCOLS.map((c) => (
-              <View key={c.key} style={{ width: c.w, paddingHorizontal: 6 }}>
-                {c.render(r, i)}
-              </View>
-            ))}
-          </TouchableOpacity>
-        ))}
+        <ScrollView style={{ maxHeight: bodyMax }} nestedScrollEnabled>
+          {sorted.map((r, i) => (
+            <TouchableOpacity
+              key={r.symbol}
+              style={styles.tRow}
+              onPress={() => onOpen(r.symbol)}
+              activeOpacity={0.7}
+            >
+              {PCOLS.map((c) => (
+                <View key={c.key} style={{ width: c.w, paddingHorizontal: 6 }}>
+                  {c.render(r, i)}
+                </View>
+              ))}
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
       </View>
     </ScrollView>
   );

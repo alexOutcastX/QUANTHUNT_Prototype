@@ -5,6 +5,7 @@ import {
   ActivityIndicator,
   Animated,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -452,7 +453,21 @@ export function Sheet({
 
 const sh = StyleSheet.create({
   // zIndex above any fixed in-page toolbar (screener's dropdown rows use ~60).
-  wrap: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, justifyContent: 'flex-end', zIndex: 1000, elevation: 1000 },
+  // 'fixed' on web, not 'absolute'.
+  //
+  // An absolutely-positioned element anchors to its nearest positioned
+  // ANCESTOR, and a Sheet is normally rendered inside the page's ScrollView.
+  // On a short page the two coincide and nobody notices; on a long one — the
+  // penny screen at 300 rows is ~11,000px tall — the sheet anchors to the
+  // bottom of the CONTENT, so tapping a row near the end opened the card far
+  // below the viewport, apparently doing nothing. 'fixed' anchors to the
+  // viewport, which is what a modal has always meant. Native has no 'fixed'
+  // and doesn't need one: there is no document scroll to escape.
+  wrap: {
+    position: (Platform.OS === 'web' ? 'fixed' : 'absolute') as 'absolute',
+    top: 0, left: 0, right: 0, bottom: 0,
+    justifyContent: 'flex-end', zIndex: 1000, elevation: 1000,
+  },
   scrim: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: '#000a' },
   panel: {
     backgroundColor: theme.surface,
