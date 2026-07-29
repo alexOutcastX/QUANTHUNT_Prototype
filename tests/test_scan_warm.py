@@ -47,10 +47,11 @@ class ScanWarmTest(unittest.TestCase):
         """Walk one cycle with the network and clock stubbed: every symbol is
         warmed, in bounded chunks, with a pause after each."""
         syms = [f"S{i}" for i in range(130)]
-        scanned, sleeps = [], []
+        scanned, sleeps, waits = [], [], []
 
-        def fake_scan(chunk):
+        def fake_scan(chunk, wait=False):
             scanned.append(list(chunk))
+            waits.append(wait)
             return {"count": len(chunk), "computed": len(chunk), "cached": 0}
 
         # Break out of the infinite loop once the cycle sleep is reached.
@@ -70,6 +71,11 @@ class ScanWarmTest(unittest.TestCase):
                 server._warm_scan_loop()
 
         self.assertEqual(len(scanned), 3, "130 symbols should warm in 3 chunks of 60")
+        # The warm loop must BLOCK. scan() is non-blocking by default now, and
+        # left that way this loop would just enqueue every index onto the same
+        # pool that serves live requests and then report success having
+        # computed nothing — the failure mode it exists to prevent.
+        self.assertTrue(all(waits), "warm loop must call scan(wait=True)")
         self.assertTrue(all(len(c) <= server.SCAN_WARM_CHUNK for c in scanned))
         self.assertEqual(sum(len(c) for c in scanned), len(syms), "symbols were dropped")
         self.assertEqual(sorted(s for c in scanned for s in c), sorted(syms))
@@ -89,14 +95,16 @@ class ScanWarmTest(unittest.TestCase):
                 raise RuntimeError("index feed down")
             return ["A"]
 
+        def fake_scan(chunk, wait=False):
+            return {"count": len(chunk), "computed": len(chunk), "cached": 0}
+
         def fake_sleep(s):
             if s >= 30 and seen:
                 raise Done
 
         with mock.patch.object(server, "_warm_index_symbols", side_effect=flaky), \
              mock.patch.object(server, "SCAN_WARM", "NIFTY 50,NIFTY 100"), \
-             mock.patch.object(server._scanner, "scan",
-                               return_value={"count": 1, "computed": 1, "cached": 0}), \
+             mock.patch.object(server._scanner, "scan", side_effect=fake_scan), \
              mock.patch.object(server.time, "sleep", side_effect=fake_sleep):
             with self.assertRaises(Done):
                 server._warm_scan_loop()

@@ -92,7 +92,10 @@ def analyse(symbol):
         log.debug("strategy_scores mb %s: %s", symbol, e)
     try:
         import scanner
-        data = (scanner.scan([symbol]) or {}).get("data", {})
+        # wait=True: this is one symbol for a report the caller is holding open,
+        # not a screen that can fill in behind itself. The default non-blocking
+        # scan would hand back an empty row and a pending list nobody polls.
+        data = (scanner.scan([symbol], wait=True) or {}).get("data", {})
         tech = data.get(symbol) or data.get(symbol.upper())
     except Exception as e:
         log.debug("strategy_scores scan %s: %s", symbol, e)

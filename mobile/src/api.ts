@@ -306,8 +306,13 @@ export type ScanRow = {
 export type ScanResp = {
   data: Record<string, ScanRow>;
   count: number;
+  // Symbols the server hasn't computed yet. It queues them and answers from
+  // cache immediately rather than holding the request open, so this is the
+  // list to poll for — the same contract /fundamentals/bulk uses.
+  pending?: string[];
   computed?: number;
   cached?: number;
+  stale?: number;
   error?: string;
 };
 
@@ -543,6 +548,12 @@ async function scanBatch(symbols: string[]): Promise<ScanResp> {
 // round-trip latency on a mobile connection, small enough that one screen
 // can't monopolise the VM's worker pool.
 const SCAN_CONCURRENCY = 6;
+// Symbols per /scan URL. The server no longer blocks on uncached names, so a
+// batch is bounded by the request line nginx will accept (~32k with the tuning
+// drop-in), not by how long the response takes. At ~10 chars a symbol, 500 is
+// a ~5k query string — well inside it, and it turns a 1447-symbol universe
+// into three requests instead of a hundred and twenty-one.
+const SCAN_BATCH = 500;
 const BULK_CONCURRENCY = 4;
 
 // Company-relationship graph (Terminal tab). Shape is stable across the
@@ -1710,10 +1721,14 @@ export const api = {
     );
     return merged;
   },
-  // Scans any number of symbols in small batches so results stream in instead
-  // of blocking on one huge request (a cold 50-symbol scan can take a minute;
-  // 12 at a time returns the first technicals within seconds). onBatch fires
-  // after each batch with that batch's rows and overall progress.
+  // Scans any number of symbols. The server answers from cache without
+  // blocking and names what it is still computing, so the batches here exist
+  // to keep each URL under nginx's request-line limit — not to hide latency.
+  // They are correspondingly large: 1447 symbols is 3 requests, not 121.
+  //
+  // `poll` re-asks for whatever came back pending until it drains or the
+  // budget runs out, which is what actually fills the table. onBatch fires
+  // with each batch's rows and overall progress.
   scan: async (
     symbols: string[],
     opts?: {
@@ -1721,40 +1736,78 @@ export const api = {
       // Lower it for background work so a bulk sweep can't crowd out the
       // fetch for the rows currently on screen.
       concurrency?: number;
+      // Keep re-asking for pending symbols. Off for one-shot callers.
+      poll?: boolean;
+      pollMs?: number;
+      pollRounds?: number;
       onBatch?: (data: Record<string, ScanRow>, done: number, total: number) => void;
     },
   ): Promise<ScanResp> => {
-    const size = opts?.batch ?? 12;
+    const size = opts?.batch ?? SCAN_BATCH;
     const merged: Record<string, ScanRow> = {};
     let cached = 0;
     let computed = 0;
     let seen = 0;
 
-    // These batches used to run one after another: a 500-symbol index is 42
-    // round-trips end to end, so the table filled at the speed of latency
-    // rather than the speed of the server (which answers a warm batch in
-    // milliseconds). Running several at once collapses that to a few waves.
-    const slices: string[][] = [];
-    for (let i = 0; i < symbols.length; i += size) slices.push(symbols.slice(i, i + size));
+    // One pass over a symbol list; returns whatever is still pending.
+    const sweep = async (syms: string[], report: boolean): Promise<string[]> => {
+      const slices: string[][] = [];
+      for (let i = 0; i < syms.length; i += size) slices.push(syms.slice(i, i + size));
+      const pending: string[] = [];
+      await pooled(
+        slices.map((slice) => async () => {
+          try {
+            const res = await scanBatch(slice);
+            Object.assign(merged, res.data || {});
+            cached += res.cached || 0;
+            computed += res.computed || 0;
+            pending.push(...(res.pending || []));
+            if (report) {
+              seen += slice.length;
+              opts?.onBatch?.(res.data || {}, Math.min(seen, symbols.length), symbols.length);
+            } else if (Object.keys(res.data || {}).length) {
+              opts?.onBatch?.(res.data || {}, seen, symbols.length);
+            }
+          } catch {
+            // One failed batch shouldn't kill the whole scan — report and move on.
+            if (report) {
+              seen += slice.length;
+              opts?.onBatch?.({}, Math.min(seen, symbols.length), symbols.length);
+            }
+          }
+        }),
+        opts?.concurrency ?? SCAN_CONCURRENCY,
+      );
+      return pending;
+    };
 
-    await pooled(
-      slices.map((slice) => async () => {
-        try {
-          const res = await scanBatch(slice);
-          Object.assign(merged, res.data || {});
-          cached += res.cached || 0;
-          computed += res.computed || 0;
-          seen += slice.length;
-          opts?.onBatch?.(res.data || {}, Math.min(seen, symbols.length), symbols.length);
-        } catch {
-          // One failed batch shouldn't kill the whole scan — report and move on.
-          seen += slice.length;
-          opts?.onBatch?.({}, Math.min(seen, symbols.length), symbols.length);
-        }
-      }),
-      opts?.concurrency ?? SCAN_CONCURRENCY,
-    );
-    return { data: merged, count: Object.keys(merged).length, cached, computed };
+    let pending = await sweep(symbols, true);
+
+    if (opts?.poll !== false) {
+      // Collect what the server is computing behind the first answer. Bounded:
+      // a symbol the upstream never answers for must not poll forever.
+      // Scaled to the set: the server computes ~4 symbols a second through
+      // its upstream gate, so a genuinely cold universe needs minutes of
+      // polling. Bounded so a dead upstream can't poll forever.
+      const rounds = opts?.pollRounds ?? Math.min(120, 10 + Math.ceil(symbols.length / 20));
+      const gap = opts?.pollMs ?? 2500;
+      for (let r = 0; r < rounds && pending.length; r++) {
+        await new Promise((res) => setTimeout(res, gap));
+        const before = pending.length;
+        pending = (await sweep(pending, false)).filter((s) => !merged[s]);
+        // No progress at all this round and nothing left running — give up
+        // rather than spin out the remaining rounds against a dead upstream.
+        if (pending.length >= before && !Object.keys(merged).length) break;
+      }
+    }
+
+    return {
+      data: merged,
+      count: Object.keys(merged).length,
+      pending,
+      cached,
+      computed,
+    };
   },
   btStrategies: () => getJson<BtStrategiesResp>('/backtest/strategies'),
   btRun: (cfg: BtConfig) => postJson<{ run_id: string }>('/backtest/run', cfg),
