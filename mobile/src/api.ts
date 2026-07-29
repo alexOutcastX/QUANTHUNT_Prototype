@@ -128,7 +128,7 @@ export type LtpResp = Record<string, Quote>;
 export type FundamentalsBulk = {
   data: Record<string, Record<string, unknown>>;
   pending: string[];
-  provider: string;
+  provider?: string;      // absent when a batched call merged several responses
   cached: number;
   total: number;
 };
@@ -1565,10 +1565,40 @@ export const api = {
   universe: () => getJson<UniverseResp>('/universe'),
   ltp: (symbols: string[]) =>
     getJson<LtpResp>('/ltp?symbols=' + encodeURIComponent(symbols.join(','))),
-  fundamentalsBulk: (symbols: string[]) =>
-    getJson<FundamentalsBulk>(
-      '/fundamentals/bulk?symbols=' + encodeURIComponent(symbols.join(',')),
-    ),
+  // Batched: every symbol used to go into ONE query string, so a wide universe
+  // built a 13 KB request line and nginx rejected it (414) before Flask ever
+  // saw it — the screener then showed "0 with financials" for the whole list.
+  // 150 symbols keeps the URL near 1.4 KB, well inside any proxy's header
+  // buffer. Same shape as scan()/returns(), which already batch.
+  fundamentalsBulk: async (symbols: string[]): Promise<FundamentalsBulk> => {
+    const merged: FundamentalsBulk = { data: {}, pending: [], cached: 0, total: 0 };
+    let failed = 0;
+    for (let i = 0; i < symbols.length; i += 150) {
+      const slice = symbols.slice(i, i + 150);
+      try {
+        const res = await getJson<FundamentalsBulk>(
+          '/fundamentals/bulk?symbols=' + encodeURIComponent(slice.join(',')),
+        );
+        Object.assign(merged.data, res.data || {});
+        merged.pending.push(...(res.pending || []));
+        merged.cached += res.cached || 0;
+        merged.total += res.total || slice.length;
+        if (res.provider) merged.provider = res.provider;
+      } catch {
+        // One bad batch shouldn't lose the rest — treat its symbols as still
+        // pending so the caller retries them rather than marking them absent.
+        merged.pending.push(...slice);
+        merged.total += slice.length;
+        failed += 1;
+      }
+    }
+    // Every batch failing is a real outage, not "this data doesn't exist" —
+    // let the caller show an error instead of silently blanking the column.
+    if (failed && failed === Math.ceil(symbols.length / 150)) {
+      throw new Error('Could not load company financials');
+    }
+    return merged;
+  },
   history: (symbol: string, period = '5y', interval = '1d') =>
     getJson<HistoryResp>(
       `/history?symbol=${encodeURIComponent(symbol)}&interval=${interval}&period=${period}`,
