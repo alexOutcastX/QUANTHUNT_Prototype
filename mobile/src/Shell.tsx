@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Linking, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { BackHandler, Linking, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { API_BASE, api } from './api';
@@ -21,7 +21,7 @@ import TickerStrip from './components/TickerStrip';
 import CommandPalette from './components/CommandPalette';
 import TickerSettings from './components/TickerSettings';
 import PdfPreview from './components/PdfPreview';
-import { navigate, peekNav, subscribeNav } from './navIntent';
+import { canGoBack, goBack, initHistory, navigate, peekNav, subscribeNav } from './navIntent';
 import { refreshSession } from './session';
 import { refreshFlags } from './flags';
 import { installErrorReporting } from './errorReport';
@@ -121,7 +121,47 @@ function usePersistedTab() {
   useEffect(() => {
     if (hydrated) AsyncStorage.setItem(TAB_KEY, active).catch(() => {});
   }, [active, hydrated]);
-  return [active, setActive] as const;
+  return [active, setActive, hydrated] as const;
+}
+
+// Back, in every sense the platform offers one.
+//
+// Nothing here used to touch history, so the browser's Back button had only the
+// page you were on BEFORE the app to go back to — pressing it left the site.
+// Opening a dossier from a screen was one-way. This binds the intent stack to
+// real history entries, to Android's hardware back key, and to the header
+// affordance below, so all three mean the same thing.
+function useBackNav(active: string, ready: boolean): boolean {
+  const [, bump] = useState(0);
+  useEffect(() => {
+    if (!ready) return undefined;
+    // Seed with wherever the app actually opened — the restored tab, not the
+    // 'today' placeholder that showed while storage was still being read.
+    initHistory(active);
+    const un = subscribeNav(() => bump((n) => n + 1));
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => goBack());
+    return () => {
+      un();
+      sub.remove();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready]);
+  return canGoBack();
+}
+
+function BackBtn({ onPress }: { onPress: () => void }) {
+  return (
+    <TouchableOpacity
+      style={styles.backBtn}
+      onPress={onPress}
+      activeOpacity={0.75}
+      accessibilityRole="button"
+      accessibilityLabel="Back"
+      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+    >
+      <Text style={styles.backGlyph}>‹</Text>
+    </TouchableOpacity>
+  );
 }
 
 // ⌘K / Ctrl+K anywhere. Registered at every width: a keyboard is a property of
@@ -199,9 +239,10 @@ function legacyNav(k: string, setActive: (k: string) => void) {
 }
 
 function NewDesktopShell() {
-  const [active, setActive] = usePersistedTab();
+  const [active, setActive, hydrated] = usePersistedTab();
   const [palette, setPalette] = useState(false);
   const [settings, setSettings] = useState(false);
+  const showBack = useBackNav(active, hydrated);
   const cur = NAV.find((t) => t.k === active) || NAV[0];
   useEffect(
     () =>
@@ -215,6 +256,7 @@ function NewDesktopShell() {
   return (
     <View style={styles.desktop}>
       <View style={styles.brandBar}>
+        {showBack ? <BackBtn onPress={goBack} /> : null}
         <Brand big />
         <MarketChip />
         <TouchableOpacity style={styles.searchBtn} onPress={() => setPalette(true)} activeOpacity={0.75}>
@@ -234,7 +276,7 @@ function NewDesktopShell() {
               <TouchableOpacity
                 key={it.k}
                 style={[styles.pageItem, on && styles.pageItemOn]}
-                onPress={() => setActive(it.k)}
+                onPress={() => navigate(it.k)}
               >
                 <Icon name={it.icon} size={15} color={on ? theme.accent : theme.muted2} />
                 <Text style={[styles.pageLabel, on && styles.pageTextOn]}>{it.label}</Text>
@@ -265,9 +307,10 @@ function NewDesktopShell() {
 
 function NewMobileShell() {
   const insets = useSafeAreaInsets();
-  const [active, setActive] = usePersistedTab();
+  const [active, setActive, hydrated] = usePersistedTab();
   const [palette, setPalette] = useState(false);
   const [settings, setSettings] = useState(false);
+  const showBack = useBackNav(active, hydrated);
   const tab = NAV.find((t) => t.k === active) || NAV[0];
   usePaletteHotkey(setPalette);
   useEffect(
@@ -281,6 +324,7 @@ function NewMobileShell() {
   return (
     <View style={styles.mobile}>
       <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
+        {showBack ? <BackBtn onPress={goBack} /> : null}
         <Brand />
         <View style={styles.headerRight}>
           <MarketChip />
@@ -316,7 +360,7 @@ function NewMobileShell() {
         {NAV.map((t) => {
           const on = active === t.k;
           return (
-            <TouchableOpacity key={t.k} style={styles.tab} onPress={() => setActive(t.k)} activeOpacity={0.7}>
+            <TouchableOpacity key={t.k} style={styles.tab} onPress={() => navigate(t.k)} activeOpacity={0.7}>
               <View style={[styles.tabPill, on && styles.tabPillOn]}>
                 <Icon name={t.icon} size={19} color={on ? theme.brand : theme.muted} strokeWidth={on ? 2 : 1.75} />
               </View>
@@ -478,5 +522,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   themeBtnDesktop: { marginLeft: 'auto' },
+  backBtn: {
+    width: 28, height: 28, borderRadius: 8, alignItems: 'center', justifyContent: 'center',
+    backgroundColor: theme.surface2, borderWidth: 1, borderColor: theme.border, marginRight: 8,
+  },
+  backGlyph: { color: theme.text, fontSize: 20, lineHeight: 22, fontWeight: '700', marginTop: -2 },
   themeGlyph: { color: theme.muted2, fontSize: 16, lineHeight: 20 },
 });

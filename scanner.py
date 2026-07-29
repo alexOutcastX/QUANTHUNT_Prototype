@@ -22,13 +22,73 @@ Fields returned per symbol (all best-effort; missing → null):
   volume_spike,                  (volume >= 2.5x the 20-day average)
   cam_break_up, cam_break_down   (close beyond the Camarilla H4/L4 level)
 """
+import atexit
+import json
 import math
 import os
+import queue
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 
 _CACHE = {}          # sym -> (ts, row|None)
 _CACHE_LOCK = threading.Lock()
+
+# ── Why this module looks like fundamentals.py now ───────────────────────────
+# It didn't, and that was the whole problem. fundamentals.py keeps a disk cache
+# that survives restarts and answers bulk() from it IMMEDIATELY, returning a
+# `pending` list for whatever is still warming. This module kept everything in
+# memory and blocked the request until every uncached symbol had been computed.
+#
+# Two consequences, both visible on a wide universe:
+#
+#   • Every deploy wiped the technicals. gunicorn restarts, _CACHE is empty, and
+#     the next visitor pays a cold sweep of the entire universe — which is
+#     1447 upstream history fetches through a process-wide 4-wide semaphore, so
+#     minutes at best. The financials beside them came straight off disk.
+#   • A blocking scan cannot degrade. With 60 symbols a call the client had to
+#     make 121 round trips for ALL MARKETS and wait out the slowest upstream
+#     fetch in each one, while the same semaphore was being shared with the
+#     warm loop and the fundamentals sweep.
+#
+# So: the cache is now durable, reads never block on the network, and a row
+# that is merely stale is served now and refreshed behind the response.
+_DIR = os.path.dirname(os.path.abspath(__file__))
+_FILE = os.environ.get("SCAN_CACHE_FILE") or os.path.join(_DIR, "scan_cache.json")
+
+# Compute pool for background refills. Sized to the upstream semaphore in
+# ydata (4 by default) — more threads here would not buy any more concurrency,
+# it would only take workers away from serving requests.
+#
+# Deliberately NOT a ThreadPoolExecutor. Its threads are non-daemon and joined
+# by an atexit hook, so a deep queue turns every restart into a wait for the
+# backlog to drain — 1447 queued symbols at a second each is minutes of a
+# gunicorn worker refusing to die, and the cache flush never runs. Daemon
+# threads plus a bounded queue instead.
+#
+# The bound matters as much as the pool size: one visitor opening ALL MARKETS
+# would otherwise queue the entire universe and park everyone else's symbols
+# behind it. Over the cap, work is simply dropped — the client is polling and
+# will ask again, so the queue stays a window on current demand rather than a
+# transcript of every request ever made.
+_POOL_SIZE = max(1, int(os.environ.get("SCAN_WORKERS", "4")))
+_QUEUE_MAX = max(_POOL_SIZE, int(os.environ.get("SCAN_QUEUE_MAX", "400")))
+_queue: "queue.Queue[str]" = queue.Queue(maxsize=_QUEUE_MAX)
+_inflight: set = set()
+_inflight_lock = threading.Lock()
+_workers_started = False
+_workers_lock = threading.Lock()
+
+# Most symbols a single /scan may ask about. The old cap of 60 existed because
+# every miss was computed inline; now that a miss is queued rather than waited
+# on, a big request is just a big dictionary lookup.
+MAX_SYMBOLS = int(os.environ.get("SCAN_MAX_SYMBOLS", "600"))
+
+# A row past _TTL is stale but still worth showing while it refreshes — these
+# are daily-bar indicators, and a fifteen-minute-old RSI beats an em-dash. Past
+# this bound it is not: a technical read from a previous session would be
+# actively misleading, so it is withheld and recomputed.
+_STALE_MAX = int(os.environ.get("SCAN_STALE_MAX", str(12 * 3600)))
 # How long a computed row stays good. Every field here is derived from DAILY
 # bars — RSI, the moving-average distances, the 52-week extremes — so a row a
 # few minutes old is not meaningfully different from a fresh one, while the
@@ -45,6 +105,74 @@ _NEG_TTL = 45
 # Cached NIFTY 50 daily returns for beta (index -> (ts, pandas.Series))
 _IDX_CACHE = {"ts": 0.0, "ret": None}
 _IDX_TTL = 900
+
+
+def _load() -> None:
+    """Pull the last-good rows off disk. Best-effort: a missing or corrupt file
+    just means a cold start, which is what every start used to be."""
+    try:
+        with open(_FILE) as f:
+            disk = json.load(f)
+    except Exception:
+        return
+    now = time.time()
+    kept = 0
+    with _CACHE_LOCK:
+        for sym, e in (disk.get("rows") or {}).items():
+            try:
+                ts, row = float(e["ts"]), e.get("row")
+            except Exception:
+                continue
+            # Only rows still worth serving. A failed row (None) is never
+            # persisted as a negative — it would outlive its 45s cool-off.
+            if row is not None and (now - ts) < _STALE_MAX:
+                _CACHE[sym] = (ts, row)
+                kept += 1
+    if kept:
+        import logging
+        logging.getLogger("quanthunt.scanner").info(
+            "Scan cache: %d rows restored from disk", kept)
+
+
+def _save() -> None:
+    """Write the cache out atomically, so a kill mid-write can't leave a
+    truncated file that _load then silently discards."""
+    now = time.time()
+    with _CACHE_LOCK:
+        rows = {s: {"ts": ts, "row": row}
+                for s, (ts, row) in _CACHE.items()
+                if row is not None and (now - ts) < _STALE_MAX}
+    if not rows:
+        return
+    tmp = _FILE + ".tmp"
+    try:
+        with open(tmp, "w") as f:
+            json.dump({"rows": rows}, f)
+        os.replace(tmp, _FILE)
+    except Exception:
+        try:
+            os.unlink(tmp)
+        except Exception:
+            pass
+
+
+_SAVE_EVERY = int(os.environ.get("SCAN_SAVE_SEC", "120"))
+
+
+def _saver_loop() -> None:
+    while True:
+        time.sleep(_SAVE_EVERY)
+        try:
+            _save()
+        except Exception:
+            pass
+
+
+def start_persistence() -> None:
+    """Restore the cache and keep flushing it. Called once at import."""
+    _load()
+    threading.Thread(target=_saver_loop, daemon=True, name="scan-saver").start()
+    atexit.register(_save)
 
 
 def _num(v, nd=2):
@@ -420,44 +548,137 @@ def row_from_frame(df, idx_ret=None):
     }
 
 
-def scan(symbols):
-    """Compute (or serve cached) technical rows for a list of symbols.
+def _compute_into_cache(sym):
+    """Refill one symbol. Runs on the background pool; never raises."""
+    try:
+        row = _compute_row(sym, _index_returns())
+    except Exception:
+        row = None
+    with _CACHE_LOCK:
+        _CACHE[sym] = (time.time(), row)
+    with _inflight_lock:
+        _inflight.discard(sym)
+    return row
 
-    Returns {"data": {sym: row}, "count": n, "computed": k, "cached": c}.
+
+def _worker():
+    while True:
+        sym = _queue.get()
+        try:
+            _compute_into_cache(sym)
+        except Exception:
+            with _inflight_lock:
+                _inflight.discard(sym)
+        finally:
+            _queue.task_done()
+
+
+def _start_workers():
+    global _workers_started
+    with _workers_lock:
+        if _workers_started:
+            return
+        _workers_started = True
+        for i in range(_POOL_SIZE):
+            threading.Thread(target=_worker, daemon=True,
+                             name=f"scan-{i}").start()
+
+
+def enqueue(symbols):
+    """Queue background refills. Returns what was actually accepted.
+
+    Two things are deliberately dropped rather than queued:
+      • a symbol already in flight — a polling client re-sends its pending list
+        every couple of seconds, and without this the queue fills with
+        duplicates of work already running and never drains;
+      • anything past the queue bound — the client will ask again on its next
+        poll, so a full queue costs a round trip, whereas an unbounded one
+        parks every later visitor behind one ALL MARKETS sweep.
     """
-    symbols = [s.strip().upper() for s in symbols if s and s.strip()][:60]
+    _start_workers()
+    queued = []
+    for s in symbols:
+        with _inflight_lock:
+            if s in _inflight:
+                continue
+            _inflight.add(s)
+        try:
+            _queue.put_nowait(s)
+            queued.append(s)
+        except queue.Full:
+            with _inflight_lock:
+                _inflight.discard(s)
+            break                      # the rest would fail too
+    return queued
+
+
+def scan(symbols, wait=False):
+    """Technical rows for `symbols`, served from cache without blocking.
+
+    Returns {"data", "pending", "count", "computed", "cached", "stale"}.
+
+    A fresh row is returned. A row past its TTL but inside _STALE_MAX is ALSO
+    returned — and refreshed behind the response — because these are daily-bar
+    indicators and a slightly old number beats an empty column. Anything else
+    is queued and named in `pending`; poll again to collect it.
+
+    `wait=True` restores the old blocking behaviour for the warm loop, which
+    exists precisely to do this work up front and has no one waiting on it.
+    """
+    symbols = [s.strip().upper() for s in symbols if s and s.strip()][:MAX_SYMBOLS]
     now = time.time()
-    out = {}
-    todo = []
+    out, pending, todo = {}, [], []
+    stale_n = 0
 
     with _CACHE_LOCK:
         for s in symbols:
             hit = _CACHE.get(s)
-            if hit and hit[1] is not None and (now - hit[0]) < _TTL:
-                out[s] = hit[1]                       # good row within its TTL
-            elif hit and hit[1] is None and (now - hit[0]) < _NEG_TTL:
-                pass                                  # failed recently — brief cool-off, don't recompute yet
+            row = hit[1] if hit else None
+            age = (now - hit[0]) if hit else None
+            if row is not None and age < _TTL:
+                out[s] = row                          # fresh
+            elif row is not None and age < _STALE_MAX:
+                out[s] = row                          # stale but usable…
+                stale_n += 1
+                todo.append(s)                        # …refresh behind it
+            elif row is None and hit and age < _NEG_TTL:
+                pending.append(s)                     # failed just now — cool off
             else:
+                pending.append(s)
                 todo.append(s)
 
-    cached_n = len(out)
-    if todo:
-        idx_ret = _index_returns()
-        from concurrent.futures import ThreadPoolExecutor, as_completed
-        results = {}
-        with ThreadPoolExecutor(max_workers=8) as ex:
-            futs = {ex.submit(_compute_row, s, idx_ret): s for s in todo}
-            for f in as_completed(futs):
-                s = futs[f]
-                try:
-                    results[s] = f.result()
-                except Exception:
-                    results[s] = None
-        stamp = time.time()
-        with _CACHE_LOCK:
-            for s, row in results.items():
-                _CACHE[s] = (stamp, row)
-                if row is not None:
-                    out[s] = row
+    if wait:
+        _blocking_fill(todo, out)
+        pending = [s for s in pending if s not in out]
+    else:
+        enqueue(todo)
 
-    return {"data": out, "count": len(out), "computed": len(todo), "cached": cached_n}
+    return {"data": out, "pending": pending, "count": len(out),
+            "computed": len(todo), "cached": len(out) - stale_n, "stale": stale_n}
+
+
+def _blocking_fill(todo, out):
+    """Compute `todo` inline and merge into `out`. Warm-loop path only."""
+    if not todo:
+        return
+    from concurrent.futures import as_completed
+    idx_ret = _index_returns()
+    ex = ThreadPoolExecutor(max_workers=_POOL_SIZE)
+    try:
+        futs = {ex.submit(_compute_row, s, idx_ret): s for s in todo}
+        stamp = time.time()
+        for f in as_completed(futs):
+            s = futs[f]
+            try:
+                row = f.result()
+            except Exception:
+                row = None
+            with _CACHE_LOCK:
+                _CACHE[s] = (stamp, row)
+            if row is not None:
+                out[s] = row
+    finally:
+        ex.shutdown(wait=False)
+
+
+start_persistence()

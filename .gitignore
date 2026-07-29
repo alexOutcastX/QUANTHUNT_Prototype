@@ -19,6 +19,8 @@ node_modules/
 # runtime caches
 fund_cache.json
 fund_cache.json.tmp
+scan_cache.json
+scan_cache.json.tmp
 index_cache.json
 graph_cache.json
 graph_cache.json.tmp

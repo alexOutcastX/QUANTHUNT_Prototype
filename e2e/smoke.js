@@ -179,6 +179,32 @@ function check(name, ok, detail) {
     check('Symbol page shows RELIANCE', symText.includes('RELIANCE'));
     check('Symbol page shows the tab set', /Overview/.test(symText) && /Technicals/.test(symText));
 
+    // 5b · Back actually goes back INSIDE the app.
+    //
+    // Nothing used to touch history, so the browser's Back button had only the
+    // page before the app to return to — pressing it left the site, and opening
+    // a dossier from a screen was one-way. We're on Symbol here (from the check
+    // above), so going back must land on the screener, not on about:blank.
+    const backEl = () =>
+      page.evaluate(() => !!document.querySelector('[aria-label="Back"]'));
+    check('a Back affordance appears once you have navigated', await backEl());
+    await page.goBack();                       // the BROWSER's back button
+    await page.waitForTimeout(1800);
+    const afterBack = await page.evaluate(() => ({
+      url: location.href,
+      text: document.body.innerText,
+    }));
+    check(
+      'browser back stays inside the app',
+      /127\.0\.0\.1/.test(afterBack.url),
+      afterBack.url,
+    );
+    check(
+      'browser back returns to the previous screen',
+      /Screener|Multibagger|Momentum|Penny/.test(afterBack.text),
+      afterBack.text.slice(0, 160),
+    );
+
     // 6 · command palette opens from the header search button
     await page.locator('[aria-label="Search symbols and pages"]').first().click({ timeout: 5000 })
       .catch(() => {});
