@@ -424,6 +424,35 @@ export type BackfillProgress = {
   finished?: number; error?: string | null;
 };
 
+// Penny screen — low-priced scrips graded by tradeability and substance, not
+// just listed by price. See penny_screen.py.
+export type PennyRiskGrade = 'moderate' | 'elevated' | 'high' | 'extreme';
+export type PennyLiquidity = 'tradeable' | 'thin' | 'illiquid' | 'unknown';
+export type PennyRow = {
+  symbol: string; name: string; exchange: string;
+  price: number; chg?: number | null;
+  turnover: number; turnover_cr: number;
+  market_cap_cr?: number | null;
+  eps?: number | null; pe?: number | null; pb?: number | null; roe?: number | null;
+  debt_equity?: number | null; ocf_cr?: number | null;
+  revenue_growth_pct?: number | null; sector?: string | null;
+  risk_score: number; risk_grade: PennyRiskGrade;
+  liquidity: PennyLiquidity; liquidity_note: string;
+  flags: string[]; positives: string[];
+  band?: string | null; has_fundamentals: boolean;
+};
+export type PennyBand = { key: string; label: string; lo: number; hi: number; note: string };
+export type PennyResp = {
+  band: string; band_label: string; band_note: string;
+  rows: PennyRow[]; count: number; matches: number; in_band: number; truncated: boolean;
+  grades: Partial<Record<PennyRiskGrade, number>>;
+  liquidity_mix: Partial<Record<PennyLiquidity, number>>;
+  with_fundamentals: number;
+  bands: PennyBand[];
+  thresholds: { tradeable: number; thin: number };
+  universe: number; warming: boolean;
+};
+
 // Cases — TaurEye's own investment baskets. Built from the analyser's scored
 // universe, struck once a year, managed by the engine in between (see cases.py).
 export type CaseKind = 'multibagger' | 'sector' | 'cap' | 'strategy';
@@ -1425,6 +1454,14 @@ export const api = {
     postJson<{ started: boolean; open: number }>('/tradelog/reconcile', {}),
   tradeLogBackfill: (force = false) =>
     postJson<{ started: boolean; progress: BackfillProgress }>('/tradelog/backfill', { force }),
+  pennyScreen: (opts?: { band?: string; minTurnover?: number; maxRisk?: string; limit?: number }) => {
+    const q: string[] = [];
+    if (opts?.band) q.push('band=' + encodeURIComponent(opts.band));
+    if (opts?.minTurnover) q.push('min_turnover=' + Math.round(opts.minTurnover));
+    if (opts?.maxRisk) q.push('max_risk=' + encodeURIComponent(opts.maxRisk));
+    if (opts?.limit) q.push('limit=' + opts.limit);
+    return getJson<PennyResp>('/penny/screen' + (q.length ? '?' + q.join('&') : ''), 40000);
+  },
   cases: (refresh = false) => getJson<CasesResp>('/cases' + (refresh ? '?refresh=1' : ''), 30000),
   caseDetail: (id: string, amount?: number) =>
     getJson<CaseDetail>(

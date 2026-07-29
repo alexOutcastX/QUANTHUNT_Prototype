@@ -116,6 +116,25 @@ function check(name, ok, detail) {
     const bodyText = await page.evaluate(() => document.body.innerText);
     check('Screens hub renders', /Screener|Momentum|Multibagger/.test(bodyText));
 
+    // 4b · Penny tab — graded by the real screen in the fixture server, so a
+    // grading regression shows up as a missing warning rather than a cheap
+    // stock quietly reading as safe.
+    const tapEl = async (t) =>
+      page.evaluate((txt) => {
+        const el = [...document.querySelectorAll('div,span,a,button')].filter(
+          (n) => (n.textContent || '').trim() === txt && n.offsetParent !== null,
+        );
+        const last = el.pop();
+        if (last) last.click();
+        return !!last;
+      }, t);
+    await tapEl('Penny');
+    await page.waitForTimeout(2500);
+    const penny = await page.evaluate(() => document.body.innerText);
+    check('Penny tab renders', /Read this before you use this screen/i.test(penny), penny.slice(0, 200));
+    check('Penny grades liquidity and risk', /ILLIQUID|TRADEABLE/.test(penny) && /EXTREME RISK|HIGH RISK|MODERATE RISK/.test(penny));
+    check('Penny offers a volume floor', /cr\+\/day/.test(penny));
+
     // 5 · Symbol page renders RELIANCE from the fake scan
     await page.locator('text=Symbol').last().click();
     await page.waitForTimeout(1200);
