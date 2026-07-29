@@ -36,15 +36,82 @@ const styles = StyleSheet.create({
   txt: { color: theme.muted, fontSize: 13 },
 });
 
+// Chunks queued for prefetch, in the order they were registered.
+const registry: (() => Promise<unknown>)[] = [];
+let prefetched = false;
+
+export type LazyComponent<P> = React.ComponentType<P> & { preload: () => void };
+
 export function lazyScreen<P extends object>(
   load: () => Promise<{ default: React.ComponentType<P> }>,
-): React.ComponentType<P> {
+): LazyComponent<P> {
   const Inner = React.lazy(load);
-  return function LazyScreen(props: P) {
+  let started = false;
+  const preload = () => {
+    if (started) return;
+    started = true;
+    // Metro's web import() does not always hand back a real Promise — calling
+    // .catch() on it threw, and the throw killed the whole prefetch loop, so
+    // NOTHING was warmed. Tolerate either shape.
+    try {
+      const r = load() as unknown as { then?: unknown; catch?: (f: () => void) => void };
+      if (r && typeof r.then === 'function' && typeof r.catch === 'function') {
+        r.catch(() => {
+          started = false;  // a failed fetch must be retryable
+        });
+      }
+    } catch {
+      started = false;
+    }
+  };
+  registry.push(() => {
+    preload();
+    return Promise.resolve();
+  });
+  const Wrapped = function LazyScreen(props: P) {
     return (
       <React.Suspense fallback={<Fallback />}>
         <Inner {...props} />
       </React.Suspense>
     );
+  } as LazyComponent<P>;
+  Wrapped.preload = preload;
+  return Wrapped;
+}
+
+/**
+ * Warm every screen chunk once the app is idle.
+ *
+ * Splitting the app made FIRST paint cheap — the shell and the dashboard,
+ * nothing else. What it also did was move the cost to the moment you open a
+ * tab, which is the worst possible time: you have just asked for something and
+ * are now watching a spinner while a chunk downloads. Fetching them in the
+ * background after the first screen is up gets both — a small first paint AND
+ * instant tab switches — because by the time anyone taps, the chunk is in the
+ * browser cache and React.lazy resolves synchronously.
+ *
+ * Deliberately serial and deliberately late: this is spare-capacity work and
+ * must never contend with the data the visible screen is fetching.
+ */
+export function prefetchScreens(delayMs = 2500): void {
+  if (prefetched) return;
+  prefetched = true;
+  const g = globalThis as {
+    requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => void;
   };
+  const run = async () => {
+    for (const load of registry) {
+      try {
+        await load();
+      } catch {
+        /* one bad chunk must not stop the rest */
+      }
+      // Yield between chunks so a slow connection never blocks interaction.
+      await new Promise((r) => setTimeout(r, 150));
+    }
+  };
+  setTimeout(() => {
+    if (g.requestIdleCallback) g.requestIdleCallback(() => { run(); }, { timeout: 4000 });
+    else run();
+  }, delayMs);
 }

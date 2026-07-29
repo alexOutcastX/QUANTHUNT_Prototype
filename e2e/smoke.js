@@ -59,6 +59,12 @@ function check(name, ok, detail) {
     const page = await browser.newPage({ viewport: { width: 400, height: 860 } });
     const errors = [];
     page.on('pageerror', (e) => errors.push(String(e)));
+    // Screen chunks requested at any point, for the idle-prefetch check below.
+    const chunks = new Set();
+    page.on('request', (r) => {
+      const m = r.url().match(/\/([A-Za-z]+)-[a-f0-9]{16,}\.js$/);
+      if (m) chunks.add(m[1]);
+    });
     await page.goto(`http://127.0.0.1:${PORT}/`, { waitUntil: 'networkidle', timeout: 45000 });
     await page.waitForTimeout(3500);
 
@@ -203,6 +209,24 @@ function check(name, ok, detail) {
       'browser back returns to the previous screen',
       /Screener|Multibagger|Momentum|Penny/.test(afterBack.text),
       afterBack.text.slice(0, 160),
+    );
+
+    // 5c · the idle prefetch warms chunks nobody navigated to.
+    //
+    // Splitting the app made first paint cheap but moved the cost to the moment
+    // a tab is opened — the worst time, since the user is already waiting. The
+    // prefetch removes that, and it is checked here because it failed silently
+    // once already: Metro's web import() does not always return a Promise, the
+    // .catch() on it threw, and the whole loop died having warmed nothing.
+    //
+    // These screens are Desk sub-tabs this suite never opens, so a request for
+    // them can only have come from the prefetch.
+    const unvisited = ['CalculatorScreen', 'HolidaysScreen', 'MethodologyScreen'];
+    const warmed = unvisited.filter((c) => chunks.has(c));
+    check(
+      'idle prefetch warms screens nobody opened',
+      warmed.length > 0,
+      `none of ${unvisited.join('/')} were fetched (${chunks.size} chunks seen)`,
     );
 
     // 6 · command palette opens from the header search button
