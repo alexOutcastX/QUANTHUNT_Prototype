@@ -199,11 +199,23 @@ def _universe(universe_fn=None) -> list:
     except Exception as e:
         log.warning("backfill: index feed unavailable (%s)", e)
     try:
-        uni = (universe_fn() if universe_fn else []) or []
-        return [{"symbol": x["symbol"], "name": x.get("name")}
-                for x in uni if x.get("symbol")][:MAX_SYMBOLS]
-    except Exception:
+        return rows_of(universe_fn() if universe_fn else [])[:MAX_SYMBOLS]
+    except Exception as e:
+        log.warning("backfill: universe unavailable (%s)", e)
         return []
+
+
+def rows_of(uni) -> list:
+    """Normalise whatever a universe callable returned into symbol rows.
+
+    server.get_universe_nonblocking() returns (rows, warming); get_universe()
+    returns a bare list. Taking the first for the second silently replays an
+    empty universe — and iterating the tuple as rows is what 500'd the penny
+    route — so both shapes are accepted explicitly."""
+    if isinstance(uni, tuple):
+        uni = uni[0]
+    return [{"symbol": x["symbol"], "name": x.get("name")}
+            for x in (uni or []) if isinstance(x, dict) and x.get("symbol")]
 
 
 def _run(universe_fn, days) -> None:
