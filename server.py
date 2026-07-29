@@ -3543,7 +3543,10 @@ def _warm_scan_loop():
                 warmed = computed = 0
                 for i in range(0, len(syms), SCAN_WARM_CHUNK):
                     chunk = syms[i:i + SCAN_WARM_CHUNK]
-                    res = _scanner.scan(chunk)
+                    # wait=True: this loop exists to do the work, and nobody is
+                    # waiting on it. Left non-blocking it would just enqueue the
+                    # whole index onto the same pool that serves live requests.
+                    res = _scanner.scan(chunk, wait=True)
                     warmed += res["count"]
                     computed += res["computed"]
                     time.sleep(SCAN_WARM_PAUSE)   # yield the upstream budget
@@ -4430,8 +4433,10 @@ def indices_history():
 def scan():
     """Live technical indicators per symbol for the screener filter engine.
 
-    Query: ?symbols=A,B,C (max 60). Returns computed + cached rows; call again
-    for the same symbols within the cache TTL to get instant results.
+    Query: ?symbols=A,B,C. Answers from cache WITHOUT blocking on the network:
+    anything not yet computed comes back in `pending` and is queued behind the
+    response, so a wide universe paints whatever is warm on the first call
+    instead of waiting out an upstream fetch per symbol. Poll for the rest.
     """
     raw = request.args.get("symbols", "").strip().upper()
     if not raw:

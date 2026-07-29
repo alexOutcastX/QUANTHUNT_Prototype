@@ -75,6 +75,15 @@ class DeployWorkflowTest(unittest.TestCase):
             if "/etc/nginx/conf.d/quanthunt.conf" in bare:
                 self.fail(f"deploy writes the certbot-owned site file: {line.strip()}")
 
+    def test_the_caches_survive_a_deploy(self):
+        """rsync runs with --delete, so a cache file not excluded here is
+        DELETED from the VM on every push. scan_cache.json exists precisely so
+        technicals survive a restart; letting the deploy wipe it would restore
+        the exact behaviour it was written to fix."""
+        for name in ("fund_cache.json", "scan_cache.json", "index_cache.json",
+                     "quanthunt.db*"):
+            self.assertIn(name, self.yml, f"deploy would delete {name} from the VM")
+
     def test_the_systemd_unit_is_still_synced(self):
         """The unit carries SCAN_WARM and the gunicorn thread count; a deploy
         that stopped syncing it would silently pin production to old tuning."""

@@ -282,10 +282,9 @@ export function loadNames(): Promise<Record<string, { name: string; exchange: st
 
 // Fixed page size — 50 rows a page keeps the (sticky-header) table snappy.
 const PAGE_SIZE = 50;
-// Background technical sweep: how many symbols per chunk, and how many of that
-// chunk's batches may be in flight. Kept below the foreground setting so the
-// sweep never out-competes the page the user is actually reading.
-const SWEEP_CHUNK = 60;
+// Background technical sweep: how many of its requests may be in flight. Kept
+// below the foreground setting so the sweep never out-competes the page the
+// user is actually reading.
 const SWEEP_CONCURRENCY = 2;
 
 // "2026-07-28" → "28 Jul", for the settled-close caption.
@@ -788,32 +787,33 @@ export default function ScreenerScreen() {
   }, [pageRows, scanJob, applyScan]);
 
   // Pass 2 — everything else, so filtering and sorting on a technical column
-  // eventually cover the whole universe. Chunked, low concurrency, and it
-  // stands off whenever pass 1 is fetching: the rows being looked at always
-  // win the connection.
+  // cover the whole universe.
+  //
+  // This used to walk the list in chunks of 60 because /scan blocked on every
+  // uncached symbol, which made a big request a long request. It no longer
+  // does: the server answers from cache and computes behind the response. So
+  // this is now one call that streams rows in as they land, and the chunking
+  // that existed to hide latency is gone with the latency.
   useEffect(() => {
     const job = scanJob;
     if (!job) return;
     let stop = false;
-    const idle = () => new Promise((r) => setTimeout(r, 250));
     (async () => {
-      await idle(); // let the first page claim the pool
-      for (let i = 0; i < job.symbols.length; i += SWEEP_CHUNK) {
-        if (stop || job.seq !== loadSeq.current) return;
-        while (pageScanBusy.current && !stop) await idle();
-        if (stop || job.seq !== loadSeq.current) return;
-        const chunk = job.symbols
-          .slice(i, i + SWEEP_CHUNK)
-          .filter((s) => !scanReq.current.has(s));
-        if (!chunk.length) continue;
-        chunk.forEach((s) => scanReq.current.add(s));
-        try {
-          const res = await api.scan(chunk, { concurrency: SWEEP_CONCURRENCY });
-          if (stop || job.seq !== loadSeq.current) return;
-          applyScan(res.data || {}, job.live);
-        } catch {
-          /* one bad chunk shouldn't end the sweep */
-        }
+      // Let the visible page claim the connection first.
+      await new Promise((r) => setTimeout(r, 300));
+      if (stop || job.seq !== loadSeq.current) return;
+      const rest = job.symbols.filter((s) => !scanReq.current.has(s));
+      if (!rest.length) return;
+      rest.forEach((s) => scanReq.current.add(s));
+      try {
+        await api.scan(rest, {
+          concurrency: SWEEP_CONCURRENCY,
+          onBatch: (data) => {
+            if (!stop && job.seq === loadSeq.current) applyScan(data, job.live);
+          },
+        });
+      } catch {
+        /* the visible page still has its own fetch */
       }
     })();
     return () => {
