@@ -8,7 +8,7 @@ import { Icon, IconName } from './icons';
 import { useResponsive } from './responsive';
 import { DeskHub, ScreensHub } from './screens/Hosts';
 import DashboardScreen from './screens/DashboardScreen';
-import { lazyScreen } from './lazyScreen';
+import { lazyScreen, prefetchScreens } from './lazyScreen';
 
 // Dashboard (the landing tab) stays in the main bundle; every other tab is a
 // lazy chunk fetched on first open — see lazyScreen.tsx.
@@ -18,9 +18,16 @@ const TerminalScreen = lazyScreen(() => import('./screens/TerminalScreen'));
 const HeatmapScreen = lazyScreen(() => import('./screens/HeatmapScreen'));
 const BacktestScreen = lazyScreen(() => import('./screens/BacktestScreen'));
 import TickerStrip from './components/TickerStrip';
-import CommandPalette from './components/CommandPalette';
-import TickerSettings from './components/TickerSettings';
 import PdfPreview from './components/PdfPreview';
+// Both are modals: nothing renders until the user opens them, so there is no
+// reason for their code to be in the bundle that blocks first paint. They are
+// prefetched with the screens once the app is idle, so opening one still feels
+// instant. (PdfPreview stays eager — it is an always-mounted subscriber, not
+// something you open, and lazily loading it would mean its subscription never
+// registers until something tried to print.)
+const CommandPalette = lazyScreen(() => import('./components/CommandPalette'));
+const TickerSettings = lazyScreen(() => import('./components/TickerSettings'));
+
 import { canGoBack, goBack, initHistory, navigate, peekNav, subscribeNav } from './navIntent';
 import { refreshSession } from './session';
 import { refreshFlags } from './flags';
@@ -131,6 +138,14 @@ function usePersistedTab() {
 // Opening a dossier from a screen was one-way. This binds the intent stack to
 // real history entries, to Android's hardware back key, and to the header
 // affordance below, so all three mean the same thing.
+// Warm the screen chunks in the background once the first paint is done, so
+// opening a tab doesn't pay a download at the moment it's asked for.
+function usePrefetch(ready: boolean) {
+  useEffect(() => {
+    if (ready) prefetchScreens();
+  }, [ready]);
+}
+
 function useBackNav(active: string, ready: boolean): boolean {
   const [, bump] = useState(0);
   useEffect(() => {
@@ -243,6 +258,7 @@ function NewDesktopShell() {
   const [palette, setPalette] = useState(false);
   const [settings, setSettings] = useState(false);
   const showBack = useBackNav(active, hydrated);
+  usePrefetch(hydrated);
   const cur = NAV.find((t) => t.k === active) || NAV[0];
   useEffect(
     () =>
@@ -299,7 +315,7 @@ function NewDesktopShell() {
       </View>
       <TickerStrip />
       <View style={styles.main}>{cur.render((k) => legacyNav(k, setActive))}</View>
-      <CommandPalette open={palette} onClose={() => setPalette(false)} />
+      {palette ? <CommandPalette open onClose={() => setPalette(false)} /> : null}
       {settings ? <TickerSettings onClose={() => setSettings(false)} /> : null}
     </View>
   );
@@ -311,6 +327,7 @@ function NewMobileShell() {
   const [palette, setPalette] = useState(false);
   const [settings, setSettings] = useState(false);
   const showBack = useBackNav(active, hydrated);
+  usePrefetch(hydrated);
   const tab = NAV.find((t) => t.k === active) || NAV[0];
   usePaletteHotkey(setPalette);
   useEffect(
@@ -354,7 +371,7 @@ function NewMobileShell() {
       <TickerStrip />
       <View style={styles.mobileBody}>{tab.render((k) => legacyNav(k, setActive))}</View>
       <LegalLink style={styles.legalBtnMobile} />
-      <CommandPalette open={palette} onClose={() => setPalette(false)} />
+      {palette ? <CommandPalette open onClose={() => setPalette(false)} /> : null}
       {settings ? <TickerSettings onClose={() => setSettings(false)} /> : null}
       <View style={[styles.tabBar, { paddingBottom: insets.bottom || 8 }]}>
         {NAV.map((t) => {
