@@ -208,5 +208,92 @@ class ScreenTest(unittest.TestCase):
         self.assertTrue(all(b.get("note") for b in r["bands"]))
 
 
+class RouteTest(unittest.TestCase):
+    """The /penny/screen route against a seeded universe cache.
+
+    Pinned because the first cut of this route iterated
+    get_universe_nonblocking() as a list when it actually returns
+    (rows, warming) — which 500'd the whole tab.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        import os
+        import tempfile
+        os.environ["DB_PATH"] = tempfile.mktemp(suffix=".db")
+        os.environ["TRADELOG_BACKFILL"] = "0"
+        try:
+            import server
+        except Exception as e:                      # flask absent in the stdlib CI path
+            raise unittest.SkipTest("server import unavailable: %s" % e)
+        cls.server = server
+        cls.client = server.app.test_client()
+        # A cold-cache request kicks a background bhavcopy fetch that would
+        # replace the seeded universe mid-test (NSE is reachable from CI).
+        # Stub it — these tests are about the route, not the loader.
+        cls._warm = server._warm_universe_async
+        server._warm_universe_async = lambda: None
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.server._warm_universe_async = cls._warm
+
+    def _seed(self, rows):
+        import time
+        self.server._universe_cache = rows
+        self.server._universe_ts = time.time() if rows else 0
+
+    def test_route_returns_a_graded_screen(self):
+        self._seed([
+            {"symbol": "GOOD", "name": "Good", "price": 5.0, "turnover": 3e7,
+             "chg": 1.0, "exchange": "NSE"},
+            {"symbol": "SHELL", "name": "Shell", "price": 2.0, "turnover": 1e5,
+             "chg": 9.0, "exchange": "NSE"},
+            {"symbol": "BIG", "name": "Big", "price": 2400.0, "turnover": 9e8,
+             "chg": 0.1, "exchange": "NSE"},
+        ])
+        r = self.client.get("/penny/screen?band=under10")
+        self.assertEqual(r.status_code, 200)
+        d = r.get_json()
+        self.assertEqual(d["matches"], 2)
+        self.assertEqual({x["symbol"] for x in d["rows"]}, {"GOOD", "SHELL"})
+        self.assertFalse(d["warming"])
+
+    def test_cold_universe_does_not_error(self):
+        self._seed([])
+        r = self.client.get("/penny/screen")
+        self.assertEqual(r.status_code, 200)
+        self.assertTrue(r.get_json()["warming"])
+        self.assertEqual(r.get_json()["matches"], 0)
+
+    def test_filters_pass_through(self):
+        self._seed([
+            {"symbol": "LIQUID", "name": "Liquid", "price": 5.0, "turnover": 5e7,
+             "chg": 0.0, "exchange": "NSE"},
+            {"symbol": "DEAD", "name": "Dead", "price": 5.0, "turnover": 1e4,
+             "chg": 0.0, "exchange": "NSE"},
+        ])
+        r = self.client.get("/penny/screen?band=under10&min_turnover=10000000")
+        self.assertEqual([x["symbol"] for x in r.get_json()["rows"]], ["LIQUID"])
+
+
+class BackfillUniverseTest(unittest.TestCase):
+    """The replay takes the same universe callable — and hit the same bug."""
+
+    def test_accepts_both_universe_shapes(self):
+        import backfill
+        rows = [{"symbol": "A", "name": "A Ltd"}, {"symbol": "B", "name": "B Ltd"}]
+        self.assertEqual(len(backfill.rows_of(rows)), 2)              # get_universe
+        self.assertEqual(len(backfill.rows_of((rows, False))), 2)     # …_nonblocking
+        self.assertEqual(backfill.rows_of((rows, True))[0]["symbol"], "A")
+
+    def test_survives_junk(self):
+        import backfill
+        self.assertEqual(backfill.rows_of(None), [])
+        self.assertEqual(backfill.rows_of(([], True)), [])
+        self.assertEqual(backfill.rows_of(["not-a-dict", None, 7]), [])
+        self.assertEqual(backfill.rows_of([{"name": "no symbol"}]), [])
+
+
 if __name__ == "__main__":
     unittest.main()
