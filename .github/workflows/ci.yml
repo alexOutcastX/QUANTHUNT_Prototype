@@ -39,7 +39,9 @@ jobs:
           npx --yes esbuild src/screener.ts --bundle --format=cjs --platform=node --outfile=tests/build/screener.js --log-level=error
           npx --yes esbuild src/costs.ts --bundle --format=cjs --platform=node --outfile=tests/build/costs.js --log-level=error
           npx --yes esbuild src/swr.ts --bundle --format=cjs --platform=node --outfile=tests/build/swr.js --log-level=error
+          npx --yes esbuild src/navIntent.ts --bundle --format=cjs --platform=node --outfile=tests/build/nav.js --log-level=error
           node tests/engines.test.js
+          node tests/nav.test.js
 
       - name: HTML / inline-JS sanity
         run: |

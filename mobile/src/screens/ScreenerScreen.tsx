@@ -162,6 +162,56 @@ export const COLS: Col[] = [
   { key: 'debt_equity', label: 'D/E', w: 48, render: (r) => <Text style={styles.cell}>{fnum2(r, 'debt_equity', 2)}</Text> },
   { key: 'dividend_yield', label: 'Div%', w: 50, render: (r) => <Text style={styles.cell}>{fnum2(r, 'dividend_yield')}</Text> },
 ];
+
+// ── Columns derived from the filter engine ───────────────────────────────────
+// The two lists used to be written by hand and had drifted badly: you could
+// FILTER on EPS, EPS growth, PEG, forward P/E, cash conversion, every valuation
+// model — and then not show any of them as a column. Screening on a number you
+// cannot see is close to useless, and every metric added to the filters since
+// has widened the gap.
+//
+// So the extras are generated from FILTER_DEFS instead. Anything numeric the
+// engine can filter on is automatically available in ▤ Columns, using the same
+// label, the same unit and the same getter — which means the two can no longer
+// disagree, and a metric added to the engine tomorrow appears here for free.
+// The hand-written columns above stay: they have bespoke rendering (colour on
+// sign, Indian digit grouping, the signal chip) that a generic cell can't do.
+const MANUAL = new Set(COLS.map((c) => c.key));
+
+const fmtByUnit = (v: number, unit?: string): string => {
+  if (unit === '₹cr') return crore(v);
+  if (unit === '%') return (v >= 0 ? '' : '') + v.toFixed(1) + '%';
+  if (unit === '×') return v.toFixed(2) + '×';
+  if (unit === '₹') return fmtIN(v);
+  return Math.abs(v) >= 1000 ? Math.round(v).toLocaleString('en-IN') : v.toFixed(2);
+};
+
+// Roughly size the column to its heading — these are opt-in extras, so a
+// too-narrow header is a worse failure than a slightly wide one.
+const autoWidth = (label: string) => Math.max(56, Math.min(150, 12 + label.length * 7.5));
+
+const AUTO_COLS: Col[] = FILTER_DEFS.filter(
+  (d) => !MANUAL.has(d.key) && (d.type === 'range' || d.type === 'toggle'),
+).map((d) => ({
+  key: d.key,
+  label: d.label,
+  w: autoWidth(d.label),
+  render: (r: Row) => {
+    const v = d.get(r);
+    if (typeof v === 'boolean') {
+      return <Text style={[styles.cell, { color: v ? theme.green : theme.muted }]}>{v ? 'Yes' : 'No'}</Text>;
+    }
+    if (typeof v !== 'number' || !isFinite(v)) return <Text style={styles.cell}>—</Text>;
+    // Percentages and anything that can go negative read much faster in colour.
+    const signed = d.unit === '%' && /growth|upside|vs |yield/i.test(d.label);
+    return (
+      <Text style={[styles.cell, signed ? { color: colorOf(v) } : null]}>{fmtByUnit(v, d.unit)}</Text>
+    );
+  },
+}));
+
+COLS.push(...AUTO_COLS);
+
 export const ACTIONS_W = 252; // per-row action cell (B / S / Chart / ★ / Report)
 const COL_META = COLS.map((c) => ({ key: c.key, label: c.label }));
 
@@ -178,13 +228,17 @@ export const cellFlex = (c: Col) => ({
 // TaurEye default view: extras start hidden (re-enable via ▤ Columns). The
 // v3 key intentionally ignores older prefs so the new default reaches everyone.
 export const DEFAULT_HIDDEN = ['d20', 'd200', 'willr', 'bollb', 'beta', 'sqzMom', 's1', 'r1',
-  'pe', 'pb', 'roe', 'roce', 'debt_equity', 'dividend_yield'];
+  'pe', 'pb', 'roe', 'roce', 'debt_equity', 'dividend_yield',
+  // Everything generated from the filter engine is opt-in: there are ~60 of
+  // them and a table that showed them all by default would be unreadable.
+  ...AUTO_COLS.map((c) => c.key)];
 
 const FILTERS_KEY = 'taureye.screener.filters.v1'; // legacy keyed filters (migrated)
 const EXPR_KEY = 'taureye.screener.expr.v1';
 const INDEX_KEY = 'taureye.screener.index.v1';
-// v4: the serial-number column joined the set — reset stored orders once.
-const COLS_KEY = 'taureye.screener.cols.v4';
+// v5: the filter-derived columns joined the set — reset stored orders once so
+// the ~60 new keys land in DEFAULT_HIDDEN rather than inheriting a stale order.
+const COLS_KEY = 'taureye.screener.cols.v5';
 
 // Universe name/exchange lookup (fetched once per app session) so the table
 // can show full company names like the TaurEye site.

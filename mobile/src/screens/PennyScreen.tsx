@@ -8,9 +8,10 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { PennyLiquidity, PennyResp, PennyRiskGrade, PennyRow, api } from '../api';
-import { Card, ChipBtn, Dropdown, EmptyState, ErrorState, Loading, SectionTitle, StatTile } from '../ui';
+import { Card, ChipBtn, Dropdown, EmptyState, ErrorState, Loading, SectionTitle, Sheet, StatTile } from '../ui';
 import { theme } from '../theme';
-import { navigate } from '../navIntent';
+import { navigate, openStock } from '../navIntent';
+import { addSymbol, loadWatchlist, normSymbol, removeSymbol } from '../watchlist';
 
 const money = (v?: number | null, d = 2) =>
   v == null || !isFinite(v) ? '—' : '₹' + v.toLocaleString('en-IN', { maximumFractionDigits: d });
@@ -69,6 +70,7 @@ export default function PennyScreen() {
   const [floor, setFloor] = useState('any');
   const [risk, setRisk] = useState('any');
   const [open, setOpen] = useState<string | null>(null);
+  const [watch, setWatch] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
 
@@ -93,6 +95,15 @@ export default function PennyScreen() {
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    loadWatchlist().then(setWatch).catch(() => {});
+  }, []);
+
+  const toggleWatch = useCallback(async (sym: string) => {
+    const s = normSymbol(sym);
+    setWatch(watch.includes(s) ? await removeSymbol(watch, s) : await addSymbol(watch, sym));
+  }, [watch]);
 
   if (!data && busy) return <Loading label="Screening the low-priced segment" />;
   if (!data && err) return <ErrorState title="Could not run the penny screen" detail={err} onRetry={load} />;
@@ -182,10 +193,19 @@ export default function PennyScreen() {
         <>
           <SectionTitle>{rows.length} stocks</SectionTitle>
           {rows.map((r) => (
-            <Row key={r.symbol} r={r} expanded={open === r.symbol} onToggle={() => setOpen(open === r.symbol ? null : r.symbol)} />
+            <Row key={r.symbol} r={r} onOpen={() => setOpen(r.symbol)} />
           ))}
         </>
       )}
+
+      {open && rows.find((x) => x.symbol === open) ? (
+        <PennyDetail
+          r={rows.find((x) => x.symbol === open) as PennyRow}
+          watched={watch.includes(normSymbol(open))}
+          onClose={() => setOpen(null)}
+          onWatch={() => toggleWatch(open)}
+        />
+      ) : null}
 
       {data ? (
         <Text style={styles.note}>
@@ -210,13 +230,133 @@ function tapHint(r: PennyRow): string {
   return r.positives.length ? `Tap for the ${warn} and what supports it` : `Tap for the ${warn}`;
 }
 
-function Row({ r, expanded, onToggle }: { r: PennyRow; expanded: boolean; onToggle: () => void }) {
+// Tapping a symbol opens the same kind of card every other screen uses —
+// green flags, red flags, the numbers behind them, and the actions you'd
+// reach for next. It used to expand in place, which buried the detail inside
+// a scrolling list and gave the row none of the actions (watchlist, chart,
+// analyse) that the momentum and multibagger cards have had all along.
+function PennyDetail({
+  r, watched, onClose, onWatch,
+}: {
+  r: PennyRow;
+  watched: boolean;
+  onClose: () => void;
+  onWatch: () => void;
+}) {
+  const rc = RISK_COLOR[r.risk_grade];
+  const lc = LIQ_COLOR[r.liquidity];
+  const chgCol = (r.chg ?? 0) >= 0 ? theme.green : theme.red;
+  const go = (fn: () => void) => () => {
+    onClose();
+    fn();
+  };
+  return (
+    <Sheet onClose={onClose} maxHeight="92%">
+      <View style={styles.dHead}>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.dSym}>{r.symbol}</Text>
+          <Text style={styles.dName} numberOfLines={2}>{r.name}</Text>
+          <Text style={styles.meta}>
+            {r.exchange}
+            {r.sector ? ` · ${r.sector}` : ''}
+            {r.market_cap_cr != null
+              ? ` · ₹${r.market_cap_cr.toLocaleString('en-IN', { maximumFractionDigits: 0 })}cr mcap`
+              : ''}
+          </Text>
+        </View>
+        <View style={{ alignItems: 'flex-end' }}>
+          <Text style={styles.dPrice}>{money(r.price)}</Text>
+          <Text style={[styles.chg, { color: chgCol }]}>{pct(r.chg)}</Text>
+        </View>
+      </View>
+
+      <View style={styles.badges}>
+        <View style={[styles.badge, { borderColor: lc }]}>
+          <Text style={[styles.badgeTxt, { color: lc }]}>{LIQ_LABEL[r.liquidity]}</Text>
+        </View>
+        <View style={[styles.badge, { borderColor: rc }]}>
+          <Text style={[styles.badgeTxt, { color: rc }]}>{RISK_LABEL[r.risk_grade]}</Text>
+        </View>
+        <Text style={styles.turn}>{cr(r.turnover_cr)}/day</Text>
+      </View>
+      <Text style={styles.dLiq}>{r.liquidity_note}</Text>
+
+      <ScrollView style={{ marginTop: theme.sp.sm }} contentContainerStyle={{ paddingBottom: theme.sp.md }}>
+        {r.flags.length ? (
+          <>
+            <Text style={[styles.detailHead, { color: theme.red }]}>Red flags</Text>
+            {r.flags.map((f, i) => (
+              <Text key={i} style={styles.flag}>• {f}</Text>
+            ))}
+          </>
+        ) : null}
+        {r.positives.length ? (
+          <>
+            <Text style={[styles.detailHead, { color: theme.green, marginTop: theme.sp.sm }]}>
+              Green flags
+            </Text>
+            {r.positives.map((p, i) => (
+              <Text key={i} style={styles.pos}>• {p}</Text>
+            ))}
+          </>
+        ) : null}
+        {!r.flags.length && !r.positives.length ? (
+          <Text style={styles.dNone}>
+            Nothing published either way — this scrip has no financials on file, which is itself
+            the finding.
+          </Text>
+        ) : null}
+        <View style={styles.nums}>
+          <Num k="EPS" v={r.eps == null ? '—' : money(r.eps)} />
+          <Num k="P/E" v={r.pe == null ? '—' : r.pe.toFixed(1) + '×'} />
+          <Num k="P/B" v={r.pb == null ? '—' : r.pb.toFixed(2) + '×'} />
+          <Num k="ROE" v={r.roe == null ? '—' : r.roe.toFixed(1) + '%'} />
+          <Num k="D/E" v={r.debt_equity == null ? '—' : r.debt_equity.toFixed(2)} />
+          <Num k="OCF" v={r.ocf_cr == null ? '—' : `₹${r.ocf_cr.toFixed(0)}cr`} />
+          <Num k="Rev growth" v={r.revenue_growth_pct == null ? '—' : pct(r.revenue_growth_pct)} />
+          <Num k="Turnover" v={cr(r.turnover_cr)} />
+        </View>
+      </ScrollView>
+
+      <View style={styles.dActs}>
+        <TouchableOpacity style={styles.dAct} onPress={onWatch} activeOpacity={0.75}>
+          <Text style={[styles.dActTxt, watched && { color: theme.green }]}>
+            {watched ? '★ Watching' : '☆ Watchlist'}
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.dAct}
+          onPress={go(() => openStock(r.symbol, r.sector || undefined))}
+          activeOpacity={0.75}
+        >
+          <Text style={styles.dActTxt}>Chart</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.dAct}
+          onPress={go(() => navigate('screens', { sub: 'mb', symbol: r.symbol }))}
+          activeOpacity={0.75}
+        >
+          <Text style={styles.dActTxt}>Analyse</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.dAct, styles.dActPrimary]}
+          onPress={go(() => navigate('desk', { sub: 'inst', symbol: r.symbol }))}
+          activeOpacity={0.8}
+        >
+          <Text style={[styles.dActTxt, styles.dActPrimaryTxt]}>Dossier</Text>
+        </TouchableOpacity>
+      </View>
+    </Sheet>
+  );
+}
+
+function Row({ r, onOpen }: { r: PennyRow; onOpen: () => void }) {
   const rc = RISK_COLOR[r.risk_grade];
   const lc = LIQ_COLOR[r.liquidity];
   const chgCol = (r.chg ?? 0) >= 0 ? theme.green : theme.red;
   return (
     <Card style={styles.row}>
-      <TouchableOpacity onPress={onToggle} activeOpacity={0.85}>
+      <TouchableOpacity onPress={onOpen} activeOpacity={0.85}>
         <View style={styles.rowTop}>
           <View style={{ flex: 1 }}>
             <Text style={styles.sym} numberOfLines={1}>
@@ -244,44 +384,9 @@ function Row({ r, expanded, onToggle }: { r: PennyRow; expanded: boolean; onTogg
           <Text style={styles.turn}>{cr(r.turnover_cr)}/day</Text>
           {!r.has_fundamentals ? <Text style={styles.noFund}>no published financials</Text> : null}
         </View>
-        <Text style={styles.tapHint}>{expanded ? 'Tap to collapse' : tapHint(r)}</Text>
+        <Text style={styles.tapHint}>{tapHint(r)}</Text>
       </TouchableOpacity>
 
-      {expanded ? (
-        <View style={styles.detail}>
-          {r.flags.length ? (
-            <>
-              <Text style={[styles.detailHead, { color: theme.red }]}>What's wrong with it</Text>
-              {r.flags.map((f, i) => (
-                <Text key={i} style={styles.flag}>• {f}</Text>
-              ))}
-            </>
-          ) : null}
-          {r.positives.length ? (
-            <>
-              <Text style={[styles.detailHead, { color: theme.green, marginTop: theme.sp.sm }]}>What supports it</Text>
-              {r.positives.map((p, i) => (
-                <Text key={i} style={styles.pos}>• {p}</Text>
-              ))}
-            </>
-          ) : null}
-          <View style={styles.nums}>
-            <Num k="EPS" v={r.eps == null ? '—' : money(r.eps)} />
-            <Num k="P/E" v={r.pe == null ? '—' : r.pe.toFixed(1) + '×'} />
-            <Num k="P/B" v={r.pb == null ? '—' : r.pb.toFixed(2) + '×'} />
-            <Num k="ROE" v={r.roe == null ? '—' : r.roe.toFixed(1) + '%'} />
-            <Num k="D/E" v={r.debt_equity == null ? '—' : r.debt_equity.toFixed(2)} />
-            <Num k="OCF" v={r.ocf_cr == null ? '—' : `₹${r.ocf_cr.toFixed(0)}cr`} />
-          </View>
-          <TouchableOpacity
-            style={styles.dossierBtn}
-            onPress={() => navigate('desk', { sub: 'inst', symbol: r.symbol })}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.dossierTxt}>Open the full dossier</Text>
-          </TouchableOpacity>
-        </View>
-      ) : null}
     </Card>
   );
 }
@@ -333,5 +438,24 @@ const styles = StyleSheet.create({
     borderRadius: 999, paddingHorizontal: theme.sp.lg, paddingVertical: 7,
   },
   dossierTxt: { color: theme.text, fontSize: theme.fs.sm, fontWeight: '700' },
+  // Detail sheet — the same card shape the momentum and multibagger screens use.
+  dHead: { flexDirection: 'row', alignItems: 'flex-start', gap: theme.sp.md },
+  dSym: { color: theme.text, fontSize: 18, fontWeight: '800', letterSpacing: 0.3 },
+  dName: { color: theme.muted2, fontSize: theme.fs.sm, marginTop: 1 },
+  dPrice: { color: theme.text, fontSize: 20, fontWeight: '800' },
+  dLiq: { color: theme.muted, fontSize: theme.fs.xs, marginTop: 4 },
+  dNone: { color: theme.muted, fontSize: theme.fs.sm, lineHeight: 19 },
+  dActs: {
+    flexDirection: 'row', flexWrap: 'wrap', gap: theme.sp.sm, marginTop: theme.sp.sm,
+    paddingTop: theme.sp.sm, borderTopWidth: 1, borderTopColor: theme.border,
+  },
+  dAct: {
+    flexGrow: 1, minWidth: 84, paddingVertical: 10, paddingHorizontal: theme.sp.md,
+    borderRadius: 10, borderWidth: 1, borderColor: theme.border2,
+    backgroundColor: theme.surface2, alignItems: 'center',
+  },
+  dActPrimary: { backgroundColor: theme.accent, borderColor: theme.accent },
+  dActTxt: { color: theme.text, fontSize: theme.fs.sm, fontWeight: '700' },
+  dActPrimaryTxt: { color: theme.onAccent },
   note: { color: theme.muted, fontSize: theme.fs.sm, marginTop: theme.sp.lg, lineHeight: 18 },
 });
