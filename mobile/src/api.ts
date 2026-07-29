@@ -9,6 +9,12 @@
 // On web the app is served by the same Flask server that exposes the API, so
 // default to same-origin (relative URLs). Native builds hit the VM directly.
 import { Platform } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { pooled, setStorage, swr } from './swr';
+
+// swr.ts is deliberately free of React Native imports so its logic can be
+// unit-tested in plain node; the app supplies the durable backend here.
+setStorage(AsyncStorage);
 
 // Inside the Capacitor Android shell the bundle runs as react-native-web, so
 // Platform.OS === 'web', but the page origin is capacitor://localhost — a
@@ -86,6 +92,29 @@ async function getJson<T>(path: string, timeoutMs = 25000): Promise<T> {
     clearTimeout(timer);
   }
 }
+
+// A cached GET. The key is the path, so every caller of the same endpoint
+// shares one entry and one in-flight request. `force` (pull-to-refresh) skips
+// the cache. Only for reads whose staleness is harmless for a few minutes —
+// never for a quote the user is about to trade on.
+function cachedGet<T>(path: string, ttlMs: number, force = false, timeoutMs = 25000): Promise<T> {
+  return swr<T>(path, ttlMs, () => getJson<T>(path, timeoutMs), { force });
+}
+
+// How long each kind of read stays fresh before a background refresh. Tuned to
+// how fast the underlying thing actually changes: an index's membership is
+// stable for hours, a background sweep republishes every few hours, a news
+// feed every few minutes.
+const TTL = {
+  universe: 30 * 60_000,
+  index: 10 * 60_000,
+  sectors: 30 * 60_000,
+  indices: 60_000,
+  news: 5 * 60_000,
+  screen: 2 * 60_000,     // momentum / multibagger sweep snapshots
+  slow: 10 * 60_000,      // cases, sector medians, holidays, IPOs, G-Sec
+  ledger: 60_000,         // tradelog, penny screen
+} as const;
 
 async function postJson<T>(path: string, body: unknown): Promise<T> {
   const res = await fetch(API_BASE + path, {
@@ -494,6 +523,12 @@ export type CasesResp = {
 async function scanBatch(symbols: string[]): Promise<ScanResp> {
   return getJson<ScanResp>('/scan?symbols=' + encodeURIComponent(symbols.join(',')), 60000);
 }
+
+// How many batched requests may be in flight at once. Enough to hide
+// round-trip latency on a mobile connection, small enough that one screen
+// can't monopolise the VM's worker pool.
+const SCAN_CONCURRENCY = 6;
+const BULK_CONCURRENCY = 4;
 
 // Company-relationship graph (Terminal tab). Shape is stable across the
 // curated demo dataset and AI-generated graphs (?symbol= with a server key).
@@ -1437,8 +1472,8 @@ export const api = {
   apiKeysIssue: (label: string) => postJson<{ key: string; record: ApiKey }>('/apikeys', { label }),
   apiKeysRevoke: (id: string) => delJson<{ revoked: boolean }>('/apikeys/' + encodeURIComponent(id)),
   sectorMedians: () =>
-    getJson<{ sectors: Record<string, Record<string, number | null>>; count: number; min_sample: number }>(
-      '/sector-medians', 30000),
+    cachedGet<{ sectors: Record<string, Record<string, number | null>>; count: number; min_sample: number }>(
+      '/sector-medians', TTL.slow, false, 30000),
   tradeLog: (
     source?: TradeSource | 'all',
     status?: TradeStatus | 'all',
@@ -1462,7 +1497,8 @@ export const api = {
     if (opts?.limit) q.push('limit=' + opts.limit);
     return getJson<PennyResp>('/penny/screen' + (q.length ? '?' + q.join('&') : ''), 40000);
   },
-  cases: (refresh = false) => getJson<CasesResp>('/cases' + (refresh ? '?refresh=1' : ''), 30000),
+  cases: (refresh = false) =>
+    cachedGet<CasesResp>('/cases' + (refresh ? '?refresh=1' : ''), TTL.slow, refresh, 30000),
   caseDetail: (id: string, amount?: number) =>
     getJson<CaseDetail>(
       '/cases/' + encodeURIComponent(id) + (amount ? '?amount=' + Math.round(amount) : ''),
@@ -1526,18 +1562,21 @@ export const api = {
       45000,
     ),
   momentumScreen: (refresh = false) =>
-    getJson<MomentumScreenResp>('/momentum/screen' + (refresh ? '?refresh=1' : ''), 30000),
+    cachedGet<MomentumScreenResp>(
+      '/momentum/screen' + (refresh ? '?refresh=1' : ''), TTL.screen, refresh, 30000),
   mbScreen: (refresh = false) =>
-    getJson<MbScreenResp>('/multibagger/screen' + (refresh ? '?refresh=1' : ''), 30000),
+    cachedGet<MbScreenResp>(
+      '/multibagger/screen' + (refresh ? '?refresh=1' : ''), TTL.screen, refresh, 30000),
   patternsScreen: (index: string, refresh = false) =>
-    getJson<PatternScreenResp>(
-      `/patterns/screen?index=${encodeURIComponent(index)}` + (refresh ? '&refresh=1' : ''), 30000),
+    cachedGet<PatternScreenResp>(
+      `/patterns/screen?index=${encodeURIComponent(index)}` + (refresh ? '&refresh=1' : ''),
+      TTL.screen, refresh, 30000),
   sectors: (level: SectorLevel = 'macro', refresh = false) => {
     const qs = new URLSearchParams();
     if (level && level !== 'macro') qs.set('level', level);
     if (refresh) qs.set('refresh', '1');
     const q = qs.toString();
-    return getJson<SectorsResp>('/sectors' + (q ? '?' + q : ''), 30000);
+    return cachedGet<SectorsResp>('/sectors' + (q ? '?' + q : ''), TTL.sectors, refresh, 30000);
   },
   riskPortfolio: (holdings: RiskHolding[], conf = 0.95) =>
     postJson<RiskReport>('/risk/portfolio', { holdings, conf }),
@@ -1557,12 +1596,14 @@ export const api = {
   brokerLtp: (symbols: string[]) =>
     getJson<{ data: LtpResp }>('/broker/ltp?symbols=' + encodeURIComponent(symbols.join(','))),
   brokerHoldings: () => getJson<{ holdings: BrokerHolding[] }>('/broker/holdings'),
-  indices: (category?: string) =>
-    getJson<IndicesResp>('/indices' + (category ? '?category=' + encodeURIComponent(category) : '')),
-  holidays: () => getJson<HolidaysResp>('/holidays'),
+  indices: (category?: string, force = false) =>
+    cachedGet<IndicesResp>(
+      '/indices' + (category ? '?category=' + encodeURIComponent(category) : ''),
+      TTL.indices, force),
+  holidays: () => cachedGet<HolidaysResp>('/holidays', TTL.slow),
   ping: () => getJson<Ping>('/ping'),
   version: () => getJson<Version>('/version'),
-  universe: () => getJson<UniverseResp>('/universe'),
+  universe: (force = false) => cachedGet<UniverseResp>('/universe', TTL.universe, force),
   ltp: (symbols: string[]) =>
     getJson<LtpResp>('/ltp?symbols=' + encodeURIComponent(symbols.join(','))),
   // Batched: every symbol used to go into ONE query string, so a wide universe
@@ -1573,28 +1614,33 @@ export const api = {
   fundamentalsBulk: async (symbols: string[]): Promise<FundamentalsBulk> => {
     const merged: FundamentalsBulk = { data: {}, pending: [], cached: 0, total: 0 };
     let failed = 0;
-    for (let i = 0; i < symbols.length; i += 150) {
-      const slice = symbols.slice(i, i + 150);
-      try {
-        const res = await getJson<FundamentalsBulk>(
-          '/fundamentals/bulk?symbols=' + encodeURIComponent(slice.join(',')),
-        );
-        Object.assign(merged.data, res.data || {});
-        merged.pending.push(...(res.pending || []));
-        merged.cached += res.cached || 0;
-        merged.total += res.total || slice.length;
-        if (res.provider) merged.provider = res.provider;
-      } catch {
-        // One bad batch shouldn't lose the rest — treat its symbols as still
-        // pending so the caller retries them rather than marking them absent.
-        merged.pending.push(...slice);
-        merged.total += slice.length;
-        failed += 1;
-      }
-    }
+    const slices: string[][] = [];
+    for (let i = 0; i < symbols.length; i += 150) slices.push(symbols.slice(i, i + 150));
+
+    await pooled(
+      slices.map((slice) => async () => {
+        try {
+          const res = await getJson<FundamentalsBulk>(
+            '/fundamentals/bulk?symbols=' + encodeURIComponent(slice.join(',')),
+          );
+          Object.assign(merged.data, res.data || {});
+          merged.pending.push(...(res.pending || []));
+          merged.cached += res.cached || 0;
+          merged.total += res.total || slice.length;
+          if (res.provider) merged.provider = res.provider;
+        } catch {
+          // One bad batch shouldn't lose the rest — treat its symbols as still
+          // pending so the caller retries them rather than marking them absent.
+          merged.pending.push(...slice);
+          merged.total += slice.length;
+          failed += 1;
+        }
+      }),
+      BULK_CONCURRENCY,
+    );
     // Every batch failing is a real outage, not "this data doesn't exist" —
     // let the caller show an error instead of silently blanking the column.
-    if (failed && failed === Math.ceil(symbols.length / 150)) {
+    if (failed && failed === slices.length) {
       throw new Error('Could not load company financials');
     }
     return merged;
@@ -1607,18 +1653,18 @@ export const api = {
   fundamentals: (symbol: string) =>
     getJson<Fundamentals>('/fundamentals?symbol=' + encodeURIComponent(symbol)),
   graph: (symbol?: string, ai?: AiCreds) => fetchGraph(symbol, ai),
-  indexConstituents: (name: string) =>
-    getJson<IndexResp>('/index?name=' + encodeURIComponent(name)),
+  indexConstituents: (name: string, force = false) =>
+    cachedGet<IndexResp>('/index?name=' + encodeURIComponent(name), TTL.index, force),
   // Server-computed breadth + top gainers/losers (resilient: NSE pChange, else a
   // Yahoo batch quote, else last-good). Keeps the dashboard populated even when
   // the NSE constituent feed falls back to the symbols-only CSV.
   movers: (index = 'NIFTY 50', n = 6) =>
     getJson<MoversResp>('/movers?index=' + encodeURIComponent(index) + '&n=' + n),
   // Landing-page windows: NSE public-issue calendar + traded G-Sec/SGB quotes.
-  ipos: () => getJson<IpoResp>('/ipos'),
-  gsec: () => getJson<GsecResp>('/gsec'),
+  ipos: () => cachedGet<IpoResp>('/ipos', TTL.slow),
+  gsec: () => cachedGet<GsecResp>('/gsec', TTL.slow),
   news: (force = false) =>
-    getJson<NewsResp>('/news' + (force ? '?force=1' : '')),
+    cachedGet<NewsResp>('/news' + (force ? '?force=1' : ''), TTL.news, force),
   tradeScan: (refresh = false) =>
     getJson<TradeScanResp>('/patterns/trade-scan' + (refresh ? '?refresh=1' : ''), 30000),
   sectorMembers: (sector: string, level = 'macro') =>
@@ -1629,13 +1675,24 @@ export const api = {
   // /returns caps at 50 symbols/call; batch and merge.
   returns: async (symbols: string[]): Promise<ReturnsResp> => {
     const merged: ReturnsResp = {};
-    for (let i = 0; i < symbols.length; i += 50) {
-      const res = await getJson<ReturnsResp>(
-        '/returns?symbols=' + encodeURIComponent(symbols.slice(i, i + 50).join(',')),
-        60000,
-      );
-      Object.assign(merged, res);
-    }
+    const slices: string[][] = [];
+    for (let i = 0; i < symbols.length; i += 50) slices.push(symbols.slice(i, i + 50));
+    await pooled(
+      slices.map((slice) => async () => {
+        try {
+          Object.assign(
+            merged,
+            await getJson<ReturnsResp>(
+              '/returns?symbols=' + encodeURIComponent(slice.join(',')),
+              60000,
+            ),
+          );
+        } catch {
+          /* a failed slice leaves those symbols absent rather than failing all */
+        }
+      }),
+      BULK_CONCURRENCY,
+    );
     return merged;
   },
   // Scans any number of symbols in small batches so results stream in instead
@@ -1653,19 +1710,32 @@ export const api = {
     const merged: Record<string, ScanRow> = {};
     let cached = 0;
     let computed = 0;
-    for (let i = 0; i < symbols.length; i += size) {
-      const slice = symbols.slice(i, i + size);
-      try {
-        const res = await scanBatch(slice);
-        Object.assign(merged, res.data || {});
-        cached += res.cached || 0;
-        computed += res.computed || 0;
-        opts?.onBatch?.(res.data || {}, Math.min(i + size, symbols.length), symbols.length);
-      } catch {
-        // One failed batch shouldn't kill the whole scan — report progress and move on.
-        opts?.onBatch?.({}, Math.min(i + size, symbols.length), symbols.length);
-      }
-    }
+    let seen = 0;
+
+    // These batches used to run one after another: a 500-symbol index is 42
+    // round-trips end to end, so the table filled at the speed of latency
+    // rather than the speed of the server (which answers a warm batch in
+    // milliseconds). Running several at once collapses that to a few waves.
+    const slices: string[][] = [];
+    for (let i = 0; i < symbols.length; i += size) slices.push(symbols.slice(i, i + size));
+
+    await pooled(
+      slices.map((slice) => async () => {
+        try {
+          const res = await scanBatch(slice);
+          Object.assign(merged, res.data || {});
+          cached += res.cached || 0;
+          computed += res.computed || 0;
+          seen += slice.length;
+          opts?.onBatch?.(res.data || {}, Math.min(seen, symbols.length), symbols.length);
+        } catch {
+          // One failed batch shouldn't kill the whole scan — report and move on.
+          seen += slice.length;
+          opts?.onBatch?.({}, Math.min(seen, symbols.length), symbols.length);
+        }
+      }),
+      SCAN_CONCURRENCY,
+    );
     return { data: merged, count: Object.keys(merged).length, cached, computed };
   },
   btStrategies: () => getJson<BtStrategiesResp>('/backtest/strategies'),

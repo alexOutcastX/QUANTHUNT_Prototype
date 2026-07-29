@@ -24,6 +24,10 @@ Environment=PORT=5000
 # and finish in seconds. Progress is in the developer portal, which can also stop
 # a sweep or start a scoped one.
 Environment=FUND_WARM=ALL
+# Keep the technical-scan cache hot so the screener paints from cache instead
+# of computing per visit. Add "NIFTY 500" here if the VM has the headroom —
+# each name costs one upstream history call per constituent per cycle.
+Environment=SCAN_WARM=NIFTY 50,NIFTY 100
 # Optional secrets/config (e.g. EODHD_API_KEY=...) — the leading '-' means the
 # service still starts if the file is absent. Deploys never overwrite it.
 EnvironmentFile=-/opt/quanthunt/.env
