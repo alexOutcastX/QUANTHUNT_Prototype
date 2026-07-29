@@ -16,9 +16,29 @@
 //     truthful now and it updates in place a moment later.
 //
 // Writes are never cached. Anything the user changes goes straight through.
-import AsyncStorage from '@react-native-async-storage/async-storage';
+//
+// Persistence is INJECTED rather than imported: this module stays free of any
+// React Native dependency so the cache logic can be bundled and unit-tested in
+// plain node. Without a backend it degrades to a memory-only cache, which is
+// still correct — just not durable across launches.
 
 type Entry<T> = { v: T; ts: number };
+
+/** The slice of AsyncStorage this module needs. */
+export type Storage = {
+  getItem(k: string): Promise<string | null>;
+  setItem(k: string, v: string): Promise<void>;
+  removeItem(k: string): Promise<void>;
+  getAllKeys?(): Promise<readonly string[]>;
+  multiRemove?(keys: string[]): Promise<void>;
+};
+
+let store: Storage | null = null;
+
+/** Wire up durable storage. Called once by the app; tests leave it unset. */
+export function setStorage(s: Storage | null): void {
+  store = s;
+}
 
 const PREFIX = 'taureye.swr.';
 const mem = new Map<string, Entry<unknown>>();
@@ -54,10 +74,10 @@ export function peek<T>(key: string): T | null {
 
 /** Pull one key off disk into memory. Runs once per key per session. */
 async function hydrate(key: string): Promise<void> {
-  if (hydrated.has(key) || mem.has(key)) return;
+  if (hydrated.has(key) || mem.has(key) || !store) return;
   hydrated.add(key);
   try {
-    const raw = await AsyncStorage.getItem(PREFIX + key);
+    const raw = await store.getItem(PREFIX + key);
     if (!raw) return;
     const e = JSON.parse(raw) as Entry<unknown>;
     // A later in-session write always wins over what was on disk.
@@ -68,7 +88,7 @@ async function hydrate(key: string): Promise<void> {
 }
 
 function persist(key: string, e: Entry<unknown>): void {
-  AsyncStorage.setItem(PREFIX + key, JSON.stringify(e)).catch(() => {
+  store?.setItem(PREFIX + key, JSON.stringify(e)).catch(() => {
     /* quota or serialisation — the memory copy still works */
   });
 }
@@ -124,7 +144,7 @@ export function invalidate(prefix: string): void {
     if (k === prefix || k.startsWith(prefix)) {
       mem.delete(k);
       hydrated.delete(k);
-      AsyncStorage.removeItem(PREFIX + k).catch(() => {});
+      store?.removeItem(PREFIX + k).catch(() => {});
     }
   }
 }
@@ -134,8 +154,8 @@ export async function clearAll(): Promise<void> {
   mem.clear();
   hydrated.clear();
   try {
-    const keys = await AsyncStorage.getAllKeys();
-    await AsyncStorage.multiRemove(keys.filter((k) => k.startsWith(PREFIX)));
+    const keys = (await store?.getAllKeys?.()) || [];
+    await store?.multiRemove?.(keys.filter((k) => k.startsWith(PREFIX)));
   } catch {
     /* ignore */
   }

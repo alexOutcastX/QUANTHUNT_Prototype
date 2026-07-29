@@ -9,7 +9,12 @@
 // On web the app is served by the same Flask server that exposes the API, so
 // default to same-origin (relative URLs). Native builds hit the VM directly.
 import { Platform } from 'react-native';
-import { pooled, swr } from './swr';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { pooled, setStorage, swr } from './swr';
+
+// swr.ts is deliberately free of React Native imports so its logic can be
+// unit-tested in plain node; the app supplies the durable backend here.
+setStorage(AsyncStorage);
 
 // Inside the Capacitor Android shell the bundle runs as react-native-web, so
 // Platform.OS === 'web', but the page origin is capacitor://localhost — a
