@@ -104,28 +104,14 @@ jobs:
             --exclude 'graph_cache.json' --exclude 'broker_token.json' --exclude 'quanthunt.db*' \
             -e "ssh -i ~/.ssh/id_deploy" ./ "$U@$H:$APP/"
           # Install any new deps, sync the systemd unit (so gunicorn tuning like
-          # thread count is version-controlled and applied on deploy), install
-          # the nginx tuning drop-in, then restart gunicorn and reload nginx.
-          #
-          # The drop-in is a SEPARATE file on purpose. quanthunt.conf stops
-          # being ours the moment TLS is enabled — `certbot --nginx` rewrites it
-          # in place with the 443 block and the certificate paths — so copying
-          # the repo's copy over it would delete the site's HTTPS config. Edge
-          # settings that the deploy must be able to change therefore live in
-          # deploy/nginx-tuning.conf, which certbot never opens. Before this,
-          # nothing copied nginx config at all: the 414 fix sat in the repo,
-          # looking deployed, for as long as it took someone to notice.
-          #
-          # If the drop-in fails `nginx -t`, it is removed and the step fails —
-          # nginx keeps serving its existing config and the reload never runs.
+          # thread count is version-controlled and applied on deploy), then
+          # restart gunicorn and reload nginx.
           ssh -i ~/.ssh/id_deploy "$U@$H" "\
             $APP/venv/bin/pip install -q -r $APP/requirements.txt gunicorn && \
             sed 's/__DEPLOY_USER__/$U/g' $APP/deploy/quanthunt.service | sudo tee /etc/systemd/system/quanthunt.service >/dev/null && \
             sudo systemctl daemon-reload && \
             sudo systemctl restart quanthunt && \
             (sudo restorecon -R $APP 2>/dev/null || true) && \
-            sudo cp $APP/deploy/nginx-tuning.conf /etc/nginx/conf.d/zz-taureye-tuning.conf && \
-            { sudo nginx -t || { sudo rm -f /etc/nginx/conf.d/zz-taureye-tuning.conf; sudo nginx -t; false; }; } && \
             sudo systemctl reload nginx"
 
       - name: Verify the app is up (post-deploy smoke test)
