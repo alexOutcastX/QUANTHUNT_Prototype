@@ -29,6 +29,7 @@ const CorporateScreen = lazyScreen(() => import('./CorporateScreen'));
 const DerivativesScreen = lazyScreen(() => import('./DerivativesScreen'));
 const MomentumScreen = lazyScreen(() => import('./MomentumScreen'));
 const MultibaggerScreen = lazyScreen(() => import('./MultibaggerScreen'));
+const PennyScreen = lazyScreen(() => import('./PennyScreen'));
 const PatternScreen = lazyScreen(() => import('./PatternScreen'));
 const RecommendationsScreen = lazyScreen(() => import('./RecommendationsScreen'));
 const RiskScreen = lazyScreen(() => import('./RiskScreen'));
@@ -231,10 +232,13 @@ const SCREENER_TABS: SubTab[] = [
   { key: 'custom', label: 'Custom', render: () => <ScreenerScreen /> },
   { key: 'mb', label: 'Multibagger', render: () => <MultibaggerScreen /> },
   { key: 'momentum', label: 'Momentum', render: () => <MomentumScreen /> },
+  { key: 'penny', label: 'Penny', render: () => <PennyScreen /> },
 ];
 // Legacy intent sub-keys → inner tab. 'screener' (the outer tab's own key)
 // means the raw custom screener.
-const SCREENER_SUBS: Record<string, string> = { screener: 'custom', mb: 'mb', momentum: 'momentum' };
+const SCREENER_SUBS: Record<string, string> = {
+  screener: 'custom', mb: 'mb', momentum: 'momentum', penny: 'penny',
+};
 
 export function ScreenerHub() {
   const pick = (sub?: string) => (sub && SCREENER_SUBS[sub]) || null;

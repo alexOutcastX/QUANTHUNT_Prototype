@@ -2815,6 +2815,36 @@ def multibagger_screen():
     return jsonify(mbs.snapshot())
 
 
+@app.route("/penny/screen")
+def penny_screen_route():
+    """Penny-stock screen: low-priced scrips graded by whether you could
+    actually trade them and whether a business exists underneath.
+
+    Price and turnover come from the bhavcopy universe that is already cached,
+    and fundamentals are read from the warm cache WITHOUT fetching — so a screen
+    over the whole listed market costs no outbound calls."""
+    import penny_screen as ps
+
+    band = request.args.get("band") or ps.DEFAULT_BAND
+    try:
+        min_turnover = float(request.args.get("min_turnover") or 0)
+    except (TypeError, ValueError):
+        min_turnover = 0.0
+    try:
+        limit = int(request.args.get("limit") or 300)
+    except (TypeError, ValueError):
+        limit = 300
+
+    uni = get_universe_nonblocking()
+    funds = _fund.cached_many([u["symbol"] for u in uni if u.get("symbol")])
+    payload = ps.screen(uni, funds, band=band, min_turnover=min_turnover,
+                        max_risk=request.args.get("max_risk"),
+                        exchange=request.args.get("exchange"), limit=limit)
+    payload["universe"] = len(uni)
+    payload["warming"] = not uni
+    return jsonify(payload)
+
+
 @app.route("/sectors/members")
 def sector_members():
     """Constituent stocks of one heatmap bucket (symbol, name, price, day chg),
