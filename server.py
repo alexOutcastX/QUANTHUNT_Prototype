@@ -4712,22 +4712,43 @@ def report():
         # Valuation is computed here, from values already in hand, so the
         # dossier gets it without a second round trip. Best-effort: a valuation
         # that cannot be built must never cost the reader the rest of the report.
+        #
+        # EVERY input falls back to the fundamentals cache. All of these used to
+        # be read from the yfinance `info` blob alone — which is precisely the
+        # call that gets rate-limited from a cloud IP. When it came back thin,
+        # the whole valuation section rendered as em-dashes: no earnings yield,
+        # no book value, no PEG, no EV multiples — while the fundamentals card
+        # an inch above it showed a full P/E and P/B from a different, cached,
+        # far more reliable source. Deriving a yield needs the same P/E either
+        # way, so there is no reason for one panel to know it and the other not.
         try:
+            _fc = _fund.get_one(sym) or {}
+
+            def _pick(a, b):
+                return a if a is not None else b
+
             _px = r2(info.get("currentPrice") or info.get("regularMarketPrice")) \
                 or (tech or {}).get("price")
             _latest = (fin_years or [{}])[0] if fin_years else {}
-            _sec_name = _sectors.sector_of(sym, info.get("sector")) or info.get("sector")
+            _sec_name = (_sectors.sector_of(sym, info.get("sector")) or info.get("sector")
+                         or _fc.get("sector"))
             valuation = _valuation.value(
-                price=_px, eps=r2(info.get("trailingEps")), pe=pe, pb=pb,
-                market_cap_cr=mcap_cr,
-                fcf_cr=(cf or {}).get("fcf"), ocf_cr=(cf or {}).get("ocf"),
+                price=_px,
+                eps=_pick(r2(info.get("trailingEps")), _fc.get("eps")),
+                pe=_pick(pe, _fc.get("pe")),
+                pb=_pick(pb, _fc.get("pb")),
+                market_cap_cr=_pick(mcap_cr, _fc.get("market_cap_cr")),
+                fcf_cr=_pick((cf or {}).get("fcf"), _fc.get("fcf_cr")),
+                ocf_cr=_pick((cf or {}).get("ocf"), _fc.get("ocf_cr")),
                 total_debt_cr=(bs or {}).get("total_debt"),
                 cash_cr=(bs or {}).get("cash"),
-                revenue_cr=_latest.get("revenue"),
+                revenue_cr=_pick(_latest.get("revenue"), _fc.get("revenue_cr")),
                 op_income_cr=_latest.get("op_income"),
-                dividend_yield_pct=dy,
-                earnings_growth_pct=pct(info.get("earningsGrowth")),
-                fin_years=fin_years, roe_pct=roe,
+                dividend_yield_pct=_pick(dy, _fc.get("dividend_yield")),
+                earnings_growth_pct=_pick(pct(info.get("earningsGrowth")),
+                                          _fc.get("earnings_growth_pct")),
+                fin_years=fin_years,
+                roe_pct=_pick(roe, _fc.get("roe")),
                 sector=_sec_name, peers=(_fund.sector_medians() or {}).get(_sec_name))
         except Exception as e:
             log.warning("Valuation failed for %s: %s", sym, e)

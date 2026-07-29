@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Linking,
@@ -231,6 +231,44 @@ export default function AnalysisScreen() {
   const tech = d?.tech;
   const rep = d?.rep;
   const val = rep?.valuation || null;
+  // A ratio is a ratio wherever its inputs come from. The valuation block is
+  // built server-side off the yfinance `info` blob, which is the exact call
+  // that gets rate-limited from a cloud IP — and when it came back thin every
+  // derived row here went to an em-dash while the fundamentals card an inch
+  // above showed a perfectly good P/E and P/B. These recompute from whatever
+  // IS on the page, so a missing valuation object costs the assumptions and
+  // the intrinsic-value estimates, not the arithmetic anyone can do by hand.
+  const vm = useMemo(() => {
+    const m0 = val?.multiples;
+    const pe = m0?.pe ?? fund?.pe ?? null;
+    const pb = m0?.pb ?? fund?.pb ?? null;
+    const px = tech?.price ?? mb?.price ?? null;
+    const mcap = fund?.market_cap_cr ?? null;
+    const ocf = fund?.ocf_cr ?? null;
+    const capex = fund?.capex_cr ?? null;
+    // Reported FCF first; otherwise OCF less capex, which is its definition.
+    const fcf = fund?.fcf_cr ?? (ocf != null && capex != null ? ocf - Math.abs(capex) : null);
+    const ok = (v: number | null | undefined) => (typeof v === 'number' && isFinite(v) ? v : null);
+    const pos = (v: number | null | undefined) => { const n = ok(v); return n != null && n > 0 ? n : null; };
+    return {
+      pe: ok(pe),
+      pb: ok(pb),
+      fcf: ok(fcf),
+      bvps: m0?.bvps ?? (px != null && pos(pb) ? px / (pb as number) : null),
+      earnings_yield_pct: m0?.earnings_yield_pct ?? (pos(pe) ? 100 / (pe as number) : null),
+      fcf_yield_pct: m0?.fcf_yield_pct ?? (ok(fcf) != null && pos(mcap) ? (fcf as number) / (mcap as number) * 100 : null),
+      peg: val?.multiples.peg ?? fund?.peg ?? null,
+      ev_ebitda: m0?.ev_ebitda ?? null,
+      ev_sales: m0?.ev_sales ?? null,
+      // OCF / PAT, with PAT backed out of market cap and P/E when the provider
+      // didn't publish it directly.
+      cash_conversion_pct:
+        fund?.cash_conversion_pct ??
+        (ok(ocf) != null && pos(mcap) && pos(pe)
+          ? (ocf as number) / ((mcap as number) / (pe as number)) * 100
+          : null),
+    };
+  }, [val, fund, mb, tech]);
   const bal = rep?.balance_sheet;
   const cflow = rep?.cash_flow;
   // screener.in balance figures (borrowings / reserves / equity capital) — real
@@ -401,23 +439,22 @@ export default function AnalysisScreen() {
                 <Card>
                   <KV k="P/E (trailing)" v={plain(m.pe ?? fund?.pe ?? null, 1)} />
                   <KV k="Forward P/E" v={plain(fund?.forward_pe ?? null, 1)} />
-                  <KV k="PEG" v={plain(val?.multiples.peg ?? m.peg ?? null, 2)} />
+                  <KV k="PEG" v={plain(vm.peg ?? m.peg ?? null, 2)} />
                   <KV k="Price / book" v={plain(fund?.pb ?? null, 2)} />
-                  <KV k="Book value / share" v={val?.multiples.bvps != null ? `₹${val.multiples.bvps}` : '—'} />
+                  <KV k="Book value / share" v={vm.bvps != null ? `₹${vm.bvps.toFixed(2)}` : '—'} />
                   <KV k="EPS" v={plain(fund?.eps ?? null, 2)} />
-                  <KV k="Earnings yield" v={num(val?.multiples.earnings_yield_pct ?? null, 2, '%')} />
-                  <KV k="Free-cash-flow yield" v={num(val?.multiples.fcf_yield_pct ?? null, 2, '%')}
-                      color={dirColor(val?.multiples.fcf_yield_pct ?? null)} />
+                  <KV k="Earnings yield" v={num(vm.earnings_yield_pct, 2, '%')} />
+                  <KV k="Free-cash-flow yield" v={num(vm.fcf_yield_pct, 2, '%')}
+                      color={dirColor(vm.fcf_yield_pct)} />
                   <KV k="Dividend yield" v={num(fund?.dividend_yield != null ? fund.dividend_yield : null, 2, '%')} />
-                  <KV k="EV / EBITDA" v={plain(val?.multiples.ev_ebitda ?? null, 2)} />
-                  <KV k="EV / sales" v={plain(val?.multiples.ev_sales ?? null, 2)} />
+                  <KV k="EV / EBITDA" v={plain(vm.ev_ebitda, 2)} />
+                  <KV k="EV / sales" v={plain(vm.ev_sales, 2)} />
                   {/* Cash flow, from the company's own annual NSE filing. */}
                   <KV k="Operating cash flow" v={fmtCr(fund?.ocf_cr ?? null)} />
                   <KV k="Capital expenditure" v={fmtCr(fund?.capex_cr ?? null)} />
-                  <KV k="Free cash flow" v={fmtCr(fund?.fcf_cr ?? null)}
-                      color={dirColor(fund?.fcf_cr ?? null)} />
-                  <KV k="Cash conversion (OCF/PAT)" v={num(fund?.cash_conversion_pct ?? null, 0, '%')}
-                      color={dirColor(fund?.cash_conversion_pct != null ? fund.cash_conversion_pct - 100 : null)} />
+                  <KV k="Free cash flow" v={fmtCr(vm.fcf)} color={dirColor(vm.fcf)} />
+                  <KV k="Cash conversion (OCF/PAT)" v={num(vm.cash_conversion_pct, 0, '%')}
+                      color={dirColor(vm.cash_conversion_pct != null ? vm.cash_conversion_pct - 100 : null)} />
                   <KV k="ROCE" v={num(fund?.roce != null ? fund.roce : null, 1, '%')} />
                   <KV k="vs 200-DMA" v={pctS(m.vs_200dma_pct)} color={dirColor(m.vs_200dma_pct)} />
                   <KV k="From 52-week high" v={pctS(m.pct_from_high_pct ?? tech?.pct_from_high ?? null)} color={dirColor(m.pct_from_high_pct ?? tech?.pct_from_high ?? null)} />
