@@ -11,7 +11,7 @@ import {
   View,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { api } from '../api';
+import { api, type IndexResp, type ScanRow } from '../api';
 import StockDetail from '../components/StockDetail';
 import { InfoDot } from '../components/InfoCard';
 import { ExportCol, exportCsv, exportExcel, exportPdf } from '../csv';
@@ -282,6 +282,19 @@ export function loadNames(): Promise<Record<string, { name: string; exchange: st
 
 // Fixed page size — 50 rows a page keeps the (sticky-header) table snappy.
 const PAGE_SIZE = 50;
+// Background technical sweep: how many symbols per chunk, and how many of that
+// chunk's batches may be in flight. Kept below the foreground setting so the
+// sweep never out-competes the page the user is actually reading.
+const SWEEP_CHUNK = 60;
+const SWEEP_CONCURRENCY = 2;
+
+// "2026-07-28" → "28 Jul", for the settled-close caption.
+const fmtDay = (iso: string): string => {
+  const d = new Date(iso + 'T00:00:00');
+  return isNaN(d.getTime())
+    ? iso
+    : `${d.getDate()} ${['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][d.getMonth()]}`;
+};
 
 // Reads a shared screen state from `#screen=` on the web URL, if present.
 function readSharedScreen(): ScreenState | null {
@@ -321,6 +334,12 @@ export default function ScreenerScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState<string>('');
+  // Where the prices on screen came from, so the status line can say whether
+  // they are a live tick or a settled close — and which session's close.
+  const [quoteInfo, setQuoteInfo] = useState<{ live: boolean; asOf: string | null }>({
+    live: true,
+    asOf: null,
+  });
   // Expression filter rows (TaurEye-style `<metric> <op> <value>` chained
   // with AND/OR). Presets and the NL builder append rows into the same list.
   const [expr, setExpr] = useState<ExprRow[]>([]);
@@ -483,8 +502,58 @@ export default function ScreenerScreen() {
   // Monotonic token so a stale in-flight scan can't write into a newer index's rows.
   const loadSeq = React.useRef(0);
 
+  // Technicals are fetched for WHAT IS ON SCREEN first, then swept in the
+  // background over the rest of the universe.
+  //
+  // The old path asked /scan for every symbol in the union up front. On a
+  // single index that was fine; on ALL MARKETS it is 1447 symbols — a hundred
+  // and twenty round trips, each of which may have to compute a year of daily
+  // bars upstream — and the table sat at "technicals 0/1447" indefinitely. The
+  // user only ever sees fifty rows at a time, so those fifty go first: one
+  // wave, and the visible page is full. Everything else still loads, just
+  // behind the part being looked at, which is what makes sorting and filtering
+  // across the whole universe work eventually without holding up first paint.
+  const [scanJob, setScanJob] = useState<
+    { seq: number; symbols: string[]; live: boolean } | null
+  >(null);
+  // Symbols already handed to /scan in this load — neither pass repeats work.
+  const scanReq = React.useRef<Set<string>>(new Set());
+  // Set while the visible page is fetching, so the background sweep stands off.
+  const pageScanBusy = React.useRef(false);
+
+  // Merge a batch of scan rows. Which side wins the price fields depends on
+  // where the seed came from: a live NSE quote is fresher than anything
+  // computed off daily bars, but a settled bhavcopy close is not — and letting
+  // it win was what pinned the table to yesterday's number.
+  const applyScan = useCallback((data: Record<string, ScanRow>, live: boolean) => {
+    setRows((prev) =>
+      prev.map((r) => {
+        const s = data[r.sym];
+        if (!s) return r;
+        const merged = { ...r, ...s };
+        if (live) {
+          merged.price = r.price ?? s.price;
+          merged.prevClose = r.prevClose ?? s.prevClose;
+          merged.chg = r.chg ?? s.chg;
+          merged.absChg = r.absChg ?? s.absChg;
+          merged.volume = r.volume ?? s.volume;
+        } else {
+          merged.price = s.price ?? r.price;
+          merged.prevClose = s.prevClose ?? r.prevClose;
+          merged.chg = s.chg ?? r.chg;
+          merged.absChg = s.absChg ?? r.absChg;
+          merged.volume = s.volume ?? r.volume;
+        }
+        return merged;
+      }),
+    );
+  }, []);
+
   const load = useCallback(async (sel: string[]) => {
     const seq = ++loadSeq.current;
+    scanReq.current = new Set();
+    pageScanBusy.current = false;
+    setScanJob(null);
     setError(null);
     setNote('');
     try {
@@ -525,41 +594,14 @@ export default function ScreenerScreen() {
       setRows(seeded);
       setLoading(false);
       setRefreshing(false);
-      const total = cons.length;
-      // CSV/cache fallback returns symbols without quotes — /scan fills prices.
-      const seedLabel = seeded.some((r) => r.price != null) ? 'live quotes' : 'symbols';
-      setNote(`${total} ${seedLabel} · technicals 0/${total}…`);
-      // 2) Technicals stream in batch by batch. Keep the fresher NSE live quote
-      //    over the scan's daily-bar figures.
-      let got = 0;
-      await api.scan(
-        cons.map((c) => c.symbol),
-        {
-          onBatch: (data, done) => {
-            if (seq !== loadSeq.current) return;
-            got += Object.keys(data).length;
-            setRows((prev) =>
-              prev.map((r) => {
-                const s = data[r.sym];
-                if (!s) return r;
-                return {
-                  ...r,
-                  ...s,
-                  price: r.price ?? s.price,
-                  prevClose: r.prevClose ?? s.prevClose,
-                  chg: r.chg ?? s.chg,
-                  absChg: r.absChg ?? s.absChg,
-                  volume: r.volume ?? s.volume,
-                };
-              }),
-            );
-            setNote(`${total} ${seedLabel} · technicals ${Math.min(done, total)}/${total}`);
-          },
-        },
-      );
-      if (seq === loadSeq.current) {
-        setNote(`${total} ${seedLabel} · ${got}/${total} technicals`);
-      }
+      // Quote provenance decides both the caption and who wins the /scan merge.
+      // 'nse' is a live tick; anything else is the last settled close, which is
+      // a real number worth showing — as long as it says which day it is.
+      const live = idxes.every((i) => (i as IndexResp).quote_source === 'nse');
+      const asOf = idxes.map((i) => (i as IndexResp).quote_date).find(Boolean) || null;
+      setQuoteInfo({ live, asOf: live ? null : asOf });
+      // 2) Technicals: the visible page first, the rest behind it.
+      setScanJob({ seq, symbols: cons.map((c) => c.symbol), live });
     } catch (e) {
       if (seq !== loadSeq.current) return;
       setError(e instanceof Error ? e.message : 'Failed to load');
@@ -587,10 +629,18 @@ export default function ScreenerScreen() {
   // a `pending` list still warming server-side — poll until pending drains
   // (bounded) so warming stocks aren't stuck at '—' or silently excluded by
   // strict fundamental filters.
+  //
+  // Keyed on the LOAD, not on `rows`. Every arriving scan batch replaces the
+  // rows array, and this effect used to depend on it: React ran the cleanup,
+  // which cancelled the poll mid-flight, and the body then started it over from
+  // round zero. With technicals streaming in a hundred batches deep, the
+  // fundamentals poll was reset a hundred times and never reached its warm
+  // rounds — which is why market cap stayed blank on the wider universes.
   const fundPolling = React.useRef(false);
   useEffect(() => {
-    if (fundPolling.current) return;
-    const missing = rows.filter((r) => r._fund === undefined).map((r) => r.sym);
+    const job = scanJob;
+    if (!job || fundPolling.current) return;
+    const missing = job.symbols;
     if (!missing.length) return;
     fundPolling.current = true;
     let cancelled = false;
@@ -626,10 +676,9 @@ export default function ScreenerScreen() {
       if (!cancelled) {
         // Anything never delivered is definitively unavailable (null), so the
         // effect doesn't loop and strict filters treat it consistently.
+        const asked = new Set(missing);   // a Set, not includes() — this runs over the whole universe
         setRows((prev) =>
-          prev.map((r) =>
-            missing.includes(r.sym) && r._fund === undefined ? { ...r, _fund: null } : r,
-          ),
+          prev.map((r) => (asked.has(r.sym) && r._fund === undefined ? { ...r, _fund: null } : r)),
         );
         setFundBusy(false);
       }
@@ -639,7 +688,7 @@ export default function ScreenerScreen() {
       cancelled = true;
       fundPolling.current = false;
     };
-  }, [rows]);
+  }, [scanJob]);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
@@ -710,6 +759,95 @@ export default function ScreenerScreen() {
     () => sorted.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE),
     [sorted, page],
   );
+
+  // Pass 1 — whatever is on screen right now. Re-runs on every rows change
+  // (pageRows is derived from them), which is the point: turning the page or
+  // re-sorting brings new symbols into view and they get fetched immediately.
+  // Deliberately has NO cleanup — an in-flight fetch must survive the re-render
+  // its own results cause. Staleness is handled by the load-sequence token.
+  useEffect(() => {
+    const job = scanJob;
+    if (!job || job.seq !== loadSeq.current) return;
+    const want = pageRows.map((r) => r.sym).filter((s) => !scanReq.current.has(s));
+    if (!want.length) return;
+    want.forEach((s) => scanReq.current.add(s));
+    pageScanBusy.current = true;
+    (async () => {
+      try {
+        await api.scan(want, {
+          onBatch: (data) => {
+            if (job.seq === loadSeq.current) applyScan(data, job.live);
+          },
+        });
+      } catch {
+        /* the sweep will come back around to these */
+      } finally {
+        pageScanBusy.current = false;
+      }
+    })();
+  }, [pageRows, scanJob, applyScan]);
+
+  // Pass 2 — everything else, so filtering and sorting on a technical column
+  // eventually cover the whole universe. Chunked, low concurrency, and it
+  // stands off whenever pass 1 is fetching: the rows being looked at always
+  // win the connection.
+  useEffect(() => {
+    const job = scanJob;
+    if (!job) return;
+    let stop = false;
+    const idle = () => new Promise((r) => setTimeout(r, 250));
+    (async () => {
+      await idle(); // let the first page claim the pool
+      for (let i = 0; i < job.symbols.length; i += SWEEP_CHUNK) {
+        if (stop || job.seq !== loadSeq.current) return;
+        while (pageScanBusy.current && !stop) await idle();
+        if (stop || job.seq !== loadSeq.current) return;
+        const chunk = job.symbols
+          .slice(i, i + SWEEP_CHUNK)
+          .filter((s) => !scanReq.current.has(s));
+        if (!chunk.length) continue;
+        chunk.forEach((s) => scanReq.current.add(s));
+        try {
+          const res = await api.scan(chunk, { concurrency: SWEEP_CONCURRENCY });
+          if (stop || job.seq !== loadSeq.current) return;
+          applyScan(res.data || {}, job.live);
+        } catch {
+          /* one bad chunk shouldn't end the sweep */
+        }
+      }
+    })();
+    return () => {
+      stop = true;
+    };
+  }, [scanJob, applyScan]);
+
+  // How many rows actually carry technicals. Derived rather than counted as
+  // batches land, so a symbol the upstream never answered for is reported as
+  // missing instead of quietly inflating the total.
+  const techCount = useMemo(
+    () => rows.reduce((n, r) => n + (r.rsi != null || r.d50 != null ? 1 : 0), 0),
+    [rows],
+  );
+
+  // The one status line under the toolbar. Load errors win; otherwise it says
+  // what the prices are, and how far the technicals have got.
+  const statusLine = useMemo(() => {
+    if (note) return note;
+    if (!rows.length) return '';
+    const priced = rows.reduce((n, r) => n + (r.price != null ? 1 : 0), 0);
+    const bits = [`${rows.length} symbols`];
+    // Only worth a number when some rows have no price at all.
+    if (priced < rows.length) bits.push(`${priced} priced`);
+    bits.push(
+      quoteInfo.live ? 'live quotes' : quoteInfo.asOf ? `${fmtDay(quoteInfo.asOf)} close` : 'quotes',
+    );
+    bits.push(
+      techCount >= rows.length
+        ? `${rows.length}/${rows.length} technicals`
+        : `technicals ${techCount}/${rows.length}…`,
+    );
+    return bits.join(' · ');
+  }, [note, rows, techCount, quoteInfo]);
 
   const stats = useMemo(() => {
     let buy = 0;
@@ -971,7 +1109,7 @@ export default function ScreenerScreen() {
       </View>
 
       <Text style={styles.note} numberOfLines={1}>
-        {note}
+        {statusLine}
         {fundBusy ? ' · loading fundamentals…' : ''}
         {/* Coverage for the fields actually being filtered on — the number that
             explains an empty table when a ·f filter is active. */}
