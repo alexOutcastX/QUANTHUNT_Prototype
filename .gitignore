@@ -40,3 +40,4 @@ sectors_cache.json
 sectors_cache.json.tmp
 mobile/dist-precompressed/
 bse_codes.json
+ipo_cache.json
