@@ -14,6 +14,7 @@ os.environ.setdefault("DB_PATH", os.path.join(
     os.environ.get("TMPDIR", "/tmp"), "taureye-fake-tradelog.db"))
 import tradelog as _tlog       # noqa: E402  (must follow the DB_PATH default)
 import cases as _tcases        # noqa: E402  the REAL case engine too
+import penny_screen as _penny  # noqa: E402  the REAL penny grader too
 
 DIST = os.path.join(os.path.dirname(__file__), "mobile", "dist")
 PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 5056
@@ -496,6 +497,54 @@ class H(BaseHTTPRequestHandler):
         self._json(_tlog.ledger(source=(q.get("source") or [None])[0],
                                 status=(q.get("status") or [None])[0]))
 
+    def _penny_screen(self):
+        """Graded by the real screen from a fixture universe covering every
+        outcome: a liquid profitable small-cap, a thin one, an illiquid shell,
+        and a scrip with nothing published at all."""
+        uni = [
+            {"symbol": "GOODSMALL", "name": "Good Small Ltd", "price": 8.4,
+             "turnover": 5.2e7, "chg": 2.1, "exchange": "NSE"},
+            {"symbol": "STEADYCO", "name": "Steady Co", "price": 6.1,
+             "turnover": 2.4e7, "chg": -0.8, "exchange": "NSE"},
+            {"symbol": "THINTRADE", "name": "Thin Trade Ltd", "price": 9.2,
+             "turnover": 6.0e6, "chg": 4.6, "exchange": "NSE"},
+            {"symbol": "SHELLCORP", "name": "Shell Corp", "price": 2.3,
+             "turnover": 1.4e5, "chg": 9.8, "exchange": "NSE"},
+            {"symbol": "NODATA", "name": "No Data Industries", "price": 4.7,
+             "turnover": 3.1e6, "chg": 0.0, "exchange": "NSE"},
+            {"symbol": "MIDPRICED", "name": "Mid Priced Ltd", "price": 34.0,
+             "turnover": 8.8e7, "chg": 1.1, "exchange": "NSE"},
+        ]
+        funds = {
+            "GOODSMALL": {"eps": 1.9, "roe": 19.0, "debt_equity": 0.22, "ocf_cr": 38.0,
+                          "market_cap_cr": 860.0, "pb": 1.7, "pe": 9.2,
+                          "revenue_growth_pct": 24.0, "sector": "Capital Goods"},
+            "STEADYCO": {"eps": 0.7, "roe": 13.5, "debt_equity": 0.44, "ocf_cr": 12.0,
+                         "market_cap_cr": 410.0, "pb": 1.2, "pe": 8.7,
+                         "revenue_growth_pct": 8.0, "sector": "Chemicals"},
+            "THINTRADE": {"eps": -0.4, "roe": -6.0, "debt_equity": 1.9, "ocf_cr": -4.0,
+                          "market_cap_cr": 120.0, "pb": 0.9,
+                          "revenue_growth_pct": -6.0, "sector": "Textiles"},
+            "SHELLCORP": {"eps": -1.4, "roe": -22.0, "debt_equity": 5.2, "ocf_cr": -21.0,
+                          "market_cap_cr": 32.0, "pb": -0.8,
+                          "revenue_growth_pct": -34.0, "sector": "Services"},
+            "MIDPRICED": {"eps": 4.2, "roe": 16.0, "debt_equity": 0.5, "ocf_cr": 95.0,
+                          "market_cap_cr": 2100.0, "pb": 2.1, "pe": 8.1,
+                          "revenue_growth_pct": 12.0, "sector": "Healthcare"},
+        }
+        q = parse_qs(urlparse(self.path).query)
+        try:
+            min_turnover = float((q.get("min_turnover") or ["0"])[0])
+        except ValueError:
+            min_turnover = 0.0
+        payload = _penny.screen(uni, funds,
+                                band=(q.get("band") or [_penny.DEFAULT_BAND])[0],
+                                min_turnover=min_turnover,
+                                max_risk=(q.get("max_risk") or [None])[0])
+        payload["universe"] = len(uni)
+        payload["warming"] = False
+        self._json(payload)
+
     def _cases(self):
         _seed_cases()
         syms = []
@@ -784,6 +833,8 @@ class H(BaseHTTPRequestHandler):
             return self._ltp()
         if path == "/tradelog":
             return self._tradelog()
+        if path == "/penny/screen":
+            return self._penny_screen()
         if path == "/cases":
             return self._cases()
         if path.startswith("/cases/"):

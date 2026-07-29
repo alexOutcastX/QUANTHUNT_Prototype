@@ -555,6 +555,29 @@ def get_one(sym: str) -> dict:
     return data
 
 
+def cached_many(symbols=None) -> dict:
+    """Whatever is ALREADY cached for these symbols — never fetches, never
+    enqueues, never blocks. Pass None for the whole cache.
+
+    This is the read path for screens that sweep the entire universe. Going
+    through get_one() there would fan out thousands of provider calls and
+    starve every other consumer of the outbound quota, which is exactly the
+    failure that took the scanner down once already.
+    """
+    with _lock:
+        if symbols is None:
+            items = list(_cache.items())
+        else:
+            wanted = {str(s).strip().upper() for s in symbols}
+            items = [(s, e) for s, e in _cache.items() if s in wanted]
+    out = {}
+    for sym, entry in items:
+        data = (entry or {}).get("data")
+        if data:
+            out[sym] = dict(data)
+    return out
+
+
 def enqueue(symbols) -> list:
     """Submit background fetches for any symbols not fresh in cache. Returns the
     list actually scheduled (already-cached / in-flight ones are skipped)."""
