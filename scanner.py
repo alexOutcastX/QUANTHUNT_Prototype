@@ -23,12 +23,20 @@ Fields returned per symbol (all best-effort; missing → null):
   cam_break_up, cam_break_down   (close beyond the Camarilla H4/L4 level)
 """
 import math
+import os
 import threading
 import time
 
 _CACHE = {}          # sym -> (ts, row|None)
 _CACHE_LOCK = threading.Lock()
-_TTL = 300           # 5 minutes for a good row
+# How long a computed row stays good. Every field here is derived from DAILY
+# bars — RSI, the moving-average distances, the 52-week extremes — so a row a
+# few minutes old is not meaningfully different from a fresh one, while the
+# recompute costs a full history fetch through a 4-wide upstream semaphore.
+# Five minutes was short enough that a wide universe could never finish warming
+# before the head of the list expired again; fifteen lets the warm loop hold
+# ~3x the symbols for the same sustained call rate.
+_TTL = int(os.environ.get("SCAN_TTL", "900"))
 # A failed row (None) previously stuck for the full 5 minutes, so one transient
 # Yahoo blip dropped the symbol from the screener for that long. Retry failures
 # much sooner (but not every request, to avoid hammering a genuinely dead sym).

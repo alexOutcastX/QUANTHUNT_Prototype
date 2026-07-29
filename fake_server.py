@@ -408,10 +408,17 @@ class H(BaseHTTPRequestHandler):
             f"STOCK{i:02d}" for i in range(48)]
 
     def _index_cons(self):
+        # Mirrors what production actually serves: NSE Direct is blocked from
+        # cloud IPs, so the constituent list comes from the quoteless CSV and
+        # the server backfills prices from the daily bhavcopy. The response is
+        # therefore fully priced but labelled as a settled close — and the
+        # client has to keep showing it while preferring /scan's numbers.
         rows = [{"symbol": s, "price": 1000 + i * 137.5, "prevClose": 990 + i * 137.0,
                  "chg": (-2.5 + i * 0.6), "absChg": 10 + i, "volume": 1500000 + i * 250000}
                 for i, s in enumerate(self.SYMS)]
-        self._json({"index": "NIFTY 50", "count": len(rows), "data": rows})
+        self._json({"index": "NIFTY 50", "count": len(rows), "data": rows,
+                    "source": "niftyindices-csv", "quote_source": "bhavcopy",
+                    "quote_date": "2026-07-28", "priced": len(rows)})
 
     def _scan(self):
         data = {}
@@ -583,13 +590,16 @@ class H(BaseHTTPRequestHandler):
         self.wfile.write(json.dumps(payload).encode())
 
     def _universe(self):
-        syms = [{"symbol": s, "name": f"{s.title()} Industries Limited", "exchange": "NSE"}
-                for s in self.SYMS]
+        # The master list carries bhavcopy quotes, same as the real route.
+        syms = [{"symbol": s, "name": f"{s.title()} Industries Limited", "exchange": "NSE",
+                 "price": 1000 + i * 137.5, "chg": (-2.5 + i * 0.6),
+                 "volume": 1500000 + i * 250000}
+                for i, s in enumerate(self.SYMS)]
         # BSE-only scrips (never on NSE) — must be searchable in predictive too.
         syms.append({"symbol": "CIANAGRO", "name": "Cian Agro Industries & Infrastructure Ltd",
-                     "exchange": "BSE"})
+                     "exchange": "BSE", "price": 84.5, "chg": 1.2, "volume": 12000})
         self._json({"ready": True, "total": len(syms), "nse": len(self.SYMS),
-                    "bse": 1, "symbols": syms})
+                    "bse": 1, "as_of": "2026-07-28", "symbols": syms})
 
     def _shareholding(self):
         from urllib.parse import urlparse, parse_qs

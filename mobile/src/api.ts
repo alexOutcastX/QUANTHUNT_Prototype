@@ -131,12 +131,18 @@ async function postJson<T>(path: string, body: unknown): Promise<T> {
 export type Ping = { server: string; status: string; source?: string; version?: string };
 export type Version = { version: string; commit: string };
 
-export type UniverseSymbol = { symbol: string; name: string; exchange: string };
+export type UniverseSymbol = {
+  symbol: string; name: string; exchange: string;
+  // Previous settled close from the daily bhavcopy — present for every NSE
+  // symbol, so any screen holding the master list can show a real price.
+  price?: number | null; chg?: number | null; volume?: number | null;
+};
 export type UniverseResp = {
   ready: boolean;
   total: number;
   nse: number;
   bse: number;
+  as_of?: string | null;
   symbols: UniverseSymbol[];
 };
 
@@ -323,6 +329,15 @@ export type IndexResp = {
   index: string;
   count: number;
   data: IndexConstituent[];
+  source?: string;
+  // Where the PRICES came from, which is not the same question as where the
+  // constituent list came from. 'nse' is live and outranks anything /scan
+  // computes off daily bars; 'bhavcopy' is the previous settled close, shown
+  // so the table is never blank — but it yields to the first technical row.
+  quote_source?: 'nse' | 'bhavcopy' | 'mixed' | 'none';
+  quote_date?: string | null;
+  priced?: number;
+  note?: string;
   error?: string;
 };
 export type MoversResp = {
@@ -1703,6 +1718,9 @@ export const api = {
     symbols: string[],
     opts?: {
       batch?: number;
+      // Lower it for background work so a bulk sweep can't crowd out the
+      // fetch for the rows currently on screen.
+      concurrency?: number;
       onBatch?: (data: Record<string, ScanRow>, done: number, total: number) => void;
     },
   ): Promise<ScanResp> => {
@@ -1734,7 +1752,7 @@ export const api = {
           opts?.onBatch?.({}, Math.min(seen, symbols.length), symbols.length);
         }
       }),
-      SCAN_CONCURRENCY,
+      opts?.concurrency ?? SCAN_CONCURRENCY,
     );
     return { data: merged, count: Object.keys(merged).length, cached, computed };
   },
