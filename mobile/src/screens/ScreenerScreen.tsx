@@ -338,6 +338,24 @@ export default function ScreenerScreen() {
     if (!usesFund) return 0;
     return rows.reduce((n, r) => n + (r._fund === undefined ? 1 : 0), 0);
   }, [expr, rows]);
+
+  // How many rows the ACTIVE fundamental filters can actually be evaluated
+  // against. A row whose financials came back empty — or that has a value for
+  // every field except the one being filtered on — silently fails the filter,
+  // so "0 matches" reads as "your filter is too strict" when the truth is
+  // "this data was never published for these symbols". Count it and say so.
+  const fundCoverage = useMemo(() => {
+    const keys = (expr || [])
+      .map((e) => DEF_BY_KEY[e.key])
+      .filter((d) => d?.fund);
+    if (!keys.length || !rows.length) return null;
+    let usable = 0;
+    for (const r of rows) {
+      if (r._fund === undefined || r._fund === null) continue;
+      if (keys.every((d) => d!.get(r) != null)) usable += 1;
+    }
+    return { usable, total: rows.length, labels: keys.map((d) => d!.label) };
+  }, [expr, rows]);
   const [detail, setDetail] = useState<Row | null>(null);
   const [restored, setRestored] = useState(false);
   // Column show/hide + order prefs.
@@ -955,6 +973,9 @@ export default function ScreenerScreen() {
       <Text style={styles.note} numberOfLines={1}>
         {note}
         {fundBusy ? ' · loading fundamentals…' : ''}
+        {/* Coverage for the fields actually being filtered on — the number that
+            explains an empty table when a ·f filter is active. */}
+        {!fundBusy && fundCoverage ? ` · ${fundCoverage.usable}/${fundCoverage.total} with financials` : ''}
         {error ? ` · ${error}` : ''}
       </Text>
 
@@ -993,12 +1014,22 @@ export default function ScreenerScreen() {
                  universe reads "0 matches" while it is merely still loading —
                  say so instead of blaming the filter. */
               <EmptyState
-                icon={fundWaiting ? '↻' : '⌕'}
-                title={fundWaiting ? 'Fetching company financials…' : 'No matches'}
+                icon={fundWaiting ? '↻' : fundCoverage && !fundCoverage.usable ? '⚠' : '⌕'}
+                title={
+                  fundWaiting
+                    ? 'Fetching company financials…'
+                    : fundCoverage && !fundCoverage.usable
+                      ? 'No financials to filter on'
+                      : 'No matches'
+                }
                 hint={
                   fundWaiting
                     ? `${fundWaiting} of ${rows.length} symbols still to load. Fundamental filters (·f) can only match once a symbol's financials arrive — results will fill in as they do.`
-                    : 'Loosen or clear a filter to see more of this index.'
+                    : fundCoverage && !fundCoverage.usable
+                      ? `None of these ${rows.length} symbols has a published value for ${fundCoverage.labels.join(' or ')}, so the ·f filter cannot match anything — this is missing data, not a strict filter. Company financials are thinnest on the widest universes; try a narrower index, or screen on technicals instead.`
+                      : fundCoverage && fundCoverage.usable < rows.length
+                        ? `Only ${fundCoverage.usable} of ${rows.length} symbols have a published ${fundCoverage.labels.join(' / ')}, and none of those passed. Loosen the filter, or switch to a narrower index where financial coverage is better.`
+                        : 'Loosen or clear a filter to see more of this index.'
                 }
               />
             ) : (

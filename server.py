@@ -2835,13 +2835,15 @@ def penny_screen_route():
     except (TypeError, ValueError):
         limit = 300
 
-    uni = get_universe_nonblocking()
+    # get_universe_nonblocking returns (rows, warming) — not a bare list.
+    uni, warming = get_universe_nonblocking()
+    uni = uni or []
     funds = _fund.cached_many([u["symbol"] for u in uni if u.get("symbol")])
     payload = ps.screen(uni, funds, band=band, min_turnover=min_turnover,
                         max_risk=request.args.get("max_risk"),
                         exchange=request.args.get("exchange"), limit=limit)
     payload["universe"] = len(uni)
-    payload["warming"] = not uni
+    payload["warming"] = bool(warming or not uni)
     return jsonify(payload)
 
 
