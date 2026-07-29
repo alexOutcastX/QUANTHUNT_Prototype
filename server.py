@@ -3356,26 +3356,61 @@ def returns():
 # a hot cache instead of waiting out a cold 50-symbol yfinance sweep. Refreshes
 # just inside scanner's 5-min TTL. Disable with SCAN_WARM=off; point at another
 # index with e.g. SCAN_WARM="NIFTY 100".
-SCAN_WARM = os.environ.get("SCAN_WARM", "NIFTY 50").strip()
+# Comma-separated index names to keep technically warm. Default covers the two
+# most-opened lists; widen it on a bigger VM (e.g. "NIFTY 50,NIFTY 100,NIFTY 500")
+# and watch the upstream budget — every extra name is more calls per cycle.
+SCAN_WARM = os.environ.get("SCAN_WARM", "NIFTY 50,NIFTY 100").strip()
+SCAN_WARM_CHUNK = int(os.environ.get("SCAN_WARM_CHUNK", "60"))
+SCAN_WARM_PAUSE = float(os.environ.get("SCAN_WARM_PAUSE", "2"))
+SCAN_WARM_CYCLE = float(os.environ.get("SCAN_WARM_CYCLE", "240"))
+
+
+def _warm_index_symbols(name):
+    """Constituent symbols for one index name, for the warm loop."""
+    key = NSE_INDEX_MAP.get(name.strip().upper())
+    if not key:
+        return []
+    data = nse_get("/api/equity-stockIndices", params={"index": key})
+    return [it.get("symbol") for it in data.get("data", [])
+            if it.get("symbol") and it.get("symbol") != key]
 
 
 def _warm_scan_loop():
+    """Keep the technical-scan cache hot for the indices users actually open.
+
+    Previously this warmed ONE index, and scanner.scan() caps a call at 60
+    symbols — so anything past NIFTY 50 was computed live, per user, per visit,
+    which is what made the screener slow on the wider universes.
+
+    It now walks a list of indices in chunks. The pacing matters more than the
+    coverage: every row costs one upstream history call through the same global
+    cap the interactive scan uses, so an unpaced sweep would starve the very
+    requests it is meant to speed up (which is exactly what the fundamentals
+    sweep once did). Chunks are small and separated by a deliberate pause.
+    """
+    names = [n.strip() for n in SCAN_WARM.split(",") if n.strip()]
     time.sleep(15)  # let the service settle before hitting data sources
     while True:
-        try:
-            key = NSE_INDEX_MAP.get(SCAN_WARM.upper())
-            syms = []
-            if key:
-                data = nse_get("/api/equity-stockIndices", params={"index": key})
-                syms = [it.get("symbol") for it in data.get("data", [])
-                        if it.get("symbol") and it.get("symbol") != key]
-            if syms:
-                res = _scanner.scan(syms)
+        started = time.time()
+        for name in names:
+            try:
+                syms = _warm_index_symbols(name)
+                if not syms:
+                    continue
+                warmed = computed = 0
+                for i in range(0, len(syms), SCAN_WARM_CHUNK):
+                    chunk = syms[i:i + SCAN_WARM_CHUNK]
+                    res = _scanner.scan(chunk)
+                    warmed += res["count"]
+                    computed += res["computed"]
+                    time.sleep(SCAN_WARM_PAUSE)   # yield the upstream budget
                 log.info("Scan warm: %s -> %d/%d rows (%d computed)",
-                         SCAN_WARM, res["count"], len(syms[:60]), res["computed"])
-        except Exception as e:
-            log.warning("Scan warm failed: %s", e)
-        time.sleep(240)
+                         name, warmed, len(syms), computed)
+            except Exception as e:
+                log.warning("Scan warm failed for %s: %s", name, e)
+        # Re-warm on a cycle a little under the row TTL so a warmed row is
+        # still fresh when the next user asks for it.
+        time.sleep(max(30, SCAN_WARM_CYCLE - (time.time() - started)))
 
 
 def start_scan_warm():
