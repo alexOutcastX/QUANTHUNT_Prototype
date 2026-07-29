@@ -116,6 +116,39 @@ function check(name, ok, detail) {
     const bodyText = await page.evaluate(() => document.body.innerText);
     check('Screens hub renders', /Screener|Momentum|Multibagger/.test(bodyText));
 
+    // 4a · the screener table actually carries DATA.
+    //
+    // The regression this guards against shipped: every price column rendered
+    // '—' because the constituent feed carried no quotes and the technical
+    // sweep was asked for the whole universe at once, so it never landed. The
+    // fixture now answers /index the way production does — a quoteless CSV list
+    // that the server backfills from the bhavcopy — so a blank table here means
+    // the client dropped the prices it was handed.
+    const table = await page.evaluate(() => {
+      const t = document.body.innerText;
+      const dash = (t.match(/^—$/gm) || []).length;
+      return { text: t, dash };
+    });
+    check(
+      'screener shows prices, not em-dashes',
+      /1,000\.00|1,137\.50|1,275\.00/.test(table.text),
+      table.text.slice(0, 300),
+    );
+    check(
+      'screener names the session its quotes came from',
+      /28 Jul close/.test(table.text),
+      (table.text.match(/\d+ symbols[^\n]*/) || [''])[0],
+    );
+    // Technicals for the visible page arrive in one wave; the status line has
+    // to show real progress rather than sitting on 0.
+    await page.waitForTimeout(2500);
+    const techLine = await page.evaluate(
+      () => (document.body.innerText.match(/\d+ symbols[^\n]*/) || [''])[0],
+    );
+    const got = Number((techLine.match(/technicals (\d+)/) || [, '0'])[1]) ||
+      (/\/(\d+) technicals/.test(techLine) ? Number(techLine.match(/(\d+)\/\d+ technicals/)[1]) : 0);
+    check('screener fills technicals for the visible page', got > 0, techLine);
+
     // 4b · Penny tab — graded by the real screen in the fixture server, so a
     // grading regression shows up as a missing warning rather than a cheap
     // stock quietly reading as safe.

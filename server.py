@@ -162,6 +162,11 @@ _UNIVERSE_TTL   = 6 * 3600   # refresh every 6 hours
 # side-effect of _load_bhavcopy, served as the "SME EMERGE" custom group.
 _SME_LIST: list = []
 
+# Trading date of the bhavcopy currently in the universe cache (ISO). Shown to
+# the user whenever a screen is painted from bhavcopy quotes rather than live
+# ones, so a settlement-day close is never mistaken for an intraday price.
+_BHAV_DATE: str = ""
+
 
 def _load_bhavcopy():
     """Download latest bhavcopy and return list of EQ-series symbols."""
@@ -199,15 +204,26 @@ def _load_bhavcopy():
                 chg   = round((close - prev) / prev * 100, 2) if prev else None
                 # TURNOVER is in lakhs of rupees; scale to rupees for a weight.
                 turnover = _num(row.get("TURNOVER_LACS")) * 1e5
+                # The full OHLCV row, not just the close: these are the exact
+                # fields the screener's price columns want, and carrying them
+                # here means an index whose live feed is blocked still paints
+                # LTP / %CHG / VOLUME without a single extra upstream call.
                 item = {"symbol": sym, "exchange": "NSE", "price": close,
-                        "chg": chg, "turnover": turnover}
+                        "chg": chg, "turnover": turnover,
+                        "prevClose": prev or None,
+                        "absChg": round(close - prev, 2) if prev else None,
+                        "open": _num(row.get("OPEN_PRICE")) or None,
+                        "high": _num(row.get("HIGH_PRICE")) or None,
+                        "low":  _num(row.get("LOW_PRICE")) or None,
+                        "volume": _num(row.get("TTL_TRD_QNTY")) or None}
                 if series in ("EQ", "BE"):
                     eq.append(item)
                 elif series in ("SM", "ST"):
                     # NSE EMERGE SME platform (same bhavcopy file, no extra fetch)
                     sme.append(item)
-            global _SME_LIST
+            global _SME_LIST, _BHAV_DATE
             _SME_LIST = sme
+            _BHAV_DATE = d.isoformat()
             log.info("Bhavcopy %s: %d EQ/BE symbols, %d SME", d, len(eq), len(sme))
             return eq, d
         except Exception as e:
@@ -1625,7 +1641,28 @@ NIFTYINDICES_CSV = {
 
 _INDEX_CACHE_FILE = os.path.join(_BASE_DIR, "index_cache.json")
 _INDEX_MEM = {}          # name -> (ts, rows, source)
-_INDEX_MEM_TTL = 60      # NSE live quotes go stale fast; CSV lists barely change
+# How long a memoised constituent list stays good, BY SOURCE. A live NSE row
+# carries quotes, so it has to expire quickly. The niftyindices CSV and the
+# static Sensex list carry no quotes at all — they are membership lists that
+# change about twice a year — yet they were being re-fetched every 60 seconds,
+# and each miss first spent several seconds on the NSE endpoint that is blocked
+# from cloud IPs anyway. That recurring stall was most of the screener's
+# perceived latency. Prices no longer ride on this cache at all (they come from
+# the bhavcopy backfill), so the quoteless sources can be held far longer.
+_INDEX_MEM_TTL = 60
+_INDEX_MEM_TTL_STATIC = 30 * 60
+
+
+def _index_mem_ttl(source):
+    return _INDEX_MEM_TTL if source == "nse" else _INDEX_MEM_TTL_STATIC
+
+
+# NSE Direct returns 404/403 to cloud IPs for the whole equity-stockIndices
+# endpoint, not per index. Once it has failed, stop paying its timeout on every
+# index in the union — sixteen of those in parallel is what made a first load
+# take the better part of a minute.
+_NSE_IDX_DOWN_UNTIL = 0.0
+_NSE_IDX_COOLOFF = 10 * 60
 
 
 def _index_cache_write(name, rows, source):
@@ -1799,6 +1836,77 @@ def _custom_group_rows(name):
     return None, None
 
 
+# ── Quote backfill from the bhavcopy universe ────────────────────────────────
+# Only ONE of the three constituent sources carries prices: NSE Direct. That
+# endpoint is routinely blocked from cloud IPs, so in production every index
+# fell through to the constituent CSV — symbols and nothing else — and the
+# screener painted a full table of em-dashes until /scan had walked all 1447
+# names one upstream history call at a time (i.e. never, in practice).
+#
+# The universe cache already holds a full OHLCV row for the entire NSE, pulled
+# once every six hours from the daily bhavcopy. Backfilling from it costs zero
+# network and turns "nothing" into "yesterday's close, clearly labelled" — a
+# real number the user can screen on while the live technicals arrive behind it.
+_QUOTE_IDX = {"ts": 0.0, "map": {}}
+_QUOTE_FIELDS = ("price", "prevClose", "chg", "absChg", "open", "high", "low",
+                 "volume", "turnover")
+
+
+def _quote_index():
+    """symbol -> bhavcopy quote, rebuilt only when the universe cache turns over."""
+    with _universe_lock:
+        cache, ts = _universe_cache, _universe_ts
+    if not cache:
+        return {}
+    if _QUOTE_IDX["ts"] == ts and _QUOTE_IDX["map"]:
+        return _QUOTE_IDX["map"]
+    m = {}
+    for row in cache:
+        sym = row.get("symbol")
+        if not sym:
+            continue
+        # `is not None`, not truthiness: a stock that closed exactly flat has a
+        # chg of 0.0, and dropping it would render an em-dash for a number we
+        # actually know. Only the price itself must be non-zero — a zero close
+        # means the scrip didn't trade, which is an absence, not a quote.
+        if not row.get("price"):
+            continue
+        m[sym] = {k: row[k] for k in _QUOTE_FIELDS if row.get(k) is not None}
+    _QUOTE_IDX["ts"], _QUOTE_IDX["map"] = ts, m
+    return m
+
+
+def _enrich_quotes(rows):
+    """Fill missing price fields on constituent rows from the bhavcopy.
+
+    Returns (rows, filled) — a NEW list, and how many rows gained a price they
+    didn't have. Never overwrites a value the source already supplied: a live
+    NSE quote always beats a settled close. The copy matters — `rows` may be
+    the memoised/disk-cached constituent list, and writing settled closes into
+    it would make them indistinguishable from live quotes on the next request.
+    """
+    if not rows:
+        return rows, 0
+    quotes = _quote_index()
+    if not quotes:
+        _warm_universe_async()      # cold cache — fill in on a later request
+        return rows, 0
+    out, filled = [], 0
+    for r in rows:
+        q = quotes.get(r.get("symbol"))
+        if not q:
+            out.append(r)
+            continue
+        merged = dict(r)
+        for k, v in q.items():
+            if merged.get(k) is None:
+                merged[k] = v
+        if r.get("price") is None and merged.get("price") is not None:
+            filled += 1
+        out.append(merged)
+    return out, filled
+
+
 def _get_constituents(name):
     """(rows, source) for an index — NSE live (carries pChange) → niftyindices
     CSV (symbols only) → last-good disk cache. (None, None) if all fail.
@@ -1809,34 +1917,41 @@ def _get_constituents(name):
     if not key:
         return None, None
 
+    global _NSE_IDX_DOWN_UNTIL
+    now = time.time()
     hit = _INDEX_MEM.get(name)
-    if hit and (time.time() - hit[0]) < _INDEX_MEM_TTL:
+    if hit and (now - hit[0]) < _index_mem_ttl(hit[2]):
         return hit[1], hit[2]
 
     # 1) NSE Direct — live quotes (often blocked from cloud IPs)
-    try:
-        data = nse_get("/api/equity-stockIndices", params={"index": key})
-        rows = []
-        for item in data.get("data", []):
-            sym = item.get("symbol")
-            if not sym or sym == key:
-                continue
-            rows.append({
-                "symbol":    sym,
-                "price":     item.get("lastPrice"),
-                "prevClose": item.get("previousClose"),
-                "chg":       item.get("pChange"),
-                "absChg":    item.get("change"),
-                "open":      item.get("open"),
-                "high":      item.get("dayHigh"),
-                "low":       item.get("dayLow"),
-                "volume":    item.get("totalTradedVolume"),
-            })
-        if rows:
-            _index_cache_write(name, rows, "nse")
-            return rows, "nse"
-    except Exception as e:
-        log.warning("NSE index fetch failed for %s: %s", name, e)
+    if now >= _NSE_IDX_DOWN_UNTIL:
+        try:
+            data = nse_get("/api/equity-stockIndices", params={"index": key})
+            rows = []
+            for item in data.get("data", []):
+                sym = item.get("symbol")
+                if not sym or sym == key:
+                    continue
+                rows.append({
+                    "symbol":    sym,
+                    "price":     item.get("lastPrice"),
+                    "prevClose": item.get("previousClose"),
+                    "chg":       item.get("pChange"),
+                    "absChg":    item.get("change"),
+                    "open":      item.get("open"),
+                    "high":      item.get("dayHigh"),
+                    "low":       item.get("dayLow"),
+                    "volume":    item.get("totalTradedVolume"),
+                })
+            if rows:
+                _index_cache_write(name, rows, "nse")
+                return rows, "nse"
+        except Exception as e:
+            # The endpoint is blocked wholesale, not per index — sit out the
+            # cool-off rather than timing out once per index in the union.
+            _NSE_IDX_DOWN_UNTIL = time.time() + _NSE_IDX_COOLOFF
+            log.warning("NSE index fetch failed for %s (cooling off %ds): %s",
+                        name, _NSE_IDX_COOLOFF, e)
 
     # 2) niftyindices.com constituent CSV — symbols only; the frontend backfills
     #    prices and technicals from /scan, so the screener stays fully live.
@@ -1863,7 +1978,23 @@ def index_constituents():
                         "available": list(NSE_INDEX_MAP) + list(CUSTOM_GROUPS)}), 400
     rows, source = _get_constituents(name)
     if rows:
-        return jsonify({"index": name, "count": len(rows), "data": rows, "source": source})
+        rows, filled = _enrich_quotes(rows)
+        priced = sum(1 for r in rows if r.get("price") is not None)
+        # quote_source tells the client how much to trust these prices: "nse"
+        # is live and must survive the /scan merge; "bhavcopy" is the previous
+        # settled close and should yield to the first technical row that lands.
+        # It keys off where the constituents CAME from, not off how many rows
+        # the backfill touched — the SME group is already bhavcopy-derived, so
+        # counting fills would have labelled a settled close as live.
+        live = (source == "nse")
+        quote_source = ("none" if not priced
+                        else "mixed" if live and filled
+                        else "nse" if live
+                        else "bhavcopy")
+        return jsonify({"index": name, "count": len(rows), "data": rows,
+                        "source": source, "quote_source": quote_source,
+                        "quote_date": None if quote_source == "nse" else (_BHAV_DATE or None),
+                        "priced": priced})
     if name in CUSTOM_GROUPS:
         # Not failure — the group simply hasn't been derived yet (bhavcopy
         # still warming / universe sweep hasn't recorded listing dates).
@@ -2026,13 +2157,20 @@ def movers():
 @app.route("/universe")
 def universe():
     items = get_universe()
+    # Quotes ride along: the master list is already a full bhavcopy row, and a
+    # client that has it can paint a price for any symbol it holds — a search
+    # result, a watchlist, a screen whose index feed came back bare — without
+    # another request. Three extra numbers per symbol, on a payload the client
+    # caches for half an hour.
     return jsonify({
         "ready":   bool(items),
         "total":   len(items),
         "nse":     len(items),
         "bse":     0,
+        "as_of":   _BHAV_DATE or None,
         "symbols": [{"symbol": x["symbol"], "name": x.get("name") or x["symbol"],
-                     "exchange": x["exchange"]}
+                     "exchange": x["exchange"], "price": x.get("price") or None,
+                     "chg": x.get("chg"), "volume": x.get("volume")}
                     for x in items],
     })
 
@@ -3352,27 +3490,32 @@ def returns():
 
 
 # ── Scan cache warmer ────────────────────────────────────────────────────────
-# Pre-computes technicals for the default screener index so first visitors hit
-# a hot cache instead of waiting out a cold 50-symbol yfinance sweep. Refreshes
-# just inside scanner's 5-min TTL. Disable with SCAN_WARM=off; point at another
-# index with e.g. SCAN_WARM="NIFTY 100".
-# Comma-separated index names to keep technically warm. Default covers the two
-# most-opened lists; widen it on a bigger VM (e.g. "NIFTY 50,NIFTY 100,NIFTY 500")
-# and watch the upstream budget — every extra name is more calls per cycle.
-SCAN_WARM = os.environ.get("SCAN_WARM", "NIFTY 50,NIFTY 100").strip()
+# Pre-computes technicals for the indices users actually open, so a visitor hits
+# a hot cache instead of waiting out a cold yfinance sweep. Disable with
+# SCAN_WARM=off; scope it with e.g. SCAN_WARM="NIFTY 100".
+#
+# Coverage is bounded by upstream calls per second, not by the number of names:
+# scanner only recomputes a symbol once its row expires, so a cycle shorter than
+# that TTL costs almost nothing after the first pass. Lengthening the TTL is
+# therefore what buys coverage — NIFTY 500 (which contains 50 and 100) now warms
+# for a LOWER sustained call rate than the old 150-symbol/5-minute setup, and it
+# covers the great majority of what the screener's wider universes ask for.
+SCAN_WARM = os.environ.get("SCAN_WARM", "NIFTY 500,NIFTY 50,NIFTY 100").strip()
 SCAN_WARM_CHUNK = int(os.environ.get("SCAN_WARM_CHUNK", "60"))
 SCAN_WARM_PAUSE = float(os.environ.get("SCAN_WARM_PAUSE", "2"))
-SCAN_WARM_CYCLE = float(os.environ.get("SCAN_WARM_CYCLE", "240"))
+SCAN_WARM_CYCLE = float(os.environ.get("SCAN_WARM_CYCLE", "600"))
 
 
 def _warm_index_symbols(name):
-    """Constituent symbols for one index name, for the warm loop."""
-    key = NSE_INDEX_MAP.get(name.strip().upper())
-    if not key:
-        return []
-    data = nse_get("/api/equity-stockIndices", params={"index": key})
-    return [it.get("symbol") for it in data.get("data", [])
-            if it.get("symbol") and it.get("symbol") != key]
+    """Constituent symbols for one index name, for the warm loop.
+
+    Goes through _get_constituents rather than hitting NSE Direct: that
+    endpoint 404s for cloud IPs, so asking it straight meant the warm loop
+    silently warmed nothing in production — exactly where a hot cache matters
+    and exactly where the failure was invisible.
+    """
+    rows, _src = _get_constituents(name.strip().upper())
+    return [r.get("symbol") for r in (rows or []) if r.get("symbol")]
 
 
 def _warm_scan_loop():
