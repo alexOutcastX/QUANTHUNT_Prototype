@@ -354,6 +354,52 @@ def _load_equity_names():
         return {}
 
 
+# ── Exchange scrip masters ───────────────────────────────────────────────────
+# A bhavcopy lists what TRADED that day, not what is LISTED. Anything thinly
+# traded therefore vanishes from the universe on any day it doesn't print a
+# tick — which for a screener with a penny tab is exactly the wrong set to
+# lose. Taparia Tools, to take the case that surfaced this, is BSE-only and
+# trades rarely: it was in neither bhavcopy, so it could not be searched for
+# at all even though its dossier renders fine once you reach it.
+#
+# The masters enumerate every listed security regardless of trading, so the
+# universe is (bhavcopy ∪ masters). Master-only rows carry no price — they
+# didn't trade — which is honest and still makes them findable.
+_BSE_MASTER_URL = "https://api.bseindia.com/BseIndiaAPI/api/ListofScripData/w"
+
+
+def _load_bse_master():
+    """Every ACTIVE BSE equity scrip. Best-effort: failure just means the
+    universe stays as wide as the bhavcopies made it."""
+    try:
+        sess = requests.Session()
+        sess.headers.update({**BSE_HEADERS,
+                             "Accept": "application/json, text/plain, */*",
+                             "Referer": BSE_BASE + "/corporates/List_Scrips.html"})
+        try:
+            sess.get(BSE_BASE, timeout=8)      # warm cookies like the bhavcopy path
+        except Exception:
+            pass
+        r = sess.get(_BSE_MASTER_URL, timeout=25, params={
+            "Group": "", "Scripcode": "", "industry": "",
+            "segment": "Equity", "status": "Active"})
+        if r.status_code != 200:
+            log.warning("BSE scrip master HTTP %s", r.status_code)
+            return []
+        out = []
+        for it in r.json() or []:
+            sym = (it.get("scrip_id") or "").strip().upper()
+            if not sym or any(ch not in _BSE_SYM_OK for ch in sym):
+                continue
+            out.append({"symbol": sym, "exchange": "BSE",
+                        "name": (it.get("Issuer_Name") or it.get("Scrip_Name") or "").strip()})
+        log.info("BSE scrip master: %d active equity scrips", len(out))
+        return out
+    except Exception as e:
+        log.warning("BSE scrip master fetch failed: %s", e)
+        return []
+
+
 def get_universe():
     global _universe_cache, _universe_ts
     with _universe_lock:
@@ -379,6 +425,24 @@ def get_universe():
         for item in bhav:
             nm = names.get(item["symbol"]) or item.get("name") or ""
             item["name"] = nm
+        # …then widen to everything LISTED, not merely everything that traded.
+        # These carry no price: they didn't print a tick, and inventing one
+        # would be worse than an honest blank. They are searchable, which is
+        # the whole point — a symbol you cannot type is a symbol you cannot use.
+        listed_only = 0
+        for sym, nm in names.items():
+            if sym not in seen:
+                bhav.append({"symbol": sym, "exchange": "NSE", "name": nm,
+                             "price": None, "chg": None, "listed_only": True})
+                seen.add(sym)
+                listed_only += 1
+        for item in _load_bse_master():
+            if item["symbol"] not in seen:
+                bhav.append({**item, "price": None, "chg": None, "listed_only": True})
+                seen.add(item["symbol"])
+                listed_only += 1
+        if listed_only:
+            log.info("Universe: +%d listed-but-untraded scrips from the masters", listed_only)
         _universe_cache = bhav
         _universe_ts    = time.time()
         log.info("Universe ready: %d symbols (bhavcopy date: %s)", len(bhav), bhav_date)
