@@ -250,7 +250,9 @@ export default function AnalysisScreen() {
     const pe = m0?.pe ?? fund?.pe ?? mm.pe ?? null;
     const pb = m0?.pb ?? fund?.pb ?? mm.pb ?? null;
     const px = tech?.price ?? mb?.price ?? null;
-    const mcap = fund?.market_cap_cr ?? mm.market_cap_cr ?? null;
+    // multibagger.fetch_metrics calls it mcap_cr, the fundamentals cache calls
+    // it market_cap_cr. Reading only one name silently never fires.
+    const mcap = fund?.market_cap_cr ?? mm.mcap_cr ?? mm.market_cap_cr ?? null;
     const ocf = fund?.ocf_cr ?? mm.ocf_cr ?? null;
     const capex = fund?.capex_cr ?? mm.capex_cr ?? null;
     // Reported FCF first; otherwise OCF less capex, which is its definition.

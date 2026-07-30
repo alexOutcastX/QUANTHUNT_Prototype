@@ -4787,9 +4787,27 @@ def report():
         # way, so there is no reason for one panel to know it and the other not.
         try:
             _fc = _fund.get_one(sym) or {}
+            # A THIRD source. The dossier's own tiles are rendered from the
+            # multibagger engine's metrics, which is a separate call the client
+            # makes — so this route could report "not enough reported data to
+            # value this company" while the tiles an inch above it displayed
+            # the very market cap and free cash flow it said were missing.
+            # Only fetched when something is actually absent, since it is real
+            # network I/O and the dossier already does plenty.
+            _mm = {}
+            if (mcap_cr is None or (cf or {}).get("fcf") is None
+                    or _fc.get("market_cap_cr") is None or _fc.get("fcf_cr") is None):
+                try:
+                    import multibagger as _mb
+                    _mm = (_mb.fetch_metrics(sym, with_history=False) or (None,))[0] or {}
+                except Exception:
+                    _mm = {}
 
-            def _pick(a, b):
-                return a if a is not None else b
+            def _pick(*vals):
+                for v in vals:
+                    if v is not None:
+                        return v
+                return None
 
             _px = r2(info.get("currentPrice") or info.get("regularMarketPrice")) \
                 or (tech or {}).get("price")
@@ -4799,20 +4817,21 @@ def report():
             valuation = _valuation.value(
                 price=_px,
                 eps=_pick(r2(info.get("trailingEps")), _fc.get("eps")),
-                pe=_pick(pe, _fc.get("pe")),
-                pb=_pick(pb, _fc.get("pb")),
-                market_cap_cr=_pick(mcap_cr, _fc.get("market_cap_cr")),
-                fcf_cr=_pick((cf or {}).get("fcf"), _fc.get("fcf_cr")),
+                pe=_pick(pe, _fc.get("pe"), _mm.get("pe")),
+                pb=_pick(pb, _fc.get("pb"), _mm.get("pb")),
+                market_cap_cr=_pick(mcap_cr, _fc.get("market_cap_cr"), _mm.get("mcap_cr")),
+                fcf_cr=_pick((cf or {}).get("fcf"), _fc.get("fcf_cr"), _mm.get("fcf_cr")),
                 ocf_cr=_pick((cf or {}).get("ocf"), _fc.get("ocf_cr")),
-                total_debt_cr=(bs or {}).get("total_debt"),
+                total_debt_cr=_pick((bs or {}).get("total_debt"), _mm.get("total_debt_cr")),
                 cash_cr=(bs or {}).get("cash"),
                 revenue_cr=_pick(_latest.get("revenue"), _fc.get("revenue_cr")),
                 op_income_cr=_latest.get("op_income"),
                 dividend_yield_pct=_pick(dy, _fc.get("dividend_yield")),
                 earnings_growth_pct=_pick(pct(info.get("earningsGrowth")),
-                                          _fc.get("earnings_growth_pct")),
+                                          _fc.get("earnings_growth_pct"),
+                                          _mm.get("earnings_growth_pct")),
                 fin_years=fin_years,
-                roe_pct=_pick(roe, _fc.get("roe")),
+                roe_pct=_pick(roe, _fc.get("roe"), _mm.get("roe_pct")),
                 sector=_sec_name, peers=(_fund.sector_medians() or {}).get(_sec_name))
         except Exception as e:
             log.warning("Valuation failed for %s: %s", sym, e)
