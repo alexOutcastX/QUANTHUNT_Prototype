@@ -239,15 +239,24 @@ export default function AnalysisScreen() {
   // IS on the page, so a missing valuation object costs the assumptions and
   // the intrinsic-value estimates, not the arithmetic anyone can do by hand.
   const vm = useMemo(() => {
+    // THREE sources, not two. The tiles above this table read the multibagger
+    // metrics (`mm`); the table read the fundamentals cache and the valuation
+    // object. So Taparia's dossier showed "FREE CASH FLOW ₹100 cr" in a tile
+    // and "Free cash flow —" in the table eight rows below it, and told the
+    // reader it could not be valued for want of free cash flow and market cap
+    // while displaying both. Whichever source has the number, use it.
+    const mm = (mb?.metrics || {}) as Record<string, number | null | undefined>;
     const m0 = val?.multiples;
-    const pe = m0?.pe ?? fund?.pe ?? null;
-    const pb = m0?.pb ?? fund?.pb ?? null;
+    const pe = m0?.pe ?? fund?.pe ?? mm.pe ?? null;
+    const pb = m0?.pb ?? fund?.pb ?? mm.pb ?? null;
     const px = tech?.price ?? mb?.price ?? null;
-    const mcap = fund?.market_cap_cr ?? null;
-    const ocf = fund?.ocf_cr ?? null;
-    const capex = fund?.capex_cr ?? null;
+    // multibagger.fetch_metrics calls it mcap_cr, the fundamentals cache calls
+    // it market_cap_cr. Reading only one name silently never fires.
+    const mcap = fund?.market_cap_cr ?? mm.mcap_cr ?? mm.market_cap_cr ?? null;
+    const ocf = fund?.ocf_cr ?? mm.ocf_cr ?? null;
+    const capex = fund?.capex_cr ?? mm.capex_cr ?? null;
     // Reported FCF first; otherwise OCF less capex, which is its definition.
-    const fcf = fund?.fcf_cr ?? (ocf != null && capex != null ? ocf - Math.abs(capex) : null);
+    const fcf = fund?.fcf_cr ?? mm.fcf_cr ?? (ocf != null && capex != null ? ocf - Math.abs(capex) : null);
     const ok = (v: number | null | undefined) => (typeof v === 'number' && isFinite(v) ? v : null);
     const pos = (v: number | null | undefined) => { const n = ok(v); return n != null && n > 0 ? n : null; };
     return {
@@ -257,11 +266,13 @@ export default function AnalysisScreen() {
       bvps: m0?.bvps ?? (px != null && pos(pb) ? px / (pb as number) : null),
       earnings_yield_pct: m0?.earnings_yield_pct ?? (pos(pe) ? 100 / (pe as number) : null),
       fcf_yield_pct: m0?.fcf_yield_pct ?? (ok(fcf) != null && pos(mcap) ? (fcf as number) / (mcap as number) * 100 : null),
-      peg: val?.multiples.peg ?? fund?.peg ?? null,
+      peg: val?.multiples.peg ?? fund?.peg ?? mm.peg ?? null,
       ev_ebitda: m0?.ev_ebitda ?? null,
       ev_sales: m0?.ev_sales ?? null,
       // OCF / PAT, with PAT backed out of market cap and P/E when the provider
       // didn't publish it directly.
+      ocf: ok(ocf),
+      capex: ok(capex),
       cash_conversion_pct:
         fund?.cash_conversion_pct ??
         (ok(ocf) != null && pos(mcap) && pos(pe)
@@ -450,8 +461,8 @@ export default function AnalysisScreen() {
                   <KV k="EV / EBITDA" v={plain(vm.ev_ebitda, 2)} />
                   <KV k="EV / sales" v={plain(vm.ev_sales, 2)} />
                   {/* Cash flow, from the company's own annual NSE filing. */}
-                  <KV k="Operating cash flow" v={fmtCr(fund?.ocf_cr ?? null)} />
-                  <KV k="Capital expenditure" v={fmtCr(fund?.capex_cr ?? null)} />
+                  <KV k="Operating cash flow" v={fmtCr(vm.ocf)} />
+                  <KV k="Capital expenditure" v={fmtCr(vm.capex)} />
                   <KV k="Free cash flow" v={fmtCr(vm.fcf)} color={dirColor(vm.fcf)} />
                   <KV k="Cash conversion (OCF/PAT)" v={num(vm.cash_conversion_pct, 0, '%')}
                       color={dirColor(vm.cash_conversion_pct != null ? vm.cash_conversion_pct - 100 : null)} />

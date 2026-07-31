@@ -354,6 +354,52 @@ def _load_equity_names():
         return {}
 
 
+# ── Exchange scrip masters ───────────────────────────────────────────────────
+# A bhavcopy lists what TRADED that day, not what is LISTED. Anything thinly
+# traded therefore vanishes from the universe on any day it doesn't print a
+# tick — which for a screener with a penny tab is exactly the wrong set to
+# lose. Taparia Tools, to take the case that surfaced this, is BSE-only and
+# trades rarely: it was in neither bhavcopy, so it could not be searched for
+# at all even though its dossier renders fine once you reach it.
+#
+# The masters enumerate every listed security regardless of trading, so the
+# universe is (bhavcopy ∪ masters). Master-only rows carry no price — they
+# didn't trade — which is honest and still makes them findable.
+_BSE_MASTER_URL = "https://api.bseindia.com/BseIndiaAPI/api/ListofScripData/w"
+
+
+def _load_bse_master():
+    """Every ACTIVE BSE equity scrip. Best-effort: failure just means the
+    universe stays as wide as the bhavcopies made it."""
+    try:
+        sess = requests.Session()
+        sess.headers.update({**BSE_HEADERS,
+                             "Accept": "application/json, text/plain, */*",
+                             "Referer": BSE_BASE + "/corporates/List_Scrips.html"})
+        try:
+            sess.get(BSE_BASE, timeout=8)      # warm cookies like the bhavcopy path
+        except Exception:
+            pass
+        r = sess.get(_BSE_MASTER_URL, timeout=25, params={
+            "Group": "", "Scripcode": "", "industry": "",
+            "segment": "Equity", "status": "Active"})
+        if r.status_code != 200:
+            log.warning("BSE scrip master HTTP %s", r.status_code)
+            return []
+        out = []
+        for it in r.json() or []:
+            sym = (it.get("scrip_id") or "").strip().upper()
+            if not sym or any(ch not in _BSE_SYM_OK for ch in sym):
+                continue
+            out.append({"symbol": sym, "exchange": "BSE",
+                        "name": (it.get("Issuer_Name") or it.get("Scrip_Name") or "").strip()})
+        log.info("BSE scrip master: %d active equity scrips", len(out))
+        return out
+    except Exception as e:
+        log.warning("BSE scrip master fetch failed: %s", e)
+        return []
+
+
 def get_universe():
     global _universe_cache, _universe_ts
     with _universe_lock:
@@ -379,6 +425,24 @@ def get_universe():
         for item in bhav:
             nm = names.get(item["symbol"]) or item.get("name") or ""
             item["name"] = nm
+        # …then widen to everything LISTED, not merely everything that traded.
+        # These carry no price: they didn't print a tick, and inventing one
+        # would be worse than an honest blank. They are searchable, which is
+        # the whole point — a symbol you cannot type is a symbol you cannot use.
+        listed_only = 0
+        for sym, nm in names.items():
+            if sym not in seen:
+                bhav.append({"symbol": sym, "exchange": "NSE", "name": nm,
+                             "price": None, "chg": None, "listed_only": True})
+                seen.add(sym)
+                listed_only += 1
+        for item in _load_bse_master():
+            if item["symbol"] not in seen:
+                bhav.append({**item, "price": None, "chg": None, "listed_only": True})
+                seen.add(item["symbol"])
+                listed_only += 1
+        if listed_only:
+            log.info("Universe: +%d listed-but-untraded scrips from the masters", listed_only)
         _universe_cache = bhav
         _universe_ts    = time.time()
         log.info("Universe ready: %d symbols (bhavcopy date: %s)", len(bhav), bhav_date)
@@ -1426,6 +1490,70 @@ def health():
             "news": safe(lambda: len(getattr(_news, "_cache", {}) or {}), 0),
         },
     })
+
+
+@app.route("/health/upstream")
+def health_upstream():
+    """Can this machine actually reach the data providers?
+
+    Added because the answer was not obtainable any other way. The screener
+    sat at "technicals 0/1444" on the VM, which looks like slowness and is
+    not: RSI, the moving averages and the 52-week extremes all come from
+    ydata.history(), that is yfinance only, and if yfinance rate-limits this
+    IP then every technical in the app is uncomputable rather than merely
+    slow. No amount of caching helps when there is nothing to cache.
+
+    Distinguishing the two needed a shell on the box, which is exactly what
+    was unavailable. So it is a URL instead. Reports booleans and counts
+    only — no keys, no config, nothing worth hiding.
+    """
+    import scanner as _sc
+    import ydata
+    out = {"ok": True}
+
+    t = time.time()
+    try:
+        # tries=1: this is a probe, not a fetch. The default backoff spends
+        # ~30s retrying, which would tie up a worker and make a health check
+        # the slowest route in the app.
+        df = ydata.history("RELIANCE.NS", "1mo", "1d", tries=1)
+        out["yfinance"] = {"rows": 0 if df is None else int(len(df)),
+                           "ms": int((time.time() - t) * 1000)}
+    except Exception as e:
+        out["yfinance"] = {"rows": 0, "error": str(e)[:200]}
+    out["yfinance"]["reachable"] = bool(out["yfinance"].get("rows"))
+
+    # What the scan cache actually holds right now — a good row, a failed
+    # row and an absent row are three different problems.
+    try:
+        now = time.time()
+        with _sc._CACHE_LOCK:
+            items = list(_sc._CACHE.items())
+        good = sum(1 for _, (ts, r) in items if r is not None and now - ts < _sc._STALE_MAX)
+        bad = sum(1 for _, (_ts, r) in items if r is None)
+        out["scan_cache"] = {"rows": len(items), "usable": good, "failed": bad,
+                            "queued": len(_sc._inflight)}
+    except Exception as e:
+        out["scan_cache"] = {"error": str(e)[:200]}
+
+    try:
+        uni, warming = get_universe_nonblocking()
+        out["universe"] = {"symbols": len(uni or []), "warming": bool(warming),
+                           "priced": sum(1 for u in (uni or []) if u.get("price")),
+                           "bhavcopy_date": _BHAV_DATE or None}
+    except Exception as e:
+        out["universe"] = {"error": str(e)[:200]}
+
+    # The one-line verdict, so nobody has to interpret the numbers.
+    if not out["yfinance"]["reachable"]:
+        out["verdict"] = ("yfinance is NOT reachable from this host — technicals "
+                          "cannot be computed at all, which is a data-source "
+                          "problem, not a caching or latency one.")
+    elif out.get("scan_cache", {}).get("usable", 0) == 0:
+        out["verdict"] = "yfinance is reachable but the scan cache is empty — still warming."
+    else:
+        out["verdict"] = "upstream reachable and the scan cache has usable rows."
+    return _no_cache(jsonify(out))
 
 
 @app.route("/healthz")
@@ -4723,9 +4851,27 @@ def report():
         # way, so there is no reason for one panel to know it and the other not.
         try:
             _fc = _fund.get_one(sym) or {}
+            # A THIRD source. The dossier's own tiles are rendered from the
+            # multibagger engine's metrics, which is a separate call the client
+            # makes — so this route could report "not enough reported data to
+            # value this company" while the tiles an inch above it displayed
+            # the very market cap and free cash flow it said were missing.
+            # Only fetched when something is actually absent, since it is real
+            # network I/O and the dossier already does plenty.
+            _mm = {}
+            if (mcap_cr is None or (cf or {}).get("fcf") is None
+                    or _fc.get("market_cap_cr") is None or _fc.get("fcf_cr") is None):
+                try:
+                    import multibagger as _mb
+                    _mm = (_mb.fetch_metrics(sym, with_history=False) or (None,))[0] or {}
+                except Exception:
+                    _mm = {}
 
-            def _pick(a, b):
-                return a if a is not None else b
+            def _pick(*vals):
+                for v in vals:
+                    if v is not None:
+                        return v
+                return None
 
             _px = r2(info.get("currentPrice") or info.get("regularMarketPrice")) \
                 or (tech or {}).get("price")
@@ -4735,20 +4881,21 @@ def report():
             valuation = _valuation.value(
                 price=_px,
                 eps=_pick(r2(info.get("trailingEps")), _fc.get("eps")),
-                pe=_pick(pe, _fc.get("pe")),
-                pb=_pick(pb, _fc.get("pb")),
-                market_cap_cr=_pick(mcap_cr, _fc.get("market_cap_cr")),
-                fcf_cr=_pick((cf or {}).get("fcf"), _fc.get("fcf_cr")),
+                pe=_pick(pe, _fc.get("pe"), _mm.get("pe")),
+                pb=_pick(pb, _fc.get("pb"), _mm.get("pb")),
+                market_cap_cr=_pick(mcap_cr, _fc.get("market_cap_cr"), _mm.get("mcap_cr")),
+                fcf_cr=_pick((cf or {}).get("fcf"), _fc.get("fcf_cr"), _mm.get("fcf_cr")),
                 ocf_cr=_pick((cf or {}).get("ocf"), _fc.get("ocf_cr")),
-                total_debt_cr=(bs or {}).get("total_debt"),
+                total_debt_cr=_pick((bs or {}).get("total_debt"), _mm.get("total_debt_cr")),
                 cash_cr=(bs or {}).get("cash"),
                 revenue_cr=_pick(_latest.get("revenue"), _fc.get("revenue_cr")),
                 op_income_cr=_latest.get("op_income"),
                 dividend_yield_pct=_pick(dy, _fc.get("dividend_yield")),
                 earnings_growth_pct=_pick(pct(info.get("earningsGrowth")),
-                                          _fc.get("earnings_growth_pct")),
+                                          _fc.get("earnings_growth_pct"),
+                                          _mm.get("earnings_growth_pct")),
                 fin_years=fin_years,
-                roe_pct=_pick(roe, _fc.get("roe")),
+                roe_pct=_pick(roe, _fc.get("roe"), _mm.get("roe_pct")),
                 sector=_sec_name, peers=(_fund.sector_medians() or {}).get(_sec_name))
         except Exception as e:
             log.warning("Valuation failed for %s: %s", sym, e)
