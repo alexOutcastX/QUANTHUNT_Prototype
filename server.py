@@ -1492,6 +1492,70 @@ def health():
     })
 
 
+@app.route("/health/upstream")
+def health_upstream():
+    """Can this machine actually reach the data providers?
+
+    Added because the answer was not obtainable any other way. The screener
+    sat at "technicals 0/1444" on the VM, which looks like slowness and is
+    not: RSI, the moving averages and the 52-week extremes all come from
+    ydata.history(), that is yfinance only, and if yfinance rate-limits this
+    IP then every technical in the app is uncomputable rather than merely
+    slow. No amount of caching helps when there is nothing to cache.
+
+    Distinguishing the two needed a shell on the box, which is exactly what
+    was unavailable. So it is a URL instead. Reports booleans and counts
+    only — no keys, no config, nothing worth hiding.
+    """
+    import scanner as _sc
+    import ydata
+    out = {"ok": True}
+
+    t = time.time()
+    try:
+        # tries=1: this is a probe, not a fetch. The default backoff spends
+        # ~30s retrying, which would tie up a worker and make a health check
+        # the slowest route in the app.
+        df = ydata.history("RELIANCE.NS", "1mo", "1d", tries=1)
+        out["yfinance"] = {"rows": 0 if df is None else int(len(df)),
+                           "ms": int((time.time() - t) * 1000)}
+    except Exception as e:
+        out["yfinance"] = {"rows": 0, "error": str(e)[:200]}
+    out["yfinance"]["reachable"] = bool(out["yfinance"].get("rows"))
+
+    # What the scan cache actually holds right now — a good row, a failed
+    # row and an absent row are three different problems.
+    try:
+        now = time.time()
+        with _sc._CACHE_LOCK:
+            items = list(_sc._CACHE.items())
+        good = sum(1 for _, (ts, r) in items if r is not None and now - ts < _sc._STALE_MAX)
+        bad = sum(1 for _, (_ts, r) in items if r is None)
+        out["scan_cache"] = {"rows": len(items), "usable": good, "failed": bad,
+                            "queued": len(_sc._inflight)}
+    except Exception as e:
+        out["scan_cache"] = {"error": str(e)[:200]}
+
+    try:
+        uni, warming = get_universe_nonblocking()
+        out["universe"] = {"symbols": len(uni or []), "warming": bool(warming),
+                           "priced": sum(1 for u in (uni or []) if u.get("price")),
+                           "bhavcopy_date": _BHAV_DATE or None}
+    except Exception as e:
+        out["universe"] = {"error": str(e)[:200]}
+
+    # The one-line verdict, so nobody has to interpret the numbers.
+    if not out["yfinance"]["reachable"]:
+        out["verdict"] = ("yfinance is NOT reachable from this host — technicals "
+                          "cannot be computed at all, which is a data-source "
+                          "problem, not a caching or latency one.")
+    elif out.get("scan_cache", {}).get("usable", 0) == 0:
+        out["verdict"] = "yfinance is reachable but the scan cache is empty — still warming."
+    else:
+        out["verdict"] = "upstream reachable and the scan cache has usable rows."
+    return _no_cache(jsonify(out))
+
+
 @app.route("/healthz")
 def healthz():
     """Lean machine-readable liveness + feed staleness for the uptime monitor.
