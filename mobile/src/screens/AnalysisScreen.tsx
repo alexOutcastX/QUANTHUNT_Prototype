@@ -286,6 +286,9 @@ export default function AnalysisScreen() {
   // Indian data that's often present for small-caps when Yahoo's balance sheet
   // is empty, so the balance-sheet section still renders.
   const scrBal = scr && typeof scr === 'object' ? scr.balance : null;
+  // The screener.in split, for the ownership panel to fall back to when the
+  // exchange filings feed returns a dated envelope with nothing in it.
+  const sh = (scr && typeof scr === 'object' && scr.ok ? scr.shareholding : null) || null;
   const hasScrBal = !!(scrBal && (scrBal.borrowings != null || scrBal.reserves != null || scrBal.equity_capital != null || scrBal.total_liabilities != null));
   // screener.in annual P&L — the fallback when Yahoo's /report has no P&L series
   // (common for Indian micro-caps), so the dossier still shows revenue/PAT/EPS.
@@ -742,11 +745,18 @@ export default function AnalysisScreen() {
             {d.hold ? (
               <>
                 <SectionTitle>Ownership · shareholding {d.hold.date ? `(${d.hold.date})` : ''}</SectionTitle>
+                {/* Falls back to the screener.in split, field by field.
+                    This panel is fed by the exchange filings feed, which for
+                    plenty of companies returns a dated envelope with nothing in
+                    it — so every row rendered an em-dash directly above a
+                    screener.in block showing Promoters 50.48%, FII 17.19%,
+                    DII 21.10%. The number was on the screen twice; only one
+                    place was allowed to read it. */}
                 <Card>
-                  <KV k="Promoters" v={num(d.hold.promoter, 2, '%')} />
-                  <KV k="FII" v={num(d.hold.fii, 2, '%')} />
-                  <KV k="DII" v={num(d.hold.dii, 2, '%')} />
-                  <KV k="Public" v={num(d.hold.public, 2, '%')} />
+                  <KV k="Promoters" v={num(d.hold.promoter ?? sh?.promoter ?? null, 2, '%')} />
+                  <KV k="FII" v={num(d.hold.fii ?? sh?.fii ?? null, 2, '%')} />
+                  <KV k="DII" v={num(d.hold.dii ?? sh?.dii ?? null, 2, '%')} />
+                  <KV k="Public" v={num(d.hold.public ?? sh?.public ?? null, 2, '%')} />
                   <KV k="Promoter pledge" v={num(d.hold.pledge, 2, '%')} color={(d.hold.pledge ?? 0) > 0 ? theme.red : undefined} />
                 </Card>
               </>

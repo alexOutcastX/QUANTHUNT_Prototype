@@ -548,12 +548,23 @@ async function scanBatch(symbols: string[]): Promise<ScanResp> {
 // round-trip latency on a mobile connection, small enough that one screen
 // can't monopolise the VM's worker pool.
 const SCAN_CONCURRENCY = 6;
-// Symbols per /scan URL. The server no longer blocks on uncached names, so a
-// batch is bounded by the request line nginx will accept (~32k with the tuning
-// drop-in), not by how long the response takes. At ~10 chars a symbol, 500 is
-// a ~5k query string — well inside it, and it turns a 1447-symbol universe
-// into three requests instead of a hundred and twenty-one.
-const SCAN_BATCH = 500;
+// Symbols per /scan URL.
+//
+// This was 500, sized against nginx's request line WITH the 32k tuning
+// drop-in applied. That drop-in is a separate PR and is not on the server, so
+// the real limit is nginx's 8k default: 500 NSE symbols is a ~5.9k query
+// string, and once the rest of the request line and the headers are added the
+// whole thing is rejected with a 414 before Flask ever sees it. The client
+// swallows the failure, so the screener sat at "technicals 0/1444" while the
+// server's own health probe reported a working upstream and an empty queue —
+// nothing was arriving to be queued.
+//
+// This is the SECOND time this bug has shipped: /fundamentals/bulk had it this
+// morning and was fixed by batching at 150. Correctness must not depend on
+// server tuning that may or may not be deployed, so the batch is now sized to
+// fit comfortably inside the stock 8k limit — ~1.8k for 150 symbols — and the
+// drop-in becomes headroom rather than a prerequisite.
+const SCAN_BATCH = 150;
 const BULK_CONCURRENCY = 4;
 
 // Company-relationship graph (Terminal tab). Shape is stable across the
