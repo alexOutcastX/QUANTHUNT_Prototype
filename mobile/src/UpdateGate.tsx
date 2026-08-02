@@ -9,6 +9,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Animated, Easing, StyleSheet, Text, View } from 'react-native';
 import { theme } from './theme';
+import { OTA_ENABLED } from './capgo';
 
 const IS_NATIVE = !!(globalThis as { Capacitor?: { isNativePlatform?: () => boolean } })
   .Capacitor?.isNativePlatform?.();
@@ -55,6 +56,12 @@ export default function UpdateGate({ children }: { children: React.ReactNode }) 
     };
 
     (async () => {
+      // OTA is switched off (see capgo.ts). Settle immediately rather than
+      // holding the first paint behind a check that cannot succeed.
+      if (!OTA_ENABLED) {
+        finish('');
+        return;
+      }
       try {
         const { CapacitorUpdater } = await import('@capgo/capacitor-updater');
         subs.push(
