@@ -69,3 +69,50 @@ class TestMemberLogin(unittest.TestCase):
         self.assertIn("backtest", pro)
         # unknown plan degrades to free, never to full access
         self.assertEqual(members.features_for("nonsense"), free)
+
+
+class MultipleAccountsTest(unittest.TestCase):
+    """Three owner accounts, not one.
+
+    The table started as a single placeholder credential, so anything that
+    assumed exactly one account would have kept working while quietly locking
+    the other two out. Each is checked end to end.
+    """
+
+    ACCOUNTS = [("Sreeraman", "SreeramPW"), ("Sri", "STI123"), ("Taureye", "TaureyePW")]
+
+    def test_every_account_signs_in(self):
+        for user, pw in self.ACCOUNTS:
+            with self.subTest(user=user):
+                self.assertIsNotNone(members.check_login(user, pw),
+                                     f"{user} cannot sign in")
+
+    def test_every_account_is_pro_and_owner(self):
+        """Owner is what lets a session reach the broker, alerts and developer
+        screens without a separate passcode — so this is the line between a
+        login and full control of the instance. Asserted, not assumed."""
+        for user, pw in self.ACCOUNTS:
+            with self.subTest(user=user):
+                m = members.check_login(user, pw)
+                self.assertEqual(m["plan"], "pro")
+                self.assertTrue(m["owner"], f"{user} lost owner rights")
+
+    def test_the_display_name_keeps_its_casing(self):
+        self.assertEqual(members.check_login("sreeraman", "SreeramPW")["username"], "Sreeraman")
+        self.assertEqual(members.check_login("SRI", "STI123")["username"], "Sri")
+
+    def test_passwords_are_not_interchangeable(self):
+        """A bug that accepted any known password for any known user would look
+        exactly like working software."""
+        for user, _ in self.ACCOUNTS:
+            for _, other_pw in self.ACCOUNTS:
+                if (user, other_pw) in self.ACCOUNTS:
+                    continue
+                with self.subTest(user=user, pw=other_pw):
+                    self.assertIsNone(members.check_login(user, other_pw))
+
+    def test_each_account_gets_the_full_feature_set(self):
+        for user, pw in self.ACCOUNTS:
+            feats = members.features_for(members.check_login(user, pw)["plan"])
+            for f in ("backtest", "terminal", "dossier", "exports", "alerts"):
+                self.assertIn(f, feats, f"{user} is missing {f}")

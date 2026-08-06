@@ -37,7 +37,18 @@ _DEFAULT_ACCOUNTS = {
     # `owner` promotes the member to the instance owner: the broker, alerts and
     # developer-key screens accept this session instead of prompting for a
     # separate passcode, so one sign-in covers the whole app.
-    "taureye": {"password": "TaureyePW", "plan": "pro", "name": "Taureye", "owner": True},
+    #
+    # Keys are lowercase because check_login() lowercases whatever is typed;
+    # `name` carries the casing the UI should display back.
+    #
+    # NOTE: every account here is an owner, so each of these is full control of
+    # the instance, not merely a login. Adding or changing any entry also
+    # rotates the cookie secret derived in _secret() below, which signs every
+    # existing session out exactly once — set AUTH_SECRET on the server to
+    # decouple the two.
+    "taureye":   {"password": "TaureyePW", "plan": "pro", "name": "Taureye",   "owner": True},
+    "sreeraman": {"password": "SreeramPW", "plan": "pro", "name": "Sreeraman", "owner": True},
+    "sri":       {"password": "STI123",    "plan": "pro", "name": "Sri",       "owner": True},
 }
 
 
