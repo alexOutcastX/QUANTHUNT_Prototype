@@ -1175,13 +1175,29 @@ def _is_https() -> bool:
             or request.scheme == "https")
 
 
+# Set to a leading-dot parent (".taureye.com") when the site answers on more
+# than one hostname — apex AND www — so one login covers both. Left blank the
+# cookie is host-only, which is the right default for a single hostname and for
+# the bare IP (browsers reject a domain attribute on an IP host outright).
+_COOKIE_DOMAIN = (os.environ.get("SESSION_COOKIE_DOMAIN") or "").strip() or None
+
+
 def _session_cookie(resp, name, value, max_age):
     """Set a session cookie with the strongest flags the transport allows.
     Cross-site (native shell) needs SameSite=None, which browsers only accept
     with Secure — so that combination is used only once TLS is in front."""
     https = _is_https()
     resp.set_cookie(name, value, max_age=max_age, httponly=True,
+                    domain=_COOKIE_DOMAIN,
                     samesite="None" if https else "Lax", secure=https)
+    return resp
+
+
+def _clear_cookie(resp, name):
+    """Expire a session cookie. The domain MUST match the one it was set with —
+    a host-only delete leaves a .parent-domain cookie in place, so logout would
+    silently not log the user out."""
+    resp.delete_cookie(name, domain=_COOKIE_DOMAIN)
     return resp
 
 
@@ -1229,8 +1245,8 @@ def auth_login():
 @app.route("/auth/logout", methods=["POST"])
 def auth_logout():
     resp = jsonify({"owner": False, "user": None})
-    resp.delete_cookie(_auth.COOKIE)
-    resp.delete_cookie(_USER_COOKIE)
+    _clear_cookie(resp, _auth.COOKIE)
+    _clear_cookie(resp, _USER_COOKIE)
     return resp
 
 
@@ -1332,7 +1348,7 @@ def member_me():
 @app.route("/auth/member/logout", methods=["POST"])
 def member_logout():
     resp = jsonify({"member": None})
-    resp.delete_cookie(_members.COOKIE)
+    _clear_cookie(resp, _members.COOKIE)
     return resp
 
 
@@ -1435,7 +1451,7 @@ def auth_account_delete():
     """DPDP-style deletion: purges the account and every stored document."""
     _users.delete_user(request.user_id)
     resp = jsonify({"deleted": True})
-    resp.delete_cookie(_USER_COOKIE)
+    _clear_cookie(resp, _USER_COOKIE)
     return resp
 
 
