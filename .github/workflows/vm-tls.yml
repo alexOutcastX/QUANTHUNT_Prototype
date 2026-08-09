@@ -76,6 +76,72 @@ jobs:
           fi
           echo "OK: domain=$DOMAIN mode=${{ inputs.mode }}"
 
+      # The check that actually decides whether the cutover can happen.
+      #
+      # Asking the VM `curl -H "Host: taureye.com" http://127.0.0.1/` only
+      # proves nginx WOULD serve that hostname — it says nothing about whether
+      # any traffic reaches the box. Let's Encrypt resolves the domain over
+      # PUBLIC DNS and fetches the challenge from whatever IP it gets, so if
+      # the A record points somewhere else the issuance fails no matter how
+      # the VM is configured. Resolve from the runner (public DNS) and compare
+      # against the deploy host.
+      - name: Check the domain resolves to this VM
+        env:
+          H: ${{ secrets.VM_HOST }}
+          DOMAIN: ${{ inputs.domain }}
+          MODE: ${{ inputs.mode }}
+        run: |
+          mismatch=0
+          for n in "$DOMAIN" "www.$DOMAIN"; do
+            ips="$(getent ahostsv4 "$n" 2>/dev/null | awk '{print $1}' | sort -u)"
+            if [ -z "$ips" ]; then
+              echo "·  $n has no A record"
+              continue
+            fi
+            if printf '%s\n' "$ips" | grep -qxF "$H"; then
+              echo "OK  $n resolves to this VM"
+            else
+              echo "!!  $n resolves to $(printf '%s' "$ips" | tr '\n' ' ')— NOT this VM"
+              mismatch=1
+            fi
+          done
+          if [ "$mismatch" = 1 ]; then
+            echo
+            echo "Public DNS points this domain somewhere else, so the ACME"
+            echo "challenge cannot reach this VM and certbot will fail. Point"
+            echo "the A record at the deploy host before enabling HTTPS."
+            if [ "$MODE" = "enable" ]; then exit 1; fi
+            echo "(diagnose mode — continuing to report the rest)"
+          fi
+
+      # Is the VM even reachable on 80/443 from the public internet? A cloud
+      # security list that does not allow 443 looks exactly like a missing
+      # certificate from a browser ("site can't be reached"), and issuing a
+      # certificate will not fix it. Tested from the runner, which is outside
+      # the VM's network, so it exercises the same path a visitor does.
+      #   open + something listening -> connects
+      #   open + nothing listening   -> refused (fast)
+      #   blocked by security list   -> times out
+      - name: Check ports 80 and 443 are reachable from outside
+        env:
+          H: ${{ secrets.VM_HOST }}
+        run: |
+          for p in 80 443; do
+            start=$(date +%s)
+            if timeout 8 bash -c "cat < /dev/null > /dev/tcp/$H/$p" 2>/dev/null; then
+              echo "OK       port $p: open, something is listening"
+            else
+              took=$(( $(date +%s) - start ))
+              if [ "$took" -ge 7 ]; then
+                echo "BLOCKED  port $p: timed out — the cloud security list or"
+                echo "         host firewall is dropping it. Open $p/tcp inbound."
+              else
+                echo "CLOSED   port $p: refused — reachable, but nothing is bound to it."
+                [ "$p" = 443 ] && echo "         Expected until the certificate is issued."
+              fi
+            fi
+          done
+
       - name: Configure SSH
         run: |
           mkdir -p ~/.ssh
@@ -99,10 +165,14 @@ jobs:
           code=$(curl -s -o /dev/null -w '%{http_code}' -H "Host: $DOMAIN" http://127.0.0.1/ping || echo 000)
           echo "GET /ping -> HTTP $code  body: $(curl -s -H "Host: $DOMAIN" http://127.0.0.1/ping || true)"
 
+          # NB: this forces the Host header locally, so it only shows which
+          # server block WOULD handle the hostname. Whether public traffic
+          # actually arrives here is the DNS check in the previous step — do
+          # not read this as "the domain is live on this app".
           if curl -s -H "Host: $DOMAIN" http://127.0.0.1/ | grep -q 'id="root"'; then
-            echo "VERDICT: $DOMAIN is ALREADY served by this app"
+            echo "VERDICT: nginx here WOULD serve $DOMAIN from this app (says nothing about DNS)"
           else
-            echo "VERDICT: $DOMAIN is NOT served by this app — something else claims it"
+            echo "VERDICT: another server block on this VM claims $DOMAIN"
             echo "--- first 300 bytes of what it does serve ---"
             curl -s -H "Host: $DOMAIN" http://127.0.0.1/ | head -c 300; echo
           fi
