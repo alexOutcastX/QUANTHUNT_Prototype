@@ -81,6 +81,22 @@ class EnableHttpsScriptTest(unittest.TestCase):
     def test_bails_when_the_app_conf_is_missing(self):
         self.assertIn('[ -f "$CONF" ]', self.src)
 
+    def test_certbot_is_installed_before_nginx_is_touched(self):
+        """The first enable run died on `Unable to find a match: certbot` —
+        AFTER server_name had already been rewritten and nginx reloaded. A
+        failed install must leave nginx exactly as it was found."""
+        self.assertLess(self.src.index("install_certbot\n"),
+                        self.src.index("sudo sed -i -E"))
+
+    def test_certbot_install_falls_back_past_the_distro_package(self):
+        """certbot is not in Oracle Linux's default repos — it lives in EPEL,
+        which ships disabled. Try the package, then EPEL, then upstream's venv
+        install, which needs only python3."""
+        self.assertIn("oracle-epel-release-el", self.src)
+        self.assertIn("_developer_EPEL", self.src)
+        self.assertIn("python3 -m venv /opt/certbot", self.src)
+        self.assertIn("certbot certbot-nginx", self.src)
+
     def test_http_redirect_is_opt_in(self):
         """certbot's --redirect rewrites the port-80 block and appends
         `return 404` for unmatched hosts. That block is `listen 80

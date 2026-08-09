@@ -61,21 +61,45 @@ if [ -n "$CONFLICT" ]; then
   echo "  FORCE=1 set — continuing."
 fi
 
+# ── get certbot BEFORE touching nginx ───────────────────────────────────────
+# Ordering matters: if the install fails, nginx must be exactly as we found it.
+# On RHEL-family hosts certbot lives in EPEL, which Oracle Linux does not
+# enable by default — a plain `dnf install certbot` there fails with
+# "Unable to find a match". Try the distro package, then EPEL, then fall back
+# to upstream's venv install, which needs only python3 and works anywhere.
+install_certbot() {
+  command -v certbot >/dev/null 2>&1 && return 0
+
+  if command -v dnf >/dev/null 2>&1; then
+    sudo dnf install -y -q certbot python3-certbot-nginx && return 0
+    rel="$(rpm -E %rhel 2>/dev/null || true)"
+    sudo dnf install -y -q "oracle-epel-release-el${rel}" 2>/dev/null \
+      || sudo dnf install -y -q epel-release 2>/dev/null || true
+    # Oracle ships the EPEL repo definition disabled.
+    sudo dnf config-manager --enable "ol${rel}_developer_EPEL" 2>/dev/null || true
+    sudo dnf install -y -q certbot python3-certbot-nginx && return 0
+  elif command -v apt-get >/dev/null 2>&1; then
+    sudo apt-get update -qq \
+      && sudo apt-get install -y -qq certbot python3-certbot-nginx && return 0
+  fi
+
+  echo "==> no certbot package available; installing into a /opt/certbot venv"
+  sudo python3 -m venv /opt/certbot
+  sudo /opt/certbot/bin/pip install -q --upgrade pip
+  sudo /opt/certbot/bin/pip install -q certbot certbot-nginx
+  sudo ln -sf /opt/certbot/bin/certbot /usr/bin/certbot
+  command -v certbot >/dev/null 2>&1
+}
+install_certbot
+echo "==> certbot: $(command -v certbot) ($(certbot --version 2>&1 | head -1))"
+
 # ── point the app's block at the real hostnames so certbot can match them ────
 # Rewrites every server_name in the file (there are two once certbot has added
 # the 443 block) rather than matching the pristine `server_name _;`, so this is
-# idempotent across reruns.
+# idempotent across reruns. The block stays `listen 80 default_server`, so it
+# still answers for the bare IP even though the IP matches no server_name.
 sudo sed -i -E "s/^([[:space:]]*)server_name[[:space:]]+[^;]*;/\1server_name ${NAMES[*]};/" "$CONF"
 sudo nginx -t && sudo systemctl reload nginx
-
-# ── issue the certificate (auto-configures nginx + renewal) ──────────────────
-if ! command -v certbot >/dev/null 2>&1; then
-  if command -v dnf >/dev/null 2>&1; then
-    sudo dnf install -y -q certbot python3-certbot-nginx
-  else
-    sudo apt-get update -qq && sudo apt-get install -y -qq certbot python3-certbot-nginx
-  fi
-fi
 
 CERTBOT_ARGS=()
 for n in "${NAMES[@]}"; do CERTBOT_ARGS+=(-d "$n"); done
