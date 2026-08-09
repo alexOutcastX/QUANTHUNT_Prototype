@@ -114,6 +114,34 @@ jobs:
             echo "(diagnose mode — continuing to report the rest)"
           fi
 
+      # Is the VM even reachable on 80/443 from the public internet? A cloud
+      # security list that does not allow 443 looks exactly like a missing
+      # certificate from a browser ("site can't be reached"), and issuing a
+      # certificate will not fix it. Tested from the runner, which is outside
+      # the VM's network, so it exercises the same path a visitor does.
+      #   open + something listening -> connects
+      #   open + nothing listening   -> refused (fast)
+      #   blocked by security list   -> times out
+      - name: Check ports 80 and 443 are reachable from outside
+        env:
+          H: ${{ secrets.VM_HOST }}
+        run: |
+          for p in 80 443; do
+            start=$(date +%s)
+            if timeout 8 bash -c "cat < /dev/null > /dev/tcp/$H/$p" 2>/dev/null; then
+              echo "OK       port $p: open, something is listening"
+            else
+              took=$(( $(date +%s) - start ))
+              if [ "$took" -ge 7 ]; then
+                echo "BLOCKED  port $p: timed out — the cloud security list or"
+                echo "         host firewall is dropping it. Open $p/tcp inbound."
+              else
+                echo "CLOSED   port $p: refused — reachable, but nothing is bound to it."
+                [ "$p" = 443 ] && echo "         Expected until the certificate is issued."
+              fi
+            fi
+          done
+
       - name: Configure SSH
         run: |
           mkdir -p ~/.ssh
