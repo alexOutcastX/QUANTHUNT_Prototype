@@ -81,6 +81,20 @@ class EnableHttpsScriptTest(unittest.TestCase):
     def test_bails_when_the_app_conf_is_missing(self):
         self.assertIn('[ -f "$CONF" ]', self.src)
 
+    def test_http_redirect_is_opt_in(self):
+        """certbot's --redirect rewrites the port-80 block and appends
+        `return 404` for unmatched hosts. That block is `listen 80
+        default_server` — the one answering for the bare IP, which every
+        installed APK uses as its API base. Defaulting it on would 404 the
+        whole fleet the moment the cert is issued."""
+        self.assertIn('if [ "${REDIRECT:-}" = "1" ]', self.src)
+        self.assertIn("--no-redirect", self.src)
+        # --redirect must appear only inside the opt-in branch, never on the
+        # certbot line itself.
+        certbot_line = [l for l in self.src.splitlines()
+                        if l.startswith("sudo certbot ")][0]
+        self.assertNotIn("--redirect", certbot_line, certbot_line)
+
 
 if __name__ == "__main__":
     unittest.main()

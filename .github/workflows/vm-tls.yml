@@ -1,0 +1,191 @@
+name: VM TLS / domain cutover
+
+# Runs the domain cutover on the VM over the SAME deploy key deploy.yml already
+# uses, so no new credential exists anywhere. Manual dispatch only.
+#
+#   mode: diagnose  (default) — read-only. Reports which nginx server block
+#                    currently answers for the domain, what certificates exist,
+#                    and what is listening on 80/443. Changes nothing.
+#   mode: enable    — runs deploy/enable-https.sh (apex + www, 80->443 redirect,
+#                    auto-renewal) and optionally sets SESSION_COOKIE_DOMAIN.
+#
+# Always run `diagnose` first: if a leftover server block still claims the
+# domain it beats the app's `server_name _` block, and enabling would install
+# the certificate into the wrong place. enable-https.sh refuses to run in that
+# case, but seeing it first is cheaper than a failed run.
+
+on:
+  workflow_dispatch:
+    inputs:
+      domain:
+        description: "Domain to serve (www.<domain> is added automatically when it resolves)"
+        required: true
+        default: "taureye.com"
+      email:
+        description: "Contact email for Let's Encrypt (expiry notices)"
+        required: false
+        default: ""
+      mode:
+        description: "diagnose (read-only) or enable (issues the certificate)"
+        required: true
+        default: "diagnose"
+        type: choice
+        options: [diagnose, enable]
+      set_cookie_domain:
+        description: "enable mode: set SESSION_COOKIE_DOMAIN so apex and www share a login"
+        required: false
+        default: true
+        type: boolean
+      redirect_http:
+        description: "enable mode: 301 plain HTTP to https. Leave OFF until the APK fleet is on an https base — it also stops the bare IP from serving, which is what installed apps call."
+        required: false
+        default: false
+        type: boolean
+
+# Never overlap with a deploy — both restart the service and touch nginx.
+concurrency:
+  group: deploy-vm
+  cancel-in-progress: false
+
+jobs:
+  cutover:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Both values are interpolated into a remote shell command below. Reject
+      # anything outside the character set a hostname/email can legally use, so
+      # a crafted dispatch input cannot smuggle shell syntax onto the VM.
+      - name: Validate inputs
+        env:
+          DOMAIN: ${{ inputs.domain }}
+          EMAIL: ${{ inputs.email }}
+        run: |
+          case "$DOMAIN" in
+            ""|-*|.*|*[!a-zA-Z0-9.-]*)
+              echo "FAIL: '$DOMAIN' is not a plain hostname"; exit 1 ;;
+          esac
+          case "$DOMAIN" in *.*) ;; *) echo "FAIL: '$DOMAIN' has no dot"; exit 1 ;; esac
+          if [ -n "$EMAIL" ]; then
+            case "$EMAIL" in
+              *[!a-zA-Z0-9.@_+-]*|*@*@*|@*|*@) echo "FAIL: '$EMAIL' is not an email"; exit 1 ;;
+              *@*) ;; *) echo "FAIL: '$EMAIL' is not an email"; exit 1 ;;
+            esac
+          elif [ "${{ inputs.mode }}" = "enable" ]; then
+            echo "FAIL: email is required for mode=enable (certbot needs it)"; exit 1
+          fi
+          echo "OK: domain=$DOMAIN mode=${{ inputs.mode }}"
+
+      - name: Configure SSH
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.VM_SSH_KEY }}" > ~/.ssh/id_deploy
+          chmod 600 ~/.ssh/id_deploy
+          ssh-keyscan -H "${{ secrets.VM_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Diagnose — who currently answers for this domain
+        env:
+          U: ${{ secrets.VM_USER }}
+          H: ${{ secrets.VM_HOST }}
+          DOMAIN: ${{ inputs.domain }}
+        run: |
+          ssh -i ~/.ssh/id_deploy "$U@$H" "DOMAIN='$DOMAIN' bash -s" <<'REMOTE'
+          set -u
+          echo "=== nginx server blocks on this VM ==="
+          grep -rn "server_name" /etc/nginx/conf.d /etc/nginx/sites-enabled 2>/dev/null || echo "(none found)"
+
+          echo
+          echo "=== what answers for Host: $DOMAIN ==="
+          code=$(curl -s -o /dev/null -w '%{http_code}' -H "Host: $DOMAIN" http://127.0.0.1/ping || echo 000)
+          echo "GET /ping -> HTTP $code  body: $(curl -s -H "Host: $DOMAIN" http://127.0.0.1/ping || true)"
+
+          if curl -s -H "Host: $DOMAIN" http://127.0.0.1/ | grep -q 'id="root"'; then
+            echo "VERDICT: $DOMAIN is ALREADY served by this app"
+          else
+            echo "VERDICT: $DOMAIN is NOT served by this app — something else claims it"
+            echo "--- first 300 bytes of what it does serve ---"
+            curl -s -H "Host: $DOMAIN" http://127.0.0.1/ | head -c 300; echo
+          fi
+
+          echo
+          echo "=== certificates ==="
+          sudo ls /etc/letsencrypt/live 2>/dev/null || echo "(none)"
+          echo "=== listening on 80/443 ==="
+          sudo ss -ltnp 2>/dev/null | grep -E ':80 |:443 ' || echo "(none)"
+          REMOTE
+
+      - name: Enable HTTPS
+        if: ${{ inputs.mode == 'enable' }}
+        env:
+          U: ${{ secrets.VM_USER }}
+          H: ${{ secrets.VM_HOST }}
+          DOMAIN: ${{ inputs.domain }}
+          EMAIL: ${{ inputs.email }}
+        run: |
+          ssh -i ~/.ssh/id_deploy "$U@$H" \
+            "DOMAIN='$DOMAIN' EMAIL='$EMAIL' COOKIE='${{ inputs.set_cookie_domain }}' \
+             REDIRECT='${{ inputs.redirect_http && '1' || '0' }}' bash -s" <<'REMOTE'
+          set -eu
+          cd /opt/quanthunt
+          sudo REDIRECT="$REDIRECT" bash deploy/enable-https.sh "$DOMAIN" "$EMAIL"
+
+          if [ "$COOKIE" = "true" ]; then
+            # Idempotent: rewrite the line if present, append if not, so re-runs
+            # do not stack duplicate keys in .env.
+            sudo touch /opt/quanthunt/.env
+            if sudo grep -q '^SESSION_COOKIE_DOMAIN=' /opt/quanthunt/.env; then
+              sudo sed -i "s|^SESSION_COOKIE_DOMAIN=.*|SESSION_COOKIE_DOMAIN=.$DOMAIN|" /opt/quanthunt/.env
+            else
+              echo "SESSION_COOKIE_DOMAIN=.$DOMAIN" | sudo tee -a /opt/quanthunt/.env >/dev/null
+            fi
+            sudo systemctl restart quanthunt
+            echo "SESSION_COOKIE_DOMAIN=.$DOMAIN (apex and www share a login)"
+          fi
+          REMOTE
+
+      - name: Verify HTTPS from the VM
+        if: ${{ inputs.mode == 'enable' }}
+        env:
+          U: ${{ secrets.VM_USER }}
+          H: ${{ secrets.VM_HOST }}
+          DOMAIN: ${{ inputs.domain }}
+        run: |
+          ssh -i ~/.ssh/id_deploy "$U@$H" \
+            "DOMAIN='$DOMAIN' REDIRECT='${{ inputs.redirect_http && '1' || '0' }}' bash -s" <<'REMOTE'
+          set -u
+          fail=0
+          for host in "$DOMAIN" "www.$DOMAIN"; do
+            getent hosts "$host" >/dev/null 2>&1 || { echo "skip $host (no DNS)"; continue; }
+
+            code=$(curl -s -o /dev/null -w '%{http_code}' "https://$host/ping" || echo 000)
+            [ "$code" = "200" ] && echo "OK   https://$host/ping -> 200" \
+                                || { echo "FAIL https://$host/ping -> $code"; fail=1; }
+
+            # The shell must fetch AND decode: these ship precompressed, and a
+            # bad variant is a 200 that renders blank in a real browser.
+            if curl -s --compressed "https://$host/" | grep -q 'id="root"'; then
+              echo "OK   https://$host/ serves the app shell"
+            else
+              echo "FAIL https://$host/ did not serve the app shell"; fail=1
+            fi
+
+            r=$(curl -s -o /dev/null -w '%{http_code}' "http://$host/" || echo 000)
+            if [ "$REDIRECT" = "1" ]; then
+              case "$r" in 30*) echo "OK   http://$host/ -> $r (redirects to https)" ;;
+                           *)   echo "FAIL http://$host/ -> $r (expected a 301)"; fail=1 ;; esac
+            else
+              case "$r" in 200) echo "OK   http://$host/ -> 200 (plain HTTP still serving, as intended)" ;;
+                           *)   echo "FAIL http://$host/ -> $r (redirect is off; HTTP must keep serving)"; fail=1 ;; esac
+            fi
+          done
+
+          # The APK fleet calls the BARE IP over plain HTTP. That is the
+          # default_server path, which certbot's --redirect would replace with
+          # `return 404`. Prove it still answers.
+          if [ "$REDIRECT" != "1" ]; then
+            ip=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1/ping || echo 000)
+            [ "$ip" = "200" ] && echo "OK   bare-IP path still serves (installed APKs unaffected)" \
+                              || { echo "FAIL bare-IP path -> $ip — installed APKs would break"; fail=1; }
+          fi
+          exit $fail
+          REMOTE

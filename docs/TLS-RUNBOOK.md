@@ -62,8 +62,17 @@ sudo bash deploy/enable-https.sh taureye.com you@email.com
 
 This sets `server_name`, installs certbot, issues a cert covering **both**
 `taureye.com` and `www.taureye.com` (www is added automatically because it
-resolves), adds the 443 server block with an 80→443 redirect, and enables
-auto-renewal. Verify:
+resolves), adds the 443 server block, and enables auto-renewal.
+
+It deliberately does **not** add an 80→443 redirect. certbot implements that
+redirect by rewriting the port-80 block — prepending an `if ($host = …) return
+301` per certificate name and appending `return 404` for everything else. That
+block is this app's `listen 80 default_server`: the one that answers for the
+**bare IP**, which is what every APK in the field uses as its API base. Turning
+the redirect on before the fleet has moved would 404 every installed app the
+moment the certificate is issued. See step 5.
+
+Verify:
 
 ```bash
 curl -sSI https://taureye.com/ping
@@ -105,10 +114,22 @@ the **Android APK** workflow (workflow_dispatch) or push to `production`; then
 distribute the new APK. Old installs keep working through the transition
 because the server still answers on the bare IP until step 5.
 
-## 5. Retire plain HTTP (after the fleet has updated)
+## 5. Retire plain HTTP (only after the fleet has updated)
 
-Once installed apps are on the https-base bundle, have nginx return 301 from
-the bare-IP host to the domain, and remove the IP from any docs.
+Once installed apps are on the https-base bundle, turn the redirect on:
+
+```bash
+cd /opt/quanthunt
+sudo REDIRECT=1 bash deploy/enable-https.sh taureye.com you@email.com
+```
+
+or run the **VM TLS / domain cutover** workflow with `mode: enable` and
+`redirect_http: true`.
+
+This is the step that stops plain HTTP — including on the bare IP. Do not run
+it while APKs built against `http://161.118.174.177` are still in use; check
+that first, because there is no signal from the server side that they have all
+moved.
 
 ## Rollback
 
