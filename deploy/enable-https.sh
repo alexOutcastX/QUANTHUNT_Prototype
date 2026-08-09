@@ -79,11 +79,36 @@ fi
 
 CERTBOT_ARGS=()
 for n in "${NAMES[@]}"; do CERTBOT_ARGS+=(-d "$n"); done
-sudo certbot --nginx "${CERTBOT_ARGS[@]}" -m "${EMAIL}" --agree-tos --no-eff-email --redirect
+
+# --redirect is OPT-IN (REDIRECT=1), and defaults off deliberately.
+#
+# certbot's nginx installer implements the redirect by rewriting the port-80
+# block: it prepends `if ($host = <name>)  return 301 https://...` for each
+# certificate name and appends `return 404; # managed by Certbot` for
+# everything else. That block is this app's `listen 80 default_server`, i.e.
+# the one that answers for the BARE IP — which is exactly what every APK in
+# the field uses as its API base (EXPO_PUBLIC_API_BASE=http://<ip>). Turning
+# the redirect on before the fleet has moved to an https base would 404 every
+# installed app the moment the cert is issued.
+#
+# Without it, certbot only ADDS the 443 block: https starts working, plain HTTP
+# keeps serving both the domain and the IP, and nothing in the field breaks.
+# Flip REDIRECT=1 at step 5 of docs/TLS-RUNBOOK.md, once the APKs are on https.
+if [ "${REDIRECT:-}" = "1" ]; then
+  echo "==> --redirect ON: plain HTTP will 301, and the bare IP will stop serving."
+  CERTBOT_ARGS+=(--redirect)
+else
+  CERTBOT_ARGS+=(--no-redirect)
+fi
+
+sudo certbot --nginx "${CERTBOT_ARGS[@]}" -m "${EMAIL}" --agree-tos --no-eff-email
 
 sudo nginx -t && sudo systemctl reload nginx
 echo
 echo "HTTPS enabled: https://${DOMAIN}"
+if [ "${REDIRECT:-}" != "1" ]; then
+  echo "Plain HTTP still serves (domain AND bare IP) — installed APKs keep working."
+fi
 echo "Renewal is automatic (systemd timer). Next steps:"
 if [ "${#NAMES[@]}" -gt 1 ]; then
   echo "  - Both apex and www now serve the app. Set SESSION_COOKIE_DOMAIN=.${DOMAIN}"

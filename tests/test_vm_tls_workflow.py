@@ -75,6 +75,22 @@ class VmTlsWorkflowTest(unittest.TestCase):
         """Re-running must not stack duplicate SESSION_COOKIE_DOMAIN keys."""
         self.assertIn("grep -q '^SESSION_COOKIE_DOMAIN=' /opt/quanthunt/.env", self.yml)
 
+    def test_http_redirect_defaults_off(self):
+        """Turning it on stops the bare IP from serving, which is what every
+        installed APK calls. Must never be the default."""
+        try:
+            import yaml
+        except ImportError:
+            self.skipTest("pyyaml not installed")
+        d = yaml.safe_load(self.yml)
+        self.assertIs(d[True]["workflow_dispatch"]["inputs"]["redirect_http"]["default"], False)
+
+    def test_verify_proves_the_bare_ip_still_serves(self):
+        """With the redirect off, the check must assert plain HTTP still works
+        — otherwise a silent 404 on the default_server path ships unnoticed."""
+        self.assertIn("installed APKs would break", self.yml)
+        self.assertIn("http://127.0.0.1/ping", self.yml)
+
     def test_verify_checks_the_shell_decodes(self):
         """Assets ship precompressed; a bad variant is a 200 that renders blank,
         so the check must decode the body, not just read the status code."""

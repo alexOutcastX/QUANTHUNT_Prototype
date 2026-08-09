@@ -36,6 +36,11 @@ on:
         required: false
         default: true
         type: boolean
+      redirect_http:
+        description: "enable mode: 301 plain HTTP to https. Leave OFF until the APK fleet is on an https base — it also stops the bare IP from serving, which is what installed apps call."
+        required: false
+        default: false
+        type: boolean
 
 # Never overlap with a deploy — both restart the service and touch nginx.
 concurrency:
@@ -118,10 +123,11 @@ jobs:
           EMAIL: ${{ inputs.email }}
         run: |
           ssh -i ~/.ssh/id_deploy "$U@$H" \
-            "DOMAIN='$DOMAIN' EMAIL='$EMAIL' COOKIE='${{ inputs.set_cookie_domain }}' bash -s" <<'REMOTE'
+            "DOMAIN='$DOMAIN' EMAIL='$EMAIL' COOKIE='${{ inputs.set_cookie_domain }}' \
+             REDIRECT='${{ inputs.redirect_http && '1' || '0' }}' bash -s" <<'REMOTE'
           set -eu
           cd /opt/quanthunt
-          sudo bash deploy/enable-https.sh "$DOMAIN" "$EMAIL"
+          sudo REDIRECT="$REDIRECT" bash deploy/enable-https.sh "$DOMAIN" "$EMAIL"
 
           if [ "$COOKIE" = "true" ]; then
             # Idempotent: rewrite the line if present, append if not, so re-runs
@@ -144,7 +150,8 @@ jobs:
           H: ${{ secrets.VM_HOST }}
           DOMAIN: ${{ inputs.domain }}
         run: |
-          ssh -i ~/.ssh/id_deploy "$U@$H" "DOMAIN='$DOMAIN' bash -s" <<'REMOTE'
+          ssh -i ~/.ssh/id_deploy "$U@$H" \
+            "DOMAIN='$DOMAIN' REDIRECT='${{ inputs.redirect_http && '1' || '0' }}' bash -s" <<'REMOTE'
           set -u
           fail=0
           for host in "$DOMAIN" "www.$DOMAIN"; do
@@ -162,10 +169,23 @@ jobs:
               echo "FAIL https://$host/ did not serve the app shell"; fail=1
             fi
 
-            # Plain HTTP must redirect, not serve.
             r=$(curl -s -o /dev/null -w '%{http_code}' "http://$host/" || echo 000)
-            case "$r" in 30*) echo "OK   http://$host/ -> $r (redirects to https)" ;;
-                         *)   echo "WARN http://$host/ -> $r (expected a 301)" ;; esac
+            if [ "$REDIRECT" = "1" ]; then
+              case "$r" in 30*) echo "OK   http://$host/ -> $r (redirects to https)" ;;
+                           *)   echo "FAIL http://$host/ -> $r (expected a 301)"; fail=1 ;; esac
+            else
+              case "$r" in 200) echo "OK   http://$host/ -> 200 (plain HTTP still serving, as intended)" ;;
+                           *)   echo "FAIL http://$host/ -> $r (redirect is off; HTTP must keep serving)"; fail=1 ;; esac
+            fi
           done
+
+          # The APK fleet calls the BARE IP over plain HTTP. That is the
+          # default_server path, which certbot's --redirect would replace with
+          # `return 404`. Prove it still answers.
+          if [ "$REDIRECT" != "1" ]; then
+            ip=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1/ping || echo 000)
+            [ "$ip" = "200" ] && echo "OK   bare-IP path still serves (installed APKs unaffected)" \
+                              || { echo "FAIL bare-IP path -> $ip — installed APKs would break"; fail=1; }
+          fi
           exit $fail
           REMOTE
