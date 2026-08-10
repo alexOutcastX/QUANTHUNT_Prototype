@@ -47,6 +47,39 @@ class CookieDomainTest(unittest.TestCase):
         self.assertGreaterEqual(self.src.count("_clear_cookie(resp,"), 3)
 
 
+class OpenFirewallPortTest(unittest.TestCase):
+    """443 was refused from outside — immediately, not a timeout, so the cloud
+    security list allows it and the HOST firewall was rejecting. certbot's
+    http-01 challenge only needs port 80, so the certificate would issue while
+    https went on refusing connections: a closed port wearing the costume of a
+    broken certificate."""
+
+    def setUp(self):
+        with open(os.path.join(DEPLOY, "open-firewall-port.sh"), encoding="utf-8") as fh:
+            self.src = fh.read()
+
+    def test_picks_one_firewall_backend_not_both(self):
+        """firewalld owns the chains while it runs; a hand-inserted iptables
+        rule is ignored or wiped on its next reload."""
+        self.assertIn("elif command -v iptables", self.src)
+
+    def test_iptables_rule_goes_above_the_catch_all_reject(self):
+        """Oracle's images end INPUT with a catch-all REJECT — an appended
+        ACCEPT below it never matches."""
+        self.assertIn('$2=="REJECT"||$2=="DROP"', self.src)
+        self.assertIn("iptables -I INPUT", self.src)
+
+    def test_rule_is_persisted(self):
+        """Otherwise https dies at the next reboot with no code change to
+        explain it."""
+        for how in ("netfilter-persistent", "iptables.init", "service iptables save"):
+            self.assertIn(how, self.src)
+        self.assertIn("could not persist", self.src)
+
+    def test_port_argument_is_validated(self):
+        self.assertIn("is not a port number", self.src)
+
+
 class EnableHttpsScriptTest(unittest.TestCase):
     def setUp(self):
         with open(os.path.join(DEPLOY, "enable-https.sh"), encoding="utf-8") as fh:

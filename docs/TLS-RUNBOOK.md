@@ -6,51 +6,45 @@ repo) instead of the previous TaurEye site.
 The stack is fully parameterised — the cutover is configuration and DNS, with
 zero code changes.
 
-## Where things stand
+## 0. Point the domain at this VM (owner, at the DNS provider)
 
-`taureye.com` and `www.taureye.com` already have A records pointing at the VM
-this app runs on:
+**This is the whole cutover. Everything else is follow-up.**
+
+`taureye.com` currently resolves to the old host:
 
 ```
-$ getent hosts taureye.com www.taureye.com
-161.118.174.177  taureye.com
-161.118.174.177  www.taureye.com
+$ getent ahostsv4 taureye.com www.taureye.com
+98.70.43.232      taureye.com
+98.70.43.232      www.taureye.com
 ```
 
-So DNS is **already done**. What remains is making sure nginx on that VM hands
-those hostnames to this app, and putting a certificate in front.
+That is not this VM (`161.118.174.177`). Until the A records change, this app
+cannot serve the domain and a certificate cannot be issued for it — Let's
+Encrypt resolves the name over public DNS and fetches the ACME challenge from
+whatever IP it gets.
 
-## 0. Confirm nothing else is claiming the domain (owner, on the VM)
+At the DNS provider for `taureye.com`, set:
 
-This is the step that actually decides the cutover. The app's nginx block is:
+| Record | Name | Value |
+|---|---|---|
+| A | `@` | `161.118.174.177` |
+| A | `www` | `161.118.174.177` |
 
-```nginx
-listen 80 default_server;
-server_name _;
-```
+Delete or repoint any existing A/AAAA/ALIAS record for those names. Propagation
+is usually minutes; confirm with `getent ahostsv4 taureye.com`.
 
-`default_server` only catches hostnames that **no other server block claims**.
-If a leftover block for the old site names `taureye.com`, that block wins and
-keeps serving the old site — DNS pointing here changes nothing.
+> **Do not trust a `Host:`-header probe for this.** Running
+> `curl -H 'Host: taureye.com' http://127.0.0.1/` on the VM only shows which
+> server block *would* handle the hostname — it cannot see where public traffic
+> goes, and reading it as "the domain is live here" is wrong.
+> The **VM TLS / domain cutover** workflow (`mode: diagnose`) resolves the name
+> over public DNS and compares it to the deploy host, which is the check that
+> actually answers the question. `mode: enable` refuses to run on a mismatch
+> rather than burning a Let's Encrypt attempt.
 
-```bash
-ssh <user>@161.118.174.177
-grep -rn "server_name" /etc/nginx/conf.d /etc/nginx/sites-enabled 2>/dev/null
-curl -sS -H 'Host: taureye.com' http://127.0.0.1/ping     # expect: pong (this app)
-curl -sS -H 'Host: taureye.com' http://127.0.0.1/ | head -c 200
-```
-
-- `/ping` answers and `/` contains `id="root"` → the app already owns the
-  hostname; go to step 1.
-- Anything else → find the block that claims `taureye.com` and retire it:
-  ```bash
-  sudo mv /etc/nginx/conf.d/<old-site>.conf /root/old-site.conf.disabled
-  sudo nginx -t && sudo systemctl reload nginx
-  ```
-
-`deploy/enable-https.sh` refuses to run while a conflicting block exists, so a
-missed leftover fails loudly instead of installing the certificate into the
-wrong server block.
+Nothing else on the VM claims the domain — it has exactly one nginx server
+block, this app's, which is `listen 80 default_server; server_name _`. So once
+DNS moves, the app serves the domain immediately over plain HTTP.
 
 ## 1. Issue the certificate on the VM
 
