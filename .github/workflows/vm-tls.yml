@@ -178,6 +178,17 @@ jobs:
           fi
 
           echo
+          echo "=== host firewall ==="
+          if command -v firewall-cmd >/dev/null 2>&1 && sudo firewall-cmd --state >/dev/null 2>&1; then
+            echo "firewalld: RUNNING"
+            echo "  ports:    $(sudo firewall-cmd --list-ports 2>/dev/null)"
+            echo "  services: $(sudo firewall-cmd --list-services 2>/dev/null)"
+          else
+            echo "firewalld: not running"
+            sudo iptables -S INPUT 2>/dev/null \
+              | grep -E -- '--dport (80|443)|-j (REJECT|DROP)' || echo "  (no matching iptables rules)"
+          fi
+
           echo "=== certificates ==="
           sudo ls /etc/letsencrypt/live 2>/dev/null || echo "(none)"
           echo "=== listening on 80/443 ==="
@@ -197,6 +208,13 @@ jobs:
              REDIRECT='${{ inputs.redirect_http && '1' || '0' }}' bash -s" <<'REMOTE'
           set -eu
           cd /opt/quanthunt
+
+          # Open 443 on the host firewall BEFORE issuing. certbot's http-01
+          # challenge only needs port 80, so the certificate would be issued
+          # successfully and https would still refuse connections — looking
+          # like a broken certificate when it is a closed port.
+          sudo bash deploy/open-firewall-port.sh 443
+
           sudo REDIRECT="$REDIRECT" bash deploy/enable-https.sh "$DOMAIN" "$EMAIL"
 
           if [ "$COOKIE" = "true" ]; then
