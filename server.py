@@ -1349,7 +1349,180 @@ def member_me():
 def member_logout():
     resp = jsonify({"member": None})
     _clear_cookie(resp, _members.COOKIE)
+    _clear_cookie(resp, _USER_COOKIE)      # sign out of BOTH identities at once
+    _analytics.track(_acct(), "auth.signout")
     return resp
+
+
+# ── monetisation: wallet, credits, referrals, subscriptions, analytics ───────
+# Everything below is preview-gated. taureye.com and 161.118.174.177 are the
+# same server, so "live on the IP, not on the domain" is decided per request
+# from the Host header — see preview.py.
+import preview as _preview
+import wallet as _wallet
+import referrals as _referrals
+import billing as _billing
+import analytics as _analytics
+import integrations as _integrations
+
+
+def _acct() -> str:
+    """The wallet/referral identity for this request.
+
+    The member username, because that is what people actually sign in with
+    today. Email accounts (users.py) are a separate identity that is not yet
+    joined to this one; when they are, this is the single place to do it.
+    """
+    m = current_member()
+    return (m or {}).get("uname", "")
+
+
+def _preview_on() -> bool:
+    return _preview.enabled(request.headers.get("Host", ""))
+
+
+def require_preview(fn):
+    """404 (not 403) off the preview host — an unreleased feature should look
+    absent on the public domain, not merely forbidden."""
+    import functools
+
+    @functools.wraps(fn)
+    def wrapper(*a, **kw):
+        if not _preview_on():
+            return jsonify({"error": "not-found",
+                            "detail": "This feature is not available yet."}), 404
+        return fn(*a, **kw)
+    return wrapper
+
+
+@app.route("/preview")
+def preview_status():
+    host = request.headers.get("Host", "")
+    return jsonify({"preview": _preview_on(), "host": host,
+                    "reason": _preview.reason(host)})
+
+
+@app.route("/wallet")
+@require_preview
+@require_plan()
+def wallet_get():
+    acct = _acct()
+    return jsonify({
+        "account": acct,
+        "balances": _wallet.balances(acct),
+        "history": _wallet.history(acct, 25),
+    })
+
+
+@app.route("/referral")
+@require_preview
+@require_plan()
+def referral_get():
+    _analytics.track(_acct(), "referral.view", plan=request.member["plan"])
+    return jsonify(_referrals.stats(_acct()))
+
+
+@app.route("/referral/claim", methods=["POST"])
+@require_preview
+@require_plan()
+@rate_limit("referral-claim", 10, 600)
+def referral_claim():
+    body = request.get_json(silent=True) or {}
+    try:
+        out = _referrals.claim(_acct(), body.get("code", ""),
+                               list(_members.accounts().keys()))
+    except _referrals.ReferralError as e:
+        return jsonify({"error": "referral-refused", "detail": str(e)}), 400
+    _analytics.track(_acct(), "referral.claimed", plan=request.member["plan"])
+    return jsonify({"ok": True, **out, "balances": _wallet.balances(_acct())})
+
+
+@app.route("/billing/plans")
+@require_preview
+def billing_plans():
+    m = current_member()
+    acct = (m or {}).get("uname", "")
+    return jsonify({
+        "plans": _billing.plans(),
+        "current": _billing.subscription(acct, (m or {}).get("plan", "")),
+        "provider": _billing.provider(),
+        "provider_configured": _billing.provider_configured(),
+    })
+
+
+@app.route("/billing/checkout", methods=["POST"])
+@require_preview
+@require_plan()
+@rate_limit("billing-checkout", 12, 600)
+def billing_checkout():
+    body = request.get_json(silent=True) or {}
+    try:
+        intent = _billing.start_checkout(_acct(), body.get("plan", ""))
+    except ValueError as e:
+        return jsonify({"error": "bad-plan", "detail": str(e)}), 400
+    _analytics.track(_acct(), "billing.checkout_started",
+                     {"plan": body.get("plan", "")}, plan=request.member["plan"])
+    return jsonify(intent)
+
+
+@app.route("/billing/subscription")
+@require_preview
+@require_plan()
+def billing_subscription():
+    m = request.member
+    return jsonify(_billing.subscription(_acct(), m["plan"]))
+
+
+@app.route("/paywall/<feature>")
+@require_preview
+def paywall_check(feature):
+    """What a locked feature should tell the user, and what unlocks it."""
+    m = current_member()
+    acct = (m or {}).get("uname", "")
+    allowed = bool(m) and _billing.allows(acct, feature, m["plan"])
+    need = _billing.required_plan(feature)
+    return jsonify({
+        "feature": feature, "allowed": allowed, "required_plan": need,
+        "plan": _billing.PLANS.get(need, {}).get("name", need),
+        "price_inr": _billing.PLANS.get(need, {}).get("price_paise", 0) / 100.0,
+        "signed_in": bool(m),
+    })
+
+
+@app.route("/analytics/track", methods=["POST"])
+@require_preview
+def analytics_track():
+    body = request.get_json(silent=True) or {}
+    m = current_member()
+    ok = _analytics.track((m or {}).get("uname", ""), body.get("event", ""),
+                          body.get("props") or {}, plan=(m or {}).get("plan", ""))
+    return jsonify({"ok": ok})
+
+
+@app.route("/analytics/summary")
+@require_preview
+@require_owner
+def analytics_summary():
+    return jsonify(_analytics.summary(int(request.args.get("days", 30))))
+
+
+@app.route("/integrations")
+@require_preview
+@require_owner
+def integrations_status():
+    return jsonify({"integrations": _integrations.all_status()})
+
+
+@app.route("/integrations/public")
+@require_preview
+def integrations_public():
+    """Client-safe subset: just enough to decide which buttons to render."""
+    return jsonify({
+        "google": _integrations.google_signin_config(request.headers.get("Host", "")),
+        "supabase": _integrations.supabase_config(),
+        "payments": {"provider": _billing.provider(),
+                     "enabled": _billing.provider_configured()},
+    })
 
 
 @app.route("/auth/otp/request", methods=["POST"])

@@ -1466,7 +1466,78 @@ export type Member = {
 };
 export type MemberResp = { member: Member | null; token?: string; error?: string; detail?: string };
 
+// ── monetisation (preview-gated) ────────────────────────────────────────────
+// Every endpoint below 404s on taureye.com and serves on 161.118.174.177 —
+// the server decides from the Host header, so the client just asks /preview
+// once and hides the nav entries when it is off.
+export type PreviewResp = { preview: boolean; host: string; reason: string };
+
+export type WalletResp = {
+  account: string;
+  balances: { credits: number; INR: number };
+  history: { id: number; currency: string; amount: number; reason: string; ts: number }[];
+};
+
+export type ReferralResp = {
+  code: string;
+  count: number;
+  credits_earned: number;
+  referrals: { account: string; ts: number }[];
+  referred_by: string;
+  reward_referrer: number;
+  reward_referee: number;
+};
+
+export type Plan = {
+  key: string; name: string; price_paise: number; price_inr: number;
+  period: string; credits_per_period: number; blurb: string; features: string[];
+};
+export type Subscription = {
+  plan: string; status: string; source: string;
+  provider: string | null; renews_at: number | null; expired: boolean;
+};
+export type PlansResp = {
+  plans: Plan[]; current: Subscription;
+  provider: string; provider_configured: boolean;
+};
+export type CheckoutResp = {
+  intent_id: number; plan: string; amount_inr: number; provider: string;
+  provider_configured: boolean; status: string; checkout_url: string | null; message: string;
+};
+export type PaywallResp = {
+  feature: string; allowed: boolean; required_plan: string;
+  plan: string; price_inr: number; signed_in: boolean;
+};
+export type PublicIntegrations = {
+  google: { enabled: boolean; client_id: string; reason: string };
+  supabase: { enabled: boolean; url: string; anon_key: string; reason: string };
+  payments: { provider: string; enabled: boolean };
+};
+export type AnalyticsSummary = {
+  days: number; events: number; people: number; retention_days: number;
+  top_events: { event: string; n: number; people: number }[];
+  daily: { day: string; events: number; people: number }[];
+  by_plan: { plan: string; people: number; events: number }[];
+};
+
 export const api = {
+  // monetisation — preview-gated; these throw 'not-found' on the live domain
+  preview: () => getJson<PreviewResp>('/preview'),
+  wallet: () => getJson<WalletResp>('/wallet'),
+  referral: () => getJson<ReferralResp>('/referral'),
+  referralClaim: (code: string) =>
+    postJson<{ ok: boolean; referrer: string; referrer_credits: number; referee_credits: number }>(
+      '/referral/claim', { code }),
+  billingPlans: () => getJson<PlansResp>('/billing/plans'),
+  billingCheckout: (plan: string) => postJson<CheckoutResp>('/billing/checkout', { plan }),
+  billingSubscription: () => getJson<Subscription>('/billing/subscription'),
+  paywall: (feature: string) => getJson<PaywallResp>('/paywall/' + encodeURIComponent(feature)),
+  integrationsPublic: () => getJson<PublicIntegrations>('/integrations/public'),
+  analyticsSummary: (days = 30) => getJson<AnalyticsSummary>('/analytics/summary?days=' + days),
+  // Fire-and-forget: analytics must never break the screen it rides along on.
+  trackEvent: (event: string, props?: Record<string, unknown>) =>
+    postJson<{ ok: boolean }>('/analytics/track', { event, props }).catch(() => ({ ok: false })),
+
   memberLogin: (username: string, password: string) =>
     postJson<MemberResp>('/auth/member/login', { username, password }),
   memberMe: () => getJson<MemberResp>('/auth/member'),

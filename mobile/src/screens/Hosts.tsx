@@ -7,6 +7,7 @@ import { peekNav, subscribeNav } from '../navIntent';
 import { useResponsive } from '../responsive';
 import { theme } from '../theme';
 import { lazyScreen } from '../lazyScreen';
+import { usePreview } from '../usePreview';
 
 // Every hosted screen is a lazy chunk: Metro splits each import() into its own
 // web bundle, fetched the first time the user opens that screen. First paint
@@ -40,6 +41,7 @@ const AccountScreen = lazyScreen(() => import('./AccountScreen'));
 const CalibrationScreen = lazyScreen(() => import('./CalibrationScreen'));
 const MethodologyScreen = lazyScreen(() => import('./MethodologyScreen'));
 const DeveloperScreen = lazyScreen(() => import('./DeveloperScreen'));
+const WalletScreen = lazyScreen(() => import('./WalletScreen'));
 
 // hidden: routable via nav intents but not shown as a pill/menu entry (e.g.
 // Universe after it left the Screens bar for the Today landing page).
@@ -315,7 +317,12 @@ export function ChartsHome() {
 
 // "More" menu: a list of secondary tools; tapping opens one full-screen with a
 // back header. Keeps the bottom tab bar to five primary destinations.
-const MORE_ITEMS: { key: string; label: string; hint: string; render: () => React.ReactElement }[] = [
+const MORE_ITEMS: {
+  key: string; label: string; hint: string;
+  render: () => React.ReactElement;
+  /** Only listed on a preview host — see usePreview / preview.py. */
+  preview?: boolean;
+}[] = [
   { key: 'account', label: 'Account', hint: 'Sign in · cloud sync across devices', render: () => <AccountScreen /> },
   { key: 'methodology', label: 'Methodology', hint: 'How every score is computed — the published rules', render: () => <MethodologyScreen /> },
   { key: 'community', label: 'Community chat', hint: 'Global room, topic channels & direct messages with other traders', render: () => <ChatScreen /> },
@@ -334,6 +341,10 @@ const MORE_ITEMS: { key: string; label: string; hint: string; render: () => Reac
   { key: 'developer', label: 'Developer', hint: 'Fundamentals cache · API keys · public /api/v1', render: () => <DeveloperScreen /> },
   { key: 'indices', label: 'Indices', hint: 'Live index levels · day & 1Y change', render: () => <IndicesScreen /> },
   { key: 'holidays', label: 'Holidays', hint: 'NSE holiday calendar · market open/closed', render: () => <HolidaysScreen /> },
+  // Preview-only. usePreview() filters this out on taureye.com, where the
+  // endpoints behind it 404 — an entry that always errored would be worse
+  // than no entry.
+  { key: 'wallet', label: 'Wallet', hint: 'Credits · refer and earn · your plan', render: () => <WalletScreen />, preview: true },
 ];
 
 // Destinations that already have a first-class tab on the Screens or Desk
@@ -342,12 +353,14 @@ const MORE_DUP_KEYS = new Set(['account', 'heatmap', 'universe', 'portfolio', 'w
 const MORE_MENU = MORE_ITEMS.filter((i) => !MORE_DUP_KEYS.has(i.key));
 
 export function MoreScreen() {
+  const preview = usePreview();
+  const menu = MORE_MENU.filter((i) => !i.preview || preview);
   const [sel, setSel] = useState<string | null>(null);
   const [version, setVersion] = useState('');
   useEffect(() => {
     api.version().then((v) => setVersion(v.version)).catch(() => {});
   }, []);
-  const items = MORE_MENU;
+  const items = menu;
   const item = items.find((i) => i.key === sel);
 
   if (item) {
