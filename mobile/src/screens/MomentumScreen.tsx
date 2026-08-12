@@ -23,6 +23,8 @@ import { navigate, openStock, takeSector, takeSymbol } from '../navIntent';
 import { useAdvisory } from '../flags';
 import { mergeSectors } from '../sectors';
 import { theme } from '../theme';
+import { MACD_DEFAULTS, MacdParams, matchesMacd, rankMacd } from '../macdStrategy';
+import MacdControls from '../components/MacdControls';
 
 const GOLD = '#f5c518';
 
@@ -79,6 +81,14 @@ const MOM_STRATEGIES: MomStrategy[] = [
     label: 'Volume thrust (≥2× RVOL)',
     hint: 'Relative volume 2× or more — institutional participation behind the move.',
     match: (h) => (h.relvol ?? 0) >= 2,
+  },
+  {
+    key: 'macd',
+    label: 'MACD + DMA (configurable)',
+    hint: 'Your own MACD screen: pick the moving average, where price must sit relative to it, the MACD condition and an RSI band. Built for names still under a DMA with momentum quietly turning up.',
+    // Parameterised, so the predicate lives in macdStrategy.ts and is applied
+    // separately below — `match` here only has to not exclude anything.
+    match: () => true,
   },
   {
     key: 'divergence',
@@ -529,6 +539,7 @@ export default function MomentumScreen() {
   const [view, setView] = useState<'radar' | 'analyse'>('radar');
   const [setupFilter, setSetupFilter] = useState<'all' | SetupKind>('all');
   const [strategy, setStrategy] = useState('all');
+  const [macdParams, setMacdParams] = useState<MacdParams>({ ...MACD_DEFAULTS });
   const enrich = useEnrich(useMemo(() => hits.map((h) => h.symbol), [hits]));
   const [sector, setSector] = useState('');
   const [sel, setSel] = useState<MomentumHit | null>(null);
@@ -650,12 +661,17 @@ export default function MomentumScreen() {
   );
   const stratDef = MOM_STRATEGIES.find((s) => s.key === strategy) || MOM_STRATEGIES[0];
   const shown = useMemo(() => {
-    const filtered = hits.filter(
+    let filtered = hits.filter(
       (h) =>
         (setupFilter === 'all' || h.setup === setupFilter) &&
         (sector === '' || enrich[h.symbol]?.sector === sector) &&
         stratDef.match(h),
     );
+    // The MACD strategy is configured rather than fixed, so its predicate
+    // takes the live params instead of living in MOM_STRATEGIES.
+    if (strategy === 'macd') {
+      filtered = rankMacd(filtered.filter((h) => matchesMacd(h, macdParams)), macdParams);
+    }
     return [...filtered].sort((a, b) => {
       const va = sortVal(a, sortCol);
       const vb = sortVal(b, sortCol);
@@ -671,7 +687,7 @@ export default function MomentumScreen() {
       if (nb === null) return -1;
       return (na - nb) * sortDir;
     });
-  }, [hits, enrich, setupFilter, sector, strategy, sortCol, sortDir]);
+  }, [hits, enrich, setupFilter, sector, strategy, macdParams, sortCol, sortDir]);
   const arrow = (col: ColKey) => (sortCol === col ? (sortDir === 1 ? ' ↑' : ' ↓') : '');
 
   // ▤ Columns (persisted; symbol always shown) + ⇩ Export over what's visible.
@@ -832,6 +848,14 @@ export default function MomentumScreen() {
           </View>
           {strategy !== 'all' ? (
             <Text style={styles.stratHint}>{stratDef.hint}</Text>
+          ) : null}
+          {strategy === 'macd' ? (
+            <MacdControls
+              value={macdParams}
+              onChange={setMacdParams}
+              matched={shown.length}
+              total={hits.length}
+            />
           ) : null}
         </>
       ) : null}

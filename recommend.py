@@ -28,6 +28,49 @@ def _ema(vals, period):
     return e
 
 
+def _ema_series(vals, period):
+    """Full EMA series, seeded the same way _ema seeds its scalar.
+
+    MACD needs the signal line to be an EMA *of the MACD line*, which means the
+    MACD line has to exist as a series, not just its latest value.
+    """
+    if not vals:
+        return []
+    k = 2 / (period + 1)
+    out = [vals[0]]
+    for v in vals[1:]:
+        out.append(v * k + out[-1] * (1 - k))
+    return out
+
+
+def _macd_hist(closes, fast=12, slow=26, signal=9):
+    """(histogram now, histogram one bar ago) — or (None, None) if too short.
+
+    The previous bar is returned alongside because a MACD *cross* is a change
+    of sign between two consecutive bars; a single value cannot express one.
+    """
+    if len(closes) < slow + signal + 1:
+        return None, None
+    ef, es = _ema_series(closes, fast), _ema_series(closes, slow)
+    macd_line = [a - b for a, b in zip(ef, es)]
+    sig = _ema_series(macd_line, signal)
+    hist = [m - s for m, s in zip(macd_line, sig)]
+    return hist[-1], hist[-2]
+
+
+def _sma(vals, period):
+    if len(vals) < period:
+        return None
+    return sum(vals[-period:]) / period
+
+
+def _dist_pct(price, level):
+    """% distance of price from a level. Negative = price is below it."""
+    if not level:
+        return None
+    return round((price / level - 1) * 100, 2)
+
+
 def _rsi(closes, period=14):
     if len(closes) < period + 1:
         return None
@@ -127,6 +170,13 @@ def analyze(symbol, candles, fund_score=None, name=None):
     ema50 = _ema(closes[-200:], 50) or price
     ema200 = _ema(closes, 200) if len(closes) >= 200 else None
     rsi = _rsi(closes) or 50.0
+    macd_now, macd_prev = _macd_hist(closes)
+    # A cross is a sign change between consecutive bars, so both are needed and
+    # both may legitimately be absent on a short history.
+    macd_bull_cross = (None if macd_now is None or macd_prev is None
+                       else bool(macd_prev <= 0 < macd_now))
+    macd_bear_cross = (None if macd_now is None or macd_prev is None
+                       else bool(macd_prev >= 0 > macd_now))
     atr = _atr(highs, lows, closes) or price * 0.02
     win = min(252, len(closes))
     high52 = max(highs[-win:])
@@ -291,5 +341,16 @@ def analyze(symbol, candles, fund_score=None, name=None):
         "rsi": round(rsi, 1),
         "high52": round(high52, 2),
         "low52": round(low52, 2),
+        # MACD + the simple-moving-average ladder, so the MACD strategy can
+        # filter the long-term list on the same terms as the radar. dN is the
+        # % distance from that SMA — negative means price is below it, which is
+        # the "below the 200-DMA" case the strategy is built around.
+        "macd": round(macd_now, 3) if macd_now is not None else None,
+        "macd_prev": round(macd_prev, 3) if macd_prev is not None else None,
+        "macd_bull_cross": macd_bull_cross,
+        "macd_bear_cross": macd_bear_cross,
+        "d20": _dist_pct(price, _sma(closes, 20)),
+        "d50": _dist_pct(price, _sma(closes, 50)),
+        "d200": _dist_pct(price, _sma(closes, 200)),
         "rationale": rationale,
     }

@@ -21,6 +21,8 @@ import SmcScreen from './SmcScreen';
 import { useResponsive } from '../responsive';
 import { openPdfPreview } from '../pdf';
 import { LONG_STRATEGIES } from '../strategies';
+import { MACD_DEFAULTS, MacdParams, matchesMacd, rankMacd } from '../macdStrategy';
+import MacdControls from '../components/MacdControls';
 import { netRR } from '../costs';
 import { Card, Dropdown, EmptyState, FadeSlideIn, InfoButton, RiskBadge, Segmented, Sheet } from '../ui';
 import { PaperTrade, addPaperTrade, hasOpenPaper, loadPaperTrades } from '../paperTrades';
@@ -600,13 +602,19 @@ function LongTermRecs() {
   // Selected strategy re-ranks / filters the candidate pool (default = balanced);
   // the Sort dropdown then orders whatever the strategy returned.
   const stratDef = LONG_STRATEGIES.find((s) => s.id === strat) || LONG_STRATEGIES[0];
+  // The MACD strategy is configured live, so its parameters cannot travel
+  // through Strategy.apply (which takes only rows). Held here and applied
+  // below in place of stratDef.apply.
+  const [macdParams, setMacdParams] = React.useState<MacdParams>({ ...MACD_DEFAULTS });
   // Exhaustive sector list (canonical ∪ sectors present in the enriched recs).
   const sectors = React.useMemo(
     () => mergeSectors(recs.map((r) => secMap[r.symbol])),
     [recs, secMap],
   );
   const shown = React.useMemo(() => {
-    let base = [...stratDef.apply(recs)];
+    let base = strat === 'macd'
+      ? rankMacd(recs.filter((r) => matchesMacd(r, macdParams)), macdParams)
+      : [...stratDef.apply(recs)];
     if (sector) base = base.filter((r) => secMap[r.symbol] === sector);
     const asc = sortKey === 'eta_days';
     base.sort((a, b) => {
@@ -615,7 +623,7 @@ function LongTermRecs() {
       return asc ? va - vb : vb - va;
     });
     return base;
-  }, [recs, stratDef, sortKey, sector, secMap]);
+  }, [recs, stratDef, strat, macdParams, sortKey, sector, secMap]);
   const enrich = useEnrich(React.useMemo(() => shown.map((r) => r.symbol), [shown]));
 
   return (
@@ -664,6 +672,16 @@ function LongTermRecs() {
         </TouchableOpacity>
         {asof && !scanning ? <Text style={styles.asofInline}>updated {timeAgo(asof)}</Text> : null}
       </View>
+
+      {/* The MACD strategy's settings, only while it is the active strategy. */}
+      {strat === 'macd' ? (
+        <MacdControls
+          value={macdParams}
+          onChange={setMacdParams}
+          matched={shown.length}
+          total={recs.length}
+        />
+      ) : null}
 
       {/* progress bar + live status while scanning */}
       {scanning ? (

@@ -322,6 +322,18 @@ def _run(universe_fn):
                            "relvol": t.get("relvol"), "d200": t.get("d200"),
                            "pct_from_high": t.get("pct_from_high"),
                            "ret_1w": t.get("ret_1w"), "ret_1m": t.get("ret_1m"),
+                           # MACD + the rest of the moving-average ladder. The
+                           # scanner already computes all of this; the radar
+                           # only ever forwarded d200, so a MACD/DMA strategy
+                           # had nothing to filter on. dN is the % distance
+                           # from that SMA, so negative = price below it.
+                           "macd": t.get("macd"),
+                           "macd_bull_cross": t.get("macd_bull_cross"),
+                           "macd_bear_cross": t.get("macd_bear_cross"),
+                           "d20": t.get("d20"), "d50": t.get("d50"),
+                           "d150": t.get("d150"),
+                           "golden_cross": t.get("golden_cross"),
+                           "death_cross": t.get("death_cross"),
                            "target": target, "upside_pct": upside_pct, **read}
             except Exception:
                 pass

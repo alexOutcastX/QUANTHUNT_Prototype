@@ -1106,6 +1106,15 @@ export type Recommendation = {
   rsi: number;
   high52: number;
   low52: number;
+  // MACD + moving-average ladder — what the configurable MACD strategy
+  // filters on. dN is the % distance from that SMA (negative = below it).
+  macd?: number | null;
+  macd_prev?: number | null;
+  macd_bull_cross?: boolean | null;
+  macd_bear_cross?: boolean | null;
+  d20?: number | null;
+  d50?: number | null;
+  d200?: number | null;
   rationale: string[];
   note?: string;
   error?: string;
@@ -1260,6 +1269,16 @@ export type MomentumHit = {
   pct_from_high: number | null;
   ret_1w: number | null;      // trailing 1-week % return (higher-timeframe momentum)
   ret_1m: number | null;      // trailing 1-month % return
+  // MACD + the rest of the moving-average ladder (the radar forwarded only
+  // d200 before, so a MACD/DMA screen had nothing to filter on).
+  macd?: number | null;
+  macd_bull_cross?: boolean | null;
+  macd_bear_cross?: boolean | null;
+  d20?: number | null;
+  d50?: number | null;
+  d150?: number | null;
+  golden_cross?: boolean | null;
+  death_cross?: boolean | null;
   target: number | null;      // nearest overhead target (52w high / pivot)
   upside_pct: number | null;  // % upside remaining to that target
   setup: 'breakout' | 'fired' | 'pullback';

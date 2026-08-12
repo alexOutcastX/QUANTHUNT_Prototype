@@ -4,6 +4,7 @@
 // The default ("balanced") applies no strategy — the ⓘ button only highlights
 // once a specific strategy is chosen.
 import type { Recommendation } from './api';
+import { MACD_DEFAULTS, matchesMacd, rankMacd } from './macdStrategy';
 import type { InfoContent } from './ui';
 
 export type Strategy<T> = {
@@ -145,6 +146,37 @@ export const LONG_STRATEGIES: Strategy<Rec>[] = [
       disclaimer: DISC,
     },
     apply: (rows) => rows.filter((r) => rr(r) >= 2.5).sort(byDesc(rr)),
+  },
+  {
+    id: 'macd',
+    name: 'MACD + DMA (configurable)',
+    info: {
+      about:
+        'The only strategy here you set yourself. Choose which moving average matters, where price must sit relative to it, what the MACD has to be doing and an RSI band — then the list is filtered to names that satisfy all three and ranked by how close they are to the crossover.',
+      sections: [
+        { heading: 'What each control does', bullets: [
+          'Moving average — 20, 50, 150 or 200-DMA. The 200 is the classic long-term trend line.',
+          'Price position — below it (early), below but closing in (the "slowly crossing" case), above it, or a fresh reclaim.',
+          'MACD — a cross today, or the histogram merely turning up while still negative, which is the turn forming before it fires.',
+          'RSI band — keeps out the already-overbought and the still-falling. Set it to 0–100 to ignore RSI entirely.',
+        ] },
+        { heading: 'The default setup', bullets: [
+          'Below the 200-DMA but within 8% of it, MACD histogram turning up while negative, RSI 40–65.',
+          'That is a stock that has been out of favour, is quietly repairing, and has not yet been noticed.',
+          'Ranked by distance from the average, so the ones about to resolve sit at the top.',
+        ] },
+        { heading: 'What it will not tell you', bullets: [
+          'Why the stock fell in the first place — check the fundamentals and the news before acting.',
+          'Whether the base is sound. A MACD turn under a falling 200-DMA fails often; confirm on the chart.',
+        ] },
+      ],
+      disclaimer: DISC,
+    },
+    // Applied with the DEFAULT settings here so the strategy behaves sensibly
+    // anywhere the plain list is used. RecommendationsScreen substitutes the
+    // user's live settings — a strategy whose parameters live in component
+    // state cannot express them through this signature.
+    apply: (rows) => rankMacd(rows.filter((r) => matchesMacd(r, MACD_DEFAULTS)), MACD_DEFAULTS),
   },
 ];
 
