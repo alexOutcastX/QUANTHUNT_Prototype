@@ -19,7 +19,7 @@ import ShortTermScreen from './ShortTermScreen';
 import InstitutionalScreen from './InstitutionalScreen';
 import SmcScreen from './SmcScreen';
 import { useResponsive } from '../responsive';
-import { openPdfPreview } from '../pdf';
+import { docFileName, openPdfPreview } from '../pdf';
 import { LONG_STRATEGIES } from '../strategies';
 import { MACD_DEFAULTS, MacdParams, matchesMacd, rankMacd } from '../macdStrategy';
 import MacdControls from '../components/MacdControls';
@@ -127,7 +127,7 @@ async function exportRecommendationsPdf(recs: Recommendation[], summary: string)
     recs.map(card).join('') +
     `<p class="disc">Confidence blends the Multibagger analyser (fundamentals), a live momentum read and the current chart pattern. Entry/stop/target come from pivot &amp; swing structure with a capped risk band. Indicative and educational only — not investment advice; always confirm and manage risk.</p>` +
     `</body></html>`;
-  openPdfPreview(html, { docType: 'Buy recommendations', fileName: 'TaurEye-recommendations' });
+  openPdfPreview(html, { docType: 'Buy recommendations', fileName: docFileName('Recommendations') });
 }
 
 

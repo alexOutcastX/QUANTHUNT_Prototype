@@ -17,7 +17,7 @@ import { ExportCol, exportCsv, exportExcel, exportPdf } from '../csv';
 import { TrackDir, TrackEntry, addTrack, loadTrack, removeTrack } from '../tracklist';
 import { addSymbol, loadWatchlist, normSymbol, removeSymbol } from '../watchlist';
 import { Btn, Card, Dropdown, EmptyState, InfoButton, InfoContent, Loading, SectionTitle, Sheet, StatTile } from '../ui';
-import { openPdfPreview } from '../pdf';
+import { docFileName, openPdfPreview } from '../pdf';
 import { MULTIBAGGER_INFO } from '../tabInfo';
 import { theme } from '../theme';
 import { getScanned, hydrateScan, isIncluded, subscribeScan, toggleInclude } from '../scanStore';
@@ -302,7 +302,7 @@ async function exportReport(r: MultibaggerReport): Promise<void> {
   // RN runtime with no DOM falls back to a text share.
   const ok = openPdfPreview(reportHtml(r), {
     docType: 'Multibagger report',
-    fileName: `TaurEye-${r.symbol}-multibagger`,
+    fileName: docFileName('Multibagger', r.symbol),
   });
   if (!ok && Platform.OS !== 'web') {
     await Share.share({

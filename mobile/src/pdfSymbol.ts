@@ -8,7 +8,7 @@ import {
   StrategyScoresResp,
   TimeframesResp,
 } from './api';
-import { openPdfPreview } from './pdf';
+import { docFileName, openPdfPreview } from './pdf';
 
 const esc = (v: unknown): string =>
   String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -81,6 +81,6 @@ export function exportSymbolPdf(
 ): boolean {
   return openPdfPreview(symbolReportHtml(sym, name, scan, tf, strat, chk), {
     docType: 'Symbol report',
-    fileName: `TaurEye-${sym}`,
+    fileName: docFileName('Symbol_Report', sym),
   });
 }

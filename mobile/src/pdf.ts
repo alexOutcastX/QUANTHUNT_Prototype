@@ -43,7 +43,29 @@ function nowStr(): string {
 // chrome: a branded masthead, a confidential print footer, and page rules that
 // keep tables/sections from splitting across pages. Injected last so it sets the
 // page geometry without fighting each report's own inline styling.
-export function professionalShell(html: string, opts: { docType?: string; dateStr?: string } = {}): string {
+/**
+ * Canonical export filename: `Taureye_<Kind>_<Subject>`.
+ *
+ * e.g. docFileName('Dossier', 'RELIANCE') -> "Taureye_Dossier_RELIANCE"
+ *
+ * Everything outside [A-Za-z0-9.-] becomes an underscore, because a scrip can
+ * legitimately contain characters a filesystem will not take (M&M, L&TFH) and
+ * a browser silently mangles or truncates the download when it hits one.
+ * Runs of underscores collapse so "M&M" does not become "M__M".
+ */
+export function docFileName(kind: string, subject?: string | null): string {
+  const clean = (s: string) =>
+    s.trim().replace(/[^A-Za-z0-9.-]+/g, '_').replace(/^_+|_+$/g, '');
+  const parts = ['Taureye', clean(kind)];
+  const subj = clean(subject || '');
+  if (subj) parts.push(subj);
+  return parts.filter(Boolean).join('_');
+}
+
+export function professionalShell(
+  html: string,
+  opts: { docType?: string; dateStr?: string; fileName?: string } = {},
+): string {
   html = withLightScheme(html);
   const docType = opts.docType || 'Company report';
   const dateStr = opts.dateStr || nowStr();
@@ -103,7 +125,15 @@ export function professionalShell(html: string, opts: { docType?: string; dateSt
     'font-size:8px;letter-spacing:.4px;color:#94a3b8;padding:3px 0;border-top:1px solid #eee;background:#fff}' +
     '.rp-body{padding-bottom:12mm}}' +
     '</style>';
-  const withCss = /<\/head>/i.test(html) ? html.replace(/<\/head>/i, CHROME + '</head>') : CHROME + html;
+  // The browser's Save-as-PDF takes its default filename from the printed
+  // document's <title>. Without one it invents something generic, so the
+  // fileName below only ever reached Android's print dialog and the desktop
+  // download was named whatever Chrome felt like. Set it explicitly.
+  const titleTag = opts.fileName
+    ? '<title>' + esc(opts.fileName) + '</title>'
+    : '';
+  const head = titleTag + CHROME;
+  const withCss = /<\/head>/i.test(html) ? html.replace(/<\/head>/i, head + '</head>') : head + html;
   const hero =
     '<div class="rp-hero"><div class="rp-brand">Taur<i>Eye</i><small>Intelligence</small></div>' +
     '<div class="rp-meta"><div class="rp-doc">' + esc(docType) + '</div>' +
@@ -154,10 +184,11 @@ export function openPdfPreview(
   const doc = (globalThis as { document?: { body?: unknown } }).document;
   if (!doc?.body) return false;
   const docType = opts.docType || inferDocType(html);
+  const fileName = opts.fileName || docFileName('Report');
   pending = {
-    html: professionalShell(html, { docType, dateStr: opts.dateStr }),
+    html: professionalShell(html, { docType, dateStr: opts.dateStr, fileName }),
     docType,
-    fileName: opts.fileName || 'TaurEye-report',
+    fileName,
   };
   emit();
   return true;

@@ -6,7 +6,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { MomentumHit, StrategyScoresResp, TimeframesResp, api } from '../api';
 import { exportCsvRows, exportExcelRows } from '../csv';
 import { SimpleColumnMenu, SymInline } from './ScreenerScreen';
-import { openPdfPreview } from '../pdf';
+import { docFileName, openPdfPreview } from '../pdf';
 import StockDetail from '../components/StockDetail';
 import { useResponsive } from '../responsive';
 import { Row } from '../screener';
@@ -216,7 +216,7 @@ function MomDetail({
       ]);
       openPdfPreview(momentumReportHtml(h.symbol, tf, strat, h), {
         docType: 'Momentum analysis',
-        fileName: `TaurEye-momentum-${h.symbol}`,
+        fileName: docFileName('Momentum', h.symbol),
       });
     } finally {
       setExporting(false);
@@ -453,7 +453,7 @@ function MomAnalyser({
       ]);
       openPdfPreview(momentumReportHtml(active, tf, strat), {
         docType: 'Momentum analysis',
-        fileName: `TaurEye-momentum-${active}`,
+        fileName: docFileName('Momentum', active),
       });
     } finally {
       setExporting(false);

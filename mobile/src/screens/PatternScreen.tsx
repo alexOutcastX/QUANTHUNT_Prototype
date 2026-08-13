@@ -12,7 +12,7 @@ import { Row } from '../screener';
 import { navigate, takeSymbol } from '../navIntent';
 import { addSymbol, loadWatchlist, normSymbol } from '../watchlist';
 import { addPaperTrade, hasOpenPaper, loadPaperTrades } from '../paperTrades';
-import { openPdfPreview } from '../pdf';
+import { docFileName, openPdfPreview } from '../pdf';
 import { Btn, Card, EmptyState, InfoButton, Loading, SectionTitle, Segmented, Sheet } from '../ui';
 import { PATTERN_INFO } from '../tabInfo';
 import { describePattern } from '../patternInfo';
@@ -1056,7 +1056,7 @@ function PatternHitCard({ h, enr, onClose, onOpenSymbol, onFullScan }: {
       `<h2>What this pattern is</h2><p>${esc(desc.what)}</p><p><b>What it implies</b> — ${esc(desc.implies)}</p>` +
       `<p style="color:#999;font-size:10px;margin-top:14px">Geometric pattern detection on public daily price data. Indicative and educational only — not investment advice.</p>` +
       `</body></html>`,
-      { docType: 'Pattern read', fileName: `TaurEye-pattern-${h.symbol}` },
+      { docType: 'Pattern read', fileName: docFileName('Pattern', h.symbol) },
     );
   };
 

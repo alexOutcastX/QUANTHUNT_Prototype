@@ -31,7 +31,7 @@ import SymbolInput from '../components/SymbolInput';
 import { InfoDot } from '../components/InfoCard';
 import StrategyScores from '../components/StrategyScores';
 import ChecklistPanel from '../components/ChecklistPanel';
-import { openPdfPreview } from '../pdf';
+import { docFileName, openPdfPreview } from '../pdf';
 import { takeSymbol } from '../navIntent';
 import { theme } from '../theme';
 import { Card, EmptyState, Loading, ScreenTitle, SectionTitle, StatTile } from '../ui';
@@ -216,7 +216,7 @@ export default function AnalysisScreen() {
     try {
       const ok = openPdfPreview(dossierHtml(d), {
         docType: 'Institutional dossier',
-        fileName: `TaurEye-${d.sym}-dossier`,
+        fileName: docFileName('Dossier', d.sym),
       });
       setMsg(ok ? 'Opening the report preview…' : "Couldn't open the report preview on this device.");
     } catch {

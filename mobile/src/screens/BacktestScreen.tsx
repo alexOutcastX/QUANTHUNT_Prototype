@@ -16,7 +16,7 @@ import HtmlView from '../components/HtmlView';
 import SymbolInput from '../components/SymbolInput';
 import { LW_SCRIPT } from '../chartHtml';
 import { exportCsvRows, exportExcelRows } from '../csv';
-import { openPdfPreview } from '../pdf';
+import { docFileName, openPdfPreview } from '../pdf';
 import { getPalette, theme } from '../theme';
 import { Btn, Dropdown, EmptyState, Fold, InfoButton, SectionTitle, Segmented, Sheet } from '../ui';
 import { useResponsive } from '../responsive';
@@ -404,7 +404,7 @@ export default function BacktestScreen() {
     setExportOpen(false);
     if (kind === 'csv') exportCsvRows(BLOTTER_HEADERS, blotterRows(result.trades), 'backtest-trades');
     else if (kind === 'excel') exportExcelRows(BLOTTER_HEADERS, blotterRows(result.trades), 'backtest-trades');
-    else openPdfPreview(tearSheetHtml(result, stratLabel), { docType: 'Backtest tear sheet', fileName: 'TaurEye-backtest' });
+    else openPdfPreview(tearSheetHtml(result, stratLabel), { docType: 'Backtest tear sheet', fileName: docFileName('Backtest') });
   };
 
   const chartDoc = useMemo(() => (result ? equityChartHtml(result) : ''), [result]);

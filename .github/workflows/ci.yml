@@ -43,7 +43,9 @@ jobs:
           npx --yes esbuild src/macdStrategy.ts --bundle --format=cjs --platform=node --outfile=tests/build/macd.js --log-level=error
           node tests/engines.test.js
           node tests/nav.test.js
+          npx --yes esbuild src/pdf.ts --bundle --format=cjs --platform=node --outfile=tests/build/pdf.js --log-level=error
           node tests/macd.test.js
+          node tests/pdfname.test.js
 
       - name: HTML / inline-JS sanity
         run: |
