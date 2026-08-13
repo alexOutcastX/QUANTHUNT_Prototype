@@ -1,8 +1,11 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Image,
   KeyboardAvoidingView,
+  Linking,
   Platform,
+  Pressable,
   StyleSheet,
   Text,
   TextInput,
@@ -58,7 +61,20 @@ export default function LoginGate({ children }: { children: React.ReactNode }) {
           style={styles.kb}
         >
           <View style={styles.card}>
-            <Text style={styles.brand}>TaurEye</Text>
+            {/* The real brand mark, carried over from the marketing site so the
+                app's front door and taureye.com are recognisably one product. */}
+            <Image
+              source={require('../../assets/brand/logo.png')}
+              style={styles.mark}
+              resizeMode="contain"
+              accessibilityLabel="TaurEye"
+            />
+            <Image
+              source={require('../../assets/brand/wordmark.png')}
+              style={styles.wordmark}
+              resizeMode="contain"
+              accessible={false}
+            />
             <Text style={styles.tag}>Members only — sign in to continue</Text>
             <TextInput
               value={user}
@@ -85,6 +101,14 @@ export default function LoginGate({ children }: { children: React.ReactNode }) {
             <Text style={styles.foot}>
               Access is by membership. Educational market analytics — not investment advice.
             </Text>
+            {/* Somewhere to go when you are not a member yet. Opens the public
+                site rather than dead-ending on a password box. */}
+            <Pressable
+              onPress={() => Linking.openURL('/site').catch(() => {})}
+              accessibilityRole="link"
+            >
+              <Text style={styles.link}>New here? Read about TaurEye →</Text>
+            </Pressable>
           </View>
         </KeyboardAvoidingView>
       )}
@@ -104,13 +128,8 @@ const styles = StyleSheet.create({
     borderRadius: theme.radius.lg,
     padding: theme.sp.xl,
   },
-  brand: {
-    color: theme.text,
-    fontSize: 28,
-    fontWeight: '800',
-    letterSpacing: 0.5,
-    textAlign: 'center',
-  },
+  mark: { width: 74, height: 74, alignSelf: 'center', marginBottom: theme.sp.sm },
+  wordmark: { width: 168, height: 34, alignSelf: 'center' },
   tag: {
     color: theme.muted2,
     fontSize: theme.fs.sm,
@@ -130,6 +149,13 @@ const styles = StyleSheet.create({
     marginBottom: theme.sp.md,
   },
   err: { color: theme.red, fontSize: theme.fs.sm, marginBottom: theme.sp.md },
+  link: {
+    color: theme.accent,
+    fontSize: theme.fs.sm,
+    textAlign: 'center',
+    marginTop: theme.sp.md,
+    fontWeight: '600',
+  },
   foot: {
     color: theme.muted,
     fontSize: theme.fs.xs,

@@ -1395,6 +1395,57 @@ def require_preview(fn):
     return wrapper
 
 
+# ── public brand site: landing, About, Insights ──────────────────────────────
+# Served as HTML rather than inside the RN app: these are documents, not app
+# screens, and an RN-web SPA is invisible to search engines. Lives under /site
+# so the app keeps the root — moving the app would break every bookmark and the
+# deploy's own smoke check for no benefit.
+import brandsite as _brand
+
+
+@app.route("/brand/<path:asset>")
+def brand_asset(asset):
+    """Logo, wordmark, favicons, OG image. Long-cached — these are versioned by
+    filename and change roughly never."""
+    if "/" in asset or ".." in asset:
+        return jsonify({"error": "not-found"}), 404
+    path = os.path.join(_brand.IMG_DIR, asset)
+    if not os.path.isfile(path):
+        return jsonify({"error": "not-found"}), 404
+    resp = send_from_directory(_brand.IMG_DIR, asset)
+    resp.headers["Cache-Control"] = "public, max-age=604800"
+    return resp
+
+
+@app.route("/site")
+@app.route("/site/")
+def site_landing():
+    return _brand.landing_html()
+
+
+@app.route("/site/about")
+def site_about():
+    return _brand.about_html()
+
+
+@app.route("/site/insights")
+def site_insights():
+    return _brand.insights_html()
+
+
+@app.route("/site/insights/<slug>")
+def site_article(slug):
+    out = _brand.article_html(slug)
+    if out is None:
+        return _brand.page(
+            "Not found — TaurEye",
+            '<section><div class="wrap"><h1>Article not found</h1>'
+            '<p class="lead">That article does not exist or has moved.</p>'
+            '<a class="btn" href="/site/insights">← All insights</a></div></section>',
+        ), 404
+    return out
+
+
 @app.route("/preview")
 def preview_status():
     host = request.headers.get("Host", "")
