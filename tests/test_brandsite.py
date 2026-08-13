@@ -88,12 +88,14 @@ class MarkdownTest(unittest.TestCase):
 
 
 class PageTest(unittest.TestCase):
-    def test_landing_carries_the_brand_and_a_way_into_the_app(self):
+    def test_landing_carries_the_brand_and_a_way_in(self):
         h = bs.landing_html()
         self.assertIn("/brand/logo.png", h)
         self.assertIn("/brand/wordmark.png", h)
-        self.assertIn('href="/"', h)          # Launch app
         self.assertIn("Watch. Analyze. Trade.", h)
+        # The way in is the sign-in form, not a "launch" link — see
+        # SignInPanelTest for the rest.
+        self.assertIn("#signin", h)
 
     def test_pages_declare_social_and_icon_metadata(self):
         for h in (bs.landing_html(), bs.about_html(), bs.insights_html()):
@@ -137,3 +139,102 @@ class BrandAssetTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SignInPanelTest(unittest.TestCase):
+    """The landing's primary action is signing in, not 'launching'."""
+
+    def setUp(self):
+        self.h = bs.landing_html()
+
+    def test_launch_app_buttons_are_gone(self):
+        self.assertNotIn("Launch the app", self.h)
+        self.assertNotIn("Launch app", self.h)
+
+    def test_the_form_posts_to_the_same_endpoint_the_app_uses(self):
+        """One credential path, not a second one that drifts from it."""
+        self.assertIn("/auth/member/login", self.h)
+        self.assertIn('id="lu"', self.h)   # username
+        self.assertIn('id="lp"', self.h)   # password
+        self.assertIn('type="password"', self.h)
+
+    def test_credentials_are_sent_with_the_session_cookie(self):
+        self.assertIn("credentials:'include'", self.h.replace(" ", ""))
+
+    def test_social_buttons_render_and_are_honest_when_unconfigured(self):
+        self.assertIn("Continue with Google", self.h)
+        self.assertIn("Continue with Apple", self.h)
+        # No provider credentials in the test environment, so they must be
+        # disabled rather than sending someone to a provider that will refuse.
+        self.assertIn("disabled", self.h)
+        self.assertIn("not connected yet", self.h)
+
+    def test_terms_and_privacy_are_linked_from_the_form(self):
+        self.assertIn("/site/legal/terms", self.h)
+        self.assertIn("/site/legal/privacy", self.h)
+
+
+class LegalTest(unittest.TestCase):
+    def test_all_five_documents_have_content(self):
+        for key, title in bs.LEGAL_DOCS:
+            h = bs.legal_html(key)
+            self.assertIsNotNone(h, key)
+            self.assertIn(title, h)
+            self.assertNotIn("is being prepared", h, f"{key} fell back to a stub")
+
+    def test_documents_carry_the_substituted_entity_details(self):
+        """The JSX placeholders must have been resolved, not shipped raw."""
+        for key, _ in bs.LEGAL_DOCS:
+            h = bs.legal_html(key)
+            self.assertNotIn("{product}", h)
+            self.assertNotIn("{entity}", h)
+            self.assertNotIn("{email}", h)
+            self.assertNotIn('{" "}', h)
+
+    def test_the_disclaimer_still_says_the_important_thing(self):
+        h = bs.legal_html("disclaimer")
+        self.assertIn("not a SEBI-registered", h)
+        self.assertIn("Not investment advice", h)
+
+    def test_unknown_document_returns_none_so_the_route_can_redirect(self):
+        self.assertIsNone(bs.legal_html("nope"))
+
+    def test_every_document_is_reachable_from_every_other(self):
+        for key, _ in bs.LEGAL_DOCS:
+            h = bs.legal_html(key)
+            for other, _t in bs.LEGAL_DOCS:
+                self.assertIn(f"/site/legal/{other}", h)
+
+
+class ContactAndGuideTest(unittest.TestCase):
+    def test_contact_shows_the_support_address(self):
+        h = bs.contact_html()
+        self.assertIn(bs.SUPPORT_EMAIL, h)
+        self.assertIn("mailto:", h)
+
+    def test_contact_form_stores_nothing(self):
+        """It composes a mailto — say so, rather than implying a backend."""
+        self.assertIn("we do", bs.contact_html())
+        self.assertIn("not store", bs.contact_html())
+
+    def test_guide_links_only_to_routes_that_exist_here(self):
+        """The previous guide pointed at /app/screener and /blog/... — routes
+        this app does not have. A guide that 404s is worse than none."""
+        h = bs.tutorial_html()
+        self.assertNotIn("/app/", h)
+        self.assertNotIn('href="/blog', h)
+        self.assertIn("/site/insights", h)
+        self.assertIn("/site/legal/disclaimer", h)
+
+    def test_guide_names_the_dossier_convention(self):
+        self.assertIn("Taureye_Dossier_", bs.tutorial_html())
+
+
+class NavigationTest(unittest.TestCase):
+    def test_every_public_page_links_to_all_the_others(self):
+        pages = (bs.landing_html(), bs.about_html(), bs.insights_html(),
+                 bs.contact_html(), bs.tutorial_html(), bs.legal_html("terms"))
+        for h in pages:
+            for href in ("/site/insights", "/site/about", "/site/tutorial",
+                         "/site/contact", "/site/legal/terms"):
+                self.assertIn(href, h)

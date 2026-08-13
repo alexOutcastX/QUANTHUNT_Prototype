@@ -25,6 +25,31 @@ IMG_DIR = os.path.join(BRAND_DIR, "img")
 
 TAGLINE = "Watch. Analyze. Trade."
 ENTITY = "TaurEye"
+SUPPORT_EMAIL = "support@taureye.com"
+
+# Ported verbatim from the previous site — these are legally meaningful
+# documents, so the wording was converted mechanically rather than rewritten.
+LEGAL_DOCS = [
+    ("terms", "Terms of Service"),
+    ("privacy", "Privacy Policy"),
+    ("cookies", "Cookie Policy"),
+    ("refund", "Refund & Cancellation"),
+    ("disclaimer", "Disclaimer"),
+]
+LEGAL_EFFECTIVE = "14 June 2026"
+
+_legal_cache = None
+
+
+def legal_docs():
+    global _legal_cache
+    if _legal_cache is None:
+        try:
+            with open(os.path.join(BRAND_DIR, "legal.json"), encoding="utf-8") as fh:
+                _legal_cache = json.load(fh)
+        except (OSError, ValueError):
+            _legal_cache = {}
+    return _legal_cache
 
 _articles_cache = None
 
@@ -193,6 +218,40 @@ font-family:"JetBrains Mono",ui-monospace,Menlo,monospace;font-size:13px}
 .foot .wrap{display:flex;flex-direction:column;gap:10px}
 .foot a{color:var(--muted)}
 .disc{font-size:12px;line-height:1.6;max-width:80ch}
+.auth{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);
+padding:24px;max-width:400px}
+.auth h3{margin:0 0 4px;font-size:20px}
+.auth-sub{margin:0 0 18px;color:var(--muted);font-size:13px}
+.fl{display:block;margin-bottom:12px}
+.fl span{display:block;font-size:12px;color:var(--muted);margin-bottom:5px}
+.fl input{width:100%;background:var(--surface-2);border:1px solid var(--border);
+border-radius:9px;color:var(--text);font-size:15px;padding:11px 12px;font-family:inherit}
+.fl input:focus{outline:none;border-color:var(--brand)}
+.btn.wide{width:100%;text-align:center;padding:12px;border:none;cursor:pointer;
+font-family:inherit;font-size:15px}
+.auth-err{color:#f0506e;font-size:13px;margin:0 0 10px;min-height:0}
+.sep{display:flex;align-items:center;gap:12px;margin:18px 0;color:var(--faint);font-size:12px}
+.sep:before,.sep:after{content:"";flex:1;height:1px;background:var(--border)}
+.socials{display:flex;flex-direction:column;gap:9px}
+.soc{display:flex;align-items:center;justify-content:center;gap:9px;width:100%;
+padding:11px;border:1px solid var(--border);border-radius:9px;background:var(--surface-2);
+color:var(--text);font-size:14px;font-weight:600;font-family:inherit;cursor:pointer}
+.soc:hover:not(:disabled){border-color:var(--brand)}
+.soc:disabled{opacity:.45;cursor:not-allowed}
+.soc-i{width:20px;height:20px;border-radius:50%;background:var(--border);
+display:grid;place-items:center;font-size:11px;font-weight:800}
+.soc-note{color:var(--faint);font-size:11.5px;margin:10px 0 0;text-align:center}
+.auth-fine{color:var(--faint);font-size:11.5px;margin:16px 0 0;line-height:1.5}
+.auth-fine a{color:var(--muted);text-decoration:underline}
+.tabs{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 26px}
+.tabs a{padding:7px 14px;border:1px solid var(--border);border-radius:999px;
+font-size:13px;color:var(--muted)}
+.tabs a.on{background:var(--surface-2);color:var(--text);border-color:var(--brand)}
+.legal h2{font-size:19px;margin:26px 0 8px}
+.legal p{margin:0 0 12px;color:var(--text)}
+.legal ul{margin:0 0 14px;padding-left:20px}
+.legal li{margin:5px 0}
+.legal strong{color:var(--text)}
 @media(max-width:820px){.hero .wrap{grid-template-columns:1fr}.hero .art{order:-1}}
 """
 
@@ -210,23 +269,113 @@ def _nav(active=""):
         '<nav>'
         + link("/site/insights", "Insights")
         + link("/site/about", "About")
-        + '<a class="btn btn-primary" href="/">Launch app</a>'
+        + link("/site/tutorial", "Guide")
+        + link("/site/contact", "Contact")
+        + '<a class="btn btn-primary" href="/site#signin">Sign in</a>'
         '</nav></div></header>'
     )
 
 
 def _foot():
+    docs = " · ".join(
+        f'<a href="/site/legal/{k}">{t}</a>' for k, t in LEGAL_DOCS)
     return (
         '<footer class="foot"><div class="wrap">'
         f'<span>© 2026 {ENTITY} · {TAGLINE}</span>'
         '<span><a href="/site/about">About</a> · <a href="/site/insights">Insights</a>'
-        ' · <a href="/">Launch app</a></span>'
+        ' · <a href="/site/tutorial">Guide</a> · <a href="/site/contact">Contact</a></span>'
+        f'<span>{docs}</span>'
         '<span class="disc">Educational and informational content only — not investment '
         'advice. TaurEye is not a SEBI-registered investment adviser or research analyst. '
         'Market data is sourced from public feeds and may be delayed. Always do your own '
         'research and consider your risk before acting.</span>'
         '</div></footer>'
     )
+
+
+# ── sign-in panel ───────────────────────────────────────────────────────────
+# The landing's primary action. Posts to the same /auth/member/login the app
+# uses, so there is exactly one credential path rather than a second one that
+# drifts.
+#
+# Social buttons render from the integrations registry: when a provider has no
+# credentials on the server the button is DISABLED and says why, rather than
+# sending someone to a provider that will refuse them. That honesty is the whole
+# reason the registry exists.
+SOCIALS = [("google", "Google"), ("apple", "Apple")]
+
+
+def _social_buttons():
+    try:
+        import integrations as _integ
+        ready = {k: _integ.configured(k + "_oauth") if k != "google"
+                 else _integ.configured("google_oauth") for k, _ in SOCIALS}
+    except Exception:
+        ready = {k: False for k, _ in SOCIALS}
+
+    out = []
+    for key, label in SOCIALS:
+        on = ready.get(key, False)
+        if on:
+            out.append(f'<a class="soc" href="/auth/oauth/{key}">'
+                       f'<span class="soc-i">{label[0]}</span>Continue with {label}</a>')
+        else:
+            out.append(f'<button class="soc" disabled title="{label} sign-in is not '
+                       f'connected yet"><span class="soc-i">{label[0]}</span>'
+                       f'Continue with {label}</button>')
+    note = ("" if any(ready.values()) else
+            '<p class="soc-note">Social sign-in is not connected yet — '
+            'use your username and password.</p>')
+    return '<div class="socials">' + "".join(out) + "</div>" + note
+
+
+def auth_panel():
+    return f"""
+<div class="auth" id="signin">
+  <h3>Sign in</h3>
+  <p class="auth-sub">Members only. Access is by invitation while we are in beta.</p>
+  <form id="lf" autocomplete="on">
+    <label class="fl"><span>Username</span>
+      <input id="lu" name="username" autocomplete="username" autocapitalize="none"
+             spellcheck="false" placeholder="your username" required></label>
+    <label class="fl"><span>Password</span>
+      <input id="lp" name="password" type="password" autocomplete="current-password"
+             placeholder="••••••••" required></label>
+    <p class="auth-err" id="le" role="alert"></p>
+    <button class="btn btn-primary wide" type="submit" id="lb">Sign in</button>
+  </form>
+  <div class="sep"><span>or</span></div>
+  {_social_buttons()}
+  <p class="auth-fine">By signing in you agree to our
+    <a href="/site/legal/terms">Terms</a> and
+    <a href="/site/legal/privacy">Privacy Policy</a>.</p>
+</div>
+<script>
+(function(){{
+  var f=document.getElementById('lf'), e=document.getElementById('le'),
+      b=document.getElementById('lb');
+  if(!f) return;
+  f.addEventListener('submit', function(ev){{
+    ev.preventDefault();
+    e.textContent=''; b.disabled=true; b.textContent='Signing in…';
+    fetch('/auth/member/login', {{
+      method:'POST', credentials:'include',
+      headers:{{'Content-Type':'application/json'}},
+      body: JSON.stringify({{username:document.getElementById('lu').value.trim(),
+                            password:document.getElementById('lp').value}})
+    }}).then(function(r){{ return r.json().then(function(j){{ return {{ok:r.ok, j:j}}; }}); }})
+      .then(function(res){{
+        if(res.ok){{ window.location.href='/'; return; }}
+        e.textContent = res.j.detail || 'Wrong username or password.';
+        b.disabled=false; b.textContent='Sign in';
+      }})
+      .catch(function(){{
+        e.textContent='Could not reach the server. Please try again.';
+        b.disabled=false; b.textContent='Sign in';
+      }});
+  }});
+}})();
+</script>"""
 
 
 def page(title, body, description="", active="", og_type="website"):
@@ -284,19 +433,21 @@ def landing_html():
     <h1>The Indian market,<br><span class="g">screened properly.</span></h1>
     <p>Every listed NSE and BSE company, filtered by rules you set — technicals,
        fundamentals and chart patterns — with the evidence shown, not just a verdict.</p>
-    <div class="cta">
-      <a class="btn btn-primary" href="/">Launch the app</a>
-      <a class="btn" href="/site/insights">Read the insights</a>
-    </div>
+    <p style="font-size:14px"><a href="/site/insights" style="color:var(--brand-2);
+       text-decoration:underline">Read the insights</a> ·
+       <a href="/site/tutorial" style="color:var(--brand-2);text-decoration:underline">
+       How it works</a></p>
   </div>
-  <div class="art"><img src="/brand/bull-hero.png" alt="TaurEye" loading="eager"></div>
+  {auth_panel()}
 </div></section>
 
-<section><div class="wrap">
-  <h2>What it does</h2>
-  <p class="lead">Built for people who want to see why a stock made the list.</p>
-  <div class="grid">{feats}</div>
-</div></section>
+<section><div class="wrap" style="display:grid;grid-template-columns:1fr auto;
+     gap:30px;align-items:center">
+  <div><h2>What it does</h2>
+  <p class="lead">Built for people who want to see why a stock made the list.</p></div>
+  <img src="/brand/bull-hero.png" alt="" style="width:220px" loading="lazy">
+</div>
+<div class="wrap" style="margin-top:24px"><div class="grid">{feats}</div></div></section>
 
 <section style="padding-top:0"><div class="wrap">
   <div class="stats">
@@ -310,8 +461,8 @@ def landing_html():
 <section style="padding-top:0"><div class="wrap">
   <div class="card" style="text-align:center;padding:38px">
     <h2 style="margin-bottom:8px">Start screening</h2>
-    <p class="lead" style="margin:0 auto 20px">Sign in to run your first screen.</p>
-    <a class="btn btn-primary" href="/">Launch the app</a>
+    <p class="lead" style="margin:0 auto 20px">Sign in above to run your first screen.</p>
+    <a class="btn btn-primary" href="#signin">Sign in</a>
   </div>
 </div></section>
 """
@@ -401,3 +552,158 @@ def article_html(slug):
 """
     return page(f"{a.get('title','')} — {ENTITY}", body,
                 a.get("summary", ""), "insights", og_type="article")
+
+
+def legal_html(key):
+    """One policy document, with a tab strip across the set."""
+    titles = dict(LEGAL_DOCS)
+    if key not in titles:
+        return None
+    body_html = legal_docs().get(key, "")
+    if not body_html:
+        body_html = ("<p>This document is being prepared. Please contact "
+                     f"<a href='mailto:{SUPPORT_EMAIL}'>{SUPPORT_EMAIL}</a> in the "
+                     "meantime.</p>")
+    def _tab(k, t):
+        cls = ' class="on"' if k == key else ""
+        return f'<a href="/site/legal/{k}"{cls}>{html.escape(t)}</a>'
+    tabs = "".join(_tab(k, t) for k, t in LEGAL_DOCS)
+    body = f"""
+<section><div class="wrap">
+  <nav class="tabs" aria-label="Policies">{tabs}</nav>
+  <h1 style="font-size:32px;margin:0 0 6px">{html.escape(titles[key])}</h1>
+  <p class="meta" style="margin-bottom:26px">{ENTITY} · Last updated {LEGAL_EFFECTIVE}</p>
+  <div class="legal" style="max-width:78ch">{body_html}</div>
+  <p class="meta" style="margin-top:28px">Questions or grievances? Contact
+     <a href="mailto:{SUPPORT_EMAIL}" style="color:var(--brand-2)">{SUPPORT_EMAIL}</a>.</p>
+</div></section>
+"""
+    return page(f"{titles[key]} — {ENTITY}", body,
+                f"{titles[key]} for {ENTITY}.")
+
+
+def contact_html():
+    body = f"""
+<section><div class="wrap">
+  <h1 style="font-size:38px;margin:0 0 10px">Contact us</h1>
+  <p class="lead">Questions, feedback or a data correction? We'd like to hear from you.</p>
+  <p class="lead">Email us directly at
+     <a href="mailto:{SUPPORT_EMAIL}" style="color:var(--brand-2)">{SUPPORT_EMAIL}</a>.
+     For grievances, please include your account username and a clear description so we
+     can help quickly. We aim to respond within a few business days.</p>
+
+  <div class="auth" style="max-width:520px">
+    <h3>Send a message</h3>
+    <p class="auth-sub">This opens your email app with the message pre-filled — we do
+       not store anything you type here.</p>
+    <form id="cf">
+      <label class="fl"><span>Your name</span>
+        <input id="cn" placeholder="Name"></label>
+      <label class="fl"><span>Your email</span>
+        <input id="ce" type="email" placeholder="you@example.com"></label>
+      <label class="fl"><span>Message</span>
+        <input id="cm" placeholder="How can we help?"></label>
+      <button class="btn btn-primary wide" type="submit">Compose email</button>
+    </form>
+  </div>
+</div></section>
+<script>
+(function(){{
+  var f=document.getElementById('cf');
+  if(!f) return;
+  f.addEventListener('submit', function(ev){{
+    ev.preventDefault();
+    var n=document.getElementById('cn').value, e=document.getElementById('ce').value,
+        m=document.getElementById('cm').value;
+    var subject=encodeURIComponent('TaurEye enquiry from ' + (n || 'a visitor'));
+    var body=encodeURIComponent(m + '\\n\\n— ' + n + (e ? ' (' + e + ')' : ''));
+    window.location.href='mailto:{SUPPORT_EMAIL}?subject=' + subject + '&body=' + body;
+  }});
+}})();
+</script>
+"""
+    return page(f"Contact — {ENTITY}", body,
+                f"Get in touch with {ENTITY} — support, feedback and data corrections.",
+                "contact")
+
+
+# The guide is written for THIS app rather than ported verbatim: the previous
+# one linked to routes that do not exist here (/app/screener, /blog/...) and
+# described features this build does not have. A guide that sends people to 404s
+# is worse than no guide.
+GUIDE = """TaurEye turns the whole NSE/BSE universe into something you can *query* — filter
+roughly 5,800 stocks down to a short list, read each chart and company, and export or
+save the result. Everything here is educational; TaurEye is not an investment adviser
+(see the [full disclaimer](/site/legal/disclaimer)).
+
+## Start in five minutes
+
+1. **Sign in** from the [home page](/site#signin). Access is by membership while we are in beta.
+2. **Open Screens → Custom.** Add one filter to begin — say *Price ≥ 100* — and run it. Every matching stock appears.
+3. **Add a second condition** to narrow it, e.g. *% vs 200-DMA > 0* for stocks above their long-term average. Filters combine with AND.
+4. **Sort** by tapping a column header, then **tap a symbol** to open its detail card — chart, technical read, strategy scorecard and actions.
+5. **Export** the result to CSV, Excel or a branded PDF, or add names to a watchlist.
+
+That is the core loop: *filter → review → export or track*.
+
+## The main tools
+
+### Screeners
+The custom screener filters on price, volume, RSI, moving averages, 52-week range, MACD,
+market cap and dozens of fundamental columns — 78 in all. Use **Columns** to show, hide
+and reorder them, and **Export** for CSV, Excel or PDF.
+
+Alongside it sit purpose-built screens: **Multibagger** (quality and growth), **Momentum**
+(breakouts, pullbacks and volume thrust), **Penny** (with liquidity and risk flags) and the
+**Pattern recogniser**.
+
+### Strategy screens
+Each screener carries named strategies — Minervini's Trend Template, candlestick setups,
+deep value, quality-at-a-price, high reward-to-risk — plus a **configurable MACD + DMA**
+screen where you choose the moving average, where price must sit relative to it, the MACD
+condition and an RSI band. It is the one screen whose thresholds are yours to set.
+
+### Charts and patterns
+Every symbol opens a chart with the moving-average stack and rule-based pattern detection
+that draws necklines, channels and trendlines directly on the price. Descriptive only —
+never a buy or sell call.
+
+### Dossiers
+A full company report: valuation against sector medians, cash flow, shareholding and
+promoter pledges, corporate actions and detected patterns — exportable as a branded PDF
+named `Taureye_Dossier_<SCRIP>`.
+
+### Backtesting
+Test a strategy over history with the charges a real trade would pay — brokerage, STT,
+exchange fees, SEBI turnover fee, GST and stamp duty, plus slippage. A backtest that
+ignores costs is fiction.
+
+### Watchlist, portfolio and alerts
+Track entries with the price and date you added them, hold positions with live P&L, and
+set alerts on price, percentage move or RSI.
+
+## Power-user notes
+
+- **Stack conditions for precision.** Layer trend, momentum and a liquidity floor, then save the screen and re-run it on fresh data.
+- **Read the evidence, not the score.** Every screen states its rules; every report cites where its numbers came from.
+- **Watch the as-of date.** Quotes come from the most recent exchange close and may be delayed. Verify before acting.
+- **Learn the concepts** in [Insights](/site/insights) — 22 plain-English explainers on indicators, screening and the Indian markets.
+
+## Good to know
+
+- Data is sourced from public NSE/BSE feeds and other public sources, and may be delayed or incomplete.
+- TaurEye screens, charts and explains. It does not recommend buying or selling, and is **not a SEBI-registered adviser or research analyst**.
+"""
+
+
+def tutorial_html():
+    body = f"""
+<section><div class="wrap">
+  <h1 style="font-size:38px;margin:0 0 10px">How TaurEye works</h1>
+  <p class="lead">A fast start for new members, and a playbook for everyone else.</p>
+  <article class="body">{markdown(GUIDE)}</article>
+</div></section>
+"""
+    return page(f"Guide — {ENTITY}", body,
+                "How to use TaurEye: screeners, strategies, charts, dossiers and "
+                "backtests.", "guide")

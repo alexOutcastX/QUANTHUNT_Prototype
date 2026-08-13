@@ -1433,6 +1433,29 @@ def site_insights():
     return _brand.insights_html()
 
 
+@app.route("/site/tutorial")
+def site_tutorial():
+    return _brand.tutorial_html()
+
+
+@app.route("/site/contact")
+def site_contact():
+    return _brand.contact_html()
+
+
+@app.route("/site/legal")
+def site_legal_index():
+    return redirect("/site/legal/terms", code=302)
+
+
+@app.route("/site/legal/<key>")
+def site_legal(key):
+    out = _brand.legal_html(key)
+    if out is None:
+        return redirect("/site/legal/terms", code=302)
+    return out
+
+
 @app.route("/site/insights/<slug>")
 def site_article(slug):
     out = _brand.article_html(slug)
