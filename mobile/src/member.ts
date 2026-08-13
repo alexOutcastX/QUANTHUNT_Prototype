@@ -80,6 +80,16 @@ export async function memberLogin(username: string, password: string): Promise<M
   return member;
 }
 
+/** True inside the Capacitor APK, where Platform.OS still reports 'web'. */
+function isNativeShell(): boolean {
+  try {
+    const cap = (globalThis as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor;
+    return !!cap?.isNativePlatform?.();
+  } catch {
+    return false;
+  }
+}
+
 export async function memberLogout(): Promise<void> {
   try {
     await api.memberLogout();
@@ -90,4 +100,21 @@ export async function memberLogout(): Promise<void> {
   setSessionToken('member', null);
   await AsyncStorage.multiRemove([CACHE_KEY, TOKEN_KEY]).catch(() => {});
   emit();
+
+  // On the web, signing out should land on the public site, not the app's bare
+  // password box. The session is gone, so `/` now serves the landing page —
+  // but the SPA is already loaded and would simply re-render its login gate,
+  // so the navigation has to be explicit.
+  //
+  // Not in the APK: it loads a bundled index.html from the filesystem and has
+  // no server-rendered landing to navigate to. There the login gate IS the
+  // right destination.
+  if (!isNativeShell()) {
+    try {
+      const loc = (globalThis as { location?: { assign?: (u: string) => void } }).location;
+      loc?.assign?.('/');
+    } catch {
+      /* stay on the login gate if navigation is unavailable */
+    }
+  }
 }

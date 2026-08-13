@@ -3,7 +3,6 @@ import {
   ActivityIndicator,
   Image,
   KeyboardAvoidingView,
-  Linking,
   Platform,
   Pressable,
   StyleSheet,
@@ -18,6 +17,17 @@ import { currentMember, memberLogin, restoreMember, subscribeMember } from '../m
 // The app's front door: nothing renders until a member signs in. Credentials
 // are checked server-side (/auth/member/login) and the signed session cookie
 // carries the membership plan every paywalled feature gates on.
+/** Same-tab navigation to the public site. No-op where there is no location
+ *  (the native shell has no server-rendered landing to reach). */
+function openSite() {
+  try {
+    const loc = (globalThis as { location?: { assign?: (u: string) => void } }).location;
+    loc?.assign?.('/');
+  } catch {
+    /* nothing sensible to do */
+  }
+}
+
 export default function LoginGate({ children }: { children: React.ReactNode }) {
   const [checked, setChecked] = useState(false);
   const [, force] = useState(0);
@@ -101,12 +111,11 @@ export default function LoginGate({ children }: { children: React.ReactNode }) {
             <Text style={styles.foot}>
               Access is by membership. Educational market analytics — not investment advice.
             </Text>
-            {/* Somewhere to go when you are not a member yet. Opens the public
-                site rather than dead-ending on a password box. */}
-            <Pressable
-              onPress={() => Linking.openURL('/site').catch(() => {})}
-              accessibilityRole="link"
-            >
+            {/* Somewhere to go when you are not a member yet, rather than
+                dead-ending on a password box. Navigates in place: signed out,
+                `/` serves the public landing page. Linking.openURL would open
+                a second tab, which is not what a "read more" link should do. */}
+            <Pressable onPress={openSite} accessibilityRole="link">
               <Text style={styles.link}>New here? Read about TaurEye →</Text>
             </Pressable>
           </View>
