@@ -262,7 +262,7 @@ def _nav(active=""):
         return f'<a href="{href}"{style}>{label}</a>'
     return (
         '<header class="nav"><div class="wrap">'
-        '<a class="brand" href="/site">'
+        '<a class="brand" href="/">'
         '<img class="mark" src="/brand/logo.png" alt="TaurEye">'
         '<img class="word" src="/brand/wordmark.png" alt="TaurEye">'
         '</a>'
@@ -271,7 +271,7 @@ def _nav(active=""):
         + link("/site/about", "About")
         + link("/site/tutorial", "Guide")
         + link("/site/contact", "Contact")
-        + '<a class="btn btn-primary" href="/site#signin">Sign in</a>'
+        + '<a class="btn btn-primary" href="/#signin">Sign in</a>'
         '</nav></div></header>'
     )
 
@@ -365,7 +365,7 @@ def auth_panel():
                             password:document.getElementById('lp').value}})
     }}).then(function(r){{ return r.json().then(function(j){{ return {{ok:r.ok, j:j}}; }}); }})
       .then(function(res){{
-        if(res.ok){{ window.location.href='/'; return; }}
+        if(res.ok){{ window.location.href='/app'; return; }}
         e.textContent = res.j.detail || 'Wrong username or password.';
         b.disabled=false; b.textContent='Sign in';
       }})

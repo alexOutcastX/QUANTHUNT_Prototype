@@ -906,11 +906,40 @@ _WEB_INDEX = os.path.join(WEB_DIR, "index.html")
 threading.Thread(target=_precompress_web_dir, name="web-precompress", daemon=True).start()
 
 
-@app.route("/")
-def index():
+def _serve_app_shell():
     if os.path.exists(_WEB_INDEX):
         return _no_cache(_send_web_file("index.html"))
     return _no_cache(send_from_directory(_BASE_DIR, "StockScreenPro.html"))
+
+
+@app.route("/")
+def index():
+    """The start page.
+
+    Signed out you get the public landing — brand, what the product does, and
+    the sign-in form. Signed in you get the app itself, so returning members
+    never see a marketing page they have already read.
+
+    The decision is per request rather than a redirect, so the URL stays `/`
+    either way and signing in does not bounce you through an interstitial.
+    The native shell loads its bundled copy of index.html and never asks the
+    server for `/`, so it is unaffected.
+    """
+    if _member_session_present():
+        return _serve_app_shell()
+    return _brand.landing_html()
+
+
+@app.route("/app")
+@app.route("/app/")
+def app_shell():
+    """The app, regardless of session — the shell shows its own sign-in gate.
+
+    Deliberately unconditional: it is the escape hatch for a bookmark, for the
+    post-login redirect, and for the deploy's own smoke check, none of which
+    should depend on whether a cookie happens to be valid.
+    """
+    return _serve_app_shell()
 
 
 @app.route("/legacy")
@@ -1301,6 +1330,18 @@ import members as _members
 def current_member():
     return (_members.from_cookie(request.cookies.get(_members.COOKIE, ""))
             or _members.from_cookie(_bearer(_HDR_MEMBER)))
+
+
+def _member_session_present() -> bool:
+    """Is this request carrying a valid member session?
+
+    Used by `/` to choose between the landing page and the app. Never raises:
+    a malformed cookie must render the landing, not a 500 on the front door.
+    """
+    try:
+        return current_member() is not None
+    except Exception:
+        return False
 
 
 def require_plan(*feature):

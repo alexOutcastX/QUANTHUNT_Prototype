@@ -64,7 +64,10 @@ class TestVariantServing(unittest.TestCase):
         server._precompress_web_dir()          # restore for other tests
 
     def _get_index(self, accept="gzip, deflate"):
-        return self.c.get("/", headers={"Accept-Encoding": accept})
+        # /app, not /: the front door now serves the public landing page to
+        # signed-out visitors, so the app shell — which is what the
+        # precompressed-variant machinery applies to — is reached there.
+        return self.c.get("/app", headers={"Accept-Encoding": accept})
 
     def test_valid_variant_is_served_compressed(self):
         r = self._get_index()

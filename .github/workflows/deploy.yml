@@ -129,11 +129,21 @@ jobs:
             for i in $(seq 1 10); do
               if curl -fsS http://127.0.0.1/ping >/dev/null; then
                 echo "OK: /ping responded on attempt $i"
-                shell=$(curl -fsS --compressed http://127.0.0.1/) || {
-                  echo "FAIL: / did not decode (corrupt precompressed variant?)"; exit 1; }
+                # The app shell now lives at /app: `/` serves the public
+                # landing page to signed-out visitors (which this curl is), so
+                # checking it here would assert the marketing page, not the app.
+                shell=$(curl -fsS --compressed http://127.0.0.1/app) || {
+                  echo "FAIL: /app did not decode (corrupt precompressed variant?)"; exit 1; }
                 case "$shell" in
-                  *id=\"root\"*) echo "OK: RN-web shell served at /" ;;
-                  *) echo "FAIL: / did not serve the web shell (is mobile/dist present?)"; exit 1 ;;
+                  *id=\"root\"*) echo "OK: RN-web shell served at /app" ;;
+                  *) echo "FAIL: /app did not serve the web shell (is mobile/dist present?)"; exit 1 ;;
+                esac
+                # And the front door must serve the landing, not the app.
+                land=$(curl -fsS --compressed http://127.0.0.1/) || {
+                  echo "FAIL: / did not decode"; exit 1; }
+                case "$land" in
+                  *"Watch. Analyze. Trade."*) echo "OK: landing page served at /" ;;
+                  *) echo "FAIL: / did not serve the landing page"; exit 1 ;;
                 esac
                 # Every JS chunk the shell references must fetch AND decode.
                 # These ship as immutable/max-age=1y, so a bad one poisons the

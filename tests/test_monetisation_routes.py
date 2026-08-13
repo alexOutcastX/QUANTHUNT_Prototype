@@ -194,3 +194,81 @@ class MonetisationRouteTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class StartPageTest(unittest.TestCase):
+    """`/` is the start page: the landing when signed out, the app when in.
+
+    Decided per request rather than by redirect, so the URL stays `/` either
+    way and signing in does not bounce through an interstitial.
+    """
+
+    IP = "161.118.174.177"
+    ROOT_MARKER = 'id="root"'        # the RN-web shell
+    LANDING_MARKER = "Watch. Analyze. Trade."
+
+    @classmethod
+    def setUpClass(cls):
+        os.environ.setdefault("DB_PATH", tempfile.mktemp(suffix=".db"))
+        os.environ["TRADELOG_BACKFILL"] = "0"
+        os.environ["AUTH_SECRET"] = "start-page-test"
+        try:
+            import server
+        except Exception as e:
+            raise unittest.SkipTest("server import unavailable: %s" % e)
+        cls.server = server
+        cls._warm = server._warm_universe_async
+        server._warm_universe_async = lambda: None
+        boot = server.app.test_client()
+        r = boot.post("/auth/member/login",
+                      json={"username": "sri", "password": "STI123"},
+                      headers={"Host": cls.IP})
+        assert r.status_code == 200, r.data[:200]
+        cls.token = r.json["token"]
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.server._warm_universe_async = cls._warm
+
+    def anon(self):
+        return self.server.app.test_client()
+
+    def test_signed_out_root_is_the_landing_page(self):
+        body = self.anon().get("/", headers={"Host": self.IP}).data.decode()
+        self.assertIn(self.LANDING_MARKER, body)
+        self.assertNotIn(self.ROOT_MARKER, body)
+
+    def test_signed_in_root_is_the_app(self):
+        c = self.server.app.test_client()
+        c.post("/auth/member/login", json={"username": "sri", "password": "STI123"},
+               headers={"Host": self.IP})
+        body = c.get("/", headers={"Host": self.IP}).data.decode()
+        self.assertIn(self.ROOT_MARKER, body)
+        self.assertNotIn(self.LANDING_MARKER, body)
+
+    def test_app_route_serves_the_shell_regardless_of_session(self):
+        """The escape hatch: a bookmark, the post-login redirect and the
+        deploy's smoke check must not depend on a cookie being valid."""
+        for client in (self.anon(), self.server.app.test_client()):
+            body = client.get("/app", headers={"Host": self.IP}).data.decode()
+            self.assertIn(self.ROOT_MARKER, body)
+
+    def test_a_malformed_cookie_renders_the_landing_not_a_500(self):
+        c = self.anon()
+        c.set_cookie("te_member", "not-a-valid-token", domain="localhost")
+        r = c.get("/", headers={"Host": self.IP})
+        self.assertEqual(r.status_code, 200)
+        self.assertIn(self.LANDING_MARKER, r.data.decode())
+
+    def test_the_public_pages_stay_reachable_while_signed_in(self):
+        c = self.server.app.test_client()
+        c.post("/auth/member/login", json={"username": "sri", "password": "STI123"},
+               headers={"Host": self.IP})
+        for path in ("/site", "/site/about", "/site/insights", "/site/legal/terms"):
+            self.assertEqual(c.get(path, headers={"Host": self.IP}).status_code, 200, path)
+
+    def test_the_landing_signs_you_into_the_app_shell(self):
+        """Redirecting to /app rather than / avoids depending on the very next
+        request re-reading the session cookie correctly."""
+        body = self.anon().get("/", headers={"Host": self.IP}).data.decode()
+        self.assertIn("'/app'", body)
