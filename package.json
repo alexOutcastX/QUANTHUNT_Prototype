@@ -13,12 +13,18 @@
     "docker:build": "docker compose build",
     "docker:up": "docker compose up -d --build",
     "docker:down": "docker compose down",
-    "build:exe": "venv\\Scripts\\pip install pyinstaller && venv\\Scripts\\pyinstaller quanthunt.spec"
+    "build:exe": "venv\\Scripts\\pip install pyinstaller && venv\\Scripts\\pyinstaller quanthunt.spec",
+    "build:bull": "node brand/src/build.mjs"
   },
   "repository": {
     "type": "git",
     "url": "https://github.com/alexOutcastX/QUANTHUNT_Prototype.git"
   },
   "author": "alexOutcastX",
-  "license": "UNLICENSED"
+  "license": "UNLICENSED",
+  "devDependencies": {
+    "@types/three": "^0.185.4",
+    "esbuild": "^0.28.2",
+    "three": "^0.185.1"
+  }
 }

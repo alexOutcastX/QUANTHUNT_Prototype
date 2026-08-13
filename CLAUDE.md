@@ -16,4 +16,6 @@ On Windows use `npm run setup:win` / `npm run start:win` instead.
 - All backend logic lives in `server.py`; the entire frontend is `StockScreenPro.html` (served by Flask). There is no build step for the UI — edit the HTML directly.
 - `requirements.txt` installs tvDatafeed from GitHub (not on PyPI); git must be available during setup.
 - `quanthunt.spec` is the PyInstaller spec for packaging a standalone exe (`npm run build:exe`, Windows only).
+- The public brand site (landing, About, Insights, legal) is server-rendered from `brandsite.py`; assets live in `brand/`.
+- The landing hero's 3D bull is `brand/src/bull.ts` (three.js), bundled to the **committed** `brand/img/bull.js`. After editing it run `npm run build:bull` — `tests/test_brandsite.py` compares a source hash recorded in the bundle and fails if you forget. Needs `npm install` at the repo root (dev-only: three, esbuild).
 - Python 3.11+ required.

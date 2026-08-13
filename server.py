@@ -1475,8 +1475,10 @@ import brandsite as _brand
 
 @app.route("/brand/<path:asset>")
 def brand_asset(asset):
-    """Logo, wordmark, favicons, OG image. Long-cached — these are versioned by
-    filename and change roughly never."""
+    """Logo, wordmark, favicons, OG image, and the hero bull's WebGL bundle.
+    Long-cached — the images are versioned by filename and change roughly never,
+    and bull.js is requested with a content-hash query (see brandsite._asset_v)
+    so a rebuild is not stuck behind this week-long cache."""
     if "/" in asset or ".." in asset:
         return jsonify({"error": "not-found"}), 404
     path = os.path.join(_brand.IMG_DIR, asset)

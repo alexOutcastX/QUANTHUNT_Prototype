@@ -15,6 +15,7 @@
 # Bodies are the same lightweight Markdown the previous site used, rendered here
 # rather than in the browser.
 
+import hashlib
 import html
 import json
 import os
@@ -186,14 +187,23 @@ color:var(--brand-2);margin-bottom:14px;font-weight:700}
 /* The bull is a 3D render, so a perspective tilt on the pointer reads as the
    object turning rather than a flat image sliding about. The rotation lives in
    custom properties so the script only ever writes two numbers. */
-.hero-art{width:min(280px,58vw);margin:0 0 26px;perspective:900px}
-/* height:auto or the intrinsic width/height attributes — which are there to
-   reserve the space and stop the headline jumping — would squash the render. */
-.hero-art img{display:block;width:100%;height:auto;
+/* A fixed box, sized by aspect ratio rather than by the image inside it: the
+   WebGL canvas takes the image's place, and a box that depended on the image
+   would collapse the moment it is faded out. */
+.hero-art{position:relative;width:min(320px,60vw);aspect-ratio:772/708;
+margin:0 0 26px;perspective:900px}
+.hero-art img,.hero-art canvas{position:absolute;inset:0;width:100%;height:100%}
+.hero-art img{object-fit:contain;
 transform:rotateX(var(--rx,0deg)) rotateY(var(--ry,0deg)) translate3d(var(--tx,0),var(--ty,0),0);
 transform-style:preserve-3d;will-change:transform;
-transition:transform .45s cubic-bezier(.22,.61,.36,1);
+transition:transform .45s cubic-bezier(.22,.61,.36,1),opacity .5s ease;
 filter:drop-shadow(0 22px 38px rgba(16,185,129,.20))}
+.hero-art canvas{opacity:0;transition:opacity .5s ease}
+/* The scene has drawn its first frame: cross-fade from the still render to the
+   live one. Both show the same model in the same pose, so it reads as the bull
+   coming to life rather than as a swap. */
+.hero-art[data-webgl] canvas{opacity:1}
+.hero-art[data-webgl] img{opacity:0}
 /* While the pointer is actually moving, track it closely; the slow transition
    above is what eases the bull back to rest when the pointer leaves. */
 .hero-art.tracking img{transition:transform .1s linear}
@@ -445,21 +455,70 @@ FEATURES = [
 ]
 
 
+def _asset_v(name):
+    """Content hash for a brand asset, used as a cache-buster.
+
+    /brand/<asset> is cached for a week, which is right for a logo and wrong for
+    a script: without this, a fix to the bull scene would not reach anyone who
+    had already visited for seven days.
+    """
+    try:
+        with open(os.path.join(IMG_DIR, name), "rb") as fh:
+            return hashlib.sha256(fh.read()).hexdigest()[:8]
+    except OSError:
+        return "0"
+
+
 def bull_art():
-    """The hero bull, tilted by the pointer.
+    """The hero bull: the real 3D model, with the still render as its fallback.
 
-    Plain string rather than an f-string: the script below is mostly braces, and
-    doubling every one of them to survive f-string interpolation makes it
-    unreadable for no gain — there is nothing here to interpolate.
+    Ported from the previous app's BullScene — a low-poly OBJ head rendered with
+    three.js in chrome-green metal with glowing wireframe edges, swaying gently
+    and tilting toward the pointer. The scene itself lives in brand/src/bull.ts
+    and is bundled to /brand/bull.js.
 
-    Deliberately dependency-free. The art is already a 3D render, so a CSS
-    perspective rotation turns it convincingly without shipping a WebGL scene,
-    and it degrades to a still image wherever the script does not run.
+    What ships in the HTML is the pre-rendered PNG of that same model, so the
+    hero is complete at first paint. The bundle is ~150 KB gzipped — three.js
+    is not free — so it is fetched only once the browser is idle or the visitor
+    shows genuine intent, and never under prefers-reduced-motion. Until then,
+    and on any device without WebGL, the still render is what you get, tilted by
+    the small CSS transform below.
+
+    Plain string rather than an f-string except where noted: the scripts are
+    mostly braces, and doubling every one of them to survive f-string
+    interpolation makes them unreadable.
     """
     return """
 <div class="hero-art" id="bull">
   <img src="/brand/bull-hero.png" alt="TaurEye" width="772" height="708" fetchpriority="high">
 </div>
+<script>
+(function(){
+  var el = document.getElementById('bull');
+  if (!el) return;
+  // Genuine-intent events only — never scroll, which a Lighthouse pass
+  // synthesizes. Desktop fires pointermove within a second; touch on first tap.
+  var EVENTS = ['pointermove', 'pointerdown', 'keydown', 'touchstart'];
+  var loaded = false;
+  function loadScene(){
+    if (loaded) return;
+    loaded = true;
+    EVENTS.forEach(function(e){ removeEventListener(e, loadScene); });
+    var s = document.createElement('script');
+    s.src = '/brand/bull.js?v=__BULL_V__';
+    s.async = true;
+    s.onerror = function(){ /* the still render is already on screen */ };
+    document.head.appendChild(s);
+  }
+  // Reduced motion keeps the still render — and, more to the point, does not
+  // spend 150 KB on a bundle whose whole purpose is movement.
+  if (!matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    EVENTS.forEach(function(e){ addEventListener(e, loadScene, {passive: true, once: true}); });
+    if (window.requestIdleCallback) requestIdleCallback(loadScene, {timeout: 3000});
+    else setTimeout(loadScene, 1500);
+  }
+})();
+</script>
 <script>
 (function(){
   var el = document.getElementById('bull');
@@ -476,6 +535,9 @@ def bull_art():
 
   function apply(){
     pending = false;
+    // The 3D scene is live and does its own, better parallax — stop writing
+    // transforms onto the still render hiding behind it.
+    if (el.dataset.webgl) return;
     var r = el.getBoundingClientRect();
     if (!r.width) return;
     // Distance from the bull's centre, normalised against the viewport so the
@@ -508,7 +570,7 @@ def bull_art():
   document.addEventListener('mouseleave', rest);
   addEventListener('blur', rest);
 })();
-</script>"""
+</script>""".replace("__BULL_V__", _asset_v("bull.js"))
 
 
 def landing_html():

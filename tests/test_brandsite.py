@@ -266,12 +266,12 @@ class HeroBullTest(unittest.TestCase):
         """It was moved, not copied — two bulls on one page is a regression."""
         self.assertEqual(self.html.count("/brand/bull-hero.png"), 1)
 
-    def test_the_tilt_is_driven_by_pointer_position(self):
+    def test_the_fallback_tilt_is_driven_by_pointer_position(self):
         for bit in ("pointermove", "--rx", "--ry", "perspective:900px",
                     "rotateX(var(--rx"):
             self.assertIn(bit, self.html, bit)
 
-    def test_the_motion_is_subtle(self):
+    def test_the_fallback_motion_is_subtle(self):
         """'A very little with the mouse' — a big tilt reads as a gimmick and
         distorts a render that was not modelled to be seen from the side."""
         self.assertRegex(self.html, r"MAX = (\d+);")
@@ -299,3 +299,135 @@ class HeroBullTest(unittest.TestCase):
     def test_it_still_renders_without_the_script(self):
         """The tilt is an enhancement — the img tag carries the art itself."""
         self.assertIn('<img src="/brand/bull-hero.png"', self.html)
+
+
+class Bull3DSceneTest(unittest.TestCase):
+    """The real 3D bull, ported from the app this one replaces.
+
+    brand/src/bull.ts is bundled with three.js to brand/img/bull.js, which is
+    COMMITTED — the server has no build step, Flask serves brand/img off disk.
+    A committed artefact can drift from its source silently, so the bundle
+    records a hash of what it was built from and that is checked here.
+    """
+
+    ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    SOURCES = ("brand/src/bull.ts", "brand/src/bullhead.obj")
+
+    @classmethod
+    def setUpClass(cls):
+        cls.html = bs.landing_html()
+        with open(os.path.join(cls.ROOT, "brand", "img", "bull.js"), "rb") as fh:
+            cls.bundle = fh.read()
+        cls.banner = cls.bundle[:60].decode("utf-8", "replace")
+
+    def test_the_bundle_is_built_from_the_current_sources(self):
+        """Edit bull.ts, forget `npm run build:bull`, and the landing keeps
+        serving the old scene. This is the only thing that would notice."""
+        import hashlib
+        h = hashlib.sha256()
+        for rel in self.SOURCES:
+            with open(os.path.join(self.ROOT, rel), "rb") as fh:
+                h.update(fh.read())
+        expected = h.hexdigest()[:16]
+        self.assertIn(expected, self.banner,
+                      "brand/img/bull.js is stale — run `npm run build:bull`")
+
+    def test_the_model_is_bundled_not_fetched(self):
+        """A second request for the .obj is a second chance to fail, and the
+        model is 21 KB — smaller than the request overhead is worth."""
+        self.assertTrue(b"Blender" in self.bundle, "the OBJ text is not in the bundle")
+
+    def test_the_scene_ships_three_js(self):
+        self.assertTrue(b"WebGLRenderer" in self.bundle, "three.js is not in the bundle")
+
+    def test_the_landing_points_at_the_bundle_with_a_cache_buster(self):
+        """/brand/* is cached for a week, which is right for a logo and wrong
+        for a script."""
+        self.assertRegex(self.html, r"/brand/bull\.js\?v=[0-9a-f]{8}")
+
+    def test_the_cache_buster_tracks_the_file(self):
+        self.assertNotEqual(bs._asset_v("bull.js"), "0")
+        self.assertEqual(bs._asset_v("no-such-file.js"), "0")
+
+    def test_the_bundle_is_not_in_the_critical_path(self):
+        """150 KB gzipped must not compete with the landing's first paint: no
+        blocking tag, fetched on idle or first genuine interaction."""
+        self.assertNotIn('<script src="/brand/bull.js', self.html)
+        self.assertIn("requestIdleCallback", self.html)
+        self.assertIn("pointermove", self.html)
+        self.assertIn("s.async = true", self.html)
+
+    def test_reduced_motion_does_not_even_download_it(self):
+        """Loading a 150 KB animation bundle and then refusing to animate wastes
+        the visitor's data to honour their preference."""
+        loader = self.html[self.html.index("function loadScene"):
+                           self.html.index("</script>", self.html.index("function loadScene"))]
+        self.assertIn("prefers-reduced-motion: reduce", loader)
+        self.assertIn("if (!matchMedia", loader)
+
+    def test_scroll_is_not_an_intent_signal(self):
+        """A Lighthouse pass synthesizes scroll; treating it as intent means the
+        bundle lands inside the measured window every time."""
+        loader = self.html[self.html.index("var EVENTS"):self.html.index("var loaded")]
+        self.assertNotIn("scroll", loader)
+        self.assertNotIn("wheel", loader)
+
+    def test_the_still_render_is_what_ships_in_the_html(self):
+        """The hero must be complete before any of this runs, and stay complete
+        on a device with no WebGL."""
+        self.assertIn('<img src="/brand/bull-hero.png"', self.html)
+
+    def test_the_canvas_replaces_the_render_rather_than_stacking_on_it(self):
+        self.assertIn(".hero-art[data-webgl] img{opacity:0}", bs.CSS)
+        self.assertIn(".hero-art[data-webgl] canvas{opacity:1}", bs.CSS)
+
+    def test_the_box_does_not_depend_on_the_image_it_hides(self):
+        """Sizing the mount by its <img> would collapse it to nothing the moment
+        the image faded out — and the canvas sizes itself from the mount."""
+        self.assertIn("aspect-ratio:772/708", bs.CSS)
+        self.assertIn(".hero-art img,.hero-art canvas{position:absolute", bs.CSS)
+
+    def test_the_fallback_tilt_stands_down_once_the_scene_is_live(self):
+        """Two parallax implementations fighting over the same element."""
+        self.assertIn("if (el.dataset.webgl) return;", self.html)
+
+    def test_the_scene_survives_a_device_without_webgl(self):
+        with open(os.path.join(self.ROOT, "brand", "src", "bull.ts"), encoding="utf-8") as fh:
+            ts = fh.read()
+        self.assertIn("WebGL unavailable", ts)
+        self.assertIn("catch", ts)
+
+    def test_the_loop_stops_when_the_hero_is_off_screen(self):
+        with open(os.path.join(self.ROOT, "brand", "src", "bull.ts"), encoding="utf-8") as fh:
+            ts = fh.read()
+        self.assertIn("IntersectionObserver", ts)
+        self.assertIn("cancelAnimationFrame", ts)
+
+    def test_pausing_does_not_make_the_sway_jump(self):
+        """THREE.Clock keeps running while the loop is stopped, so resuming
+        from it would snap the bull to wherever the sine had got to."""
+        with open(os.path.join(self.ROOT, "brand", "src", "bull.ts"), encoding="utf-8") as fh:
+            ts = fh.read()
+        self.assertNotIn("getElapsedTime", ts)
+        self.assertIn("t += Math.min((now - last) / 1000", ts)
+
+
+class BundleTransferTest(unittest.TestCase):
+    """562 KB of three.js is 146 KB gzipped. Whether the visitor gets the first
+    number or the second is decided entirely by nginx's gzip_types, and Flask
+    labels .js as text/javascript — not application/javascript."""
+
+    def setUp(self):
+        conf = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                            "deploy", "nginx-quanthunt.conf")
+        with open(conf, encoding="utf-8") as fh:
+            self.src = fh.read()
+
+    def test_javascript_is_compressed_under_the_type_flask_actually_sends(self):
+        import mimetypes
+        guessed = mimetypes.guess_type("bull.js")[0]
+        self.assertIn(guessed, self.src,
+                      f"nginx does not gzip {guessed}, which is what .js is served as")
+
+    def test_the_bundle_is_above_the_compression_threshold(self):
+        self.assertIn("gzip_min_length 1024", self.src)
