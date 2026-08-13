@@ -1484,9 +1484,62 @@ def brand_asset(asset):
     path = os.path.join(_brand.IMG_DIR, asset)
     if not os.path.isfile(path):
         return jsonify({"error": "not-found"}), 404
-    resp = send_from_directory(_brand.IMG_DIR, asset)
+    resp = _send_brand_file(asset)
     resp.headers["Cache-Control"] = "public, max-age=604800"
     return resp
+
+
+# Verified once at import: a .gz that does not decompress to exactly its
+# original is never served. A bad one is a 200 the browser cannot decode —
+# blank content with nothing in the console — and this route sends
+# `max-age=604800`, so the browser would keep the broken result for a week.
+_BRAND_GZ = {}
+
+
+def _verify_brand_variants():
+    import gzip as _gz
+    for name in os.listdir(_brand.IMG_DIR):
+        if not name.endswith(".gz"):
+            continue
+        orig = os.path.join(_brand.IMG_DIR, name[:-3])
+        gzp = os.path.join(_brand.IMG_DIR, name)
+        if not os.path.isfile(orig):
+            continue
+        try:
+            with open(gzp, "rb") as fh:
+                out = _gz.decompress(fh.read())
+            if len(out) == os.path.getsize(orig):
+                _BRAND_GZ[name[:-3]] = os.path.getmtime(gzp)
+            else:
+                logging.warning("brand: %s does not match its source, ignoring", name)
+        except Exception:
+            logging.warning("brand: %s is not readable gzip, ignoring", name)
+
+
+def _send_brand_file(asset):
+    """send_from_directory for brand/img, preferring a committed .gz.
+
+    The three.js bull bundle is 562 KB raw and 146 KB gzipped. nginx would
+    compress it, but only where nginx's own config lists the right MIME type —
+    and the live config on the VM is certbot-managed, so a deploy cannot safely
+    rewrite it. Shipping the compressed copy makes the transfer size a property
+    of the repo rather than of one machine's configuration.
+    """
+    import mimetypes
+    if (asset in _BRAND_GZ
+            and "gzip" in request.headers.get("Accept-Encoding", "").lower()
+            and _BRAND_GZ[asset] == os.path.getmtime(
+                os.path.join(_brand.IMG_DIR, asset + ".gz"))):
+        resp = send_from_directory(_brand.IMG_DIR, asset + ".gz")
+        resp.headers["Content-Encoding"] = "gzip"
+        resp.headers["Content-Type"] = (
+            mimetypes.guess_type(asset)[0] or "application/octet-stream")
+        resp.headers["Vary"] = "Accept-Encoding"
+        return resp
+    return send_from_directory(_brand.IMG_DIR, asset)
+
+
+_verify_brand_variants()
 
 
 @app.route("/site")

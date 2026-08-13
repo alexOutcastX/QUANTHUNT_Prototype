@@ -431,3 +431,75 @@ class BundleTransferTest(unittest.TestCase):
 
     def test_the_bundle_is_above_the_compression_threshold(self):
         self.assertIn("gzip_min_length 1024", self.src)
+
+
+class BrandPrecompressedTest(unittest.TestCase):
+    """The bundle ships with a .gz beside it and the route serves that to any
+    client which accepts gzip — 562 KB becomes 146 KB without depending on one
+    machine's nginx config being right.
+
+    A bad variant is the dangerous case: a 200 the browser cannot decode, held
+    for a week by this route's cache header. Hence the integrity check.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        import tempfile
+        os.environ.setdefault("DB_PATH", tempfile.mktemp(suffix=".db"))
+        os.environ["TRADELOG_BACKFILL"] = "0"
+        try:
+            import server
+        except Exception as e:
+            raise unittest.SkipTest("server import unavailable: %s" % e)
+        cls.server = server
+        cls.client = server.app.test_client()
+
+    def test_a_client_that_accepts_gzip_gets_the_compressed_copy(self):
+        r = self.client.get("/brand/bull.js", headers={"Accept-Encoding": "gzip"})
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.headers.get("Content-Encoding"), "gzip")
+        self.assertIn("Accept-Encoding", r.headers.get("Vary", ""))
+
+    def test_it_decodes_to_exactly_the_bundle_on_disk(self):
+        import gzip as gz
+        r = self.client.get("/brand/bull.js", headers={"Accept-Encoding": "gzip"})
+        with open(os.path.join(bs.IMG_DIR, "bull.js"), "rb") as fh:
+            original = fh.read()
+        self.assertEqual(gz.decompress(r.data), original)
+
+    def test_the_compressed_copy_is_worth_shipping(self):
+        with open(os.path.join(bs.IMG_DIR, "bull.js.gz"), "rb") as fh:
+            packed = len(fh.read())
+        raw = os.path.getsize(os.path.join(bs.IMG_DIR, "bull.js"))
+        self.assertLess(packed * 3, raw, "the .gz saves less than 3x — check the build")
+
+    def test_a_client_that_does_not_accept_gzip_gets_the_plain_file(self):
+        r = self.client.get("/brand/bull.js", headers={"Accept-Encoding": ""})
+        self.assertEqual(r.status_code, 200)
+        self.assertIsNone(r.headers.get("Content-Encoding"))
+
+    def test_the_javascript_content_type_survives_the_swap(self):
+        """The file actually sent is bull.js.gz; without an explicit type the
+        browser would be handed application/gzip and refuse to execute it."""
+        r = self.client.get("/brand/bull.js", headers={"Accept-Encoding": "gzip"})
+        self.assertIn("javascript", r.headers.get("Content-Type", ""))
+
+    def test_images_are_untouched(self):
+        r = self.client.get("/brand/logo.png", headers={"Accept-Encoding": "gzip"})
+        self.assertEqual(r.status_code, 200)
+        self.assertIsNone(r.headers.get("Content-Encoding"))
+
+    def test_a_variant_that_does_not_match_its_source_is_refused(self):
+        """The integrity check, exercised rather than merely read: a truncated
+        .gz must be ignored, not served as an undecodable 200."""
+        reg = self.server._BRAND_GZ
+        self.assertIn("bull.js", reg, "the good variant was not registered")
+        saved = dict(reg)
+        try:
+            reg["bull.js"] = saved["bull.js"] + 1        # stale mtime
+            r = self.client.get("/brand/bull.js", headers={"Accept-Encoding": "gzip"})
+            self.assertIsNone(r.headers.get("Content-Encoding"),
+                              "a variant that changed under us was still served")
+        finally:
+            reg.clear()
+            reg.update(saved)

@@ -8,6 +8,7 @@
 // built from and tests/test_brandsite.py recomputes it. Editing bull.ts without
 // rebuilding then fails the suite instead of silently shipping the old scene.
 import { createHash } from 'node:crypto';
+import { gzipSync } from 'node:zlib';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -35,6 +36,14 @@ const result = await esbuild.build({
   logLevel: 'warning',
 });
 
-const code = result.outputFiles[0].text;
-writeFileSync(OUT, `/* built-from: ${sourceHash()} */\n${code}`);
-console.log(`brand/img/bull.js  ${(code.length / 1024).toFixed(0)} KB  built-from ${sourceHash()}`);
+const out = Buffer.from(`/* built-from: ${sourceHash()} */\n${result.outputFiles[0].text}`);
+writeFileSync(OUT, out);
+
+// Ship the compressed copy too. server.py serves it to any client that accepts
+// gzip, which makes the 4x transfer saving a property of the repo rather than
+// of one machine's nginx config. Level 9 because this is paid once, at build.
+const gz = gzipSync(out, { level: 9 });
+writeFileSync(`${OUT}.gz`, gz);
+
+console.log(`brand/img/bull.js  ${(out.length / 1024).toFixed(0)} KB`
+  + `  (${(gz.length / 1024).toFixed(0)} KB gzipped)  built-from ${sourceHash()}`);
