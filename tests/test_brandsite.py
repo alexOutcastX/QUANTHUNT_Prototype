@@ -238,3 +238,64 @@ class NavigationTest(unittest.TestCase):
             for href in ("/site/insights", "/site/about", "/site/tutorial",
                          "/site/contact", "/site/legal/terms"):
                 self.assertIn(href, h)
+
+
+class HeroBullTest(unittest.TestCase):
+    """The bull sits above the headline and turns with the pointer.
+
+    It used to sit beside the 'What it does' heading, well below the fold, and
+    was a flat image. Both are easy to undo by accident while editing the hero,
+    so both are pinned here.
+    """
+
+    def setUp(self):
+        self.html = bs.landing_html()
+
+    def test_the_bull_comes_before_the_headline(self):
+        art = self.html.index('id="bull"')
+        h1 = self.html.index("The Indian market,")
+        self.assertLess(art, h1, "the bull dropped below the headline")
+
+    def test_it_is_inside_the_hero_not_a_later_section(self):
+        hero = self.html.index('class="hero"')
+        nxt = self.html.index("<section", hero + 10)
+        self.assertLess(hero, self.html.index('id="bull"'))
+        self.assertLess(self.html.index('id="bull"'), nxt)
+
+    def test_the_bull_appears_exactly_once(self):
+        """It was moved, not copied — two bulls on one page is a regression."""
+        self.assertEqual(self.html.count("/brand/bull-hero.png"), 1)
+
+    def test_the_tilt_is_driven_by_pointer_position(self):
+        for bit in ("pointermove", "--rx", "--ry", "perspective:900px",
+                    "rotateX(var(--rx"):
+            self.assertIn(bit, self.html, bit)
+
+    def test_the_motion_is_subtle(self):
+        """'A very little with the mouse' — a big tilt reads as a gimmick and
+        distorts a render that was not modelled to be seen from the side."""
+        self.assertRegex(self.html, r"MAX = (\d+);")
+        import re as _re
+        self.assertLessEqual(int(_re.search(r"MAX = (\d+);", self.html).group(1)), 15)
+
+    def test_reduced_motion_and_touch_are_opted_out(self):
+        """A tilt chasing a finger is either invisible or in the way, and the
+        media query is a stated user preference, not a suggestion."""
+        self.assertIn("prefers-reduced-motion: reduce", self.html)
+        self.assertIn("(hover: hover) and (pointer: fine)", self.html)
+        self.assertIn("@media(prefers-reduced-motion:reduce)", bs.CSS)
+
+    def test_the_image_keeps_its_aspect_ratio(self):
+        """width/height attributes reserve the space so the headline does not
+        jump — but without height:auto they would squash the bull."""
+        self.assertIn('width="772" height="708"', self.html)
+        self.assertIn("height:auto", bs.CSS)
+
+    def test_writes_are_throttled_to_one_per_frame(self):
+        """pointermove fires far faster than the display refreshes; writing a
+        style property on each one is layout thrash for frames nobody sees."""
+        self.assertIn("requestAnimationFrame", self.html)
+
+    def test_it_still_renders_without_the_script(self):
+        """The tilt is an enhancement — the img tag carries the art itself."""
+        self.assertIn('<img src="/brand/bull-hero.png"', self.html)

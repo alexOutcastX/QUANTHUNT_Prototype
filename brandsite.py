@@ -183,6 +183,22 @@ letter-spacing:-1px;font-weight:800}
 .cta{display:flex;gap:12px;flex-wrap:wrap}
 .tag{display:inline-block;font-size:11px;letter-spacing:2.4px;text-transform:uppercase;
 color:var(--brand-2);margin-bottom:14px;font-weight:700}
+/* The bull is a 3D render, so a perspective tilt on the pointer reads as the
+   object turning rather than a flat image sliding about. The rotation lives in
+   custom properties so the script only ever writes two numbers. */
+.hero-art{width:min(280px,58vw);margin:0 0 26px;perspective:900px}
+/* height:auto or the intrinsic width/height attributes — which are there to
+   reserve the space and stop the headline jumping — would squash the render. */
+.hero-art img{display:block;width:100%;height:auto;
+transform:rotateX(var(--rx,0deg)) rotateY(var(--ry,0deg)) translate3d(var(--tx,0),var(--ty,0),0);
+transform-style:preserve-3d;will-change:transform;
+transition:transform .45s cubic-bezier(.22,.61,.36,1);
+filter:drop-shadow(0 22px 38px rgba(16,185,129,.20))}
+/* While the pointer is actually moving, track it closely; the slow transition
+   above is what eases the bull back to rest when the pointer leaves. */
+.hero-art.tracking img{transition:transform .1s linear}
+@media(prefers-reduced-motion:reduce){
+.hero-art img{transform:none!important;transition:none}}
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:18px}
 .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);
 padding:22px}
@@ -252,7 +268,14 @@ font-size:13px;color:var(--muted)}
 .legal ul{margin:0 0 14px;padding-left:20px}
 .legal li{margin:5px 0}
 .legal strong{color:var(--text)}
-@media(max-width:820px){.hero .wrap{grid-template-columns:1fr}.hero .art{order:-1}}
+@media(max-width:820px){.hero .wrap{grid-template-columns:1fr}
+.hero-art{margin-left:auto;margin-right:auto}}
+/* Below this the brand, the links and the Sign in button stop fitting on one
+   line; the bar's fixed 64px height then clips whatever wrapped. Let it grow
+   and drop the links onto their own row. */
+@media(max-width:560px){
+.nav .wrap{height:auto;flex-wrap:wrap;padding-top:10px;padding-bottom:10px;row-gap:10px}
+.nav nav{order:3;width:100%;justify-content:center;gap:18px;font-size:13px}}
 """
 
 
@@ -422,6 +445,72 @@ FEATURES = [
 ]
 
 
+def bull_art():
+    """The hero bull, tilted by the pointer.
+
+    Plain string rather than an f-string: the script below is mostly braces, and
+    doubling every one of them to survive f-string interpolation makes it
+    unreadable for no gain — there is nothing here to interpolate.
+
+    Deliberately dependency-free. The art is already a 3D render, so a CSS
+    perspective rotation turns it convincingly without shipping a WebGL scene,
+    and it degrades to a still image wherever the script does not run.
+    """
+    return """
+<div class="hero-art" id="bull">
+  <img src="/brand/bull-hero.png" alt="TaurEye" width="772" height="708" fetchpriority="high">
+</div>
+<script>
+(function(){
+  var el = document.getElementById('bull');
+  if (!el) return;
+  // A tilt that follows a finger is either invisible or in the way, and
+  // reduced-motion means what it says.
+  if (!window.matchMedia) return;
+  if (!matchMedia('(hover: hover) and (pointer: fine)').matches) return;
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+
+  var MAX = 11;            // degrees; "a very little" — enough to read as depth
+  var SHIFT = 7;           // px of drift, so it parallaxes rather than only spins
+  var pending = false, px = 0, py = 0;
+
+  function apply(){
+    pending = false;
+    var r = el.getBoundingClientRect();
+    if (!r.width) return;
+    // Distance from the bull's centre, normalised against the viewport so the
+    // whole page drives it — not just the pixels directly over the image.
+    var dx = (px - (r.left + r.width / 2)) / Math.max(innerWidth, 1) * 2;
+    var dy = (py - (r.top + r.height / 2)) / Math.max(innerHeight, 1) * 2;
+    dx = Math.max(-1, Math.min(1, dx));
+    dy = Math.max(-1, Math.min(1, dy));
+    el.style.setProperty('--ry', (dx * MAX).toFixed(2) + 'deg');
+    el.style.setProperty('--rx', (-dy * MAX).toFixed(2) + 'deg');
+    el.style.setProperty('--tx', (dx * SHIFT).toFixed(1) + 'px');
+    el.style.setProperty('--ty', (dy * SHIFT).toFixed(1) + 'px');
+  }
+
+  addEventListener('pointermove', function(e){
+    if (e.pointerType && e.pointerType !== 'mouse') return;
+    px = e.clientX; py = e.clientY;
+    el.classList.add('tracking');
+    // One write per frame; pointermove fires far faster than the display.
+    if (!pending) { pending = true; requestAnimationFrame(apply); }
+  }, {passive: true});
+
+  function rest(){
+    el.classList.remove('tracking');   // hands the return trip to the slow ease
+    el.style.setProperty('--rx', '0deg');
+    el.style.setProperty('--ry', '0deg');
+    el.style.setProperty('--tx', '0px');
+    el.style.setProperty('--ty', '0px');
+  }
+  document.addEventListener('mouseleave', rest);
+  addEventListener('blur', rest);
+})();
+</script>"""
+
+
 def landing_html():
     feats = "".join(
         f'<div class="card"><h3>{html.escape(t)}</h3><p>{html.escape(b)}</p></div>'
@@ -429,6 +518,7 @@ def landing_html():
     body = f"""
 <section class="hero"><div class="wrap">
   <div>
+    {bull_art()}
     <span class="tag">{html.escape(TAGLINE)}</span>
     <h1>The Indian market,<br><span class="g">screened properly.</span></h1>
     <p>Every listed NSE and BSE company, filtered by rules you set — technicals,
@@ -441,11 +531,9 @@ def landing_html():
   {auth_panel()}
 </div></section>
 
-<section><div class="wrap" style="display:grid;grid-template-columns:1fr auto;
-     gap:30px;align-items:center">
-  <div><h2>What it does</h2>
-  <p class="lead">Built for people who want to see why a stock made the list.</p></div>
-  <img src="/brand/bull-hero.png" alt="" style="width:220px" loading="lazy">
+<section><div class="wrap">
+  <h2>What it does</h2>
+  <p class="lead">Built for people who want to see why a stock made the list.</p>
 </div>
 <div class="wrap" style="margin-top:24px"><div class="grid">{feats}</div></div></section>
 
