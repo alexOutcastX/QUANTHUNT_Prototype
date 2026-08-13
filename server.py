@@ -927,7 +927,14 @@ def index():
     """
     if _member_session_present():
         return _serve_app_shell()
-    return _brand.landing_html()
+    # This response depends on a cookie, so it must never be reused for a
+    # different session. Without both headers a browser happily serves the
+    # landing back to a signed-in visitor (and the app shell to a signed-out
+    # one) from its own cache, which looks exactly like a broken login.
+    resp = app.make_response(_brand.landing_html())
+    resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    resp.headers["Vary"] = "Cookie, Accept-Encoding"
+    return resp
 
 
 @app.route("/app")
@@ -1211,13 +1218,35 @@ def _is_https() -> bool:
 _COOKIE_DOMAIN = (os.environ.get("SESSION_COOKIE_DOMAIN") or "").strip() or None
 
 
+def _cookie_domain():
+    """The configured parent domain — but only when it covers THIS request.
+
+    A Domain attribute that does not cover the request host is rejected
+    outright by every browser: the cookie is silently never stored, so login
+    returns 200 and the user is immediately signed out again. That is exactly
+    what SESSION_COOKIE_DOMAIN=.taureye.com did to sign-in on the bare IP,
+    which is the host used for preview testing.
+
+    Falling back to a host-only cookie is correct rather than merely tolerant:
+    the point of the setting is to span apex and www, and on any host outside
+    that domain there is nothing to span.
+    """
+    if not _COOKIE_DOMAIN:
+        return None
+    host = (request.host or "").split(":")[0].strip().lower()
+    base = _COOKIE_DOMAIN.lstrip(".").lower()
+    if host == base or host.endswith("." + base):
+        return _COOKIE_DOMAIN
+    return None
+
+
 def _session_cookie(resp, name, value, max_age):
     """Set a session cookie with the strongest flags the transport allows.
     Cross-site (native shell) needs SameSite=None, which browsers only accept
     with Secure — so that combination is used only once TLS is in front."""
     https = _is_https()
     resp.set_cookie(name, value, max_age=max_age, httponly=True,
-                    domain=_COOKIE_DOMAIN,
+                    domain=_cookie_domain(),
                     samesite="None" if https else "Lax", secure=https)
     return resp
 
@@ -1226,7 +1255,7 @@ def _clear_cookie(resp, name):
     """Expire a session cookie. The domain MUST match the one it was set with —
     a host-only delete leaves a .parent-domain cookie in place, so logout would
     silently not log the user out."""
-    resp.delete_cookie(name, domain=_COOKIE_DOMAIN)
+    resp.delete_cookie(name, domain=_cookie_domain())
     return resp
 
 

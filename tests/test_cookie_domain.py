@@ -16,7 +16,7 @@ DEPLOY = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))
 def _cookie_bits(src: str) -> str:
     """The body of server.py's cookie helpers, without importing the app
     (importing server.py pulls in the whole data stack)."""
-    start = src.index("def _session_cookie(")
+    start = src.index("def _cookie_domain(")
     end = src.index("def _bearer(")
     return src[start:end]
 
@@ -34,15 +34,18 @@ class CookieDomainTest(unittest.TestCase):
         line = [l for l in self.src.splitlines() if l.startswith("_COOKIE_DOMAIN =")][0]
         self.assertTrue(line.rstrip().endswith("or None"), line)
 
-    def test_set_cookie_passes_the_domain(self):
-        self.assertIn("domain=_COOKIE_DOMAIN", _cookie_bits(self.src))
+    def test_set_cookie_passes_the_scoped_domain(self):
+        """_cookie_domain(), not the raw env value: a Domain that does not
+        cover the request host is rejected and the cookie never stored."""
+        self.assertIn("domain=_cookie_domain()", _cookie_bits(self.src))
 
     def test_every_clear_uses_the_same_domain(self):
         """Any raw resp.delete_cookie() outside the helper would fail to clear a
         parent-domain cookie — logout would appear to work and not."""
         raw = re.findall(r"resp\.delete_cookie\([^)]*\)", self.src)
         self.assertEqual(len(raw), 1, f"expected only the helper's call, got {raw}")
-        self.assertIn("domain=_COOKIE_DOMAIN", raw[0])
+        # Same scoping as the set path, or the clear silently misses.
+        self.assertIn("domain=_cookie_domain()", raw[0])
         # ...and the logout routes must actually route through it.
         self.assertGreaterEqual(self.src.count("_clear_cookie(resp,"), 3)
 
@@ -147,3 +150,116 @@ class EnableHttpsScriptTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class CookieDomainScopingTest(unittest.TestCase):
+    """A Domain attribute that does not cover the request host is rejected by
+    every browser — the cookie is silently never stored, so login returns 200
+    and the user is immediately signed out again.
+
+    SESSION_COOKIE_DOMAIN=.taureye.com did exactly that to sign-in on the bare
+    IP, which is the host used for preview testing.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        import tempfile
+        os.environ["DB_PATH"] = tempfile.mktemp(suffix=".db")
+        os.environ["TRADELOG_BACKFILL"] = "0"
+        os.environ["AUTH_SECRET"] = "cookie-scope-test"
+        os.environ["SESSION_COOKIE_DOMAIN"] = ".taureye.com"
+        try:
+            import importlib
+            import server
+            cls.server = importlib.reload(server)
+        except Exception as e:
+            raise unittest.SkipTest("server import unavailable: %s" % e)
+        cls.server._warm_universe_async = lambda: None
+
+    @classmethod
+    def tearDownClass(cls):
+        os.environ.pop("SESSION_COOKIE_DOMAIN", None)
+        os.environ.pop("AUTH_SECRET", None)
+        # Leave the shared login quota as we found it. This class signs in far
+        # more than the 10-per-5-minutes cap allows, and an exhausted window
+        # makes the NEXT test module fail with a 429 that has nothing to do
+        # with what it is testing.
+        with cls.server._RL_LOCK:
+            cls.server._RL.clear()
+
+    def setUp(self):
+        # /auth/member/login is capped at 10 hits per 5 minutes per IP, and
+        # every request here comes from the same one. Clearing the window keeps
+        # the throttle intact in production while letting the suite exercise
+        # more than ten sign-ins — a 429 here would look like a broken cookie.
+        with self.server._RL_LOCK:
+            self.server._RL.clear()
+
+    def _login(self, host):
+        c = self.server.app.test_client()
+        r = c.post("/auth/member/login",
+                   json={"username": "sri", "password": "STI123"},
+                   headers={"Host": host})
+        self.assertEqual(r.status_code, 200, r.data[:160])
+        return c, " ".join(r.headers.getlist("Set-Cookie"))
+
+    def test_a_host_outside_the_domain_gets_a_host_only_cookie(self):
+        for host in ("161.118.174.177", "localhost", "example.org"):
+            _, sc = self._login(host)
+            self.assertNotIn("Domain=", sc, f"{host} was sent an unusable Domain")
+
+    def test_hosts_inside_the_domain_still_span_apex_and_www(self):
+        for host in ("taureye.com", "www.taureye.com"):
+            _, sc = self._login(host)
+            self.assertIn("Domain=taureye.com", sc, host)
+
+    def test_a_lookalike_host_does_not_get_the_domain(self):
+        """nottaureye.com ends with 'taureye.com' as a substring but is a
+        different site — a suffix check without the dot would hand it a cookie
+        scoped to someone else's domain."""
+        _, sc = self._login("nottaureye.com")
+        self.assertNotIn("Domain=", sc)
+
+    def test_the_session_actually_sticks_on_every_host(self):
+        """The symptom this fixes: login succeeded, the cookie was dropped, and
+        the next request was anonymous again."""
+        for host in ("161.118.174.177", "taureye.com", "localhost"):
+            c, _ = self._login(host)
+            r = c.get("/auth/member", headers={"Host": host})
+            self.assertIsNotNone(r.json.get("member"), f"session lost on {host}")
+
+    def test_logout_clears_with_the_same_scope_it_set(self):
+        for host in ("161.118.174.177", "taureye.com"):
+            c, sc = self._login(host)
+            out = c.post("/auth/member/logout", headers={"Host": host})
+            cleared = " ".join(out.headers.getlist("Set-Cookie"))
+            self.assertEqual("Domain=" in sc, "Domain=" in cleared,
+                             f"{host}: set and clear disagree on scope")
+            r = c.get("/auth/member", headers={"Host": host})
+            self.assertIsNone(r.json.get("member"), f"still signed in on {host}")
+
+
+class StartPageCachingTest(unittest.TestCase):
+    """`/` returns different documents to signed-in and signed-out visitors, so
+    a cache that ignores the cookie will serve one to the other — which looks
+    exactly like a broken login."""
+
+    @classmethod
+    def setUpClass(cls):
+        import tempfile
+        os.environ.setdefault("DB_PATH", tempfile.mktemp(suffix=".db"))
+        os.environ["TRADELOG_BACKFILL"] = "0"
+        try:
+            import server
+        except Exception as e:
+            raise unittest.SkipTest("server import unavailable: %s" % e)
+        cls.server = server
+        cls.server._warm_universe_async = lambda: None
+
+    def test_the_landing_is_never_stored(self):
+        r = self.server.app.test_client().get("/", headers={"Host": "taureye.com"})
+        self.assertIn("no-store", r.headers.get("Cache-Control", ""))
+
+    def test_it_varies_on_the_cookie(self):
+        r = self.server.app.test_client().get("/", headers={"Host": "taureye.com"})
+        self.assertIn("Cookie", r.headers.get("Vary", ""))
