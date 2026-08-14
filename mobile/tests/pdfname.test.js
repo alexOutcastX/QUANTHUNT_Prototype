@@ -79,4 +79,85 @@ ok('a filename with markup characters cannot break the title tag', () => {
   assert.ok(!html.includes('<script>x</script>'), 'markup leaked into the document');
 });
 
+
+// ── The bug the convention kept losing to ────────────────────────────────────
+// The name was right everywhere except on disk. Save-as-PDF reads the TOP-LEVEL
+// document's <title>, so printing our preview iframe named every download after
+// the app shell: "TaurEye — live NSE/BSE terminal & screener" landed as
+// TaurEye___live_NSE_BSE_terminal__screener.pdf regardless of the scrip.
+const { borrowDocumentTitle } = require('./build/pdf.js');
+
+const APP_TITLE = 'TaurEye — live NSE/BSE terminal & screener';
+
+function withFakeDocument(fn) {
+  const had = Object.prototype.hasOwnProperty.call(globalThis, 'document');
+  const previous = globalThis.document;
+  globalThis.document = { title: APP_TITLE };
+  try {
+    return fn(globalThis.document);
+  } finally {
+    if (had) globalThis.document = previous;
+    else delete globalThis.document;
+  }
+}
+
+ok('the tab takes the report name while the preview is open', () => {
+  withFakeDocument((d) => {
+    borrowDocumentTitle(docFileName('Dossier', 'RELIANCE'));
+    assert.strictEqual(d.title, 'Taureye_Dossier_RELIANCE');
+  });
+});
+
+ok('closing the preview hands the title back', () => {
+  withFakeDocument((d) => {
+    const restore = borrowDocumentTitle('Taureye_Dossier_TCS');
+    restore();
+    assert.strictEqual(d.title, APP_TITLE,
+      'the app tab would keep a dossier name after the preview closed');
+  });
+});
+
+ok('restoring twice does not resurrect a stale name', () => {
+  withFakeDocument((d) => {
+    const restore = borrowDocumentTitle('Taureye_Dossier_INFY');
+    restore();
+    d.title = 'something else entirely';
+    restore();
+    assert.strictEqual(d.title, 'something else entirely');
+  });
+});
+
+ok('an ampersand scrip survives the whole round trip to the filename', () => {
+  withFakeDocument((d) => {
+    borrowDocumentTitle(docFileName('Dossier', 'M&M'));
+    assert.strictEqual(d.title, 'Taureye_Dossier_M_M');
+  });
+});
+
+ok('no filename means the tab is left alone', () => {
+  withFakeDocument((d) => {
+    borrowDocumentTitle('')();
+    borrowDocumentTitle(null)();
+    assert.strictEqual(d.title, APP_TITLE);
+  });
+});
+
+ok('it is inert off the browser, where there is no document', () => {
+  const had = Object.prototype.hasOwnProperty.call(globalThis, 'document');
+  const previous = globalThis.document;
+  delete globalThis.document;
+  try {
+    borrowDocumentTitle('Taureye_Dossier_RELIANCE')();   // must not throw
+  } finally {
+    if (had) globalThis.document = previous;
+  }
+});
+
+ok('the report itself still carries the name, for the native print path', () => {
+  // Android routes through printReportNative, which uses the document's own
+  // <title>; that path was already correct and must stay so.
+  const shell = professionalShell('<p>x</p>', { fileName: 'Taureye_Dossier_RELIANCE' });
+  assert.ok(shell.includes('<title>Taureye_Dossier_RELIANCE</title>'), 'report lost its title');
+});
+
 console.log(`\nALL PDF NAMING TESTS PASSED (${passed})`);

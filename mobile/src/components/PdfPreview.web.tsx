@@ -6,7 +6,7 @@
 // (like HtmlView.web) so it typechecks under the RN tsconfig, which has no DOM
 // lib. No native plugins required.
 import React from 'react';
-import { closePdfPreview, peekPdf, subscribePdf } from '../pdf';
+import { borrowDocumentTitle, closePdfPreview, peekPdf, subscribePdf } from '../pdf';
 import { printReportNative } from '../printer';
 
 export default function PdfPreview() {
@@ -15,6 +15,15 @@ export default function PdfPreview() {
   const iframeRef = React.useRef<{ contentWindow?: { focus?: () => void; print?: () => void } } | null>(null);
 
   const doc = peekPdf();
+
+  // The browser names a Save-as-PDF after the TOP-LEVEL document's title, so
+  // the preview lends the tab the report's name while it is open — see
+  // borrowDocumentTitle. The whole screen is the dossier while this modal is
+  // up, so the tab naming it is simply correct; React's cleanup hands the title
+  // back on close and on unmount alike.
+  const fileName = doc?.fileName;
+  React.useEffect(() => borrowDocumentTitle(fileName), [fileName]);
+
   if (!doc) return null;
 
   const webPrint = () => {

@@ -44,6 +44,37 @@ function nowStr(): string {
 // keep tables/sections from splitting across pages. Injected last so it sets the
 // page geometry without fighting each report's own inline styling.
 /**
+ * Lend the top-level document the report's name, and return the undo.
+ *
+ * Save-as-PDF takes its filename from the TOP-LEVEL document's <title> — not
+ * from the iframe being printed. professionalShell writes a <title> into the
+ * report itself, which is what the native Android path and a standalone window
+ * use, but a browser printing our preview iframe ignores it and names the
+ * download after the app shell instead: "TaurEye — live NSE/BSE terminal &
+ * screener" arrives on disk as TaurEye___live_NSE_BSE_terminal__screener.pdf.
+ *
+ * Renaming around the print() call itself does not work reliably — there is no
+ * safe moment to change it back, because afterprint fires on the iframe's
+ * window rather than the top one. So the preview holds the title for as long as
+ * it is open and hands it back when it closes.
+ */
+export function borrowDocumentTitle(fileName?: string | null): () => void {
+  const d = (globalThis as { document?: { title?: string } }).document;
+  if (!d || !fileName || typeof d.title !== 'string') return () => {};
+  const previous = d.title;
+  d.title = fileName;
+  // Restoring is one-shot: a second call would stamp a stale title over
+  // whatever owns it by then. React will not invoke a cleanup twice, but this
+  // is returned to callers and costs a boolean to make safe.
+  let done = false;
+  return () => {
+    if (done) return;
+    done = true;
+    d.title = previous;
+  };
+}
+
+/**
  * Canonical export filename: `Taureye_<Kind>_<Subject>`.
  *
  * e.g. docFileName('Dossier', 'RELIANCE') -> "Taureye_Dossier_RELIANCE"
