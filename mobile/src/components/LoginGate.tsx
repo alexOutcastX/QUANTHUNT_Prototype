@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
   Image,
   KeyboardAvoidingView,
   Platform,
@@ -10,6 +9,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import BullRun from './BullRun';
 import { Btn } from '../ui';
 import { theme } from '../theme';
 import { currentMember, memberLogin, restoreMember, subscribeMember } from '../member';
@@ -64,7 +64,13 @@ export default function LoginGate({ children }: { children: React.ReactNode }) {
   return (
     <View style={styles.page}>
       {!checked ? (
-        <ActivityIndicator color={theme.muted} />
+        // The boot wait, where the old app put the galloping bull: this is the
+        // one moment the user has nothing to look at, and a spinner said
+        // nothing about whose app they had opened.
+        <View style={styles.boot}>
+          <BullRun size={170} />
+          <Text style={styles.bootLine}>Checking your session…</Text>
+        </View>
       ) : (
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -127,6 +133,8 @@ export default function LoginGate({ children }: { children: React.ReactNode }) {
 
 const styles = StyleSheet.create({
   page: { flex: 1, backgroundColor: theme.bg, alignItems: 'center', justifyContent: 'center' },
+  boot: { alignItems: 'center', gap: 10 },
+  bootLine: { color: theme.muted, fontSize: 13 },
   kb: { width: '100%', alignItems: 'center' },
   card: {
     width: '90%',

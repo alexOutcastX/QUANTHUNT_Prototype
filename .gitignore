@@ -30,6 +30,9 @@ broker_token.json
 quanthunt.db
 quanthunt.db-wal
 quanthunt.db-shm
+# The generated session-signing key. Committing it would publish the key that
+# every member cookie is signed with.
+quanthunt.db.session-key
 
 # Local throwaway static server used only for headless UI verification
 # fake_server.py is the committed E2E fixture (see e2e/smoke.js) — no longer ignored
