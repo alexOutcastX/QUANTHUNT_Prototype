@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { navigate } from '../navIntent';
 import { Linking } from 'react-native';
 import {
   Modal,
@@ -764,11 +765,22 @@ export default function PortfolioScreen() {
           </>
         ) : (
           <EmptyState
+            icon="◫"
             title={activeGroup === 'all' ? 'No holdings yet' : `“${activeGroup}” is empty`}
             hint={
               activeGroup === 'all'
-                ? "Add a symbol with quantity and average buy price — it's saved on this device and valued live."
-                : 'Add a symbol above or move a holding here with the ⇄ action in another group.'
+                ? 'Add what you own with the quantity and average buy price, and it is valued live from here on.'
+                : 'Add a symbol above, or move a holding here with the ⇄ action in another group.'
+            }
+            action={
+              activeGroup === 'all'
+                ? { label: 'Try it with fake money first', onPress: () => navigate('desk', { sub: 'paper' }) }
+                : undefined
+            }
+            secondary={
+              activeGroup === 'all'
+                ? { label: 'Find stocks', onPress: () => navigate('stock') }
+                : undefined
             }
           />
         )}

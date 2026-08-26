@@ -1491,6 +1491,44 @@ export type MemberResp = { member: Member | null; token?: string; error?: string
 // once and hides the nav entries when it is off.
 export type PreviewResp = { preview: boolean; host: string; reason: string };
 
+export type DailyStatus = {
+  claimable: boolean;
+  claimed_today: boolean;
+  trading_day: boolean;
+  day: string;
+  streak: number;
+  credits: number;
+  next_milestone: number | null;
+  next_milestone_bonus: number | null;
+  milestones: Record<string, number>;
+};
+
+export type EarnWay = {
+  key: string; label: string; credits: number; available: boolean; detail: string;
+};
+
+export type CreditPrice = { action: string; label: string; credits: number };
+
+export type EarnResp = {
+  earn: EarnWay[];
+  prices: CreditPrice[];
+  daily: DailyStatus;
+  balance: number;
+};
+
+export type DailyClaim = DailyStatus & {
+  ok: boolean;
+  error?: string;
+  awarded?: number;
+  streak_bonus?: number;
+  balance?: number;
+};
+
+export type SpendResp = {
+  ok?: boolean; spent?: number; balance?: number; action?: string;
+  error?: string; needed?: number; detail?: string;
+};
+
 export type WalletResp = {
   account: string;
   balances: { credits: number; INR: number };
@@ -1543,6 +1581,13 @@ export const api = {
   // monetisation — preview-gated; these throw 'not-found' on the live domain
   preview: () => getJson<PreviewResp>('/preview'),
   wallet: () => getJson<WalletResp>('/wallet'),
+  walletEarn: () => getJson<EarnResp>('/wallet/earn'),
+  walletHistory: (limit = 50) => getJson<WalletResp>(`/wallet/history?limit=${limit}`),
+  walletDaily: () => postJson<DailyClaim>('/wallet/daily', {}),
+  /** Charge for a metered action. `ref` must be stable for the same piece of
+      work, so a retry after a dropped connection cannot double-charge. */
+  walletSpend: (action: string, ref?: string) =>
+    postJson<SpendResp>('/wallet/spend', { action, ref }),
   referral: () => getJson<ReferralResp>('/referral'),
   referralClaim: (code: string) =>
     postJson<{ ok: boolean; referrer: string; referrer_credits: number; referee_credits: number }>(

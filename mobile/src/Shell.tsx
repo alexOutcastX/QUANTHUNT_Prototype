@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import CreditPill from './components/CreditPill';
 import { BackHandler, Linking, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -310,6 +311,7 @@ function NewDesktopShell() {
         >
           <Icon name="settings" size={16} color={theme.muted2} />
         </TouchableOpacity>
+        <CreditPill />
         <ThemeToggle />
         <LegalLink />
       </View>
@@ -365,7 +367,8 @@ function NewMobileShell() {
           >
             <Icon name="settings" size={16} color={theme.muted2} />
           </TouchableOpacity>
-          <ThemeToggle />
+          <CreditPill />
+        <ThemeToggle />
         </View>
       </View>
       <TickerStrip />
@@ -509,7 +512,11 @@ const styles = StyleSheet.create({
     gap: 8,
     flexGrow: 1,
     flexShrink: 1,
-    maxWidth: 440,
+    // 440 left no room for the last nav tab once the credit pill joined the
+    // bar — "Terminal" clipped mid-word. The search field gives up the space
+    // before navigation does: it is still comfortably wide at 320, and a
+    // half-rendered tab label reads as broken in a way a shorter box does not.
+    maxWidth: 320,
     backgroundColor: theme.surface2,
     borderColor: theme.border2,
     borderWidth: 1,

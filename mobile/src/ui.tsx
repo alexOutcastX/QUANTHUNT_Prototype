@@ -555,12 +555,52 @@ export function StatTile({
   );
 }
 
-export function EmptyState({ icon = '◇', title, hint }: { icon?: string; title: string; hint?: string }) {
+/**
+ * The "there is nothing here yet" state — and, when given an `action`, the way
+ * out of it.
+ *
+ * Without `action` this is a full stop: the two most-seen states in a new
+ * account ("No holdings yet", "Empty — add symbols") told the user what was
+ * missing and gave them no way to fix it. Any empty state a first-week user can
+ * reach should pass one.
+ *
+ * `sample` renders demonstration content behind the copy, dimmed and labelled,
+ * so a screen can show what it looks like full rather than describing it.
+ */
+export function EmptyState({
+  icon = '◇',
+  title,
+  hint,
+  action,
+  secondary,
+  sample,
+}: {
+  icon?: string;
+  title: string;
+  hint?: string;
+  action?: { label: string; onPress: () => void };
+  secondary?: { label: string; onPress: () => void };
+  sample?: React.ReactNode;
+}) {
   return (
     <View style={s.empty}>
+      {sample ? (
+        <View style={s.emptySample} pointerEvents="none" accessibilityElementsHidden>
+          <Text style={s.emptySampleTag}>SAMPLE</Text>
+          {sample}
+        </View>
+      ) : null}
       <Text style={s.emptyIcon}>{icon}</Text>
       <Text style={s.emptyTitle}>{title}</Text>
       {hint ? <Text style={s.emptyHint}>{hint}</Text> : null}
+      {action || secondary ? (
+        <View style={s.emptyActions}>
+          {action ? <Btn label={action.label} onPress={action.onPress} /> : null}
+          {secondary ? (
+            <Btn label={secondary.label} onPress={secondary.onPress} kind="ghost" />
+          ) : null}
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -1048,6 +1088,11 @@ const s = StyleSheet.create({
   emptyIcon: { color: theme.muted, fontSize: 30 },
   emptyTitle: { color: theme.muted2, fontSize: theme.fs.md, fontWeight: '600' },
   emptyHint: { color: theme.muted, fontSize: theme.fs.sm, textAlign: 'center', lineHeight: 18 },
+  emptyActions: { flexDirection: 'row', gap: theme.sp.sm, marginTop: theme.sp.md, flexWrap: 'wrap',
+    justifyContent: 'center' },
+  emptySample: { width: '100%', opacity: 0.45, marginBottom: theme.sp.md },
+  emptySampleTag: { color: theme.muted, fontSize: theme.fs.xs, fontWeight: '700',
+    letterSpacing: 1.2, marginBottom: theme.sp.xs, textAlign: 'center' },
   loading: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 10 },
   loadingTxt: { color: theme.muted, fontSize: theme.fs.sm },
 });

@@ -16,7 +16,7 @@ import { Quote, api } from '../api';
 import { exportCsvRows, exportExcelRows } from '../csv';
 import StockDetail from '../components/StockDetail';
 import { Row } from '../screener';
-import { openStock } from '../navIntent';
+import { navigate, openStock } from '../navIntent';
 import { EntryMap, dropEntry, loadEntries, saveEntries, syncTrackList, withEntry } from '../watchentry';
 import { loadTrack, removeTrack } from '../tracklist';
 import { theme } from '../theme';
@@ -538,8 +538,14 @@ export default function WatchlistScreen() {
               }
               ListEmptyComponent={
                 <EmptyState
-                  title={`“${active?.name ?? 'This list'}” is empty — add a symbol above.`}
-                  hint="Symbols are saved on this device and show live quotes."
+                  icon="☆"
+                  title={`“${active?.name ?? 'This list'}” is empty`}
+                  hint="Add symbols to follow them with live quotes and the move since you added them."
+                  action={{ label: 'Find stocks to add', onPress: () => navigate('stock') }}
+                  secondary={{
+                    label: 'Browse a screen',
+                    onPress: () => navigate('screens', { sub: 'screener' }),
+                  }}
                 />
               }
             />

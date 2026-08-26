@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import {
-  PlansResp, ReferralResp, WalletResp, PublicIntegrations, api,
+  EarnResp, PlansResp, ReferralResp, WalletResp, PublicIntegrations, api,
 } from '../api';
 import { theme } from '../theme';
 import {
@@ -21,6 +21,7 @@ export default function WalletScreen() {
   const [ref, setRef] = useState<ReferralResp | null>(null);
   const [plans, setPlans] = useState<PlansResp | null>(null);
   const [integrations, setIntegrations] = useState<PublicIntegrations | null>(null);
+  const [earn, setEarn] = useState<EarnResp | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [code, setCode] = useState('');
   const [note, setNote] = useState<string | null>(null);
@@ -30,8 +31,11 @@ export default function WalletScreen() {
     setErr(null);
     Promise.all([
       api.wallet(), api.referral(), api.billingPlans(), api.integrationsPublic(),
+      api.walletEarn(),
     ])
-      .then(([w, r, p, i]) => { setWallet(w); setRef(r); setPlans(p); setIntegrations(i); })
+      .then(([w, r, p, i, e]) => {
+        setWallet(w); setRef(r); setPlans(p); setIntegrations(i); setEarn(e);
+      })
       .catch((e) => setErr(e instanceof Error ? e.message : 'Failed to load'));
   }, []);
 
@@ -49,6 +53,27 @@ export default function WalletScreen() {
       load();
     } catch (e) {
       setNote(e instanceof Error ? e.message : 'That code could not be applied.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const claimDaily = async () => {
+    setBusy(true);
+    setNote(null);
+    try {
+      const out = await api.walletDaily();
+      if (out.ok) {
+        const bonus = out.streak_bonus
+          ? ` Plus ${out.streak_bonus} for a ${out.streak}-day streak.`
+          : '';
+        setNote(`+${out.awarded} credits.${bonus}`);
+      } else {
+        setNote("Already claimed today — come back tomorrow to keep the streak.");
+      }
+      load();
+    } catch (e) {
+      setNote(e instanceof Error ? e.message : 'Could not claim today’s bonus.');
     } finally {
       setBusy(false);
     }
@@ -102,6 +127,69 @@ export default function WalletScreen() {
           <StatTile label="Balance" value={`₹${(wallet.balances.INR / 100).toFixed(2)}`} />
           <StatTile label="Referrals" value={String(ref.count)} />
         </View>
+
+        {/* ── daily bonus ──
+            The habit loop. Deliberately deterministic and keyed on the trading
+            day, so a weekend never breaks a streak — see rewards.py. */}
+        {earn ? (
+          <>
+            <SectionTitle>Daily bonus</SectionTitle>
+            <Card>
+              <View style={styles.dailyRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.dailyStreak}>
+                    {earn.daily.streak > 0 ? `Day ${earn.daily.streak}` : 'No streak yet'}
+                  </Text>
+                  <Text style={styles.label}>
+                    {earn.daily.claimable
+                      ? `Claim ${earn.daily.credits} credits for today`
+                      : 'Claimed today — come back tomorrow'}
+                  </Text>
+                  {earn.daily.next_milestone ? (
+                    <Text style={styles.dailyNext}>
+                      {earn.daily.next_milestone - earn.daily.streak} more day
+                      {earn.daily.next_milestone - earn.daily.streak === 1 ? '' : 's'} to a{' '}
+                      {earn.daily.next_milestone_bonus}-credit bonus
+                    </Text>
+                  ) : null}
+                </View>
+                <Btn
+                  label={earn.daily.claimable ? 'Claim' : 'Claimed'}
+                  onPress={claimDaily}
+                  disabled={busy || !earn.daily.claimable}
+                />
+              </View>
+            </Card>
+
+            <SectionTitle>Ways to earn</SectionTitle>
+            <Card>
+              {earn.earn.map((w) => (
+                <View key={w.key} style={styles.earnRow}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.rowLabel}>{w.label}</Text>
+                    <Text style={styles.rowSub}>{w.detail}</Text>
+                  </View>
+                  <Text style={styles.rowAmt}>{w.credits ? `+${w.credits}` : '—'}</Text>
+                </View>
+              ))}
+            </Card>
+
+            {/* What the currency is FOR. A balance with no visible price list is
+                a number; showing what it buys is what makes it feel like money. */}
+            <SectionTitle>What credits buy</SectionTitle>
+            <Card>
+              {earn.prices.map((pr) => (
+                <View key={pr.action} style={styles.earnRow}>
+                  <Text style={[styles.rowLabel, { flex: 1 }]}>{pr.label}</Text>
+                  <Text style={styles.rowCost}>{pr.credits}</Text>
+                </View>
+              ))}
+              <Text style={styles.freeNote}>
+                Quotes, charts, news and your watchlist are always free.
+              </Text>
+            </Card>
+          </>
+        ) : null}
 
         {/* ── refer and earn ── */}
         <SectionTitle>Refer and earn</SectionTitle>
@@ -212,6 +300,17 @@ export default function WalletScreen() {
 }
 
 const styles = StyleSheet.create({
+  dailyRow: { flexDirection: 'row', alignItems: 'center', gap: theme.sp.md },
+  dailyStreak: { color: theme.text, fontSize: theme.fs.xl, fontWeight: '700' },
+  dailyNext: { color: theme.brand, fontSize: theme.fs.sm, marginTop: 4 },
+  earnRow: { flexDirection: 'row', alignItems: 'center', gap: theme.sp.md,
+    paddingVertical: theme.sp.sm, minHeight: 44 },
+  rowLabel: { color: theme.text, fontSize: theme.fs.md },
+  rowSub: { color: theme.muted, fontSize: theme.fs.sm, marginTop: 2 },
+  rowAmt: { color: theme.green, fontFamily: theme.mono, fontSize: theme.fs.md, fontWeight: '700' },
+  rowCost: { color: theme.muted2, fontFamily: theme.mono, fontSize: theme.fs.md },
+  freeNote: { color: theme.muted, fontSize: theme.fs.sm, marginTop: theme.sp.sm,
+    fontStyle: 'italic' },
   container: { flex: 1, backgroundColor: theme.bg, padding: theme.sp.md },
   tiles: { flexDirection: 'row', gap: 8, marginBottom: 8 },
   label: { color: theme.muted, fontSize: theme.fs.sm, marginBottom: 4 },

@@ -55,6 +55,21 @@ const TABS: { key: Tab; label: string }[] = [
   { key: 'patterns', label: 'Patterns' },
 ];
 
+// Recognition beats recall: a first-time visitor cannot type a ticker they have
+// never learned, but they know these companies. Deliberately the household
+// names rather than the day's movers — a stable list is teachable and a moving
+// one is not.
+const STARTERS: { sym: string; name: string }[] = [
+  { sym: 'RELIANCE', name: 'Reliance Industries' },
+  { sym: 'TCS', name: 'Tata Consultancy' },
+  { sym: 'HDFCBANK', name: 'HDFC Bank' },
+  { sym: 'INFY', name: 'Infosys' },
+  { sym: 'TATAMOTORS', name: 'Tata Motors' },
+  { sym: 'ITC', name: 'ITC' },
+  { sym: 'SBIN', name: 'State Bank of India' },
+  { sym: 'ZOMATO', name: 'Zomato' },
+];
+
 export default function StockScreen() {
   const [sym, setSym] = useState('');
   const [active, setActive] = useState('');
@@ -267,8 +282,27 @@ export default function StockScreen() {
           <EmptyState
             icon="◈"
             title="One page per stock"
-            hint="Everything about a symbol in one place — live read, multi-timeframe technicals, fundamentals and chart patterns. Search above, or tap any stock anywhere in the app."
+            hint="Live read, technicals across timeframes, fundamentals and chart patterns — all in one place. Search above, or start with one of these."
+            action={{ label: 'Open RELIANCE', onPress: () => run('RELIANCE') }}
           />
+          {/* A search box on an empty page is a dead end: it asks a newcomer to
+              recall a ticker they have never seen. These are the largest and
+              most recognisable NSE names, so the first tap needs no knowledge. */}
+          <View style={s.starters}>
+            {STARTERS.map((t) => (
+              <TouchableOpacity
+                key={t.sym}
+                style={s.starter}
+                onPress={() => run(t.sym)}
+                activeOpacity={0.75}
+                accessibilityRole="button"
+                accessibilityLabel={`Open ${t.name}`}
+              >
+                <Text style={s.starterSym}>{t.sym}</Text>
+                <Text style={s.starterName} numberOfLines={1}>{t.name}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
         </ScrollView>
       ) : (
         <>
@@ -460,6 +494,23 @@ const s = StyleSheet.create({
     borderRadius: 999, paddingHorizontal: theme.sp.md, paddingVertical: 5,
   },
   recentTxt: { color: theme.muted2, fontFamily: theme.mono, fontSize: theme.fs.sm },
+  starters: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.sp.sm,
+    justifyContent: 'center', paddingBottom: theme.sp.xl },
+  starter: {
+    backgroundColor: theme.surface2,
+    borderWidth: 1,
+    borderColor: theme.border,
+    borderRadius: theme.radius.md,
+    paddingVertical: theme.sp.md,
+    paddingHorizontal: theme.sp.lg,
+    minWidth: 132,
+    // 44px is the floor for a touch target; this clears it comfortably so the
+    // grid is usable one-handed on a phone.
+    minHeight: 56,
+    justifyContent: 'center',
+  },
+  starterSym: { color: theme.text, fontFamily: theme.mono, fontSize: theme.fs.md, fontWeight: '700' },
+  starterName: { color: theme.muted, fontSize: theme.fs.sm, marginTop: 2 },
 
   spine: {
     paddingHorizontal: theme.sp.lg, paddingBottom: theme.sp.sm, gap: theme.sp.sm,

@@ -8,6 +8,8 @@
 // drawdown, monthly returns, per-symbol breakdown and the complete trade
 // blotter with CSV / Excel / PDF export.
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { navigate } from '../navIntent';
+import { Gate } from '../components/Gate';
 import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -166,7 +168,7 @@ ${cell('Avg holding', s.avg_hold_days + ' days')}${cell('Total charges', money(s
 // with no indication the two devices disagreed. One number, both widths.
 const TRADE_ROWS = 400;
 
-export default function BacktestScreen() {
+function BacktestConsole() {
   const { isDesktop } = useResponsive();
   const [metas, setMetas] = useState<BtStrategyMeta[]>(FALLBACK_STRATS);
   const [defaultCosts, setDefaultCosts] = useState<Record<string, number>>({});
@@ -975,3 +977,28 @@ const styles = StyleSheet.create({
   symChipX: { color: theme.muted, fontSize: theme.fs.sm },
   method: { color: theme.muted, fontSize: theme.fs.xs + 1, lineHeight: 17, marginTop: theme.sp.lg },
 });
+
+/**
+ * Backtesting is a Pro feature. It is gated in `replace` mode rather than
+ * `blur`: a blurred equity curve and a visible Sharpe would give away most of
+ * the answer, which defeats the point of charging for it.
+ *
+ * Everyone gets one run regardless of plan — nobody subscribes to something
+ * they have never watched work. That allowance is granted server-side so it
+ * survives a reinstall.
+ */
+export default function BacktestScreen() {
+  return (
+    <Gate
+      feature="backtest"
+      requiredPlan="pro"
+      title="Test a strategy before you risk money on it"
+      blurb="Run any strategy against years of history with real Indian charges and slippage, then see what it would actually have returned."
+      creditAction="backtest"
+      creditCost={10}
+      onSpendCredits={() => navigate('desk', { sub: 'wallet' })}
+    >
+      <BacktestConsole />
+    </Gate>
+  );
+}

@@ -1429,6 +1429,7 @@ def member_logout():
 # same server, so "live on the IP, not on the domain" is decided per request
 # from the Host header — see preview.py.
 import preview as _preview
+import rewards as _rewards
 import wallet as _wallet
 import referrals as _referrals
 import billing as _billing
@@ -1611,6 +1612,81 @@ def wallet_get():
         "balances": _wallet.balances(acct),
         "history": _wallet.history(acct, 25),
     })
+
+
+@app.route("/wallet/earn")
+@require_preview
+@require_plan()
+def wallet_earn():
+    """Ways to earn credits, and which are available right now.
+
+    The wallet's 'what next' — a balance with no visible way to grow it reads
+    as a dead end, which is how the credit system felt before this existed.
+    """
+    acct = _acct()
+    return jsonify({
+        "earn": _rewards.earn_list(acct),
+        "prices": _rewards.price_list(),
+        "daily": _rewards.status(acct),
+        "balance": _wallet.balance(acct),
+    })
+
+
+@app.route("/wallet/daily", methods=["POST"])
+@require_preview
+@require_plan()
+def wallet_daily():
+    """Claim the daily bonus. Idempotent on the trading day, so a double tap or
+    a retried request pays exactly once."""
+    acct = _acct()
+    out = _rewards.claim_daily(acct)
+    _analytics.track(acct, "wallet.daily",
+                     {"ok": bool(out.get("ok")), "streak": out.get("streak", 0)})
+    return jsonify(out), (200 if out.get("ok") else 409)
+
+
+@app.route("/wallet/history")
+@require_preview
+@require_plan()
+def wallet_history():
+    """The full ledger. Every row carries a human reason, and showing them is
+    how a currency earns trust — a balance nobody can audit is a number."""
+    try:
+        limit = max(1, min(200, int(request.args.get("limit", "50"))))
+    except (TypeError, ValueError):
+        limit = 50
+    acct = _acct()
+    return jsonify({"history": _wallet.history(acct, limit),
+                    "balances": _wallet.balances(acct)})
+
+
+@app.route("/wallet/spend", methods=["POST"])
+@require_preview
+@require_plan()
+def wallet_spend():
+    """Charge for a metered action.
+
+    The client asks to spend BEFORE doing the work and passes a stable `ref`,
+    so a retry after a dropped connection cannot double-charge — the ledger's
+    unique index on (acct, currency, ref) enforces that at the database rather
+    than in application logic.
+    """
+    body = request.get_json(silent=True) or {}
+    action = str(body.get("action") or "").strip()
+    ref = str(body.get("ref") or "").strip() or None
+    cost = _rewards.price(action)
+    if not cost:
+        return jsonify({"error": "unknown-action",
+                        "detail": f"Nothing is priced as {action!r}."}), 400
+    acct = _acct()
+    try:
+        left = _wallet.spend(acct, cost, _rewards.PRICE_LABELS.get(action, action), ref=ref)
+    except _wallet.InsufficientFunds:
+        return jsonify({"error": "insufficient-credits", "needed": cost,
+                        "balance": _wallet.balance(acct),
+                        "detail": "Not enough credits for this yet."}), 402
+    _analytics.track(acct, "wallet.spend", {"action": action, "credits": cost})
+    return jsonify({"ok": True, "spent": cost, "balance": left, "action": action})
 
 
 @app.route("/referral")
