@@ -81,23 +81,39 @@ def _ref(acct: str, day: _dt.date) -> str:
     return f"daily:{acct}:{day.isoformat()}"
 
 
-def _claimed_on(acct: str, day: _dt.date) -> bool:
-    ref = _ref(acct, day)
-    return any(r.get("ref") == ref for r in _wallet.history(acct, limit=400))
+def _claimed_days(acct: str) -> set:
+    """Every day this account has claimed, as a set of ISO dates.
+
+    Read ONCE per call. The first version asked the ledger "was day X claimed?"
+    separately for each day it walked, which meant one full history query per
+    step — 180 queries and 70ms to compute a single streak, repeated on every
+    wallet load and every header poll. The whole answer is in one read.
+    """
+    prefix = f"daily:{acct}:"
+    return {r["ref"][len(prefix):] for r in _wallet.history(acct, limit=1000)
+            if r.get("ref", "").startswith(prefix)}
 
 
-def streak(acct: str, now: _dt.date = None) -> int:
+def _claimed_on(acct: str, day: _dt.date, claimed: set = None) -> bool:
+    days = _claimed_days(acct) if claimed is None else claimed
+    return day.isoformat() in days
+
+
+def streak(acct: str, now: _dt.date = None, claimed: set = None) -> int:
     """Consecutive trading days claimed, counting back from the last claim."""
+    days = _claimed_days(acct) if claimed is None else claimed
     day = _today(now)
     if not is_trading_day(day):
         day = previous_trading_day(day)
-    if not _claimed_on(acct, day):
+    if day.isoformat() not in days:
         day = previous_trading_day(day)
-        if not _claimed_on(acct, day):
+        if day.isoformat() not in days:
             return 0
     n = 0
-    for _ in range(400):
-        if not _claimed_on(acct, day):
+    # Bounded by the ledger page rather than a magic number: you cannot have a
+    # longer streak than there are claim rows.
+    for _ in range(len(days) + 1):
+        if day.isoformat() not in days:
             break
         n += 1
         day = previous_trading_day(day)
@@ -108,8 +124,9 @@ def status(acct: str, now: _dt.date = None) -> dict:
     day = _today(now)
     trading = is_trading_day(day)
     claim_day = day if trading else previous_trading_day(day)
-    claimed = _claimed_on(acct, claim_day)
-    n = streak(acct, now)
+    days = _claimed_days(acct)
+    claimed = claim_day.isoformat() in days
+    n = streak(acct, now, claimed=days)
     nxt = next((k for k in sorted(STREAK_BONUS) if k > n), None)
     return {
         "claimable": not claimed,
@@ -164,9 +181,13 @@ def price_list() -> list:
             for k, v in PRICES.items()]
 
 
-def earn_list(acct: str, now: _dt.date = None) -> list:
-    """Ways to earn, with what is available right now — the wallet's 'what next'."""
-    st = status(acct, now)
+def earn_list(acct: str, now: _dt.date = None, st: dict = None) -> list:
+    """Ways to earn, with what is available right now — the wallet's 'what next'.
+
+    Accepts a status dict so a caller that already has one (the /wallet/earn
+    route does) does not pay for a second ledger read.
+    """
+    st = st or status(acct, now)
     import referrals as _ref_mod
     return [
         {"key": "daily", "label": "Daily bonus", "credits": DAILY_CREDITS,

@@ -140,5 +140,68 @@ class RewardsTest(unittest.TestCase):
         self.assertFalse(after["daily"]["available"])
 
 
+class LedgerReadCostTest(unittest.TestCase):
+    """One ledger read per streak, not one per day walked.
+
+    The first implementation asked "was day X claimed?" separately for every
+    day it stepped back through, so a long streak cost 180 full history queries
+    and 70ms — on every wallet load AND every header poll. The whole answer is
+    available in a single read, and this test is here because that regression
+    would be invisible until the ledger got big.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        os.environ["DB_PATH"] = tempfile.mktemp(suffix=".db")
+        import importlib
+        import wallet
+        import rewards
+        cls.wallet = importlib.reload(wallet)
+        cls.rewards = importlib.reload(rewards)
+
+    def setUp(self):
+        self.wallet._reset_for_tests()
+        # A long history, so a per-day implementation would be obvious.
+        for i in range(120):
+            d = dt.date(2026, 8, 26) - dt.timedelta(days=i)
+            self.wallet.grant("x", 5, "Daily bonus", ref=self.rewards._ref("x", d))
+
+    def _count_reads(self, fn):
+        calls = {"n": 0}
+        original = self.rewards._wallet.history
+
+        def counted(*a, **k):
+            calls["n"] += 1
+            return original(*a, **k)
+
+        self.rewards._wallet.history = counted
+        try:
+            fn()
+        finally:
+            self.rewards._wallet.history = original
+        return calls["n"]
+
+    def test_streak_reads_the_ledger_once(self):
+        n = self._count_reads(lambda: self.rewards.streak("x", dt.date(2026, 8, 26)))
+        self.assertEqual(n, 1, f"streak() made {n} ledger reads; it needs 1")
+
+    def test_status_reads_the_ledger_once(self):
+        n = self._count_reads(lambda: self.rewards.status("x", dt.date(2026, 8, 26)))
+        self.assertEqual(n, 1, f"status() made {n} ledger reads; it needs 1")
+
+    def test_the_earn_route_path_reads_once(self):
+        """What /wallet/earn actually does: one status, reused by earn_list."""
+        def path():
+            st = self.rewards.status("x", dt.date(2026, 8, 26))
+            self.rewards.earn_list("x", dt.date(2026, 8, 26), st=st)
+        n = self._count_reads(path)
+        self.assertEqual(n, 1, f"the /wallet/earn path made {n} ledger reads; it needs 1")
+
+    def test_a_long_streak_is_still_correct(self):
+        """Speed must not have cost accuracy."""
+        n = self.rewards.streak("x", dt.date(2026, 8, 26))
+        self.assertGreater(n, 50)
+
+
 if __name__ == "__main__":
     unittest.main()

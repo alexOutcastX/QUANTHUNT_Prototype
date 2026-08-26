@@ -1624,10 +1624,12 @@ def wallet_earn():
     as a dead end, which is how the credit system felt before this existed.
     """
     acct = _acct()
+    # One status read, shared — earn_list() would otherwise recompute it.
+    daily = _rewards.status(acct)
     return jsonify({
-        "earn": _rewards.earn_list(acct),
+        "earn": _rewards.earn_list(acct, st=daily),
         "prices": _rewards.price_list(),
-        "daily": _rewards.status(acct),
+        "daily": daily,
         "balance": _wallet.balance(acct),
     })
 
