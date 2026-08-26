@@ -56,7 +56,7 @@ function ThemeToggle({ style }: { style?: object }) {
 // NSE session state where the version string used to sit — a professional
 // glances at "is the market open" far more often than a build number (the
 // version now lives at the bottom of Desk → More).
-function MarketChip() {
+function MarketChip({ compact }: { compact?: boolean } = {}) {
   const [st, setSt] = useState(() => marketState());
   useEffect(() => {
     const id = setInterval(() => setSt(marketState()), 30000);
@@ -65,7 +65,12 @@ function MarketChip() {
   return (
     <View style={styles.mktChip}>
       <View style={[styles.mktDot, { backgroundColor: st.open ? theme.green : theme.muted }]} />
-      <Text style={styles.mktTxt}>{st.label}</Text>
+      {/* "CLOSED · 01:29 IST" costs 150px in a row that has none to spare.
+          Below 1400 the state is kept and the clock dropped — the dot and the
+          word are what anyone actually reads at a glance. */}
+      <Text style={styles.mktTxt} numberOfLines={1}>
+        {compact ? st.label.split('·')[0].trim() : st.label}
+      </Text>
     </View>
   );
 }
@@ -115,6 +120,24 @@ const DESK_ANALYSIS_SUBS = new Set(['inst', 'shareholders', 'paper', 'risk', 'bt
 // breakpoint, which swaps one shell component for the other — puts you back
 // where you were instead of on Today.
 const TAB_KEY = 'taureye.nav.tab2';
+
+/**
+ * How wide the header search may grow.
+ *
+ * The brand, market chip, six nav tabs, credit pill, two icon buttons and the
+ * disclaimer all share one row. Search is the only element that can lose width
+ * without losing meaning, so it yields first — a clipped tab label reads as
+ * broken, a narrower search box does not. Measured: at 1280 the row overflowed
+ * by 93px with search at 320.
+ */
+function searchMaxWidth(width: number): number {
+  if (width >= 1600) return 420;
+  if (width >= 1400) return 340;
+  // Below 1400 the row is over-subscribed: measured at 1280, the six nav tabs
+  // needed 636px and were given 528. Search drops to the short placeholder and
+  // roughly a third of its width, which is most of the shortfall.
+  return 132;
+}
 
 function usePersistedTab() {
   const [active, setActive] = useState('today');
@@ -255,6 +278,7 @@ function legacyNav(k: string, setActive: (k: string) => void) {
 }
 
 function NewDesktopShell() {
+  const { width } = useResponsive();
   const [active, setActive, hydrated] = usePersistedTab();
   const [palette, setPalette] = useState(false);
   const [settings, setSettings] = useState(false);
@@ -275,10 +299,16 @@ function NewDesktopShell() {
       <View style={styles.brandBar}>
         {showBack ? <BackBtn onPress={goBack} /> : null}
         <Brand big />
-        <MarketChip />
-        <TouchableOpacity style={styles.searchBtn} onPress={() => setPalette(true)} activeOpacity={0.75}>
+        <MarketChip compact={width < 1400} />
+        <TouchableOpacity
+          style={[styles.searchBtn, { maxWidth: searchMaxWidth(width) }]}
+          onPress={() => setPalette(true)}
+          activeOpacity={0.75}
+        >
           <Icon name="search" size={14} color={theme.muted} />
-          <Text style={styles.searchTxt}>Search symbols &amp; pages…</Text>
+          <Text style={styles.searchTxt} numberOfLines={1}>
+            {width >= 1400 ? 'Search symbols & pages…' : 'Search…'}
+          </Text>
           <Text style={styles.searchKbd}>⌘K</Text>
         </TouchableOpacity>
         <ScrollView
@@ -294,9 +324,18 @@ function NewDesktopShell() {
                 key={it.k}
                 style={[styles.pageItem, on && styles.pageItemOn]}
                 onPress={() => navigate(it.k)}
+                accessibilityRole="tab"
+                accessibilityLabel={it.label}
+                accessibilityState={{ selected: on }}
               >
                 <Icon name={it.icon} size={15} color={on ? theme.accent : theme.muted2} />
-                <Text style={[styles.pageLabel, on && styles.pageTextOn]}>{it.label}</Text>
+                {/* Between the desktop breakpoint and 1280 the six labels do
+                    not fit beside the rest of the bar, and a tab clipped
+                    mid-word reads as broken. The icons carry it in that band;
+                    the accessibility label always says the full name. */}
+                {width >= 1280 ? (
+                  <Text style={[styles.pageLabel, on && styles.pageTextOn]}>{it.label}</Text>
+                ) : null}
               </TouchableOpacity>
             );
           })}
@@ -512,11 +551,9 @@ const styles = StyleSheet.create({
     gap: 8,
     flexGrow: 1,
     flexShrink: 1,
-    // 440 left no room for the last nav tab once the credit pill joined the
-    // bar — "Terminal" clipped mid-word. The search field gives up the space
-    // before navigation does: it is still comfortably wide at 320, and a
-    // half-rendered tab label reads as broken in a way a shorter box does not.
-    maxWidth: 320,
+    // maxWidth is set per render from the window width — see searchMaxWidth.
+    // A fixed 440 clipped the last nav tab once the credit pill joined the bar,
+    // and a fixed 320 wrapped this box's own placeholder onto two lines.
     backgroundColor: theme.surface2,
     borderColor: theme.border2,
     borderWidth: 1,
