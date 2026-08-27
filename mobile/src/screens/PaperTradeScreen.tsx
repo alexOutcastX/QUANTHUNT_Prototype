@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { navigate } from '../navIntent';
 import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { api } from '../api';
 import SymbolInput from '../components/SymbolInput';
@@ -302,7 +303,12 @@ function Simulator() {
           );
         })
       ) : (
-        <EmptyState icon="◇" title="No positions" hint="Buy any scrip above to start your virtual portfolio." />
+        <EmptyState
+          icon="◫"
+          title="No positions yet"
+          hint="Practise with fake money first — same prices, same charges, nothing at risk."
+          action={{ label: 'Find a stock to try', onPress: () => navigate('stock') }}
+        />
       )}
 
       {sim.trades.length ? (

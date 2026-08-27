@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { navigate } from '../navIntent';
 import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { Alert, Quote, api } from '../api';
 import OwnerGate from '../components/OwnerGate';
@@ -199,7 +200,12 @@ function AlertsInner() {
       {alerts === null ? (
         <Loading />
       ) : !alerts.length ? (
-        <EmptyState title="No alerts yet" hint="Add one above — it's evaluated server-side against live quotes." />
+        <EmptyState
+          icon="◎"
+          title="No alerts yet"
+          hint="Set a price, % move or RSI level and we watch it server-side — you do not need the app open."
+          action={{ label: 'Pick a stock to watch', onPress: () => navigate('stock') }}
+        />
       ) : (
         alerts.map((a) => (
           <Card key={a.id} style={styles.alertCard}>

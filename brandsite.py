@@ -253,6 +253,15 @@ padding:24px;max-width:400px}
 .fl input{width:100%;background:var(--surface-2);border:1px solid var(--border);
 border-radius:9px;color:var(--text);font-size:15px;padding:11px 12px;font-family:inherit}
 .fl input:focus{outline:none;border-color:var(--brand)}
+.pw{position:relative;display:block}
+/* Room for the button, so a long password never runs underneath it. */
+.pw input{padding-right:64px}
+.pw-eye{position:absolute;right:6px;top:50%;transform:translateY(-50%);
+background:none;border:0;color:var(--muted);font-family:inherit;font-size:12px;
+font-weight:600;cursor:pointer;padding:6px 8px;border-radius:6px;
+min-width:48px;min-height:32px}
+.pw-eye:hover{color:var(--text)}
+.pw-eye:focus-visible{outline:2px solid var(--brand);outline-offset:1px;color:var(--text)}
 .btn.wide{width:100%;text-align:center;padding:12px;border:none;cursor:pointer;
 font-family:inherit;font-size:15px}
 .auth-err{color:#f0506e;font-size:13px;margin:0 0 10px;min-height:0}
@@ -372,8 +381,12 @@ def auth_panel():
       <input id="lu" name="username" autocomplete="username" autocapitalize="none"
              spellcheck="false" placeholder="your username" required></label>
     <label class="fl"><span>Password</span>
-      <input id="lp" name="password" type="password" autocomplete="current-password"
-             placeholder="••••••••" required></label>
+      <span class="pw">
+        <input id="lp" name="password" type="password" autocomplete="current-password"
+               placeholder="••••••••" required>
+        <button type="button" id="lpx" class="pw-eye" aria-pressed="false"
+                aria-controls="lp" aria-label="Show password" title="Show password">Show</button>
+      </span></label>
     <p class="auth-err" id="le" role="alert"></p>
     <button class="btn btn-primary wide" type="submit" id="lb">Sign in</button>
   </form>
@@ -388,6 +401,33 @@ def auth_panel():
   var f=document.getElementById('lf'), e=document.getElementById('le'),
       b=document.getElementById('lb');
   if(!f) return;
+
+  // Show/hide the password. A typo in a field you cannot read is the most
+  // common reason a correct password appears to fail, and on a phone keyboard
+  // it is close to guaranteed.
+  var pw=document.getElementById('lp'), eye=document.getElementById('lpx');
+  if(eye && pw){{
+    eye.addEventListener('click', function(){{
+      var shown = pw.type === 'text';
+      var pos = pw.selectionStart;
+      pw.type = shown ? 'password' : 'text';
+      eye.textContent = shown ? 'Show' : 'Hide';
+      eye.setAttribute('aria-pressed', shown ? 'false' : 'true');
+      var label = shown ? 'Show password' : 'Hide password';
+      eye.setAttribute('aria-label', label);
+      eye.setAttribute('title', label);
+      // Changing the input type moves the caret to the end, which is maddening
+      // in the middle of a correction. Put it back.
+      pw.focus();
+      try {{ pw.setSelectionRange(pos, pos); }} catch (err) {{ /* some types refuse */ }}
+    }});
+    // Never leave a password legible on screen after the form is used.
+    f.addEventListener('submit', function(){{
+      pw.type='password'; eye.textContent='Show';
+      eye.setAttribute('aria-pressed','false');
+      eye.setAttribute('aria-label','Show password');
+    }});
+  }}
   f.addEventListener('submit', function(ev){{
     ev.preventDefault();
     e.textContent=''; b.disabled=true; b.textContent='Signing in…';

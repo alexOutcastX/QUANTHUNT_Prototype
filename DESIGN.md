@@ -38,9 +38,31 @@ rules; shared primitives live in `mobile/src/ui.tsx`, tokens in
 - Errors: human sentence + what to do next, never a raw exception string.
 
 ## Navigation
-- Desktop: brand bar → ticker → pages bar (8 groups):
-  Dashboard · Screener · Universe · Terminal · Analysis · Charts · Lists · Tools.
-  Active page = white text + 2px white underline (not a filled block).
-- Mobile: 5 tabs — Dashboard, Screener, Terminal, Analysis, More.
-- Sub-pages (Backtest, TradingView, Portfolio, Calculator, Indices, Holidays…)
-  live inside their group as segmented sub-tabs.
+ONE set of destinations at every width. Desktop and mobile used to expose
+different tabs, so the same navigate() call landed on different screens
+depending on window size; only the layout adapts now, never the destinations.
+
+- Six tabs: Today · Screens · Symbol · Desk · Backtest · Terminal.
+  Active tab = white text + 2px white underline (not a filled block).
+- Desktop lays them in a top row, phones in a bottom bar.
+- Between 1024 and 1280 the tabs are icon-only — six labels do not fit beside
+  the rest of the bar there. Each keeps its accessibilityLabel.
+- Sub-pages live inside Screens and Desk as segmented sub-tabs. Wallet is a
+  Desk sub-tab (preview hosts only), not a More-menu entry.
+- The header carries the credit balance on the right, always in the same place.
+
+## Colour contrast
+Every text token must clear WCAG AA (4.5:1) against BOTH the card surface and
+the page background — a colour that passes on `surface` can still fail on `bg`.
+`tests/test_theme_contrast.py` checks every pair and fails the build below the
+threshold. Two tokens shipped failing it for months; do not regress them.
+
+## Empty states
+`EmptyState` takes `action` and `secondary`. Any empty state a first-week user
+can reach MUST pass an action — an empty screen with no way out is the single
+most common dead end in a new account.
+
+## Paywalls
+Gating happens in one place: the `Gate` component, which reads `hasFeature()`.
+Never check the plan inline in a screen — that is how gating gets forgotten on
+a new screen and drifts on old ones.

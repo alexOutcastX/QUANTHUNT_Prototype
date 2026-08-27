@@ -2039,7 +2039,11 @@ function SavedScreensModal({
         </View>
         <ScrollView keyboardShouldPersistTaps="handled">
           {saved.length === 0 ? (
-            <EmptyState icon="◇" title="No saved screens" hint="Name the current scan above to save it." />
+            <EmptyState
+              icon="◇"
+              title="No saved screens"
+              hint="Give the filters above a name and they are one tap away next time."
+            />
           ) : (
             saved.map((s) => (
               <View key={s.name} style={styles.savedRow}>

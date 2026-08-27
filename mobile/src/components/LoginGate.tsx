@@ -7,6 +7,7 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  TouchableOpacity,
   View,
 } from 'react-native';
 import BullRun from './BullRun';
@@ -34,6 +35,7 @@ export default function LoginGate({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState('');
   const [pw, setPw] = useState('');
   const [busy, setBusy] = useState(false);
+  const [showPw, setShowPw] = useState(false);
   const [msg, setMsg] = useState('');
 
   useEffect(() => {
@@ -50,6 +52,7 @@ export default function LoginGate({ children }: { children: React.ReactNode }) {
       return;
     }
     setBusy(true);
+    setShowPw(false);
     try {
       await memberLogin(user.trim(), pw);
       setPw('');
@@ -102,16 +105,35 @@ export default function LoginGate({ children }: { children: React.ReactNode }) {
               style={styles.input}
               testID="login-user"
             />
-            <TextInput
-              value={pw}
-              onChangeText={setPw}
-              placeholder="Password"
-              placeholderTextColor={theme.muted}
-              secureTextEntry
-              style={styles.input}
-              onSubmitEditing={login}
-              testID="login-pw"
-            />
+            {/* Show/hide. A typo in a field you cannot read is the most common
+                reason a correct password appears to fail, and on a phone
+                keyboard it is close to guaranteed. */}
+            <View style={styles.pwRow}>
+              <TextInput
+                value={pw}
+                onChangeText={setPw}
+                placeholder="Password"
+                placeholderTextColor={theme.muted}
+                secureTextEntry={!showPw}
+                autoCapitalize="none"
+                autoCorrect={false}
+                style={[styles.input, styles.pwInput]}
+                onSubmitEditing={login}
+                testID="login-pw"
+              />
+              <TouchableOpacity
+                style={styles.pwEye}
+                onPress={() => setShowPw((v) => !v)}
+                activeOpacity={0.75}
+                accessibilityRole="button"
+                accessibilityState={{ selected: showPw }}
+                accessibilityLabel={showPw ? 'Hide password' : 'Show password'}
+                hitSlop={{ top: 10, bottom: 10, left: 8, right: 8 }}
+                testID="login-pw-toggle"
+              >
+                <Text style={styles.pwEyeTxt}>{showPw ? 'Hide' : 'Show'}</Text>
+              </TouchableOpacity>
+            </View>
             {msg ? <Text style={styles.err}>{msg}</Text> : null}
             <Btn label={busy ? 'SIGNING IN…' : 'SIGN IN'} onPress={login} />
             <Text style={styles.foot}>
@@ -134,6 +156,13 @@ export default function LoginGate({ children }: { children: React.ReactNode }) {
 const styles = StyleSheet.create({
   page: { flex: 1, backgroundColor: theme.bg, alignItems: 'center', justifyContent: 'center' },
   boot: { alignItems: 'center', gap: 10 },
+  pwRow: { position: 'relative', justifyContent: 'center', marginBottom: theme.sp.md },
+  // The shared input style owns the bottom gap; keep it on the row so the
+  // absolutely-positioned button stays centred on the field itself.
+  pwInput: { paddingRight: 64, marginBottom: 0 },
+  pwEye: { position: 'absolute', right: 6, paddingHorizontal: 8, paddingVertical: 6,
+    minWidth: 48, minHeight: 32, alignItems: 'center', justifyContent: 'center' },
+  pwEyeTxt: { color: theme.muted2, fontSize: theme.fs.sm, fontWeight: '700' },
   bootLine: { color: theme.muted, fontSize: 13 },
   kb: { width: '100%', alignItems: 'center' },
   card: {
