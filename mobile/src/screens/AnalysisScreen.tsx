@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { Gate } from '../components/Gate';
 import {
   ActivityIndicator,
   Linking,
@@ -123,7 +124,7 @@ function Bullets({ items, color, glyph }: { items: string[]; color: string; glyp
   );
 }
 
-export default function AnalysisScreen() {
+function AnalysisInner() {
   const [sym, setSym] = useState('RELIANCE');
   const [target, setTarget] = useState('10');
   const [busy, setBusy] = useState(false);
@@ -1197,3 +1198,21 @@ const styles = StyleSheet.create({
   checkLabel: { color: theme.muted2, fontSize: theme.fs.sm, flexShrink: 1 },
   disclaimer: { color: theme.muted, fontSize: theme.fs.xs + 1, lineHeight: 16, marginTop: theme.sp.lg, fontStyle: 'italic' },
 });
+
+
+/** Institutional company dossier — gated through the one Gate component, never inline. */
+export default function AnalysisScreen() {
+  return (
+    <Gate
+      feature="dossier"
+      requiredPlan="pro"
+      mode="replace"
+      title="Institutional company dossier"
+      blurb="Valuation against sector medians, cash flow, shareholding and promoter pledges — one printable report per company."
+      creditAction="dossier"
+      creditCost={25}
+    >
+      <AnalysisInner />
+    </Gate>
+  );
+}

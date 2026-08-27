@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { chargeFor, chargeMessage } from '../credits';
 import { navigate } from '../navIntent';
 import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { Alert, Quote, api } from '../api';
@@ -120,6 +121,7 @@ function AlertsInner() {
   const [type, setType] = useState<Alert['type']>('price_above');
   const [value, setValue] = useState('');
   const [busy, setBusy] = useState(false);
+  const [creditNote, setCreditNote] = useState<string | null>(null);
   const [checkMsg, setCheckMsg] = useState('');
 
   const load = useCallback(() => {
@@ -127,12 +129,29 @@ function AlertsInner() {
   }, []);
   useEffect(load, [load]);
 
+  const FREE_ALERTS = 5;
+
   const add = async () => {
     const s = (sym || symInput).trim().toUpperCase().replace(/^NSE:/, '');
     const v = Number(value);
     if (!s || !value || Number.isNaN(v)) return;
     setBusy(true);
+    setCreditNote(null);
     try {
+      // The first five alerts are free; each one beyond that is an ongoing
+      // server-side cost, so it is metered. Charge BEFORE creating it — an
+      // alert that exists but was never paid for is the worse failure.
+      if ((alerts?.length ?? 0) >= FREE_ALERTS) {
+        // chargeFor knows the plan: a plan that includes alerts returns
+        // 'covered-by-plan' and nothing is charged. Keeping that check inside
+        // it means no screen has to reason about entitlement itself.
+        const r = await chargeFor('extra_alert', `alert:${s}:${type}:${v}`,
+                                  { feature: 'alerts' });
+        if (!r.ok && r.reason !== 'covered-by-plan') {
+          setCreditNote(chargeMessage(r));
+          return;
+        }
+      }
       await api.alertsCreate(s, type, v);
       setValue('');
       load();
@@ -189,6 +208,9 @@ function AlertsInner() {
           />
           <Btn label={busy ? '…' : 'Add'} onPress={add} disabled={busy} style={{ minWidth: 84 }} />
         </View>
+        {/* Why an add did not go through — beside the control that failed,
+            not buried further down the page. */}
+        {creditNote ? <Text style={styles.creditNote}>{creditNote}</Text> : null}
       </Card>
 
       <View style={styles.checkRow}>
@@ -243,6 +265,7 @@ function AlertsInner() {
 }
 
 const styles = StyleSheet.create({
+  creditNote: { color: theme.red, fontSize: theme.fs.sm, marginBottom: theme.sp.sm },
   container: { flex: 1, backgroundColor: theme.bg },
   body: { padding: theme.sp.lg, paddingBottom: 44 },
   input: {

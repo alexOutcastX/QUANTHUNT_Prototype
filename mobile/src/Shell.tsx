@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import CreditPill from './components/CreditPill';
+import WalletChip from './components/WalletChip';
 import { BackHandler, Linking, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -33,22 +33,27 @@ import { canGoBack, goBack, initHistory, navigate, peekNav, subscribeNav } from 
 import { refreshSession } from './session';
 import { refreshFlags } from './flags';
 import { installErrorReporting } from './errorReport';
-import { theme, toggleThemeMode, useThemeMode } from './theme';
+import { theme, toggleThemeMode, useThemePref } from './theme';
 
 // Light/dark switch — glyph shows the mode you'll switch TO. Present in both the
 // desktop brand bar and the mobile header.
+// Three states, not two: System follows the device, so a phone that goes dark
+// at sunset takes the app with it. Cycles System → Light → Dark → System.
+const THEME_GLYPH: Record<string, string> = { system: '◐', light: '☀', dark: '☾' };
+const THEME_NEXT: Record<string, string> = { system: 'light', light: 'dark', dark: 'system' };
+
 function ThemeToggle({ style }: { style?: object }) {
-  const mode = useThemeMode();
+  const pref = useThemePref();
   return (
     <TouchableOpacity
       style={[styles.themeBtn, style]}
       onPress={toggleThemeMode}
       activeOpacity={0.75}
       accessibilityRole="button"
-      accessibilityLabel={mode === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+      accessibilityLabel={`Theme: ${pref}. Switch to ${THEME_NEXT[pref]}`}
       hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
     >
-      <Text style={styles.themeGlyph}>{mode === 'dark' ? '☀' : '☾'}</Text>
+      <Text style={styles.themeGlyph}>{THEME_GLYPH[pref]}</Text>
     </TouchableOpacity>
   );
 }
@@ -350,7 +355,7 @@ function NewDesktopShell() {
         >
           <Icon name="settings" size={16} color={theme.muted2} />
         </TouchableOpacity>
-        <CreditPill />
+        <WalletChip />
         <ThemeToggle />
         <LegalLink />
       </View>
@@ -406,7 +411,7 @@ function NewMobileShell() {
           >
             <Icon name="settings" size={16} color={theme.muted2} />
           </TouchableOpacity>
-          <CreditPill />
+          <WalletChip />
         <ThemeToggle />
         </View>
       </View>

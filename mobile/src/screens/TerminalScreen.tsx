@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { Gate } from '../components/Gate';
 import {
   ActivityIndicator,
   ScrollView,
@@ -1319,7 +1320,7 @@ const PROVIDERS: Provider[] = [
 ];
 const providerOf = (id: string) => PROVIDERS.find((p) => p.id === id) || PROVIDERS[0];
 
-export default function TerminalScreen() {
+function TerminalInner() {
   // Rebuild the embedded graph HTML (resolved hex) when the theme toggles.
   const themeMode = useThemeMode();
   const [data, setData] = useState<GraphResp | null>(null);
@@ -1827,3 +1828,19 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
   },
 });
+
+
+/** The full trading terminal — gated through the one Gate component, never inline. */
+export default function TerminalScreen() {
+  return (
+    <Gate
+      feature="terminal"
+      requiredPlan="pro"
+      mode="replace"
+      title="The full trading terminal"
+      blurb="Multi-pane quotes, depth, charts and order tickets in one screen."
+    >
+      <TerminalInner />
+    </Gate>
+  );
+}

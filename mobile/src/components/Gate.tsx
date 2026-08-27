@@ -15,6 +15,7 @@ import { Btn } from '../ui';
 import { theme } from '../theme';
 import { hasFeature } from '../member';
 import { navigate } from '../navIntent';
+import { chargeFor, chargeMessage } from '../credits';
 
 export type GateMode = 'blur' | 'replace';
 
@@ -32,7 +33,7 @@ export function Gate({
   mode = 'replace',
   creditAction,
   creditCost,
-  onSpendCredits,
+  creditRef,
   children,
 }: {
   feature: string;
@@ -43,10 +44,28 @@ export function Gate({
   /** When set, the sheet offers paying with credits as the second way in. */
   creditAction?: string;
   creditCost?: number;
-  onSpendCredits?: () => void;
+  /** Stable per unlock, so a retried charge cannot bill twice. */
+  creditRef?: string;
   children: React.ReactNode;
 }) {
-  if (hasFeature(feature)) return <>{children}</>;
+  // An unlock bought with credits lasts for this mount. It is deliberately not
+  // persisted here: the ledger is the record, and re-deriving entitlement from
+  // client state would let a reload grant it for free.
+  const [unlocked, setUnlocked] = React.useState(false);
+  const [busy, setBusy] = React.useState(false);
+  const [note, setNote] = React.useState<string | null>(null);
+
+  const buy = React.useCallback(async () => {
+    if (!creditAction || busy) return;
+    setBusy(true);
+    setNote(null);
+    const r = await chargeFor(creditAction, creditRef || `gate:${feature}`);
+    if (r.ok || (!r.ok && r.reason === 'covered-by-plan')) setUnlocked(true);
+    else setNote(chargeMessage(r));
+    setBusy(false);
+  }, [creditAction, creditRef, feature, busy]);
+
+  if (hasFeature(feature) || unlocked) return <>{children}</>;
 
   const sheet = (
     <View style={s.sheet} accessibilityRole="summary">
@@ -57,10 +76,16 @@ export function Gate({
           label={`Unlock with ${PLAN_LABEL[requiredPlan] ?? requiredPlan}`}
           onPress={() => navigate('desk', { sub: 'wallet' })}
         />
-        {creditAction && creditCost && onSpendCredits ? (
-          <Btn label={`Use ${creditCost} credits`} onPress={onSpendCredits} kind="ghost" />
+        {creditAction && creditCost ? (
+          <Btn
+            label={busy ? 'Charging…' : `Use ${creditCost} credits`}
+            onPress={buy}
+            kind="ghost"
+            disabled={busy}
+          />
         ) : null}
       </View>
+      {note ? <Text style={s.note}>{note}</Text> : null}
       {creditAction && creditCost ? (
         <Text style={s.alt}>
           No subscription needed — credits work as a one-off.
@@ -102,6 +127,7 @@ const s = StyleSheet.create({
   actions: { flexDirection: 'row', gap: theme.sp.sm, flexWrap: 'wrap',
     justifyContent: 'center', marginTop: theme.sp.xs },
   alt: { color: theme.muted, fontSize: theme.fs.xs, textAlign: 'center' },
+  note: { color: theme.red, fontSize: theme.fs.sm, textAlign: 'center' },
 });
 
 export default Gate;

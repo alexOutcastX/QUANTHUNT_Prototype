@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import {
-  EarnResp, PlansResp, ReferralResp, WalletResp, PublicIntegrations, api,
+  EarnResp, GiftQuote, PlansResp, ReferralResp, WalletResp, PublicIntegrations, api,
 } from '../api';
 import { theme } from '../theme';
 import {
@@ -22,6 +22,9 @@ export default function WalletScreen() {
   const [plans, setPlans] = useState<PlansResp | null>(null);
   const [integrations, setIntegrations] = useState<PublicIntegrations | null>(null);
   const [earn, setEarn] = useState<EarnResp | null>(null);
+  const [gift, setGift] = useState<GiftQuote | null>(null);
+  const [giftTo, setGiftTo] = useState('');
+  const [giftAmt, setGiftAmt] = useState('');
   const [err, setErr] = useState<string | null>(null);
   const [code, setCode] = useState('');
   const [note, setNote] = useState<string | null>(null);
@@ -31,10 +34,10 @@ export default function WalletScreen() {
     setErr(null);
     Promise.all([
       api.wallet(), api.referral(), api.billingPlans(), api.integrationsPublic(),
-      api.walletEarn(),
+      api.walletEarn(), api.giftQuote(),
     ])
-      .then(([w, r, p, i, e]) => {
-        setWallet(w); setRef(r); setPlans(p); setIntegrations(i); setEarn(e);
+      .then(([w, r, p, i, e, g]) => {
+        setWallet(w); setRef(r); setPlans(p); setIntegrations(i); setEarn(e); setGift(g);
       })
       .catch((e) => setErr(e instanceof Error ? e.message : 'Failed to load'));
   }, []);
@@ -74,6 +77,23 @@ export default function WalletScreen() {
       load();
     } catch (e) {
       setNote(e instanceof Error ? e.message : 'Could not claim today’s bonus.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const sendGift = async () => {
+    const amt = Number(giftAmt);
+    if (!giftTo.trim() || !amt) return;
+    setBusy(true);
+    setNote(null);
+    try {
+      const out = await api.sendGift(giftTo.trim(), amt, '');
+      setNote(`Sent ${out.amount} credits to ${out.to}.`);
+      setGiftTo(''); setGiftAmt('');
+      load();
+    } catch (e) {
+      setNote(e instanceof Error ? e.message : 'That gift could not be sent.');
     } finally {
       setBusy(false);
     }
@@ -186,6 +206,49 @@ export default function WalletScreen() {
               ))}
               <Text style={styles.freeNote}>
                 Quotes, charts, news and your watchlist are always free.
+              </Text>
+            </Card>
+          </>
+        ) : null}
+
+        {/* ── gifting ──
+            Only bought or earned-by-purchase credits move. Daily bonuses,
+            streaks and referral rewards stay with the account that earned
+            them, or two accounts pass one allowance back and forth. */}
+        {gift ? (
+          <>
+            <SectionTitle>Send credits</SectionTitle>
+            <Card>
+              <Text style={styles.label}>
+                {gift.giftable} of your {gift.balance} credits can be sent ·{' '}
+                {gift.remaining_today} left today
+              </Text>
+              <View style={styles.row}>
+                <TextInput
+                  value={giftTo}
+                  onChangeText={setGiftTo}
+                  placeholder="Their username"
+                  placeholderTextColor={theme.muted}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  style={styles.input}
+                />
+                <TextInput
+                  value={giftAmt}
+                  onChangeText={(t) => setGiftAmt(t.replace(/[^0-9]/g, ''))}
+                  placeholder={`min ${gift.minimum}`}
+                  placeholderTextColor={theme.muted}
+                  keyboardType="numeric"
+                  style={[styles.input, { maxWidth: 110 }]}
+                />
+                <Btn
+                  label="Send"
+                  onPress={sendGift}
+                  disabled={busy || !giftTo.trim() || Number(giftAmt) < gift.minimum}
+                />
+              </View>
+              <Text style={styles.hint}>
+                Earned credits — daily bonuses, streaks and referrals — stay with you.
               </Text>
             </Card>
           </>

@@ -996,7 +996,6 @@ export default function BacktestScreen() {
       blurb="Run any strategy against years of history with real Indian charges and slippage, then see what it would actually have returned."
       creditAction="backtest"
       creditCost={10}
-      onSpendCredits={() => navigate('desk', { sub: 'wallet' })}
     >
       <BacktestConsole />
     </Gate>

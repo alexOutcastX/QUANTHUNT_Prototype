@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Gate } from '../components/Gate';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { REFRESH, REFRESHING } from '../copy';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -1246,7 +1247,7 @@ function ScreenHitRow({ h, enr, idx, top, cols, onPress }: {
   );
 }
 
-export default function PatternScreen() {
+function PatternInner() {
   const [mode, setMode] = useState<'stock' | 'screen' | 'trade'>('stock');
   const [symbol, setSymbol] = useState('');
   const [period, setPeriod] = useState('2y');
@@ -1758,3 +1759,19 @@ const styles = StyleSheet.create({
   },
   drawBtnTxt: { color: theme.muted, fontSize: theme.fs.sm },
 });
+
+
+/** Chart patterns, drawn on the chart — gated through the one Gate component, never inline. */
+export default function PatternScreen() {
+  return (
+    <Gate
+      feature="patterns"
+      requiredPlan="member"
+      mode="blur"
+      title="Chart patterns, drawn on the chart"
+      blurb="Rule-based detection traces necklines, channels and trendlines, with a confidence and a measured target."
+    >
+      <PatternInner />
+    </Gate>
+  );
+}

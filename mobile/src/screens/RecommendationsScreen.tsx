@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { Gate } from '../components/Gate';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { REFRESH, REFRESHING } from '../copy';
 import { MbScreenRow, Recommendation, api } from '../api';
@@ -820,7 +821,7 @@ function LongTermRecs() {
 // them; each keeps its own persistent cache.
 type RecMode = 'long' | 'short' | 'inst' | 'smc';
 const REC_MODES: RecMode[] = ['long', 'short', 'inst', 'smc'];
-export default function RecommendationsScreen() {
+function RecommendationsInner() {
   const [mode, setMode] = useState<RecMode>('long');
   const [modeHydrated, setModeHydrated] = useState(false);
   // Remember which sub-list was open so returning to the app doesn't snap back
@@ -1099,3 +1100,19 @@ const styles = StyleSheet.create({
   },
   toastTxt: { color: theme.text, fontSize: theme.fs.sm + 1, fontWeight: '600' },
 });
+
+
+/** Ranked setups, with the reasoning — gated through the one Gate component, never inline. */
+export default function RecommendationsScreen() {
+  return (
+    <Gate
+      feature="recommendations"
+      requiredPlan="member"
+      mode="blur"
+      title="Ranked setups, with the reasoning"
+      blurb="The candidates our screens like today, each with the evidence that put it there."
+    >
+      <RecommendationsInner />
+    </Gate>
+  );
+}

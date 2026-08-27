@@ -1429,6 +1429,7 @@ def member_logout():
 # same server, so "live on the IP, not on the domain" is decided per request
 # from the Host header — see preview.py.
 import preview as _preview
+import gifting as _gifting
 import rewards as _rewards
 import wallet as _wallet
 import referrals as _referrals
@@ -1689,6 +1690,37 @@ def wallet_spend():
                         "detail": "Not enough credits for this yet."}), 402
     _analytics.track(acct, "wallet.spend", {"action": action, "credits": cost})
     return jsonify({"ok": True, "spent": cost, "balance": left, "action": action})
+
+
+@app.route("/wallet/gift", methods=["GET", "POST"])
+@require_preview
+@require_plan()
+def wallet_gift():
+    """Send credits to another member.
+
+    GET returns what the sender may do right now, so the form can show the
+    limits before an attempt rather than after a refusal.
+    """
+    acct = _acct()
+    if request.method == "GET":
+        return jsonify(_gifting.quote(acct))
+
+    body = request.get_json(silent=True) or {}
+    try:
+        out = _gifting.send(
+            acct,
+            str(body.get("to") or ""),
+            body.get("amount"),
+            str(body.get("message") or ""),
+            known_accounts=set(_members.accounts().keys()),
+        )
+    except _gifting.GiftRefused as e:
+        return jsonify({"error": "gift-refused", "detail": str(e)}), 400
+    except _wallet.InsufficientFunds:
+        return jsonify({"error": "insufficient-credits",
+                        "detail": "Not enough credits."}), 402
+    _analytics.track(acct, "wallet.gift", {"amount": out["amount"]})
+    return jsonify(out)
 
 
 @app.route("/referral")

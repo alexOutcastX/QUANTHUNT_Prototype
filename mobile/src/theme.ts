@@ -66,7 +66,31 @@ const KEYS = Object.keys(DARK) as ColorKey[];
 const WEB = Platform.OS === 'web' && typeof document !== 'undefined';
 
 type Mode = 'dark' | 'light';
+/**
+ * What the USER chose, as opposed to what is currently painted.
+ *
+ * 'system' follows the device. A binary toggle meant someone whose phone
+ * switches to dark at sunset kept a hard-coded choice made once, months ago —
+ * so 'system' is the default for a new install, and an explicit choice sticks
+ * forever once made.
+ */
+export type ThemePref = 'system' | 'dark' | 'light';
+let pref: ThemePref = 'system';
 let mode: Mode = 'dark';
+
+function systemMode(): Mode {
+  try {
+    if (WEB && typeof window !== 'undefined' && window.matchMedia) {
+      return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+    }
+    // Native: Appearance is imported lazily so this module stays usable in the
+    // browser-less test harness.
+    const rn = require('react-native') as { Appearance?: { getColorScheme?: () => string | null } };
+    return rn.Appearance?.getColorScheme?.() === 'light' ? 'light' : 'dark';
+  } catch {
+    return 'dark';
+  }
+}
 const listeners = new Set<() => void>();
 
 function applyAttr() {
@@ -99,7 +123,22 @@ if (WEB) {
   document.head.appendChild(style);
   try {
     const saved = window.localStorage?.getItem('taureye.theme');
-    if (saved === 'light' || saved === 'dark') mode = saved;
+    if (saved === 'light' || saved === 'dark' || saved === 'system') pref = saved;
+  } catch {
+    /* ignore */
+  }
+  mode = pref === 'system' ? systemMode() : pref;
+  // Follow the device while the preference is 'system'. An explicit choice
+  // ignores this, which is the whole point of making it explicit.
+  try {
+    window.matchMedia?.('(prefers-color-scheme: light)')?.addEventListener?.('change', () => {
+      if (pref !== 'system') return;
+      const next = systemMode();
+      if (next === mode) return;
+      mode = next;
+      applyAttr();
+      listeners.forEach((l) => l());
+    });
   } catch {
     /* ignore */
   }
@@ -203,21 +242,28 @@ export function getPalette(): Palette {
 export function getThemeMode(): Mode {
   return mode;
 }
-export function setThemeMode(next: Mode) {
-  if (next === mode) return;
-  mode = next;
+export function getThemePref(): ThemePref {
+  return pref;
+}
+export function setThemeMode(next: ThemePref) {
+  const resolved: Mode = next === 'system' ? systemMode() : next;
+  if (next === pref && resolved === mode) return;
+  pref = next;
+  mode = resolved;
   applyAttr();
   if (WEB) {
     try {
-      window.localStorage?.setItem('taureye.theme', mode);
+      window.localStorage?.setItem('taureye.theme', pref);
     } catch {
       /* ignore */
     }
   }
   listeners.forEach((l) => l());
 }
+
+/** System → Light → Dark → System. */
 export function toggleThemeMode() {
-  setThemeMode(mode === 'dark' ? 'light' : 'dark');
+  setThemeMode(pref === 'system' ? 'light' : pref === 'light' ? 'dark' : 'system');
 }
 export function subscribeTheme(l: () => void) {
   listeners.add(l);
@@ -231,4 +277,11 @@ export function useThemeMode(): Mode {
   const [m, setM] = useState<Mode>(mode);
   useEffect(() => subscribeTheme(() => setM(getThemeMode())), []);
   return m;
+}
+
+/** The user's choice, for a control that has to show three states. */
+export function useThemePref(): ThemePref {
+  const [p, setP] = useState<ThemePref>(pref);
+  useEffect(() => subscribeTheme(() => setP(getThemePref())), []);
+  return p;
 }

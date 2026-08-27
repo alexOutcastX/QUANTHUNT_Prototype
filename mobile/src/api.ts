@@ -1529,6 +1529,16 @@ export type SpendResp = {
   error?: string; needed?: number; detail?: string;
 };
 
+export type GiftQuote = {
+  balance: number; giftable: number; sent_today: number;
+  daily_cap: number; remaining_today: number; minimum: number;
+};
+
+export type GiftResp = {
+  ok?: boolean; amount?: number; to?: string; balance?: number;
+  error?: string; detail?: string;
+};
+
 export type WalletResp = {
   account: string;
   balances: { credits: number; INR: number };
@@ -1582,6 +1592,9 @@ export const api = {
   preview: () => getJson<PreviewResp>('/preview'),
   wallet: () => getJson<WalletResp>('/wallet'),
   walletEarn: () => getJson<EarnResp>('/wallet/earn'),
+  giftQuote: () => getJson<GiftQuote>('/wallet/gift'),
+  sendGift: (to: string, amount: number, message: string) =>
+    postJson<GiftResp>('/wallet/gift', { to, amount, message }),
   walletHistory: (limit = 50) => getJson<WalletResp>(`/wallet/history?limit=${limit}`),
   walletDaily: () => postJson<DailyClaim>('/wallet/daily', {}),
   /** Charge for a metered action. `ref` must be stable for the same piece of
