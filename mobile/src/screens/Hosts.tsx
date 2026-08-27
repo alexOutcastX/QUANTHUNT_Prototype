@@ -280,6 +280,7 @@ export function ScreenerHub() {
 // Analysis, plus the More list so no destination is lost.
 export function DeskHub() {
   const { isDesktop } = useResponsive();
+  const preview = usePreview();
   return (
     <SubTabs
       persistKey="desk"
@@ -294,6 +295,10 @@ export function DeskHub() {
         { key: 'risk', label: 'Risk', hint: 'Portfolio VaR · volatility · beta · drawdown · correlation', render: () => <RiskScreen /> },
         { key: 'bt', label: 'Backtest', hint: 'Test a strategy against historical data before risking capital', render: () => <BacktestScreen /> },
         { key: 'calc', label: 'Calculator', hint: 'Position size · SIP · CAGR', render: () => <CalculatorScreen /> },
+        // Wallet sits here rather than inside More: it used to be four taps
+        // deep inside a nineteen-item menu, which is where the whole credit
+        // economy went to be forgotten. The header pill links straight here.
+        { key: 'wallet', label: 'Wallet', hint: 'Credits · daily bonus · refer and earn · your plan', render: () => <WalletScreen />, hidden: !preview },
         { key: 'account', label: 'Account', hint: 'Sign in · cloud sync across devices', render: () => <AccountScreen /> },
         { key: 'more', label: 'More', hint: 'Charts, community, corporate data, indices & settings', render: () => <MoreScreen /> },
         // Desktop promotes Backtest to the top bar beside Terminal; keep the
@@ -344,7 +349,6 @@ const MORE_ITEMS: {
   // Preview-only. usePreview() filters this out on taureye.com, where the
   // endpoints behind it 404 — an entry that always errored would be worse
   // than no entry.
-  { key: 'wallet', label: 'Wallet', hint: 'Credits · refer and earn · your plan', render: () => <WalletScreen />, preview: true },
 ];
 
 // Destinations that already have a first-class tab on the Screens or Desk

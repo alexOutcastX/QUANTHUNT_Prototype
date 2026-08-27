@@ -120,7 +120,15 @@ def spend(acct: str, amount: int, reason: str, ref: str = None,
         bal = int(row["bal"] or 0)
         if bal < amount:
             raise InsufficientFunds(f"balance {bal} < {amount} {currency}")
-        _insert(conn, acct, currency, -amount, reason or "spend", ref)
+        wrote = _insert(conn, acct, currency, -amount, reason or "spend", ref)
+        if not wrote:
+            # This (acct, currency, ref) was already charged — a retried request
+            # or a double-tapped button. The unique index refused the duplicate
+            # row, so no money moved; return the balance as it ACTUALLY stands.
+            # Returning bal - amount here reported a deduction that never
+            # happened, and the caller displayed a balance too low by the price
+            # of whatever they just retried.
+            return bal
         return bal - amount
 
 
