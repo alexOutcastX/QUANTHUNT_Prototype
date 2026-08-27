@@ -8,6 +8,7 @@
 // drawdown, monthly returns, per-symbol breakdown and the complete trade
 // blotter with CSV / Excel / PDF export.
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import TermTip from '../components/TermTip';
 import { navigate } from '../navIntent';
 import { Gate } from '../components/Gate';
 import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
@@ -425,14 +426,32 @@ function BacktestConsole() {
     </View>
   );
 
-  const tile = (label: string, value: string, color?: string) => (
-    <View style={styles.tile} key={label}>
-      <Text style={styles.tileLbl}>{label}</Text>
-      <Text style={[styles.tileVal, color ? { color } : null]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>
-        {value}
-      </Text>
-    </View>
-  );
+  // Every label maps to a glossary entry, so tapping a tile says what the
+  // number is and whether higher is better. Thirteen metrics with no
+  // explanation is the single densest thing in the product.
+  const TILE_TERMS: Record<string, string> = {
+    SHARPE: 'sharpe', SORTINO: 'sortino', CALMAR: 'calmar', 'MAX DD': 'max_dd',
+    'DD LENGTH': 'dd_length', VOLATILITY: 'volatility', 'WIN RATE': 'win_rate',
+    'PROFIT FACTOR': 'profit_factor', EXPECTANCY: 'expectancy', PAYOFF: 'payoff',
+    EXPOSURE: 'exposure', TURNOVER: 'turnover',
+  };
+
+  const tile = (label: string, value: string, color?: string) => {
+    const body = (
+      <View style={styles.tile}>
+        <Text style={styles.tileLbl}>{label}</Text>
+        <Text style={[styles.tileVal, color ? { color } : null]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>
+          {value}
+        </Text>
+      </View>
+    );
+    const term = TILE_TERMS[label];
+    // TRADES and AVG HOLD need no explaining, so they stay plain rather than
+    // wearing an affordance that leads nowhere.
+    return term
+      ? <TermTip id={term} key={label}>{body}</TermTip>
+      : <View key={label}>{body}</View>;
+  };
 
   // One-line summaries so the fully-collapsed console still reads as a dense
   // config sheet (the whole setup scans in four lines).

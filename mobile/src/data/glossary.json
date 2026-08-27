@@ -1,0 +1,422 @@
+[
+ {
+  "id": "sharpe",
+  "term": "Sharpe ratio",
+  "plain": "Return compared with how bumpy the ride was.",
+  "better": "higher",
+  "detail": "Above 1 is good. Below 0 means a savings account would have done better."
+ },
+ {
+  "id": "sortino",
+  "term": "Sortino ratio",
+  "plain": "Like Sharpe, but only counts the downward bumps.",
+  "better": "higher",
+  "detail": "Above 1 is good. Usually a little higher than Sharpe."
+ },
+ {
+  "id": "calmar",
+  "term": "Calmar ratio",
+  "plain": "Yearly growth divided by the worst fall along the way.",
+  "better": "higher",
+  "detail": "Above 1 is strong for a long-only strategy."
+ },
+ {
+  "id": "max_dd",
+  "term": "Maximum drawdown",
+  "plain": "The worst drop from a peak before recovering.",
+  "better": "lower",
+  "detail": "10–20% is normal for equities. Above 40% is hard to sit through."
+ },
+ {
+  "id": "dd_length",
+  "term": "Drawdown length",
+  "plain": "How long the worst fall took to recover.",
+  "better": "lower",
+  "detail": "Measured in days. Months are common; years are painful."
+ },
+ {
+  "id": "cagr",
+  "term": "CAGR",
+  "plain": "The yearly growth rate, smoothed.",
+  "better": "higher",
+  "detail": "Indian equity indices have done roughly 10–14% over long periods."
+ },
+ {
+  "id": "win_rate",
+  "term": "Win rate",
+  "plain": "How often a trade made money.",
+  "better": "higher",
+  "detail": "Above 50% is not required — a few large wins can beat many small ones."
+ },
+ {
+  "id": "profit_factor",
+  "term": "Profit factor",
+  "plain": "Money made divided by money lost.",
+  "better": "higher",
+  "detail": "Above 1 means profitable. Above 1.5 is good."
+ },
+ {
+  "id": "expectancy",
+  "term": "Expectancy",
+  "plain": "What one average trade made or lost.",
+  "better": "higher",
+  "detail": "Negative means the strategy loses money per trade on average."
+ },
+ {
+  "id": "payoff",
+  "term": "Payoff ratio",
+  "plain": "Average win divided by average loss.",
+  "better": "higher",
+  "detail": "Above 1 means wins are bigger than losses."
+ },
+ {
+  "id": "turnover",
+  "term": "Turnover",
+  "plain": "How often the whole portfolio is replaced in a year.",
+  "better": "lower",
+  "detail": "High turnover means more brokerage and more tax."
+ },
+ {
+  "id": "exposure",
+  "term": "Exposure",
+  "plain": "How much of the time money was actually invested.",
+  "better": "context",
+  "detail": "Low exposure with good returns means capital sat idle safely."
+ },
+ {
+  "id": "volatility",
+  "term": "Volatility",
+  "plain": "How much the price swings about.",
+  "better": "lower",
+  "detail": "Higher means larger moves in both directions."
+ },
+ {
+  "id": "beta",
+  "term": "Beta",
+  "plain": "How much a stock moves when the market moves.",
+  "better": "context",
+  "detail": "1 means it matches the index. Above 1 amplifies both directions."
+ },
+ {
+  "id": "var",
+  "term": "Value at Risk (VaR)",
+  "plain": "A bad-but-not-worst day, in rupees.",
+  "better": "lower",
+  "detail": "'95% VaR of ₹10,000' means one day in twenty could lose more."
+ },
+ {
+  "id": "correlation",
+  "term": "Correlation",
+  "plain": "Whether two holdings move together.",
+  "better": "lower",
+  "detail": "Near 1 means they rise and fall as one — that is concentration, not diversification."
+ },
+ {
+  "id": "rsi",
+  "term": "RSI",
+  "plain": "Whether a stock has run up or fallen hard recently.",
+  "better": "context",
+  "detail": "Above 70 is often called overbought, below 30 oversold. Neither is a signal on its own."
+ },
+ {
+  "id": "macd",
+  "term": "MACD",
+  "plain": "Whether short-term momentum is gaining on long-term.",
+  "better": "context",
+  "detail": "A rising histogram means momentum is building."
+ },
+ {
+  "id": "dma",
+  "term": "DMA",
+  "plain": "The average price over the last N days.",
+  "better": "context",
+  "detail": "200-DMA is the common long-term trend line."
+ },
+ {
+  "id": "ema",
+  "term": "EMA",
+  "plain": "A moving average that weights recent days more heavily.",
+  "better": "context",
+  "detail": "Reacts faster than a simple average."
+ },
+ {
+  "id": "atr",
+  "term": "ATR",
+  "plain": "How far a stock typically moves in a day, in rupees.",
+  "better": "context",
+  "detail": "Used to size a stop so it is not hit by ordinary noise."
+ },
+ {
+  "id": "advance_decline",
+  "term": "Advance/decline",
+  "plain": "How many stocks rose versus fell.",
+  "better": "higher",
+  "detail": "Above 1 means more risers than fallers — a broad day."
+ },
+ {
+  "id": "market_breadth",
+  "term": "Market breadth",
+  "plain": "Whether a move was shared by most stocks or a few.",
+  "better": "higher",
+  "detail": "A rising index with poor breadth is a narrow rally."
+ },
+ {
+  "id": "pe",
+  "term": "P/E ratio",
+  "plain": "Price divided by yearly profit per share.",
+  "better": "lower",
+  "detail": "A rough 'how many years of profit am I paying'. Varies hugely by sector."
+ },
+ {
+  "id": "pb",
+  "term": "P/B ratio",
+  "plain": "Price compared with the company's book value.",
+  "better": "lower",
+  "detail": "Below 1 can mean cheap, or a business in trouble."
+ },
+ {
+  "id": "roce",
+  "term": "ROCE",
+  "plain": "How much profit the business makes on the money it uses.",
+  "better": "higher",
+  "detail": "Above 15% is generally healthy."
+ },
+ {
+  "id": "roe",
+  "term": "ROE",
+  "plain": "Profit as a share of shareholders' money.",
+  "better": "higher",
+  "detail": "Above 15% is generally healthy."
+ },
+ {
+  "id": "promoter_holding",
+  "term": "Promoter holding",
+  "plain": "How much of the company the founders still own.",
+  "better": "higher",
+  "detail": "A rising stake is usually read as confidence."
+ },
+ {
+  "id": "promoter_pledge",
+  "term": "Promoter pledge",
+  "plain": "How much of the founders' stake is borrowed against.",
+  "better": "lower",
+  "detail": "High pledging is a well-known risk flag."
+ },
+ {
+  "id": "fii_dii",
+  "term": "FII / DII",
+  "plain": "Foreign and domestic institutional investors.",
+  "better": "context",
+  "detail": "Their buying and selling moves Indian markets more than retail does."
+ },
+ {
+  "id": "market_cap",
+  "term": "Market capitalisation",
+  "plain": "What the whole company is worth at today's price.",
+  "better": "context",
+  "detail": "Large-cap is steadier; small-cap moves more in both directions."
+ },
+ {
+  "id": "free_float",
+  "term": "Free float",
+  "plain": "The shares actually available to trade.",
+  "better": "context",
+  "detail": "A small float means the price moves further on the same volume."
+ },
+ {
+  "id": "volume",
+  "term": "Volume",
+  "plain": "How many shares changed hands.",
+  "better": "context",
+  "detail": "A big move on low volume convinces fewer people."
+ },
+ {
+  "id": "52w_range",
+  "term": "52-week range",
+  "plain": "The highest and lowest price of the past year.",
+  "better": "context",
+  "detail": "Where today sits in that range is a quick sense of the trend."
+ },
+ {
+  "id": "slippage",
+  "term": "Slippage",
+  "plain": "The gap between the price you wanted and the one you got.",
+  "better": "lower",
+  "detail": "Wider on small, thinly traded stocks."
+ },
+ {
+  "id": "stt",
+  "term": "STT",
+  "plain": "Securities Transaction Tax, charged on every trade.",
+  "better": "lower",
+  "detail": "Small per trade, and it adds up with high turnover."
+ },
+ {
+  "id": "option_chain",
+  "term": "Option chain",
+  "plain": "Every contract available for betting on where a price will go.",
+  "better": "context",
+  "detail": "Used to read where traders expect a stock or index to move, and by how much, before a given date."
+ },
+ {
+  "id": "pcr",
+  "term": "Put/Call ratio",
+  "plain": "Puts traded divided by calls.",
+  "better": "context",
+  "detail": "Often read as a sentiment gauge; unreliable on its own."
+ },
+ {
+  "id": "max_pain",
+  "term": "Max pain",
+  "plain": "The price at which most option buyers lose.",
+  "better": "context",
+  "detail": "A theory about where price gravitates near expiry, not a prediction."
+ },
+ {
+  "id": "r_multiple",
+  "term": "R multiple",
+  "plain": "A win or loss measured in units of the risk taken.",
+  "better": "higher",
+  "detail": "+2R means it made twice what it risked."
+ },
+ {
+  "id": "hit_rate",
+  "term": "Hit rate",
+  "plain": "How often an engine's calls worked out.",
+  "better": "higher",
+  "detail": "Shown on the Calibration page — the honesty check."
+ },
+ {
+  "id": "paper_trade",
+  "term": "Paper trade",
+  "plain": "A trade with fake money, real prices.",
+  "better": "context",
+  "detail": "The safe way to test an idea before risking anything."
+ },
+ {
+  "id": "stop_loss",
+  "term": "Stop loss",
+  "plain": "The price where you decide you were wrong.",
+  "better": "context",
+  "detail": "Set before entering, not after."
+ },
+ {
+  "id": "position_size",
+  "term": "Position size",
+  "plain": "How much to buy, given what you can afford to lose.",
+  "better": "context",
+  "detail": "Usually the largest single decision in a trade."
+ },
+ {
+  "id": "delivery",
+  "term": "Delivery",
+  "plain": "Buying shares to keep, rather than selling the same day.",
+  "better": "context",
+  "detail": "Attracts different charges from intraday."
+ },
+ {
+  "id": "intraday",
+  "term": "Intraday",
+  "plain": "Buying and selling on the same day.",
+  "better": "context",
+  "detail": "Cheaper per trade, and settled before the close."
+ },
+ {
+  "id": "circuit",
+  "term": "Circuit limit",
+  "plain": "A daily cap on how far one stock may move.",
+  "better": "context",
+  "detail": "Hitting one halts trading in that stock."
+ },
+ {
+  "id": "bulk_deal",
+  "term": "Bulk deal",
+  "plain": "A large trade the exchange must disclose.",
+  "better": "context",
+  "detail": "Shows who is buying or selling in size."
+ },
+ {
+  "id": "block_deal",
+  "term": "Block deal",
+  "plain": "A very large negotiated trade in a separate window.",
+  "better": "context",
+  "detail": "Usually institutions moving a stake."
+ },
+ {
+  "id": "split",
+  "term": "Stock split",
+  "plain": "One share becomes several, each worth proportionally less.",
+  "better": "context",
+  "detail": "Nothing is created; prices in history are adjusted for it."
+ },
+ {
+  "id": "bonus",
+  "term": "Bonus issue",
+  "plain": "Free extra shares to existing holders.",
+  "better": "context",
+  "detail": "Like a split in effect; the total value does not change."
+ },
+ {
+  "id": "dividend",
+  "term": "Dividend",
+  "plain": "A share of profit paid out in cash.",
+  "better": "context",
+  "detail": "Quoted per share. Yield is that divided by the price."
+ },
+ {
+  "id": "candlestick",
+  "term": "Candlestick",
+  "plain": "One bar showing a period's open, high, low and close.",
+  "better": "context",
+  "detail": "The body is open-to-close; the wicks are the extremes."
+ },
+ {
+  "id": "support",
+  "term": "Support",
+  "plain": "A price where buyers have stepped in before.",
+  "better": "context",
+  "detail": "Describes past behaviour, not a guarantee."
+ },
+ {
+  "id": "resistance",
+  "term": "Resistance",
+  "plain": "A price where sellers have stepped in before.",
+  "better": "context",
+  "detail": "Same caveat as support."
+ },
+ {
+  "id": "breakout",
+  "term": "Breakout",
+  "plain": "Price moving out of a range it had been stuck in.",
+  "better": "context",
+  "detail": "Often watched with volume for confirmation."
+ },
+ {
+  "id": "backtest",
+  "term": "Backtest",
+  "plain": "Running a strategy against past prices.",
+  "better": "context",
+  "detail": "Past results are the weakest kind of evidence, but the cheapest to get."
+ },
+ {
+  "id": "universe",
+  "term": "Universe",
+  "plain": "The set of stocks a screen looks at.",
+  "better": "context",
+  "detail": "NIFTY 50 is 50 companies; the full market is over 5,000."
+ },
+ {
+  "id": "screener",
+  "term": "Screener",
+  "plain": "A filter over every listed company.",
+  "better": "context",
+  "detail": "You set the rules; it returns what matches, with the evidence."
+ },
+ {
+  "id": "dossier",
+  "term": "Dossier",
+  "plain": "A full report on one company.",
+  "better": "context",
+  "detail": "Valuation, cash flow, ownership and filings in one printable document."
+ }
+]

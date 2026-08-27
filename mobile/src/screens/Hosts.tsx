@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { api } from '../api';
 import { currentMember, memberLogout } from '../member';
@@ -356,10 +356,22 @@ const MORE_ITEMS: {
 const MORE_DUP_KEYS = new Set(['account', 'heatmap', 'universe', 'portfolio', 'watchlist', 'calc', 'risk', 'entities', 'alerts']);
 const MORE_MENU = MORE_ITEMS.filter((i) => !MORE_DUP_KEYS.has(i.key));
 
+// Groups for the All-features list. A flat eighteen-item menu ordered by
+// neither frequency nor category is where features go to be forgotten; the
+// hints already exist on every entry and were wasted in a list.
+const MORE_GROUPS: { title: string; keys: string[] }[] = [
+  { title: 'Markets', keys: ['heatmap', 'universe', 'indices', 'charts', 'holidays'] },
+  { title: 'Research', keys: ['corporate', 'derivatives', 'entities', 'risk', 'methodology'] },
+  { title: 'Your desk', keys: ['portfolio', 'watchlist', 'alerts', 'calc'] },
+  { title: 'Community', keys: ['community', 'announcements'] },
+  { title: 'Account', keys: ['account', 'developer'] },
+];
+
 export function MoreScreen() {
   const preview = usePreview();
   const menu = MORE_MENU.filter((i) => !i.preview || preview);
   const [sel, setSel] = useState<string | null>(null);
+  const [q, setQ] = useState('');
   const [version, setVersion] = useState('');
   useEffect(() => {
     api.version().then((v) => setVersion(v.version)).catch(() => {});
@@ -382,22 +394,61 @@ export function MoreScreen() {
     );
   }
 
+  const term = q.trim().toLowerCase();
+  const match = (i: typeof items[number]) =>
+    !term || i.label.toLowerCase().includes(term) || (i.hint || '').toLowerCase().includes(term);
+
+  const row = (i: typeof items[number]) => (
+    <TouchableOpacity
+      key={i.key}
+      style={styles.menuRow}
+      onPress={() => setSel(i.key)}
+      activeOpacity={0.75}
+      accessibilityRole="button"
+      accessibilityLabel={`${i.label}. ${i.hint || ''}`}
+    >
+      <View style={{ flex: 1 }}>
+        <Text style={styles.menuLabel}>{i.label}</Text>
+        <Text style={styles.menuHint}>{i.hint}</Text>
+      </View>
+      <Text style={styles.menuChevron}>›</Text>
+    </TouchableOpacity>
+  );
+
+  // Anything a group forgot to list still shows, so adding a MORE_MENU entry
+  // can never make a feature disappear from the only page that lists them all.
+  const grouped = new Set(MORE_GROUPS.flatMap((g) => g.keys));
+  const ungrouped = items.filter((i) => !grouped.has(i.key));
+
   return (
     <ScrollView style={styles.host} contentContainerStyle={styles.menuPad}>
-      {items.map((i) => (
-        <TouchableOpacity
-          key={i.key}
-          style={styles.menuRow}
-          onPress={() => setSel(i.key)}
-          activeOpacity={0.75}
-        >
-          <View style={{ flex: 1 }}>
-            <Text style={styles.menuLabel}>{i.label}</Text>
-            <Text style={styles.menuHint}>{i.hint}</Text>
+      <TextInput
+        value={q}
+        onChangeText={setQ}
+        placeholder="Search features…"
+        placeholderTextColor={theme.muted}
+        style={styles.menuSearch}
+        autoCapitalize="none"
+        autoCorrect={false}
+      />
+      {MORE_GROUPS.map((g) => {
+        const rows = g.keys
+          .map((k) => items.find((i) => i.key === k))
+          .filter((i): i is typeof items[number] => !!i && match(i));
+        if (!rows.length) return null;
+        return (
+          <View key={g.title}>
+            <Text style={styles.menuGroup}>{g.title.toUpperCase()}</Text>
+            {rows.map(row)}
           </View>
-          <Text style={styles.menuChevron}>›</Text>
-        </TouchableOpacity>
-      ))}
+        );
+      })}
+      {ungrouped.filter(match).length ? (
+        <View>
+          <Text style={styles.menuGroup}>MORE</Text>
+          {ungrouped.filter(match).map(row)}
+        </View>
+      ) : null}
       {currentMember() ? (
         <TouchableOpacity style={styles.menuRow} onPress={() => memberLogout()} activeOpacity={0.75}>
           <View style={{ flex: 1 }}>
@@ -495,6 +546,15 @@ const styles = StyleSheet.create({
   },
   back: { color: theme.text, fontSize: theme.fs.md + 1, width: 54 },
   moreTitle: { color: theme.text, fontSize: theme.fs.md + 1, fontWeight: '700' },
+  menuGroup: { color: theme.muted, fontSize: theme.fs.xs, fontWeight: '700',
+    letterSpacing: 1.4, marginTop: theme.sp.lg, marginBottom: theme.sp.xs,
+    paddingHorizontal: theme.sp.lg },
+  menuSearch: {
+    backgroundColor: theme.surface2, borderColor: theme.border2, borderWidth: 1,
+    borderRadius: theme.radius.md, color: theme.text, fontSize: theme.fs.md,
+    paddingHorizontal: theme.sp.md, paddingVertical: theme.sp.sm + 2,
+    marginHorizontal: theme.sp.lg, marginBottom: theme.sp.sm,
+  },
   menuPad: { padding: theme.sp.lg },
   menuRow: {
     flexDirection: 'row',
