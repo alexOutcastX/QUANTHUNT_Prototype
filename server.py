@@ -1430,6 +1430,7 @@ def member_logout():
 # from the Host header — see preview.py.
 import preview as _preview
 import gifting as _gifting
+import privacy as _privacy
 import usage as _usage
 import rewards as _rewards
 import wallet as _wallet
@@ -1691,6 +1692,68 @@ def wallet_spend():
                         "detail": "Not enough credits for this yet."}), 402
     _analytics.track(acct, "wallet.spend", {"action": action, "credits": cost})
     return jsonify({"ok": True, "spent": cost, "balance": left, "action": action})
+
+
+@app.route("/account/data")
+@require_preview
+@require_plan()
+def account_data_export():
+    """Everything this account holds, as one JSON document.
+
+    A DPDP requirement, and the honest version of one: it returns the actual
+    rows rather than a summary, because the point is that the person can see
+    what is held about them, not be told about it.
+    """
+    acct = _acct()
+    plan = request.member.get("plan") or "free"
+    out = {
+        "account": acct,
+        "exported_at": int(time.time()),
+        "member": {k: v for k, v in request.member.items() if k != "token"},
+        "wallet": {
+            "balances": _wallet.balances(acct),
+            "ledger": _wallet.history(acct, limit=1000),
+        },
+        "referrals": _referrals.stats(acct),
+        "usage": _usage.summary(acct, plan),
+        "subscription": _billing.subscription(acct, plan),
+    }
+    resp = jsonify(out)
+    resp.headers["Content-Disposition"] = f'attachment; filename="taureye-data-{acct}.json"'
+    return resp
+
+
+@app.route("/account/delete", methods=["POST"])
+@require_preview
+@require_plan()
+def account_delete():
+    """Erase this account's data.
+
+    Requires the password again: deletion is irreversible and a live session is
+    not proof that the person at the keyboard is the account holder.
+
+    The wallet ledger is NOT deleted — it is the record behind money that has
+    moved, including gifts to other people, and erasing one side of a transfer
+    corrupts the other. It is anonymised instead: the rows survive, the identity
+    does not. That is what the law asks for and what accounting needs.
+    """
+    body = request.get_json(silent=True) or {}
+    acct = _acct()
+    if not _members.check_login(acct, str(body.get("password") or "")):
+        return jsonify({"error": "bad-password",
+                        "detail": "Enter your password to confirm deletion."}), 403
+    if str(body.get("confirm") or "").strip().upper() != "DELETE":
+        return jsonify({"error": "not-confirmed",
+                        "detail": 'Type DELETE to confirm.'}), 400
+
+    erased = _privacy.erase(acct)
+    resp = jsonify({"ok": True, "erased": erased,
+                    "note": "Wallet rows were anonymised rather than removed, "
+                            "because they are the other half of transfers that "
+                            "involved other people."})
+    _clear_cookie(resp, _members.COOKIE)
+    _clear_cookie(resp, _USER_COOKIE)
+    return resp
 
 
 @app.route("/r/<code>")

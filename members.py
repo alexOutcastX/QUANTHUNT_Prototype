@@ -23,6 +23,29 @@ import time
 COOKIE = "te_member"
 TTL = int(os.environ.get("MEMBER_TTL_SEC", str(30 * 24 * 3600)))  # 30-day session
 
+# ── roles ───────────────────────────────────────────────────────────────────
+# `owner` is a boolean everywhere in the app already (broker keys, alerts, the
+# developer screen), so it stays exactly that. ROLE adds the distinction that
+# was missing: an ordinary member, and a read-only seat for someone who should
+# see a desk's work without being able to change it.
+#
+# An account's role is derived, not stored twice: owner=True implies "owner",
+# and anything else defaults to "member" unless it says otherwise.
+ROLES = ("owner", "member", "viewer")
+
+
+def role_of(acct: dict) -> str:
+    if acct.get("owner"):
+        return "owner"
+    r = (acct.get("role") or "member").strip().lower()
+    return r if r in ROLES else "member"
+
+
+def can_write(acct: dict) -> bool:
+    """A viewer may look at everything their plan allows and change nothing."""
+    return role_of(acct) != "viewer"
+
+
 # Plan ladder — every feature the app intends to paywall gets a key here, and
 # each plan lists what it unlocks. The placeholder account is on "pro" (all
 # access) so nothing is dark while memberships are wired up; real tiers get
@@ -200,7 +223,8 @@ def check_login(username: str, password: str):
         return None
     return {"username": acct.get("name") or uname, "uname": uname,
             "plan": acct.get("plan") or "member",
-            "owner": bool(acct.get("owner"))}
+            "owner": bool(acct.get("owner")),
+            "role": role_of(acct)}
 
 
 def features_for(plan: str):
@@ -250,7 +274,8 @@ def from_cookie(cookie_value: str):
     plan = acct.get("plan") or "member"
     return {"username": acct.get("name") or data["m"], "uname": data["m"],
             "plan": plan, "features": features_for(plan),
-            "owner": bool(acct.get("owner"))}
+            "owner": bool(acct.get("owner")),
+            "role": role_of(acct)}
 
 
 if __name__ == "__main__":                                   # pragma: no cover
