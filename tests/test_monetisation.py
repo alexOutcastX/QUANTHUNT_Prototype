@@ -79,11 +79,19 @@ class ReferralTest(unittest.TestCase):
         for ch in "IO01":
             self.assertNotIn(ch, a)
 
-    def test_claim_pays_both_sides(self):
+    def test_claim_pays_both_sides_the_signup_share(self):
+        """A claim pays a SHARE now and holds the rest until the referred
+        account does something real — paying it all here would pay in full for
+        a signup, which is the one thing trivial to manufacture. The totals
+        after activation are covered in tests/test_usage_referral.py."""
         out = self.r.claim("bob", self.r.code_for("alice"), self.accounts)
         self.assertEqual(out["referrer"], "alice")
-        self.assertEqual(self.w.balance("alice"), self.r.REFERRER_REWARD)
-        self.assertEqual(self.w.balance("bob"), self.r.REFEREE_REWARD)
+        r_now, r_rest = self.r._split(self.r.REFERRER_REWARD)
+        e_now, e_rest = self.r._split(self.r.REFEREE_REWARD)
+        self.assertEqual(self.w.balance("alice"), r_now)
+        self.assertEqual(self.w.balance("bob"), e_now)
+        self.assertEqual(out["pending_referrer"], r_rest)
+        self.assertEqual(out["pending_referee"], e_rest)
 
     def test_cannot_refer_yourself(self):
         with self.assertRaises(self.r.ReferralError):
@@ -94,9 +102,10 @@ class ReferralTest(unittest.TestCase):
         self.r.claim("bob", self.r.code_for("alice"), self.accounts)
         with self.assertRaises(self.r.ReferralError):
             self.r.claim("bob", self.r.code_for("carol"), self.accounts)
-        # The second attempt paid nobody.
+        # The second attempt paid nobody, and bob still holds only the share
+        # his first (and only) referral paid on signup.
         self.assertEqual(self.w.balance("carol"), 0)
-        self.assertEqual(self.w.balance("bob"), self.r.REFEREE_REWARD)
+        self.assertEqual(self.w.balance("bob"), self.r._split(self.r.REFEREE_REWARD)[0])
 
     def test_unknown_code_refused(self):
         with self.assertRaises(self.r.ReferralError):

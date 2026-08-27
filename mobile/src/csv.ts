@@ -206,13 +206,36 @@ function buildHtmlTableRows(headers: string[], rows: string[][]): string {
   return `<table><thead><tr>${th}</tr></thead><tbody>${body}</tbody></table>`;
 }
 
+
+/**
+ * Charge for an export, once, at the only two doors every export goes through.
+ *
+ * There are eight export call sites across the app. Metering each of them would
+ * mean eight chances to forget, and one forgotten site makes the price list a
+ * lie. Both public helpers funnel through here instead.
+ *
+ * Returns false when the charge failed, and the caller must then NOT deliver a
+ * file — an export that was refused but downloaded anyway is worse than no
+ * metering at all.
+ */
+async function chargeExport(name: string): Promise<boolean> {
+  const { chargeFor } = await import('./credits');
+  // The ref is the export's name plus the day: re-exporting the same table
+  // twice in one session is one charge, which is what a user would expect.
+  const day = new Date().toISOString().slice(0, 10);
+  const r = await chargeFor('export', `export:${slug(name)}:${day}`, { feature: 'exports' });
+  return r.ok || (!r.ok && r.reason === 'covered-by-plan');
+}
+
 export async function exportCsvRows(headers: string[], rows: string[][], name: string): Promise<void> {
+  if (!(await chargeExport(name))) return;
   const csv = buildCsvRows(headers, rows);
   const filename = `taureye-${slug(name)}.csv`;
   await deliverFile(csv, filename, 'text/csv');
 }
 
 export async function exportExcelRows(headers: string[], rows: string[][], name: string): Promise<void> {
+  if (!(await chargeExport(name))) return;
   const filename = `taureye-${slug(name)}.xls`;
   const html =
     '<html><head><meta charset="utf-8"></head><body>' +

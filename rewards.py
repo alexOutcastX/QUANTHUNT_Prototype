@@ -28,17 +28,23 @@ import wallet as _wallet
 PRICES = {
     "dossier": int(os.environ.get("PRICE_DOSSIER", "25")),
     "backtest": int(os.environ.get("PRICE_BACKTEST", "10")),
-    "deep_scan": int(os.environ.get("PRICE_DEEP_SCAN", "15")),
-    "ai_explain": int(os.environ.get("PRICE_AI_EXPLAIN", "5")),
     "export": int(os.environ.get("PRICE_EXPORT", "10")),
     "extra_alert": int(os.environ.get("PRICE_EXTRA_ALERT", "5")),
+    # Deliberately absent: "ai_explain" and "deep_scan".
+    #
+    # The plan priced both, and neither maps to anything a user actually does.
+    # There is no AI feature — Chat is trader-to-trader. And the screener does
+    # not have a "scan the universe" button: it sweeps incrementally as you
+    # page, so charging per scan would charge for scrolling.
+    #
+    # The screener's cost is real but continuous, which is what ALLOWANCES are
+    # for — see usage.py. Pricing something nobody can buy puts a lie in the
+    # wallet's "What credits buy" list.
 }
 
 PRICE_LABELS = {
     "dossier": "Full company dossier",
     "backtest": "Backtest run",
-    "deep_scan": "Deep screen over the whole universe",
-    "ai_explain": "Explain this stock",
     "export": "Export to CSV or Excel",
     "extra_alert": "Price alert beyond the free five",
 }

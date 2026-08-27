@@ -1430,6 +1430,7 @@ def member_logout():
 # from the Host header — see preview.py.
 import preview as _preview
 import gifting as _gifting
+import usage as _usage
 import rewards as _rewards
 import wallet as _wallet
 import referrals as _referrals
@@ -1690,6 +1691,72 @@ def wallet_spend():
                         "detail": "Not enough credits for this yet."}), 402
     _analytics.track(acct, "wallet.spend", {"action": action, "credits": cost})
     return jsonify({"ok": True, "spent": cost, "balance": left, "action": action})
+
+
+@app.route("/r/<code>")
+def referral_link(code):
+    """A share link that applies the code without anyone typing it.
+
+    First touch, not last: the person who sent the first link is the one who
+    actually persuaded them, so an existing cookie is never overwritten. The
+    cookie is the only state — attribution still happens through /referral/claim
+    once there is an account to attach it to.
+    """
+    clean = "".join(ch for ch in (code or "").upper() if ch.isalnum())[:12]
+    resp = redirect("/", code=302)
+    if clean:
+        resp.set_cookie(
+            "te_ref", clean,
+            max_age=30 * 24 * 3600,
+            httponly=False,          # the sign-in page reads it to prefill
+            samesite="Lax",
+            secure=request.is_secure,
+            domain=_cookie_domain(),
+        )
+    return resp
+
+
+@app.route("/usage")
+@require_preview
+@require_plan()
+def usage_get():
+    """This month's allowances — so the UI can show a limit BEFORE it is hit
+    rather than only when it bites."""
+    acct = _acct()
+    return jsonify(_usage.summary(acct, request.member.get("plan") or "free"))
+
+
+@app.route("/usage/record", methods=["POST"])
+@require_preview
+@require_plan()
+def usage_record():
+    """Count one use of an allowance-limited action.
+
+    Returns 402 when the allowance is spent, with what would lift it — the
+    client turns that into an upgrade prompt rather than an error.
+    """
+    body = request.get_json(silent=True) or {}
+    action = str(body.get("action") or "").strip()
+    if action not in _usage.LABELS:
+        return jsonify({"error": "unknown-action"}), 400
+    acct = _acct()
+    plan = request.member.get("plan") or "free"
+    if not _usage.allows(acct, action, plan):
+        return jsonify({
+            "error": "allowance-spent",
+            "detail": f"You have used this month's {_usage.LABELS[action]}.",
+            "action": action,
+            "plan": plan,
+            "limit": _usage.limit_for(plan, action),
+        }), 402
+    _usage.record(acct, action)
+    # Doing something real is what releases the rest of a referral reward — a
+    # manufactured account signs up and stops, so the bulk waits for this.
+    try:
+        _referrals.activate(acct)
+    except Exception:
+        logging.debug("referral activation failed for %s", acct, exc_info=True)
+    return jsonify({"ok": True, **_usage.summary(acct, plan)["actions"][action]})
 
 
 @app.route("/wallet/gift", methods=["GET", "POST"])
