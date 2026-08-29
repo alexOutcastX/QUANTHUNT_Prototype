@@ -37,6 +37,7 @@ import { loadPortfolio } from '../portfolio';
 import { navigate, openStock } from '../navIntent';
 import { AsOfChip, Card, EmptyState, Loading, SectionTitle, StatTile } from '../ui';
 import { theme } from '../theme';
+import { sessionLabel } from '../format';
 
 type Mover = { symbol: string; price?: number | null; chg?: number | null };
 type SocialLink = { label: string; url: string };
@@ -169,6 +170,7 @@ function MoverRows({ rows }: { rows: Mover[] }) {
 export default function DashboardScreen({ onNavigate }: { onNavigate?: (page: string) => void }) {
   const [indices, setIndices] = useState<IndexQuote[] | null>(dash.indices ?? null);
   const [indicesAsof, setIndicesAsof] = useState<number | null>(null);
+  const [indicesSession, setIndicesSession] = useState<string | null>(null);
   const [market, setMarket] = useState<HolidaysResp | null>(dash.market ?? null);
   const [movers, setMovers] = useState<Mover[] | null>(dash.movers ?? null);
   const [sensex, setSensex] = useState<Mover[] | null>(dash.sensex ?? null);
@@ -192,7 +194,7 @@ export default function DashboardScreen({ onNavigate }: { onNavigate?: (page: st
 
   // Every window loads independently and in parallel.
   const load = useCallback(async () => {
-    api.indices().then((d) => { dash.indices = d.indices; setIndices(d.indices); setIndicesAsof(d.asof ?? null); }).catch(() => setIndices((v) => v ?? []));
+    api.indices().then((d) => { dash.indices = d.indices; setIndices(d.indices); setIndicesAsof(d.asof ?? null); setIndicesSession(d.session ?? null); }).catch(() => setIndices((v) => v ?? []));
     api.holidays().then((d) => { dash.market = d; setMarket(d); }).catch(() => {});
     api.indexConstituents('NIFTY 50')
       .then((idx) => { const m = topBottom(idx.data || [], 4); dash.movers = m; setMovers(m); })
@@ -313,9 +315,19 @@ export default function DashboardScreen({ onNavigate }: { onNavigate?: (page: st
   const wlAgg = useMemo(() => {
     if (!watch?.length) return null;
     const chgs = watch.map((w) => w.q?.chg).filter((c): c is number => c != null);
-    if (!chgs.length) return { n: watch.length, avg: null as number | null };
-    return { n: watch.length, avg: chgs.reduce((a, c) => a + c, 0) / chgs.length };
+    // Which session the average is OF. Over a weekend every quote is Friday's,
+    // and calling that "today" is a statement about a session that has not
+    // happened — so the button borrows the stamp the quotes came with.
+    const when = sessionLabel(watch.map((w) => w.q?.session).find((d) => d) ?? null);
+    if (!chgs.length) return { n: watch.length, avg: null as number | null, when };
+    return { n: watch.length, avg: chgs.reduce((a, c) => a + c, 0) / chgs.length, when };
   }, [watch]);
+
+  // "Friday" rather than "today", wherever a number on this page is a closing
+  // price from a session that has already ended. Written once, read by the
+  // index strip, the breadth card and both mover lists.
+  const indicesWhen = sessionLabel(indicesSession).replace(/^on /, '');
+  const moversWhen = sessionLabel(mv?.session).replace(/^on /, '');
 
   const gsecRows = (gsec?.items || []).filter((g) => g.kind === 'gsec');
   const sgbRows = (gsec?.items || []).filter((g) => g.kind === 'sgb');
@@ -434,7 +446,9 @@ export default function DashboardScreen({ onNavigate }: { onNavigate?: (page: st
             <>
               <Text style={styles.jumpVal}>{wlAgg.n} symbols</Text>
               <Text style={[styles.jumpChg, { color: colorOf(wlAgg.avg) }]}>
-                {wlAgg.avg == null ? 'quotes pending' : pct(wlAgg.avg) + ' avg today'}
+                {wlAgg.avg == null
+                  ? 'quotes pending'
+                  : `${pct(wlAgg.avg)} avg ${wlAgg.when || 'today'}`}
               </Text>
             </>
           ) : (
@@ -461,7 +475,10 @@ export default function DashboardScreen({ onNavigate }: { onNavigate?: (page: st
           <TouchableOpacity onPress={() => go('tools')} activeOpacity={0.7}>
             <Text style={styles.moreLink}>All indices ›</Text>
           </TouchableOpacity>
-          <AsOfChip ts={indicesAsof} source="delayed · Yahoo" />
+          <AsOfChip
+            ts={indicesAsof}
+            source={[indicesWhen, 'delayed · Yahoo'].filter(Boolean).join(' · ')}
+          />
         </View>
       ) : null}
 
@@ -469,7 +486,15 @@ export default function DashboardScreen({ onNavigate }: { onNavigate?: (page: st
       <Card style={{ marginTop: theme.sp.lg }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
           <SectionTitle>Market breadth · NIFTY 500</SectionTitle>
-          {mv?.asof ? <AsOfChip ts={mv.asof} source="delayed · NSE" /> : null}
+          {mv?.asof ? (
+            <AsOfChip
+              ts={mv.asof}
+              // The fetch age and the SESSION are different facts, and on a
+              // Saturday only one of them is reassuring: quotes pulled five
+              // minutes ago that describe Friday.
+              source={[moversWhen, 'delayed · NSE'].filter(Boolean).join(' · ')}
+            />
+          ) : null}
         </View>
         {!mv ? (
           mvFailed ? (
@@ -502,14 +527,14 @@ export default function DashboardScreen({ onNavigate }: { onNavigate?: (page: st
       {/* ── Top gainers / losers (rows open the company profile) ── */}
       <View style={styles.cols}>
         <Card style={styles.col}>
-          <SectionTitle>Top gainers</SectionTitle>
+          <SectionTitle>Top gainers{moversWhen ? ` · ${moversWhen}` : ''}</SectionTitle>
           {!mv ? (mvFailed ? <EmptyState title="Unavailable" hint="Feed busy — retrying." /> : <Loading />)
             : gainers.length ? <MoverRows rows={gainers} />
             : <EmptyState title="Gainers unavailable" hint="Pull to refresh." />}
           <ScreenerLink index="NIFTY 500" />
         </Card>
         <Card style={styles.col}>
-          <SectionTitle>Top losers</SectionTitle>
+          <SectionTitle>Top losers{moversWhen ? ` · ${moversWhen}` : ''}</SectionTitle>
           {!mv ? (mvFailed ? <EmptyState title="Unavailable" hint="Feed busy — retrying." /> : <Loading />)
             : losers.length ? <MoverRows rows={losers} />
             : <EmptyState title="Losers unavailable" hint="Pull to refresh." />}

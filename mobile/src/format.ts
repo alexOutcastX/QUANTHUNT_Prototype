@@ -81,6 +81,29 @@ export function istNow(): { hh: number; mm: number; day: number; label: string }
   };
 }
 
+/** Today in IST as YYYY-MM-DD — the same calendar the session stamps use. */
+export function istToday(): string {
+  return new Date(Date.now() + IST_OFFSET_MIN * 60000).toISOString().slice(0, 10);
+}
+
+/**
+ * How to say WHEN a number is from, given the trading session it belongs to.
+ *
+ * Empty string while that session is today, so the live market keeps its
+ * ordinary wording. Over a weekend it returns "on Fri 28 Aug", because a
+ * change labelled "today" on a Saturday is a claim about a session that has
+ * not happened — the numbers are Friday's and the page should say so.
+ */
+export function sessionLabel(session?: string | null): string {
+  if (!session || session === istToday()) return '';
+  const d = new Date(session + 'T00:00:00Z');
+  if (Number.isNaN(d.getTime())) return '';
+  const day = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][d.getUTCDay()];
+  const mon = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][d.getUTCMonth()];
+  return `on ${day} ${d.getUTCDate()} ${mon}`;
+}
+
 export function marketState(isHoliday = false): { open: boolean; label: string } {
   const { hh, mm, day, label } = istNow();
   const mins = hh * 60 + mm;

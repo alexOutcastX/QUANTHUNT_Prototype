@@ -122,30 +122,80 @@ def yf_session():
             _yf_session = yf
         return _yf_session
 
+# Two CALENDAR days are not two SESSIONS. `period="2d"` asked for Friday and
+# Saturday, Saturday has no bar, so the frame held one row — the previous close
+# fell back to that same row and every change on the home page read +0.00% for
+# the whole weekend, and again on Monday until the open. Ten days always spans
+# two sessions, across a long weekend or a Diwali cluster included.
+_YF_WINDOW = "10d"
+
+
+def _finite(x, fallback=None):
+    """A float that is safe to serialise, or `fallback`.
+
+    float(nan) does not raise, and a NaN that reaches jsonify is written as a
+    bare `NaN` — invalid JSON, which kills the client outright rather than
+    degrading (the same trap _nan_safe exists for further down).
+    """
+    try:
+        v = float(x)
+    except (TypeError, ValueError):
+        return fallback
+    return v if math.isfinite(v) else fallback
+
+
+def _quote_from_frame(df):
+    """Last two sessions of a daily OHLCV frame → a quote entry, or None.
+
+    Yahoo pads its frames with rows that carry a volume but no prices, and
+    dropna(subset=["Close"]) did not always clear them — RELIANCE was serving
+    `"price": NaN` on the live site. Everything is read through a finite check
+    instead of positionally trusting the frame.
+    """
+    if df is None or getattr(df, "empty", True):
+        return None
+    try:
+        closes = pd.to_numeric(df["Close"], errors="coerce")
+        df = df.loc[closes.notna() & closes.apply(lambda v: math.isfinite(v))]
+    except Exception:
+        return None
+    if df.empty:
+        return None
+    row = df.iloc[-1]
+    close = _finite(row["Close"])
+    if not close or close <= 0:
+        return None
+    prev = _finite(df.iloc[-2]["Close"]) if len(df) >= 2 else None
+    if not prev or prev <= 0:
+        prev = None
+    try:
+        session = pd.to_datetime(df.index[-1]).strftime("%Y-%m-%d")
+    except Exception:
+        session = None
+    return {
+        "price": round(close, 2),
+        "prevClose": round(prev if prev else close, 2),
+        # No prior session in a ten-day window means a listing too new to have
+        # a change. Reporting +0.00% would be a claim; None is the gap it is.
+        "chg": round((close - prev) / prev * 100, 2) if prev else None,
+        "absChg": round(close - prev, 2) if prev else None,
+        "open": _finite(row.get("Open"), close),
+        "high": _finite(row.get("High"), close),
+        "low": _finite(row.get("Low"), close),
+        "volume": int(_finite(row.get("Volume"), 0) or 0),
+        # The session these numbers are FROM, taken off the bar's own date
+        # rather than guessed from the server clock.
+        "session": session,
+        "source": "YF",
+    }
+
+
 def yf_price(symbol):
     """Fetch price from Yahoo Finance using NSE suffix (.NS)."""
     try:
         yf = yf_session()
         ticker = yf.Ticker(f"{symbol}.NS")
-        h = ticker.history(period="2d")
-        if h.empty:
-            return None
-        row = h.iloc[-1]
-        prev_row = h.iloc[-2] if len(h) >= 2 else None
-        close = float(row["Close"])
-        prev  = float(prev_row["Close"]) if prev_row is not None else close
-        chg   = round((close - prev) / prev * 100, 2) if prev else 0
-        return {
-            "price":     round(close, 2),
-            "prevClose": round(prev, 2),
-            "chg":       chg,
-            "absChg":    round(close - prev, 2),
-            "open":      float(row.get("Open", close)),
-            "high":      float(row.get("High", close)),
-            "low":       float(row.get("Low",  close)),
-            "volume":    int(row.get("Volume", 0)),
-            "source":    "YF",
-        }
+        return _quote_from_frame(ticker.history(period=_YF_WINDOW))
     except Exception as e:
         log.debug("YF fallback failed for %s: %s", symbol, e)
         return None
@@ -2273,26 +2323,21 @@ def _yf_batch(symbols):
         return out
     try:
         yf = yf_session()
-        data = yf.download([s + ".NS" for s in symbols], period="2d",
+        data = yf.download([s + ".NS" for s in symbols], period=_YF_WINDOW,
                            group_by="ticker", threads=True, progress=False,
                            auto_adjust=False)
+        # Whether the frame is per-ticker depends on the shape yfinance
+        # returns, not on how many symbols were asked for: a one-symbol
+        # download can still come back with MultiIndex columns, and then
+        # `data` itself has no "Close" to read.
+        cols = getattr(data, "columns", None)
+        top = set(cols.levels[0]) if isinstance(cols, pd.MultiIndex) else set()
         for s in symbols:
             try:
-                df = data[s + ".NS"] if len(symbols) > 1 else data
-                df = df.dropna(subset=["Close"])
-                if df.empty:
-                    continue
-                row = df.iloc[-1]
-                prev = df.iloc[-2] if len(df) >= 2 else row
-                close, pc = float(row["Close"]), float(prev["Close"]) or float(row["Close"])
-                out[s] = {"price": round(close, 2), "prevClose": round(pc, 2),
-                          "chg": round((close - pc) / pc * 100, 2) if pc else 0,
-                          "absChg": round(close - pc, 2),
-                          "open": float(row.get("Open", close)),
-                          "high": float(row.get("High", close)),
-                          "low": float(row.get("Low", close)),
-                          "volume": int(row.get("Volume", 0) or 0),
-                          "source": "YF"}
+                df = data[s + ".NS"] if (s + ".NS") in top else data
+                entry = _quote_from_frame(df)
+                if entry:
+                    out[s] = entry
             except Exception:
                 continue
     except Exception as e:
@@ -2772,8 +2817,19 @@ def _rows_with_chg(name, cap=180):
     rows, _src = _get_constituents(name)
     if not rows:
         return []
-    if any(r.get("chg") is not None for r in rows):
+    live = [r for r in rows if r.get("chg") is not None]
+    # An index whose every constituent is EXACTLY unchanged is not a session,
+    # it is a feed serving placeholder zeros — which is what a weekend request
+    # to the NSE endpoint returns. Fall through to the quote backfill, which
+    # reads the last bar that actually traded.
+    if live and any(r["chg"] != 0 for r in live):
         return rows
+    # Clear the placeholder zeros before backfilling. The backfill is capped,
+    # so anything past the cap would otherwise keep its 0.00 and be counted as
+    # a genuine unchanged print — 320 fake flats in a 500-name breadth. A row
+    # nobody could quote is a gap, and _movers_build drops gaps.
+    for r in rows:
+        r["chg"] = None
     # CSV fallback gave symbols only — backfill quotes in one batched call so
     # breadth/movers still work when NSE has blocked the VM.
     syms = [r["symbol"] for r in rows][:cap]
@@ -2781,7 +2837,8 @@ def _rows_with_chg(name, cap=180):
     for r in rows:
         e = q.get(r["symbol"])
         if e:
-            for k in ("price", "prevClose", "chg", "absChg", "open", "high", "low", "volume"):
+            for k in ("price", "prevClose", "chg", "absChg", "open", "high",
+                      "low", "volume", "session"):
                 r[k] = e.get(k)
     return rows
 
@@ -2789,6 +2846,11 @@ def _rows_with_chg(name, cap=180):
 def _movers_aggregate(name, rows, top, partial=False):
     """Breadth + top movers payload from constituent rows carrying `chg`."""
     now = time.time()
+    # Which session these numbers belong to. Taken from the rows themselves
+    # where the quote backfill recorded it, so the card can say "Friday" over
+    # a weekend instead of implying the move happened today.
+    stamps = [r.get("session") for r in rows if r.get("session")]
+    session = max(set(stamps), key=stamps.count) if stamps else _holidays.last_session()
     up = sum(1 for r in rows if r["chg"] > 0)
     down = sum(1 for r in rows if r["chg"] < 0)
     flat = len(rows) - up - down
@@ -2801,6 +2863,7 @@ def _movers_aggregate(name, rows, top, partial=False):
         "gainers": srt[:top],
         "losers": list(reversed(srt[-top:])) if len(srt) >= top else list(reversed(srt)),
         "asof": int(now),
+        "session": session,
     }
     if partial:
         payload["partial"] = True
@@ -4650,10 +4713,28 @@ def _fetch_index_row(key, name, yf_sym):
     last = float(closes.iloc[-1])
     prev = float(closes.iloc[-2]) if len(closes) >= 2 else None
     first = float(closes.iloc[0]) if len(closes) >= 2 else None
+    # A year of closes means the last two rows are always two real sessions —
+    # which is why the index tiles kept showing Friday's move over a weekend
+    # while every other card on the page read +0.00%.
+    try:
+        session = pd.to_datetime(closes.index[-1]).strftime("%Y-%m-%d")
+    except Exception:
+        session = None
     return {"key": key, "name": name, "symbol": yf_sym,
             "level": round(last, 2),
             "chg": round((last / prev - 1) * 100, 2) if prev else None,
-            "y1": round((last / first - 1) * 100, 1) if first else None}
+            "y1": round((last / first - 1) * 100, 1) if first else None,
+            "session": session}
+
+
+def _indices_session(rows):
+    """The session the levels are from — the one most of them agree on.
+
+    Foreign indices in the same list keep their own calendar, so this is a
+    majority rather than the first row's stamp.
+    """
+    stamps = [r.get("session") for r in (rows or []) if r.get("session")]
+    return max(set(stamps), key=stamps.count) if stamps else None
 
 
 @app.route("/indices")
@@ -4685,11 +4766,14 @@ def indices_live():
                 ).start()
             stale = dict(entry)
             return jsonify({"indices": stale["data"], "asof": int(time.time()),
+                            "session": _indices_session(stale["data"]),
                             "cached": True, "stale": True})
         _refresh_indices(category)
         entry = _indices_cache[category]
     return jsonify({"indices": entry["data"],
-                    "asof": int(time.time()), "cached": cached})
+                    "asof": int(time.time()),
+                    "session": _indices_session(entry["data"]),
+                    "cached": cached})
 
 
 _indices_refreshing = {}   # category -> bool (single-flight guard)

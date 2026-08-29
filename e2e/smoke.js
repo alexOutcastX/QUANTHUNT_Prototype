@@ -286,6 +286,27 @@ function check(name, ok, detail) {
     check('a case opens its constituents', /CONSTITUENTS/i.test(one) && /WEIGHT/i.test(one));
     check('the engine action log renders', /What the engine has done/i.test(one) && /BOOKED|EXITED|ADDED|REBALANCED/.test(one));
 
+    // 8a · numbers from a session that has already ended say WHICH session.
+    //
+    // On a Saturday every quote is Friday's close. The page used to call that
+    // change "today" — a statement about a session that had not happened —
+    // and, worse, computed it as Friday against Friday, so the whole dashboard
+    // read +0.00%. The fixture stamps its quotes with a fixed past date, so
+    // the "not today" wording has to appear here.
+    await tap('Today');
+    await page.waitForTimeout(2500);
+    const dash = await page.evaluate(() => document.body.innerText);
+    check(
+      'movers name the session they are from',
+      /Top gainers\s*·\s*Thu 23 Jul/i.test(dash),
+      dash.slice(0, 300),
+    );
+    check(
+      'the breadth card names the session too',
+      /Thu 23 Jul\s*·\s*delayed/i.test(dash),
+      (dash.match(/.{0,60}delayed.{0,20}/g) || []).join(' | '),
+    );
+
     // 8b · the sign-out control in the chrome, and the width budget it lives in.
     //
     // Two things are measured here that source-level tests cannot see. First,

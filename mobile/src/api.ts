@@ -155,6 +155,10 @@ export type Quote = {
   high?: number | null;
   low?: number | null;
   volume?: number | null;
+  // The trading date these numbers are FROM, taken off the price bar itself.
+  // Over a weekend it is Friday, and the UI says so rather than calling a
+  // Friday move "today".
+  session?: string | null;
   source?: string;
   error?: string;
 };
@@ -351,6 +355,8 @@ export type MoversResp = {
   gainers: IndexConstituent[];
   losers: IndexConstituent[];
   asof?: number;
+  // The trading session this breadth and these movers belong to (YYYY-MM-DD).
+  session?: string | null;
   stale?: boolean;
   error?: string;
 };
@@ -637,8 +643,15 @@ export type IndexQuote = {
   y1: number;
   category?: string;
   country?: string;
+  // Trading date of the close this level and change are from.
+  session?: string | null;
 };
-export type IndicesResp = { indices: IndexQuote[]; asof: number; cached?: boolean };
+export type IndicesResp = {
+  indices: IndexQuote[];
+  asof: number;
+  session?: string | null;
+  cached?: boolean;
+};
 export type Holiday = { date: string; name: string; day: string };
 export type HolidaysResp = {
   open: boolean;

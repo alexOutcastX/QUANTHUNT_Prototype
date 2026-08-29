@@ -62,3 +62,38 @@ def holidays():
     return [{"date": d, "name": name,
              "day": datetime.datetime.strptime(d, "%Y-%m-%d").strftime("%A")}
             for d, name in sorted(NSE_HOLIDAYS_2026)]
+
+
+def is_trading_day(d):
+    """Weekday, and not on the published holiday list."""
+    if isinstance(d, str):
+        d = datetime.datetime.strptime(d, "%Y-%m-%d").date()
+    return d.weekday() < 5 and d.strftime("%Y-%m-%d") not in _HOLIDAY_DATES
+
+
+def last_session(now=None):
+    """The trading date the current quotes belong to, as YYYY-MM-DD.
+
+    Today once the session has opened; otherwise the previous trading day. On
+    a Saturday, a Sunday, or a Monday before 09:15 that is Friday — which is
+    the whole point: a quote taken then IS Friday's close, and its change
+    belongs to Friday's session, not to a session that has not happened.
+
+    Walks back day by day rather than subtracting a fixed offset, so a long
+    weekend or a Diwali cluster resolves to the last day that actually traded.
+    """
+    if now is None:
+        now = datetime.datetime.now(datetime.timezone.utc)
+    if now.tzinfo is not None:
+        now = now.astimezone(IST)
+    d = now.date()
+    open_yet = now.hour * 60 + now.minute >= 9 * 60 + 15
+    if not (is_trading_day(d) and open_yet):
+        d -= datetime.timedelta(days=1)
+        # 14 is comfortably more than the longest stretch the NSE has ever
+        # been shut; the bound only stops a bad holiday table looping forever.
+        for _ in range(14):
+            if is_trading_day(d):
+                break
+            d -= datetime.timedelta(days=1)
+    return d.strftime("%Y-%m-%d")

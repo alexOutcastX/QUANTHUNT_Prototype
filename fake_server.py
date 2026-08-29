@@ -20,6 +20,12 @@ DIST = os.path.join(os.path.dirname(__file__), "mobile", "dist")
 PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 5056
 
 _MEMBER_TOKEN = "fake-member-token"
+
+# The trading session every stubbed quote belongs to. A fixed PAST date on
+# purpose: it is what makes the dashboard render its "not today" wording, which
+# is the thing the smoke suite checks. (Thursday 23 July 2026 — the same day
+# the movers fixture is stamped with.)
+_SESSION = "2026-07-23"
 _MEMBER = {"username": "Taureye", "uname": "taureye", "plan": "pro", "owner": True,
            "features": ["quotes", "heatmap", "news", "universe", "screener", "patterns",
                         "recommendations", "watchlist", "portfolio", "backtest",
@@ -318,12 +324,14 @@ class H(BaseHTTPRequestHandler):
             "commodity": [("GOLD", "Gold", 2410.5, 0.55, 19.2),
                          ("BRENT", "Brent Crude", 84.3, -1.02, 3.1)],
         }.get(cat, [])
-        rows = [{"key": k, "name": n, "level": lv, "chg": c, "y1": y, "category": cat}
+        rows = [{"key": k, "name": n, "level": lv, "chg": c, "y1": y,
+                 "category": cat, "session": _SESSION}
                 for (k, n, lv, c, y) in sample]
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
         self.end_headers()
-        self.wfile.write(json.dumps({"indices": rows, "asof": 1752350000, "cached": False}).encode())
+        self.wfile.write(json.dumps({"indices": rows, "asof": 1752350000,
+                                     "session": _SESSION, "cached": False}).encode())
 
     def _graph(self):
         from urllib.parse import urlparse, parse_qs
@@ -679,7 +687,8 @@ class H(BaseHTTPRequestHandler):
             out[s] = {"price": round(base, 2), "prevClose": round(base / (1 + chg / 100), 2),
                       "chg": chg, "absChg": round(base * chg / 100, 2),
                       "open": round(base * 0.995, 2), "high": round(base * 1.02, 2),
-                      "low": round(base * 0.98, 2), "volume": 120000 + i * 45000, "source": "stub"}
+                      "low": round(base * 0.98, 2), "volume": 120000 + i * 45000,
+                      "session": _SESSION, "source": "stub"}
         self._json(out)
 
     def _chart_patterns(self):
@@ -917,7 +926,8 @@ class H(BaseHTTPRequestHandler):
                                                 ("LOSER1", -3.8), ("LOSER2", -2.9), ("LOSER3", -1.7)])]
             return self._json({"index": "NIFTY 500",
                                "breadth": {"up": 293, "down": 182, "flat": 25, "total": 500, "ratio": 1.61},
-                               "gainers": rows[:3], "losers": rows[3:], "asof": "2026-07-23T15:30:00"})
+                               "gainers": rows[:3], "losers": rows[3:],
+                               "session": _SESSION, "asof": "2026-07-23T15:30:00"})
         if path == "/news":
             # Item 3 deliberately carries no summary so the popup's
             # headline-only branch is exercised by the checks.
