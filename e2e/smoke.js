@@ -627,36 +627,53 @@ function check(name, ok, detail) {
       const t = [...document.querySelectorAll('*')]
         .find((e) => !e.children.length && (e.textContent || '').trim() === 'DESK');
       if (!t) return { found: false };
-      // Walk out to the panel itself: pinned to the left edge AND as tall as
-      // the viewport. Stopping at the first element with left 0 lands on the
-      // drawer's own header row, which is neither.
+      // Walk out to the panel itself: pinned to the left edge and running to
+      // the foot of the page. Stopping at the first element with left 0 lands
+      // on the drawer's own header row, which is neither.
       let n = t;
       while (n) {
         const b = n.getBoundingClientRect();
-        if (b.left <= 1 && b.height >= window.innerHeight - 2) break;
+        if (b.left <= 1 && b.height > 200 && b.width > 200 && b.width < 420) break;
         n = n.parentElement;
       }
       if (!n) return { found: false };
       const r = n.getBoundingClientRect();
-      const hit = document.elementFromPoint(r.left + 20, r.top + 160);
+      const hit = document.elementFromPoint(r.left + 20, r.top + 120);
+      // Whatever sits at the very top of the window must NOT be the drawer:
+      // the wordmark, the search box and the destination tabs are how you
+      // leave the Desk, and a menu for switching sections of it must not sit
+      // on top of them.
+      const topLeft = document.elementFromPoint(8, 20);
       return {
         found: true,
         left: Math.round(r.left),
         top: Math.round(r.top),
-        fullHeight: r.height >= window.innerHeight - 2,
+        bottom: Math.round(r.bottom),
+        viewportH: window.innerHeight,
         onTop: !!hit && n.contains(hit),
+        clearsChrome: r.top > 24 && !!topLeft && !n.contains(topLeft),
         text: (n.textContent || '').slice(0, 400),
       };
     });
     check(
-      'the drawer opens against the left edge, full height',
-      drawer.found && drawer.left === 0 && drawer.top === 0 && drawer.fullHeight,
+      'the drawer opens against the left edge of the page, not the window',
+      drawer.found && drawer.left === 0 && drawer.clearsChrome,
       JSON.stringify({ ...drawer, text: undefined }),
     );
     check(
-      'it is drawn over the page, not under the header',
-      drawer.onTop,
+      'it runs to the foot of the page and is drawn over it',
+      drawer.onTop && Math.abs(drawer.bottom - drawer.viewportH) < 90,
       JSON.stringify({ ...drawer, text: undefined }),
+    );
+    check(
+      'the app chrome stays reachable behind it',
+      await page.evaluate(() => {
+        const el = document.querySelector('[aria-label="Screens"]');
+        if (!el) return false;
+        const r = el.getBoundingClientRect();
+        const hit = document.elementFromPoint((r.left + r.right) / 2, (r.top + r.bottom) / 2);
+        return !!hit && (hit === el || el.contains(hit) || hit.contains(el));
+      }),
     );
     check(
       'it lists every section with what it is for',

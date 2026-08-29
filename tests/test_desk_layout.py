@@ -138,24 +138,35 @@ class SideNavTest(unittest.TestCase):
         self.assertIn("variant?: 'pills' | 'side'", self.hosts)
         self.assertIn("if (variant === 'side') {", self.hosts)
 
-    def test_it_sits_against_the_left_edge_and_runs_full_height(self):
+    def test_it_sits_against_the_left_edge_of_the_page(self):
         drawer = self.hosts.split("  drawer: {")[1].split("},")[0]
         for needle in ("position: 'absolute'", "top: 0", "bottom: 0", "left: 0", "width: 320"):
             self.assertIn(needle, drawer, needle)
 
-    def test_it_is_portalled_so_the_header_cannot_paint_over_it(self):
-        """The header carries zIndex for its own popover; ranked inside the
-        page the drawer loses to it, which is how the universe sheet lost its
-        close button."""
+    def test_it_belongs_to_the_page_and_not_to_the_window(self):
+        """Portalled through a Modal it started at the top of the WINDOW and
+        lay over the wordmark, the search box and the destination tabs — the
+        chrome you use to leave the Desk. Absolute inside the sub-nav host, it
+        starts under the app bar, so it covers only what it switches."""
         side = self.hosts.split("if (variant === 'side') {")[1].split("return (\n    <View style={styles.host}>")[0]
-        self.assertIn("<Modal visible={menuOpen}", side)
-        self.assertIn("<Pressable style={styles.menuScrim}", side)
+        self.assertNotIn("<Modal", side)
+        self.assertIn("{menuOpen ? (", side)
+        self.assertIn("<Pressable\n              style={styles.drawerScrim}", side)
+
+    def test_the_scrim_covers_the_page_and_only_the_page(self):
+        scrim = self.hosts.split("  drawerScrim: {")[1].split("},")[0]
+        self.assertIn("position: 'absolute'", scrim)
+        self.assertIn("top: 0, left: 0, right: 0, bottom: 0", scrim)
 
     def test_the_drawer_can_be_dismissed_three_ways(self):
         side = self.hosts.split("if (variant === 'side') {")[1]
-        self.assertIn("onRequestClose={close}", side)          # escape / back
         self.assertIn("onPress={close}", side)                 # the scrim
         self.assertIn('accessibilityLabel="Close the sections menu"', side)
+
+    def test_escape_still_closes_it_without_a_modal(self):
+        """Modal supplied onRequestClose; a plain View supplies nothing."""
+        self.assertIn("if (e.key === 'Escape') setMenuOpen(false);", self.hosts)
+        self.assertIn("g.removeEventListener?.('keydown', onKey);", self.hosts)
 
     def test_the_button_says_where_you_are_and_what_it_is_for(self):
         side = self.hosts.split("if (variant === 'side') {")[1].split("</Modal>")[0]

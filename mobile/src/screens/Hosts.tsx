@@ -118,6 +118,20 @@ function SubTabs({ tabs, persistKey, alias, variant = 'pills', menuTitle }: {
   const shown = tabs.filter((t) => !t.hidden);
 
   const close = () => setMenuOpen(false);
+  // Escape used to be handled by Modal's onRequestClose. The drawer is part of
+  // the page now, so it needs its own.
+  useEffect(() => {
+    if (!menuOpen) return undefined;
+    const g = globalThis as {
+      addEventListener?: (t: string, f: (e: KeyboardEvent) => void) => void;
+      removeEventListener?: (t: string, f: (e: KeyboardEvent) => void) => void;
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setMenuOpen(false);
+    };
+    g.addEventListener?.('keydown', onKey);
+    return () => g.removeEventListener?.('keydown', onKey);
+  }, [menuOpen]);
   // The drawer's list, shared by the side variant and the mobile dropdown.
   const menuRows = shown.map((t) => (
     <TouchableOpacity
@@ -157,28 +171,39 @@ function SubTabs({ tabs, persistKey, alias, variant = 'pills', menuTitle }: {
             </View>
           </TouchableOpacity>
         </View>
-        {/* A Modal so the drawer portals to the document root: inside the page
-            it would be ranked against the header's own stacking context and
-            painted under it, which is how the universe sheet lost its close
-            button. */}
-        <Modal visible={menuOpen} transparent animationType="fade" onRequestClose={close}>
-          <Pressable style={styles.menuScrim} onPress={close} />
-          <View style={styles.drawer}>
-            <View style={styles.drawerHead}>
-              <Text style={styles.drawerTitle}>{menuTitle || 'Sections'}</Text>
-              <TouchableOpacity
-                onPress={close}
-                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-                accessibilityRole="button"
-                accessibilityLabel="Close the sections menu"
-              >
-                <Text style={styles.drawerX}>✕</Text>
-              </TouchableOpacity>
-            </View>
-            <ScrollView bounces={false}>{menuRows}</ScrollView>
-          </View>
-        </Modal>
         <View style={styles.hostBody}>{cur.render()}</View>
+        {/* Inside the page rather than portalled through a Modal, and that is
+            deliberate: portalled it started at the top of the window and lay
+            over the wordmark, the search box and the destination tabs — the
+            chrome you use to leave the Desk. It belongs to the page it
+            switches, so it is absolute within this host, which begins under
+            the app bar and ends above the tab bar. Nothing above it is
+            covered, and since the two no longer overlap there is no stacking
+            contest with the header to lose. */}
+        {menuOpen ? (
+          <>
+            <Pressable
+              style={styles.drawerScrim}
+              onPress={close}
+              accessibilityRole="button"
+              accessibilityLabel="Close the sections menu"
+            />
+            <View style={styles.drawer}>
+              <View style={styles.drawerHead}>
+                <Text style={styles.drawerTitle}>{menuTitle || 'Sections'}</Text>
+                <TouchableOpacity
+                  onPress={close}
+                  hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Close the sections menu"
+                >
+                  <Text style={styles.drawerX}>✕</Text>
+                </TouchableOpacity>
+              </View>
+              <ScrollView bounces={false}>{menuRows}</ScrollView>
+            </View>
+          </>
+        ) : null}
       </View>
     );
   }
@@ -672,6 +697,11 @@ const styles = StyleSheet.create({
     borderRadius: theme.radius.md,
     paddingHorizontal: theme.sp.lg,
     paddingVertical: theme.sp.md - 3,
+  },
+  // Absolute within the sub-nav host — i.e. the page body — not the window.
+  drawerScrim: {
+    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+    backgroundColor: '#0009', zIndex: 25,
   },
   drawer: {
     position: 'absolute',
