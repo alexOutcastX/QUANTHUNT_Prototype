@@ -617,6 +617,37 @@ function check(name, ok, detail) {
       !/Watchlist[\s\S]{0,25}Portfolio[\s\S]{0,25}Paper trades/.test(landed),
       (landed.match(/Watchlist[\s\S]{0,80}/) || [''])[0],
     );
+    // The button lives in the page's own title row, not in a band above it —
+    // a band pushes every heading down behind a strip that repeats it.
+    const btnRow = await page.evaluate(() => {
+      const btn = [...document.querySelectorAll('[role="button"]')].find((e) =>
+        (e.getAttribute('aria-label') || '').startsWith('Sections menu'));
+      const h1 = [...document.querySelectorAll('*')]
+        .find((e) => !e.children.length && (e.textContent || '').trim() === 'Desk'
+          && e.getBoundingClientRect().top > 60);
+      if (!btn || !h1) return { found: false, btn: !!btn, h1: !!h1 };
+      const b = btn.getBoundingClientRect();
+      const t = h1.getBoundingClientRect();
+      return {
+        found: true,
+        sameRow: Math.abs((b.top + b.bottom) / 2 - (t.top + t.bottom) / 2) < 16,
+        leftOfTitle: b.right <= t.left + 2,
+        square: Math.abs(b.width - b.height) < 2,
+        headingTop: Math.round(t.top),
+        btnTop: Math.round(b.top),
+      };
+    });
+    check(
+      'the hamburger sits in the page title row, left of the heading',
+      btnRow.found && btnRow.sameRow && btnRow.leftOfTitle,
+      JSON.stringify(btnRow),
+    );
+    check(
+      'so the heading is not pushed down behind a band of its own',
+      btnRow.found && btnRow.headingTop < 200,
+      JSON.stringify(btnRow),
+    );
+
     await page.evaluate(() => {
       const el = [...document.querySelectorAll('[role="button"]')].find((e) =>
         (e.getAttribute('aria-label') || '').startsWith('Sections menu'));
@@ -705,6 +736,22 @@ function check(name, ok, detail) {
       'coming back to Desk lands on Home, not on the last section',
       /Corporate calendar/i.test(back) && !/Holdings/.test(back),
       back.slice(0, 200),
+    );
+
+    // Four Desk screens open on their own chrome and have no title row to sit
+    // beside; with no button at all there would be no way off them.
+    await openDeskSection('Shareholders');
+    check(
+      'a screen with no heading of its own keeps a labelled way out',
+      await page.evaluate(() => {
+        const btn = [...document.querySelectorAll('[role="button"]')].find((e) =>
+          (e.getAttribute('aria-label') || '').startsWith('Sections menu'));
+        if (!btn) return false;
+        const r = btn.getBoundingClientRect();
+        const hit = document.elementFromPoint((r.left + r.right) / 2, (r.top + r.bottom) / 2);
+        return !!hit && (btn.contains(hit) || hit.contains(btn))
+          && /Shareholders/.test(btn.textContent || '');
+      }),
     );
 
     const desk = await openDeskSection('Home');

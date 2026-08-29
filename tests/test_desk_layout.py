@@ -96,7 +96,7 @@ class DeskLandingTest(unittest.TestCase):
         self.assertIn("navigate('desk', { sub: 'holidays' })", self.home)
         self.assertIn("navigate('desk', { sub: 'community' })", self.home)
         for key in ("holidays", "community"):
-            self.assertRegex(self.hosts, r"\{ key: '%s'[^\n]*hidden: true \}" % key)
+            self.assertRegex(self.hosts, r"\{ key: '%s'[^\n]*hidden: true" % key)
 
     def test_the_calendar_only_offers_a_filter_for_what_is_in_the_window(self):
         self.assertIn("const have = new Set((items || []).map((i) => i.kind));", self.home)
@@ -168,15 +168,68 @@ class SideNavTest(unittest.TestCase):
         self.assertIn("if (e.key === 'Escape') setMenuOpen(false);", self.hosts)
         self.assertIn("g.removeEventListener?.('keydown', onKey);", self.hosts)
 
-    def test_the_button_says_where_you_are_and_what_it_is_for(self):
-        side = self.hosts.split("if (variant === 'side') {")[1].split("</Modal>")[0]
-        self.assertIn("styles.hamIcon", side)
+    def test_the_button_sits_in_the_page_title_row(self):
+        """In a band of its own it pushed every page heading down behind a
+        strip that repeated what the heading already said."""
+        side = self.hosts.split("if (variant === 'side') {")[1]
+        self.assertIn("const inTitle = cur.titled !== false;", side)
+        self.assertIn(
+            "<TitleSlotContext.Provider value={inTitle ? { node: hamburger } : null}>", side)
+        self.assertIn("{inTitle ? null : <View style={styles.sideWrap}>{hamburger}</View>}", side)
+
+    def test_the_title_row_renders_whatever_the_host_puts_there(self):
+        ui = _read("mobile", "src", "ui.tsx")
+        self.assertIn("export const TitleSlotContext", ui)
+        self.assertIn("const slot = React.useContext(TitleSlotContext);", ui)
+        self.assertIn("{slot?.node}\n      <Text style={s.title}>{title}</Text>", ui)
+
+    def test_beside_a_heading_it_is_just_the_icon(self):
+        """The heading already names the section; repeating it in the button
+        is the band's copy in a smaller font."""
+        side = self.hosts.split("if (variant === 'side') {")[1].split("return (")[0]
+        self.assertIn("style={inTitle ? styles.sideBtnCompact : styles.sideBtn}", side)
+        self.assertIn("{inTitle ? null : (", side)
+        compact = self.hosts.split("  sideBtnCompact: {")[1].split("},")[0]
+        self.assertIn("width: 38", compact)
+        self.assertIn("height: 38", compact)
+
+    def test_a_screen_with_no_heading_still_gets_a_labelled_button(self):
+        """Four Desk screens open on their own chrome. With no title row to
+        sit beside, the band is the only thing naming the section — and
+        without it there is no way out of that screen at all."""
+        band = self.hosts.split("  sideBtn: {")[1].split("},")[0]
+        self.assertIn("alignSelf: 'flex-start'", band)
+        side = self.hosts.split("if (variant === 'side') {")[1].split("return (")[0]
         self.assertIn("{cur.label}", side)
         self.assertIn("{cur.hint}", side)
 
-    def test_it_hugs_the_left_rather_than_stretching_the_page(self):
-        btn = self.hosts.split("  sideBtn: {")[1].split("},")[0]
-        self.assertIn("alignSelf: 'flex-start'", btn)
+    def test_the_titled_flag_matches_the_screens_themselves(self):
+        """The flag decides where the only way off a screen is drawn, so it
+        cannot be allowed to drift from what the screen actually renders."""
+        desk = self.hosts.split("export function DeskHub")[1].split("ChartsHome")[0]
+        rows = [l for l in desk.splitlines() if "{ key: '" in l]
+        self.assertGreaterEqual(len(rows), 10)
+        checked = 0
+        for row in rows:
+            m = re.search(r"render: \(\) => <(\w+) ?/>", row)
+            if not m:
+                continue
+            name = m.group(1)
+            path = os.path.join(ROOT, "mobile", "src", "screens", name + ".tsx")
+            if not os.path.exists(path):        # hosted in Hosts.tsx itself
+                src = self.hosts.split("export function " + name)[1] if (
+                    "export function " + name) in self.hosts else ""
+            else:
+                with open(path, encoding="utf-8") as fh:
+                    src = fh.read()
+            has_title = "<ScreenTitle" in src
+            flagged = "titled: false" not in row
+            self.assertEqual(
+                has_title, flagged,
+                f"{name}: renders ScreenTitle={has_title} but the Desk tab says titled={flagged}",
+            )
+            checked += 1
+        self.assertGreaterEqual(checked, 10)
 
     def test_every_section_carries_its_description_into_the_drawer(self):
         desk = self.hosts.split("export function DeskHub")[1].split("ChartsHome")[0]

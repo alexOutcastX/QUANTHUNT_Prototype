@@ -241,6 +241,16 @@ export function InfoButton({ title, content, style }: { title: string; content: 
 // (and its sub-line) would get squeezed and wrap, so the actions drop below it.
 // `info`, when given, renders an ⓘ button next to the title that opens a popup
 // with the tab's full details (so the header can stay a one-liner).
+// A control the page's HOST wants rendered inside the page's own title row.
+//
+// The Desk's section drawer opens from a hamburger, and a hamburger in a band
+// of its own above the page costs a strip of empty space across the top of
+// every screen under it — the page title then starts below a bar that says
+// nothing the title does not. The host puts the button here instead and
+// ScreenTitle renders it immediately left of the heading.
+export type TitleSlot = { node: React.ReactNode };
+export const TitleSlotContext = React.createContext<TitleSlot | null>(null);
+
 export function ScreenTitle({
   title,
   sub,
@@ -253,8 +263,10 @@ export function ScreenTitle({
   info?: InfoContent;
 }) {
   const { isDesktop } = useResponsive();
+  const slot = React.useContext(TitleSlotContext);
   const heading = (
     <View style={s.titleLine}>
+      {slot?.node}
       <Text style={s.title}>{title}</Text>
       {info ? <InfoButton title={title} content={info} /> : null}
     </View>

@@ -7,7 +7,7 @@ import { useResponsive } from '../responsive';
 import { theme } from '../theme';
 import { lazyScreen } from '../lazyScreen';
 import { usePreview } from '../usePreview';
-import { AnchoredMenu, useMenuAnchor } from '../ui';
+import { AnchoredMenu, TitleSlotContext, useMenuAnchor } from '../ui';
 
 // Every hosted screen is a lazy chunk: Metro splits each import() into its own
 // web bundle, fetched the first time the user opens that screen. First paint
@@ -47,7 +47,14 @@ const DeskHome = lazyScreen(() => import('./DeskHome'));
 
 // hidden: routable via nav intents but not shown as a pill/menu entry (e.g.
 // Universe after it left the Screens bar for the Today landing page).
-type SubTab = { key: string; label: string; hint?: string; render: () => React.ReactElement; hidden?: boolean };
+// titled: does this screen render a <ScreenTitle>? The side variant puts its
+// hamburger inside that title row rather than in a band of its own; the few
+// screens with no title row (they open on their own chrome) get the band.
+// tests/test_desk_layout.py checks the flag against the screens themselves.
+type SubTab = {
+  key: string; label: string; hint?: string;
+  render: () => React.ReactElement; hidden?: boolean; titled?: boolean;
+};
 
 // A lightweight top switcher hosting several full screens under one bottom tab.
 // Only the active sub-screen is mounted (each manages its own state / fetches).
@@ -154,24 +161,36 @@ function SubTabs({ tabs, persistKey, alias, variant = 'pills', menuTitle }: {
   ));
 
   if (variant === 'side') {
+    // Beside the page's own heading, not above it. In a band of its own the
+    // button pushed every page title down behind a strip that repeated what
+    // the title already said; the pages that have no heading of their own
+    // still get the band, since there is nothing to sit beside.
+    const inTitle = cur.titled !== false;
+    const hamburger = (
+      <TouchableOpacity
+        style={inTitle ? styles.sideBtnCompact : styles.sideBtn}
+        onPress={() => setMenuOpen(true)}
+        activeOpacity={0.75}
+        accessibilityRole="button"
+        accessibilityLabel={`Sections menu — currently ${cur.label}`}
+      >
+        <Text style={styles.hamIcon}>☰</Text>
+        {inTitle ? null : (
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text style={styles.hamLabel} numberOfLines={1}>{cur.label}</Text>
+            {cur.hint ? <Text style={styles.hamHint} numberOfLines={1}>{cur.hint}</Text> : null}
+          </View>
+        )}
+      </TouchableOpacity>
+    );
     return (
       <View style={styles.host}>
-        <View style={styles.sideWrap}>
-          <TouchableOpacity
-            style={styles.sideBtn}
-            onPress={() => setMenuOpen(true)}
-            activeOpacity={0.75}
-            accessibilityRole="button"
-            accessibilityLabel={`Sections menu — currently ${cur.label}`}
-          >
-            <Text style={styles.hamIcon}>☰</Text>
-            <View style={{ flex: 1, minWidth: 0 }}>
-              <Text style={styles.hamLabel} numberOfLines={1}>{cur.label}</Text>
-              {cur.hint ? <Text style={styles.hamHint} numberOfLines={1}>{cur.hint}</Text> : null}
-            </View>
-          </TouchableOpacity>
+        {inTitle ? null : <View style={styles.sideWrap}>{hamburger}</View>}
+        <View style={styles.hostBody}>
+          <TitleSlotContext.Provider value={inTitle ? { node: hamburger } : null}>
+            {cur.render()}
+          </TitleSlotContext.Provider>
         </View>
-        <View style={styles.hostBody}>{cur.render()}</View>
         {/* Inside the page rather than portalled through a Modal, and that is
             deliberate: portalled it started at the top of the window and lay
             over the wordmark, the search box and the destination tabs — the
@@ -457,19 +476,19 @@ export function DeskHub() {
         { key: 'paper', label: 'Paper trades', hint: 'Your logged setups, a virtual portfolio, the engines’ track record and their calibration', render: () => <PaperTradeScreen /> },
         { key: 'alerts', label: 'Alerts', hint: 'Price / % / RSI alerts', render: () => <AlertsScreen /> },
         { key: 'inst', label: 'Reports', hint: 'Full company report · fundamentals, valuation, ownership, filings', render: () => <AnalysisScreen /> },
-        { key: 'shareholders', label: 'Shareholders', hint: 'Institutions, promoters & political funding · every link cited', render: () => <EntityGraphScreen /> },
-        { key: 'bt', label: 'Backtest', hint: 'Test a strategy against historical data before risking capital', render: () => <BacktestScreen /> },
+        { key: 'shareholders', label: 'Shareholders', hint: 'Institutions, promoters & political funding · every link cited', render: () => <EntityGraphScreen />, titled: false },
+        { key: 'bt', label: 'Backtest', hint: 'Test a strategy against historical data before risking capital', render: () => <BacktestScreen />, titled: false },
         { key: 'calc', label: 'Calculator', hint: 'Position size · SIP · CAGR', render: () => <CalculatorScreen /> },
         // Wallet sits here rather than inside More: it used to be four taps
         // deep inside a nineteen-item menu, which is where the whole credit
         // economy went to be forgotten. The header pill links straight here.
         { key: 'wallet', label: preview ? 'Account & wallet' : 'Account', hint: 'Sign in, cloud sync, membership · credits, daily bonus, refer and earn', render: () => <AccountWalletScreen /> },
-        { key: 'more', label: 'More', hint: 'Charts, community, corporate data, indices & settings', render: () => <MoreScreen /> },
+        { key: 'more', label: 'More', hint: 'Charts, community, corporate data, indices & settings', render: () => <MoreScreen />, titled: false },
         // Not pills — the Desk home links straight into these, so its
         // "Full calendar ›" and "Open community ›" land on the screen they
         // name instead of on a menu that lists it.
         { key: 'holidays', label: 'Holidays', render: () => <HolidaysScreen />, hidden: true },
-        { key: 'community', label: 'Community', render: () => <ChatScreen />, hidden: true },
+        { key: 'community', label: 'Community', render: () => <ChatScreen />, hidden: true, titled: false },
         // Desktop promotes Backtest to the top bar beside Terminal; keep the
         // Desk tab only where that top-level entry doesn't exist (mobile).
       ].filter((t) => !(isDesktop && t.key === 'bt'))}
@@ -702,6 +721,18 @@ const styles = StyleSheet.create({
   drawerScrim: {
     position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
     backgroundColor: '#0009', zIndex: 25,
+  },
+  // In a title row the heading names the section, so the button is just the
+  // icon — a square that lines up with the cap height beside it.
+  sideBtnCompact: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 38,
+    height: 38,
+    backgroundColor: theme.surface2,
+    borderColor: theme.border2,
+    borderWidth: 1,
+    borderRadius: theme.radius.md,
   },
   drawer: {
     position: 'absolute',
