@@ -59,7 +59,7 @@ import { theme } from '../theme';
 import { Icon } from '../icons';
 import { navigate, subscribeNav, takeIndex } from '../navIntent';
 import { useResponsive } from '../responsive';
-import { Btn, EmptyState, Loading, Sheet } from '../ui';
+import { AnchoredMenu, Btn, EmptyState, Loading, Sheet, useMenuAnchor } from '../ui';
 
 // Universe picker (dropdown): NSE's official indices plus the custom groups
 // the backend derives — BSE SENSEX (static 30), SME EMERGE (bhavcopy SM/ST
@@ -472,8 +472,18 @@ export default function ScreenerScreen({
   const [page, setPage] = useState(0);
   // Dropdown/popup UI state: universe picker, export menu, per-row Analyse.
   const [idxOpen, setIdxOpen] = useState(false);
-  const [presetsOpen, setPresetsOpen] = useState(false);
-  const [screenOpen, setScreenOpen] = useState(false);
+  // Both menus are portalled (AnchoredMenu), so neither can be painted under
+  // the table. Opening one closes the other — two open at once was the overlap.
+  const presetMenu = useMenuAnchor();
+  const screenMenu = useMenuAnchor();
+  const openPresets = () => {
+    screenMenu.close();
+    presetMenu.toggle();
+  };
+  const openScreens = () => {
+    presetMenu.close();
+    screenMenu.toggle();
+  };
   const [exportOpen, setExportOpen] = useState(false);
   const [analyseFor, setAnalyseFor] = useState<Row | null>(null);
   const [flash, setFlash] = useState('');
@@ -1115,69 +1125,39 @@ export default function ScreenerScreen({
             over what universe, looking for what. They used to be two pill bars
             above the page and a button buried in the filter panel. */}
         {screens && onScreen ? (
-          <View style={styles.screenPickWrap}>
-            <TouchableOpacity
-              style={styles.idxDrop}
-              onPress={() => setScreenOpen((v) => !v)}
-              activeOpacity={0.75}
-              accessibilityRole="button"
-              accessibilityState={{ expanded: screenOpen }}
-              accessibilityLabel="Choose a screener"
-            >
-              <Text style={styles.idxDropLabel}>SCREEN</Text>
-              <Text style={styles.idxDropTxt}>
-                {screens.find((x) => x.key === screen)?.label ?? 'Custom'} ▾
-              </Text>
-            </TouchableOpacity>
-            {screenOpen ? (
-              <View style={[styles.pickerDrop, styles.screenDrop]}>
-                {screens.map((x) => (
-                  <TouchableOpacity
-                    key={x.key}
-                    style={styles.presetItem}
-                    onPress={() => {
-                      setScreenOpen(false);
-                      onScreen(x.key);
-                    }}
-                    activeOpacity={0.75}
-                    accessibilityRole="button"
-                    accessibilityLabel={x.label}
-                  >
-                    <Text style={[styles.presetMark, x.key === screen && { color: theme.green }]}>
-                      {x.key === screen ? '✓' : '○'}
-                    </Text>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.presetName}>{x.label}</Text>
-                      {x.hint ? <Text style={styles.presetDesc} numberOfLines={1}>{x.hint}</Text> : null}
-                    </View>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            ) : null}
-          </View>
+          <TouchableOpacity
+            ref={screenMenu.ref}
+            style={[styles.idxDrop, screenMenu.isOpen && styles.idxDropOn]}
+            onPress={openScreens}
+            activeOpacity={0.75}
+            accessibilityRole="button"
+            accessibilityState={{ expanded: screenMenu.isOpen }}
+            accessibilityLabel="Choose a screener"
+          >
+            <Text style={styles.idxDropLabel}>SCREEN</Text>
+            <Text style={styles.idxDropTxt}>
+              {screens.find((x) => x.key === screen)?.label ?? 'Custom'} ▾
+            </Text>
+          </TouchableOpacity>
         ) : null}
         <TouchableOpacity style={styles.idxDrop} onPress={() => setIdxOpen(true)} activeOpacity={0.75}>
           <Text style={styles.idxDropLabel}>UNIVERSE</Text>
           <Text style={styles.idxDropTxt}>{selLabel(indexSel)} ▾</Text>
         </TouchableOpacity>
-        <View style={styles.screenPickWrap}>
-          <TouchableOpacity
-            style={[styles.idxDrop, presetsOpen && styles.idxDropOn]}
-            onPress={() => setPresetsOpen((v) => !v)}
-            activeOpacity={0.75}
-            accessibilityRole="button"
-            accessibilityState={{ expanded: presetsOpen }}
-            accessibilityLabel="Preset scans"
-          >
-            <Text style={styles.idxDropLabel}>PRESET SCANS</Text>
-            <Text style={styles.idxDropTxt}>
-              {presetCount ? `${presetCount} applied` : 'Pick one'} ▾
-            </Text>
-          </TouchableOpacity>
-          {presetsOpen ? (
-            <PresetMenu expr={expr} setExpr={setExpr} onClose={() => setPresetsOpen(false)} />
-          ) : null}
-        </View>
+        <TouchableOpacity
+          ref={presetMenu.ref}
+          style={[styles.idxDrop, presetMenu.isOpen && styles.idxDropOn]}
+          onPress={openPresets}
+          activeOpacity={0.75}
+          accessibilityRole="button"
+          accessibilityState={{ expanded: presetMenu.isOpen }}
+          accessibilityLabel="Preset scans"
+        >
+          <Text style={styles.idxDropLabel}>PRESET SCANS</Text>
+          <Text style={styles.idxDropTxt}>
+            {presetCount ? `${presetCount} applied` : 'Pick one'} ▾
+          </Text>
+        </TouchableOpacity>
         {!isDesktop ? (
           <>
             <TouchableOpacity
@@ -1346,6 +1326,41 @@ export default function ScreenerScreen({
           </ScrollView>
         </View>
       </ScrollView>
+
+      {/* Both toolbar menus, portalled so nothing can paint over them. */}
+      <AnchoredMenu
+        anchor={presetMenu.anchor}
+        width={480}
+        maxHeight={440}
+        onClose={presetMenu.close}
+      >
+        <PresetMenu expr={expr} setExpr={setExpr} onClose={presetMenu.close} />
+      </AnchoredMenu>
+      {screens && onScreen ? (
+        <AnchoredMenu anchor={screenMenu.anchor} width={300} onClose={screenMenu.close}>
+          {screens.map((x) => (
+            <TouchableOpacity
+              key={x.key}
+              style={styles.presetItem}
+              onPress={() => {
+                screenMenu.close();
+                onScreen(x.key);
+              }}
+              activeOpacity={0.75}
+              accessibilityRole="button"
+              accessibilityLabel={x.label}
+            >
+              <Text style={[styles.presetMark, x.key === screen && { color: theme.green }]}>
+                {x.key === screen ? '✓' : '○'}
+              </Text>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.presetName}>{x.label}</Text>
+                {x.hint ? <Text style={styles.presetDesc} numberOfLines={1}>{x.hint}</Text> : null}
+              </View>
+            </TouchableOpacity>
+          ))}
+        </AnchoredMenu>
+      ) : null}
 
       {/* Universe picker — multi-select: toggle any combination, or All. */}
       {idxOpen ? (
@@ -1570,7 +1585,7 @@ function PresetMenu({
     });
   };
   return (
-    <View style={[styles.pickerDrop, styles.presetDrop]}>
+    <View style={styles.presetDrop}>
             <View style={styles.presetHead}>
               <Text style={styles.presetHeadTxt}>PRESET SCANS</Text>
               <TouchableOpacity onPress={onClose} hitSlop={12} activeOpacity={0.75}>
@@ -2221,8 +2236,8 @@ const styles = StyleSheet.create({
   idxChipOn: { backgroundColor: theme.brandSoft, borderColor: theme.brand },
   idxTxt: { color: theme.muted2, fontSize: theme.fs.sm },
   idxTxtOn: { color: theme.brand, fontWeight: '800' },
-  // Anchored under the Preset scans button in the top bar.
-  presetDrop: { width: 480, top: 44, left: 0 },
+  // Content of an AnchoredMenu, which owns the position and the surface.
+  presetDrop: { maxHeight: '100%' },
   // Anchors the two dropdowns to their buttons, and keeps them above the
   // fixed toolbar rows below (which use zIndex ~60).
   screenPickWrap: { position: 'relative', zIndex: 90 },

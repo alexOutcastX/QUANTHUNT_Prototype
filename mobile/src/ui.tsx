@@ -14,6 +14,7 @@ import {
   TouchableOpacity,
   View,
   ViewStyle,
+  useWindowDimensions,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { theme } from './theme';
@@ -493,6 +494,99 @@ const sh = StyleSheet.create({
     width: '100%',
   },
   panelFill: { height: '100%', maxHeight: '100%', borderRadius: 0, paddingBottom: 28 },
+});
+
+/**
+ * A dropdown anchored to its button but drawn OUTSIDE the page.
+ *
+ * The screener's pickers were absolutely-positioned siblings with a high
+ * z-index, and they still came out underneath the results table — which reads
+ * as the menu being transparent, because what you see through it is the table
+ * painted on top. z-index only ranks siblings inside one stacking context, and
+ * a menu in the toolbar is not a sibling of the table's; nothing it can set
+ * about itself wins that.
+ *
+ * So the panel goes through a Modal, which react-native-web portals to the
+ * document root — outside every stacking context in the app rather than merely
+ * high within one — and is placed by measuring its trigger. Same reason Sheet
+ * does it.
+ *
+ * `anchor` is the trigger's window rect (from measureInWindow); null closes it.
+ */
+export type MenuAnchor = { x: number; y: number; w: number; h: number };
+
+export function AnchoredMenu({
+  anchor,
+  width = 300,
+  maxHeight = 420,
+  align = 'left',
+  onClose,
+  children,
+}: {
+  anchor: MenuAnchor | null;
+  width?: number;
+  maxHeight?: number;
+  align?: 'left' | 'right';
+  onClose: () => void;
+  children: React.ReactNode;
+}) {
+  const { width: winW, height: winH } = useWindowDimensions();
+  if (!anchor) return null;
+  const w = Math.min(width, Math.max(180, winW - 16));
+  // Clamped to the viewport: a menu on a button near the right edge would
+  // otherwise open off-screen, and one on a narrow window would overhang.
+  const wanted = align === 'right' ? anchor.x + anchor.w - w : anchor.x;
+  const left = Math.max(8, Math.min(wanted, winW - w - 8));
+  const top = anchor.y + anchor.h + 6;
+  // Never taller than the room below it, so the last row is always reachable.
+  const room = Math.max(160, winH - top - 12);
+  return (
+    <Modal visible transparent animationType="none" onRequestClose={onClose}>
+      <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+      <View style={[am.panel, { left, top, width: w, maxHeight: Math.min(maxHeight, room) }]}>
+        {children}
+      </View>
+    </Modal>
+  );
+}
+
+/** Measure a trigger and hand back its window rect, for AnchoredMenu. */
+export function useMenuAnchor() {
+  const ref = React.useRef<View>(null);
+  const [anchor, setAnchor] = React.useState<MenuAnchor | null>(null);
+  const open = React.useCallback(() => {
+    const node = ref.current as unknown as
+      { measureInWindow?: (cb: (x: number, y: number, w: number, h: number) => void) => void };
+    if (node?.measureInWindow) {
+      node.measureInWindow((x, y, w, h) => setAnchor({ x, y, w, h }));
+    } else {
+      setAnchor({ x: 8, y: 56, w: 0, h: 0 });     // no measurement: top-left
+    }
+  }, []);
+  const close = React.useCallback(() => setAnchor(null), []);
+  const toggle = React.useCallback(() => {
+    setAnchor((cur) => {
+      if (cur) return null;
+      open();
+      return cur;
+    });
+  }, [open]);
+  return { ref, anchor, open, close, toggle, isOpen: anchor != null };
+}
+
+const am = StyleSheet.create({
+  panel: {
+    position: 'absolute',
+    // Opaque, and stated as a solid surface rather than inherited: this panel
+    // floats over live data, and anything showing through it is a misreading
+    // waiting to happen.
+    backgroundColor: theme.surface,
+    borderColor: theme.border2,
+    borderWidth: 1,
+    borderRadius: theme.radius.md,
+    overflow: 'hidden',
+    ...theme.shadow.card,
+  },
 });
 
 export function Btn({

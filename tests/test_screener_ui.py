@@ -256,6 +256,69 @@ class StillScanningTest(unittest.TestCase):
         self.assertIn("Loosen or clear a filter", self.src)
 
 
+class AnchoredMenuTest(unittest.TestCase):
+    """The toolbar dropdowns, and why "transparent" was the wrong diagnosis.
+
+    Both menus were absolutely-positioned siblings with a high z-index, and
+    they still came out UNDERNEATH the results table. That reads as a
+    see-through menu, because what shows through is the table painted on top —
+    but their background was opaque the whole time.
+
+    z-index only ranks siblings inside one stacking context, and a menu in the
+    toolbar is not a sibling of the table's. Nothing a menu sets about itself
+    wins that argument. It has to leave the page — the same conclusion the
+    Sheet reached, one commit earlier, for the same reason.
+    """
+
+    def setUp(self):
+        self.ui = _read("mobile", "src", "ui.tsx")
+        self.screener = _read("mobile", "src", "screens", "ScreenerScreen.tsx")
+        self.hosts = _read("mobile", "src", "screens", "Hosts.tsx")
+        self.body = self.ui[self.ui.index("export function AnchoredMenu("):
+                            self.ui.index("export function Btn(")]
+
+    def test_it_leaves_the_page_rather_than_raising_its_z_index(self):
+        self.assertIn("<Modal visible transparent", self.body)
+        menu = re.search(r"const am = StyleSheet\.create\(\{(.*?)\n\}\);", self.ui, re.S).group(1)
+        self.assertNotIn("zIndex", menu, "a z-index here would be treating the symptom")
+
+    def test_the_surface_is_opaque(self):
+        """It floats over live data; anything showing through it is a
+        misreading waiting to happen."""
+        menu = re.search(r"const am = StyleSheet\.create\(\{(.*?)\n\}\);", self.ui, re.S).group(1)
+        self.assertIn("backgroundColor: theme.surface", menu)
+        self.assertNotIn("rgba", menu)
+        self.assertNotIn("opacity", menu)
+
+    def test_it_is_placed_by_measuring_its_trigger(self):
+        self.assertIn("export function useMenuAnchor()", self.ui)
+        self.assertIn("node.measureInWindow(", self.ui)
+
+    def test_it_cannot_open_off_screen(self):
+        """A button near the right edge would otherwise open past it, and a
+        long menu would run off the bottom with its last row unreachable."""
+        self.assertIn("Math.max(8, Math.min(wanted, winW - w - 8))", self.body)
+        self.assertIn("Math.max(160, winH - top - 12)", self.body)
+
+    def test_a_trigger_that_cannot_be_measured_still_opens(self):
+        """No measurement is a reason to place it badly, not to swallow the
+        click."""
+        self.assertIn("setAnchor({ x: 8, y: 56, w: 0, h: 0 })", self.ui)
+
+    def test_clicking_away_closes_it(self):
+        self.assertIn("<Pressable style={StyleSheet.absoluteFill} onPress={onClose} />", self.body)
+
+    def test_both_toolbar_menus_use_it(self):
+        self.assertIn("anchor={presetMenu.anchor}", self.screener)
+        self.assertIn("<AnchoredMenu anchor={screenMenu.anchor}", self.screener)
+        self.assertIn("<AnchoredMenu anchor={menu.anchor}", self.hosts)
+
+    def test_opening_one_closes_the_other(self):
+        """Two open at once was the overlap in the report."""
+        self.assertIn("const openPresets = () => {\n    screenMenu.close();", self.screener)
+        self.assertIn("const openScreens = () => {\n    presetMenu.close();", self.screener)
+
+
 class SheetStackingTest(unittest.TestCase):
     """The universe picker's missing close button.
 

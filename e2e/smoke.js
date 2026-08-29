@@ -223,6 +223,20 @@ function check(name, ok, detail) {
 
     check('the preset menu opens from the toolbar', await tapText('PRESET SCANS'));
     await page.waitForTimeout(600);
+    // Drawn over everything, not merely high in its own stacking context. It
+    // shipped once looking transparent, which was the results table painted on
+    // top of an opaque menu.
+    check(
+      'the preset menu is the element on top where it is drawn',
+      await page.evaluate(() => {
+        const el = [...document.querySelectorAll('*')]
+          .find((e) => !e.children.length && (e.textContent || '').trim() === 'Golden cross today');
+        if (!el) return false;
+        const r = el.getBoundingClientRect();
+        const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+        return !!hit && (hit === el || el.contains(hit) || hit.contains(el));
+      }),
+    );
     check('a preset can be toggled back off', await tapText('Golden cross today'));
     await page.waitForTimeout(500);
     await tapText('✕ Close');

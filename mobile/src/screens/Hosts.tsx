@@ -8,6 +8,7 @@ import { useResponsive } from '../responsive';
 import { theme } from '../theme';
 import { lazyScreen } from '../lazyScreen';
 import { usePreview } from '../usePreview';
+import { AnchoredMenu, useMenuAnchor } from '../ui';
 
 // Every hosted screen is a lazy chunk: Metro splits each import() into its own
 // web bundle, fetched the first time the user opens that screen. First paint
@@ -297,15 +298,18 @@ function ScreenPicker({
   active: string;
   onPick: (k: string) => void;
 }) {
-  const [open, setOpen] = useState(false);
+  // Portalled, like the console's own pickers: a menu that can be painted
+  // under the screen below it reads as a transparent menu.
+  const menu = useMenuAnchor();
   return (
     <View style={styles.screenPickWrap}>
       <TouchableOpacity
+        ref={menu.ref}
         style={styles.screenBtn}
-        onPress={() => setOpen((v) => !v)}
+        onPress={menu.toggle}
         activeOpacity={0.75}
         accessibilityRole="button"
-        accessibilityState={{ expanded: open }}
+        accessibilityState={{ expanded: menu.isOpen }}
         accessibilityLabel="Choose a screener"
       >
         <Text style={styles.screenBtnLbl}>SCREEN</Text>
@@ -313,31 +317,29 @@ function ScreenPicker({
           {choices.find((c) => c.key === active)?.label ?? 'Custom'} ▾
         </Text>
       </TouchableOpacity>
-      {open ? (
-        <View style={styles.screenMenu}>
-          {choices.map((c) => (
-            <TouchableOpacity
-              key={c.key}
-              style={styles.screenItem}
-              onPress={() => {
-                setOpen(false);
-                onPick(c.key);
-              }}
-              activeOpacity={0.75}
-              accessibilityRole="button"
-              accessibilityLabel={c.label}
-            >
-              <Text style={[styles.screenMark, c.key === active && { color: theme.green }]}>
-                {c.key === active ? '✓' : '○'}
-              </Text>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.screenName}>{c.label}</Text>
-                {c.hint ? <Text style={styles.screenHint} numberOfLines={1}>{c.hint}</Text> : null}
-              </View>
-            </TouchableOpacity>
-          ))}
-        </View>
-      ) : null}
+      <AnchoredMenu anchor={menu.anchor} width={300} onClose={menu.close}>
+        {choices.map((c) => (
+          <TouchableOpacity
+            key={c.key}
+            style={styles.screenItem}
+            onPress={() => {
+              menu.close();
+              onPick(c.key);
+            }}
+            activeOpacity={0.75}
+            accessibilityRole="button"
+            accessibilityLabel={c.label}
+          >
+            <Text style={[styles.screenMark, c.key === active && { color: theme.green }]}>
+              {c.key === active ? '✓' : '○'}
+            </Text>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.screenName}>{c.label}</Text>
+              {c.hint ? <Text style={styles.screenHint} numberOfLines={1}>{c.hint}</Text> : null}
+            </View>
+          </TouchableOpacity>
+        ))}
+      </AnchoredMenu>
     </View>
   );
 }
@@ -543,12 +545,6 @@ const styles = StyleSheet.create({
   },
   screenBtnLbl: { color: theme.muted, fontSize: 9, fontFamily: theme.mono, letterSpacing: 1 },
   screenBtnTxt: { color: theme.text, fontSize: theme.fs.sm, fontWeight: '700' },
-  screenMenu: {
-    position: 'absolute', top: 46, left: 0, width: 280,
-    backgroundColor: theme.surface, borderColor: theme.border2, borderWidth: 1,
-    borderRadius: theme.radius.md, paddingVertical: 6, zIndex: 95,
-    ...theme.shadow.card,
-  },
   screenItem: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, paddingHorizontal: 12, paddingVertical: 7 },
   screenMark: { color: theme.muted, fontSize: theme.fs.sm, width: 14 },
   screenName: { color: theme.text, fontSize: theme.fs.sm, fontWeight: '600' },
