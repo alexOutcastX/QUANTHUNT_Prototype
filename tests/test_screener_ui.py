@@ -186,6 +186,76 @@ class DefaultScreenTest(unittest.TestCase):
                       self.src)
 
 
+class DefaultPresetInteractionTest(unittest.TestCase):
+    """What happens when the opening screen meets a chosen one.
+
+    Presets stack by design — that is what makes them composable. But the
+    console now opens on the golden crossover on every load, and that screen is
+    a SUGGESTION, not a choice anybody made. Stacking on top of it gives
+    "golden cross AND Minervini", which almost always returns nothing and reads
+    as a broken preset rather than as two screens combined.
+    """
+
+    def setUp(self):
+        self.src = _read("mobile", "src", "screens", "ScreenerScreen.tsx")
+        m = re.search(r"const togglePresetExpr = \(p: Preset\) => \{.*?\n  \};", self.src, re.S)
+        self.assertIsNotNone(m, "togglePresetExpr not found")
+        self.body = m.group(0)
+
+    def test_an_untouched_default_steps_aside(self):
+        self.assertIn("const untouched = prev.length > 0 && prev.every((e) => e.src === DEFAULT_TAG);",
+                      self.body)
+        self.assertIn("const base = untouched && tag !== DEFAULT_TAG ? [] : prev;", self.body)
+
+    def test_a_screen_you_have_built_still_stacks(self):
+        """`every` is the whole safeguard: edit, add or remove one row and this
+        is no longer the default but a screen in progress."""
+        self.assertIn("prev.every((e) => e.src === DEFAULT_TAG)", self.body)
+        self.assertIn("[...base, ...filtersToExpr(p.filters, tag)]", self.body)
+
+    def test_toggling_the_default_itself_off_still_works(self):
+        """`tag !== DEFAULT_TAG` — otherwise re-picking the golden cross would
+        clear itself and immediately re-add it, which is a no-op that looks
+        like a broken toggle."""
+        self.assertIn("tag !== DEFAULT_TAG", self.body)
+        self.assertIn("if (prev.some((e) => e.src === tag)) return prev.filter((e) => e.src !== tag);",
+                      self.body)
+
+
+class StillScanningTest(unittest.TestCase):
+    """An empty table during the sweep is not an empty result.
+
+    /scan streams in behind the page, so a screen evaluated in the first second
+    is filtering rows that carry no technicals — every one fails. The table said
+    "No matches. Loosen or clear a filter", blaming the screen for something
+    that was merely unfinished, and with the console now opening on a filtered
+    screen that was the first thing you saw on every load.
+    """
+
+    def setUp(self):
+        self.src = _read("mobile", "src", "screens", "ScreenerScreen.tsx")
+
+    def test_it_counts_what_the_sweep_has_not_reached(self):
+        self.assertIn("const techWaiting = useMemo(", self.src)
+        self.assertIn("Math.max(0, rows.length - techCount)", self.src)
+
+    def test_it_only_applies_when_a_filter_actually_needs_the_scan(self):
+        """A screen filtered on price alone can match immediately; saying
+        "still scanning" there would be an excuse, not an explanation."""
+        self.assertIn("const SCAN_FREE = new Set(['price', 'chg', 'volume']);", self.src)
+        self.assertIn("!SCAN_FREE.has(e.key) && !DEF_BY_KEY[e.key]?.fund", self.src)
+
+    def test_the_empty_state_says_so_and_shows_progress(self):
+        self.assertIn("'Still scanning…'", self.src)
+        self.assertIn("${techCount} of ${rows.length} symbols have their technicals so far",
+                      self.src)
+
+    def test_a_genuinely_empty_result_still_says_no_matches(self):
+        """Once the sweep has landed, an empty table IS the screen's answer."""
+        self.assertIn("'No matches'", self.src)
+        self.assertIn("Loosen or clear a filter", self.src)
+
+
 class SheetStackingTest(unittest.TestCase):
     """The universe picker's missing close button.
 

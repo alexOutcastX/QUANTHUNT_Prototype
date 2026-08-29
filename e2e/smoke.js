@@ -194,6 +194,33 @@ function check(name, ok, detail) {
         if (el) { (el.closest('[role="button"]') || el.parentElement).click(); return true; }
         return false;
       }, t);
+    // An empty table DURING the sweep is not an empty result. With the console
+    // opening on a filtered screen, "No matches — loosen or clear a filter"
+    // was the first thing on every load, blaming the screen for something that
+    // was merely unfinished.
+    const scanState = await page.evaluate(() => {
+      const t = document.body.innerText;
+      const line = (t.match(/\d+ symbols[^\n]*/) || [''])[0];
+      // "60/60 technicals" when finished, "technicals 0/60…" while running.
+      const m = line.match(/(\d+)\/(\d+) technicals/) || line.match(/technicals (\d+)\/(\d+)/);
+      return {
+        line,
+        noMatches: /No matches/.test(t),
+        scanning: /Still scanning/.test(t),
+        swept: !!m && m[1] === m[2],
+      };
+    });
+    check(
+      '"No matches" is only claimed once the sweep has actually finished',
+      !scanState.noMatches || scanState.swept,
+      JSON.stringify(scanState),
+    );
+    check(
+      'and the two states are never claimed at once',
+      !(scanState.noMatches && scanState.scanning),
+      JSON.stringify(scanState),
+    );
+
     check('the preset menu opens from the toolbar', await tapText('PRESET SCANS'));
     await page.waitForTimeout(600);
     check('a preset can be toggled back off', await tapText('Golden cross today'));

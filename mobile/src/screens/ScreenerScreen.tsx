@@ -18,6 +18,15 @@ import { ExportCol, exportCsv, exportExcel, exportPdf } from '../csv';
 import { crore } from '../format';
 import { parseNL } from '../nlScreen';
 import { DEFAULT_PRESET_ID, PRESETS, Preset, defaultPreset } from '../presets';
+
+/** The tag every row of the opening screen carries. */
+const DEFAULT_TAG = 'preset:' + DEFAULT_PRESET_ID;
+
+// Fields the constituent feed already carries, so a filter on one of them can
+// match before the technical sweep lands. Everything else — RSI, the moving
+// averages, the crosses, the candles — only exists once /scan has answered for
+// that symbol.
+const SCAN_FREE = new Set(['price', 'chg', 'volume']);
 import {
   DEF_BY_KEY,
   ExprOp,
@@ -902,6 +911,21 @@ export default function ScreenerScreen({
     [rows],
   );
 
+  // How many rows a technical filter cannot judge yet.
+  //
+  // The sweep streams in behind the page, so a screen evaluated in the first
+  // second or two is filtering rows that have no technicals on them — every
+  // one fails, and the table says "No matches. Loosen or clear a filter",
+  // which blames the screen for something that is merely not finished. With
+  // the console now opening on a filtered screen every time, that was the
+  // first thing you saw on every load.
+  const techWaiting = useMemo(() => {
+    const needs = expr.some(
+      (e) => e.key && !SCAN_FREE.has(e.key) && !DEF_BY_KEY[e.key]?.fund,
+    );
+    return needs ? Math.max(0, rows.length - techCount) : 0;
+  }, [expr, rows.length, techCount]);
+
   // The one status line under the toolbar. Load errors win; otherwise it says
   // what the prices are, and how far the technicals have got.
   const statusLine = useMemo(() => {
@@ -1294,16 +1318,20 @@ export default function ScreenerScreen({
                  universe reads "0 matches" while it is merely still loading —
                  say so instead of blaming the filter. */
               <EmptyState
-                icon={fundWaiting ? '↻' : fundCoverage && !fundCoverage.usable ? '⚠' : '⌕'}
+                icon={techWaiting || fundWaiting ? '↻' : fundCoverage && !fundCoverage.usable ? '⚠' : '⌕'}
                 title={
-                  fundWaiting
-                    ? 'Fetching company financials…'
-                    : fundCoverage && !fundCoverage.usable
-                      ? 'No financials to filter on'
-                      : 'No matches'
+                  techWaiting
+                    ? 'Still scanning…'
+                    : fundWaiting
+                      ? 'Fetching company financials…'
+                      : fundCoverage && !fundCoverage.usable
+                        ? 'No financials to filter on'
+                        : 'No matches'
                 }
                 hint={
-                  fundWaiting
+                  techWaiting
+                    ? `${techCount} of ${rows.length} symbols have their technicals so far. A filter on RSI, a moving average or a signal can only match once a symbol has been scanned — results fill in as they arrive.`
+                    : fundWaiting
                     ? `${fundWaiting} of ${rows.length} symbols still to load. Fundamental filters (·f) can only match once a symbol's financials arrive — results will fill in as they do.`
                     : fundCoverage && !fundCoverage.usable
                       ? `None of these ${rows.length} symbols has a published value for ${fundCoverage.labels.join(' or ')}, so the ·f filter cannot match anything — this is missing data, not a strict filter. Company financials are thinnest on the widest universes; try a narrower index, or screen on technicals instead.`
@@ -1526,11 +1554,20 @@ function PresetMenu({
   const presetOn = (p: Preset) => expr.some((e) => e.src === 'preset:' + p.id);
   const togglePresetExpr = (p: Preset) => {
     const tag = 'preset:' + p.id;
-    setExpr((prev) =>
-      prev.some((e) => e.src === tag)
-        ? prev.filter((e) => e.src !== tag)
-        : [...prev, ...filtersToExpr(p.filters, tag)],
-    );
+    setExpr((prev) => {
+      if (prev.some((e) => e.src === tag)) return prev.filter((e) => e.src !== tag);
+      // The opening screen is a SUGGESTION, not a choice anybody made. Stacking
+      // a chosen preset on top of it gives "golden cross AND Minervini", which
+      // almost always returns nothing and reads as a broken preset rather than
+      // as two screens combined. So an untouched default steps aside.
+      //
+      // Only untouched: the moment a row is edited, added or removed, this is
+      // no longer the default but a screen the user is building, and presets
+      // stack on it as they always have.
+      const untouched = prev.length > 0 && prev.every((e) => e.src === DEFAULT_TAG);
+      const base = untouched && tag !== DEFAULT_TAG ? [] : prev;
+      return [...base, ...filtersToExpr(p.filters, tag)];
+    });
   };
   return (
     <View style={[styles.pickerDrop, styles.presetDrop]}>
