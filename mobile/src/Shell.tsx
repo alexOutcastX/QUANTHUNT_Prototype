@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import WalletChip from './components/WalletChip';
-import { BackHandler, Linking, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { BackHandler, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { API_BASE, api } from './api';
+import { api } from './api';
 import { marketState } from './format';
 import { Icon, IconName } from './icons';
 import { useResponsive } from './responsive';
@@ -20,6 +20,7 @@ const HeatmapScreen = lazyScreen(() => import('./screens/HeatmapScreen'));
 const BacktestScreen = lazyScreen(() => import('./screens/BacktestScreen'));
 import TickerStrip from './components/TickerStrip';
 import PdfPreview from './components/PdfPreview';
+import LegalSheet from './components/LegalSheet';
 // Both are modals: nothing renders until the user opens them, so there is no
 // reason for their code to be in the bundle that blocks first paint. They are
 // prefetched with the screens once the app is idle, so opening one still feels
@@ -264,17 +265,26 @@ function usePaletteHotkey(setPalette: (fn: (v: boolean) => boolean) => void) {
 // The disclaimer is a regulatory obligation, not desktop chrome — it renders at
 // every width. Mobile puts it under the content rather than in the crowded
 // header, where a full word would not fit beside the icon row.
+// Over the page, not instead of it. This used to hand the browser to
+// /legal.html: on the web that replaced the app, and in a standalone install
+// it opened a document with nothing to go back to — you could read the
+// disclaimer and then you were stuck in it.
 function LegalLink({ style }: { style?: object }) {
+  const [open, setOpen] = useState(false);
   return (
-    <TouchableOpacity
-      style={[styles.legalBtn, style]}
-      onPress={() => Linking.openURL((API_BASE || '') + '/legal.html').catch(() => {})}
-      accessibilityRole="link"
-      accessibilityLabel="Disclaimer and legal terms"
-      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-    >
-      <Text style={styles.legalTxt}>DISCLAIMER</Text>
-    </TouchableOpacity>
+    <>
+      <TouchableOpacity
+        style={[styles.legalBtn, style]}
+        onPress={() => setOpen(true)}
+        accessibilityRole="button"
+        accessibilityLabel="Disclaimer and legal terms"
+        accessibilityState={{ expanded: open }}
+        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+      >
+        <Text style={styles.legalTxt}>DISCLAIMER</Text>
+      </TouchableOpacity>
+      {open ? <LegalSheet onClose={() => setOpen(false)} /> : null}
+    </>
   );
 }
 

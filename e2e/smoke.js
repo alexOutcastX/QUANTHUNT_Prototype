@@ -851,6 +851,51 @@ function check(name, ok, detail) {
       risk.slice(0, 400),
     );
 
+    // 8g · the disclaimer opens over the app, not instead of it.
+    //
+    // It used to hand the browser to /legal.html: on the web that replaced the
+    // app, and in a standalone install it opened a document with nothing to go
+    // back to. You could read the disclaimer and then you were stuck in it.
+    const urlBefore = page.url();
+    const pageBefore = await page.evaluate(() => document.body.innerText);
+    await page.evaluate(() => {
+      const el = document.querySelector('[aria-label="Disclaimer and legal terms"]');
+      if (el) el.click();
+    });
+    await page.waitForTimeout(1200);
+    const legal = await page.evaluate(() => document.body.innerText);
+    check('the disclaimer opens inside the app', /Disclaimer & Privacy/i.test(legal), legal.slice(0, 200));
+    check('without leaving the page', page.url() === urlBefore, page.url() + ' vs ' + urlBefore);
+    check(
+      'and carries the whole notice',
+      /SEBI-registered investment adviser/.test(legal) && /PRIVACY/.test(legal)
+        && /TRADEMARKS/.test(legal) && /without warranty of any kind/.test(legal),
+      legal.slice(0, 200),
+    );
+    check(
+      'it is the thing drawn on top',
+      await page.evaluate(() => {
+        const t = [...document.querySelectorAll('*')].find((e) => !e.children.length
+          && (e.textContent || '').trim() === 'Disclaimer & Privacy');
+        if (!t) return false;
+        const r = t.getBoundingClientRect();
+        const hit = document.elementFromPoint((r.left + r.right) / 2, (r.top + r.bottom) / 2);
+        return !!hit && (hit === t || t.contains(hit) || hit.contains(t));
+      }),
+    );
+    await page.evaluate(() => {
+      const el = document.querySelector('[aria-label="Close the disclaimer"]');
+      if (el) el.click();
+    });
+    await page.waitForTimeout(900);
+    const dismissed = await page.evaluate(() => document.body.innerText);
+    check('close dismisses it', !/Disclaimer & Privacy/i.test(dismissed), dismissed.slice(0, 150));
+    check(
+      'and hands back the page you were on',
+      dismissed.slice(0, 400) === pageBefore.slice(0, 400),
+      dismissed.slice(0, 120),
+    );
+
     // 9 · no uncaught page errors during the whole run
     check('no uncaught page errors', errors.length === 0, errors[0]);
   } finally {
