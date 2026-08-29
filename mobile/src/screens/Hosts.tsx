@@ -55,7 +55,20 @@ type SubTab = { key: string; label: string; hint?: string; render: () => React.R
 // Desktop shows a segmented pill row (there's room). Mobile can't fit 7 labels,
 // so it collapses into a hamburger dropdown: the current tab + a menu listing
 // every tab with a one-line description of what it's for.
-function SubTabs({ tabs, persistKey, alias }: { tabs: SubTab[]; persistKey?: string; alias?: Record<string, string> }) {
+//
+// variant="side" drops the pill row at every width for a hamburger and a
+// left-hand drawer. A group with ten destinations spends a whole band of the
+// page on a row of pills that is mostly the nine you are not on; the drawer
+// costs one button, and it has room for each section's one-line description —
+// which the desktop pill row never had space to show.
+function SubTabs({ tabs, persistKey, alias, variant = 'pills', menuTitle }: {
+  tabs: SubTab[];
+  persistKey?: string;
+  alias?: Record<string, string>;
+  /** 'side' swaps the pill row for a hamburger and a left drawer. */
+  variant?: 'pills' | 'side';
+  menuTitle?: string;
+}) {
   // alias maps legacy intent sub-keys onto the tab that now hosts them (e.g.
   // 'mb'/'momentum' → 'screener' since Multibagger and Momentum became tabs
   // inside the Screener page) so every old navigate() still lands somewhere.
@@ -103,6 +116,72 @@ function SubTabs({ tabs, persistKey, alias }: { tabs: SubTab[]; persistKey?: str
   const cur = tabs.find((t) => t.key === active) || tabs[0];
   const [menuOpen, setMenuOpen] = useState(false);
   const shown = tabs.filter((t) => !t.hidden);
+
+  const close = () => setMenuOpen(false);
+  // The drawer's list, shared by the side variant and the mobile dropdown.
+  const menuRows = shown.map((t) => (
+    <TouchableOpacity
+      key={t.key}
+      style={[styles.menuItem, active === t.key && styles.menuItemOn]}
+      onPress={() => {
+        setActive(t.key);
+        close();
+      }}
+      activeOpacity={0.75}
+      accessibilityRole="menuitem"
+      accessibilityState={{ selected: active === t.key }}
+    >
+      <View style={{ flex: 1 }}>
+        <Text style={[styles.menuLabel2, active === t.key && styles.menuLabel2On]}>{t.label}</Text>
+        {t.hint ? <Text style={styles.menuHint2} numberOfLines={2}>{t.hint}</Text> : null}
+      </View>
+      {active === t.key ? <Text style={styles.menuTick}>✓</Text> : null}
+    </TouchableOpacity>
+  ));
+
+  if (variant === 'side') {
+    return (
+      <View style={styles.host}>
+        <View style={styles.sideWrap}>
+          <TouchableOpacity
+            style={styles.sideBtn}
+            onPress={() => setMenuOpen(true)}
+            activeOpacity={0.75}
+            accessibilityRole="button"
+            accessibilityLabel={`Sections menu — currently ${cur.label}`}
+          >
+            <Text style={styles.hamIcon}>☰</Text>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={styles.hamLabel} numberOfLines={1}>{cur.label}</Text>
+              {cur.hint ? <Text style={styles.hamHint} numberOfLines={1}>{cur.hint}</Text> : null}
+            </View>
+          </TouchableOpacity>
+        </View>
+        {/* A Modal so the drawer portals to the document root: inside the page
+            it would be ranked against the header's own stacking context and
+            painted under it, which is how the universe sheet lost its close
+            button. */}
+        <Modal visible={menuOpen} transparent animationType="fade" onRequestClose={close}>
+          <Pressable style={styles.menuScrim} onPress={close} />
+          <View style={styles.drawer}>
+            <View style={styles.drawerHead}>
+              <Text style={styles.drawerTitle}>{menuTitle || 'Sections'}</Text>
+              <TouchableOpacity
+                onPress={close}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                accessibilityRole="button"
+                accessibilityLabel="Close the sections menu"
+              >
+                <Text style={styles.drawerX}>✕</Text>
+              </TouchableOpacity>
+            </View>
+            <ScrollView bounces={false}>{menuRows}</ScrollView>
+          </View>
+        </Modal>
+        <View style={styles.hostBody}>{cur.render()}</View>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.host}>
@@ -175,25 +254,7 @@ function SubTabs({ tabs, persistKey, alias }: { tabs: SubTab[]; persistKey?: str
           <Modal visible={menuOpen} transparent animationType="fade" onRequestClose={() => setMenuOpen(false)}>
             <Pressable style={styles.menuScrim} onPress={() => setMenuOpen(false)} />
             <View style={styles.menuSheet}>
-              <ScrollView bounces={false}>
-                {shown.map((t) => (
-                  <TouchableOpacity
-                    key={t.key}
-                    style={[styles.menuItem, active === t.key && styles.menuItemOn]}
-                    onPress={() => {
-                      setActive(t.key);
-                      setMenuOpen(false);
-                    }}
-                    activeOpacity={0.75}
-                  >
-                    <View style={{ flex: 1 }}>
-                      <Text style={[styles.menuLabel2, active === t.key && styles.menuLabel2On]}>{t.label}</Text>
-                      {t.hint ? <Text style={styles.menuHint2} numberOfLines={2}>{t.hint}</Text> : null}
-                    </View>
-                    {active === t.key ? <Text style={styles.menuTick}>✓</Text> : null}
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
+              <ScrollView bounces={false}>{menuRows}</ScrollView>
             </View>
           </Modal>
         </View>
@@ -351,7 +412,13 @@ export function DeskHub() {
   const preview = usePreview();
   return (
     <SubTabs
-      persistKey="desk"
+      variant="side"
+      menuTitle="DESK"
+      // No persistKey, and that is the point: the Desk restored whichever of
+      // its ten sections you were last on, so "Desk" meant a different page
+      // every time you pressed it. It now always opens on the Desk home; an
+      // explicit navigate('desk', { sub }) still lands on its own section.
+      //
       // Calibration now lives inside Paper trades (it grades those very
       // trades), Risk inside Portfolio (it measures that very basket) and
       // Account inside Wallet — the old keys still resolve so every saved
@@ -590,6 +657,45 @@ const styles = StyleSheet.create({
   hamLabel: { color: theme.text, fontSize: theme.fs.md, fontWeight: '700' },
   hamHint: { color: theme.muted, fontSize: theme.fs.xs + 1, marginTop: 1 },
   hamChevron: { color: theme.muted2, fontSize: 12 },
+  // side-drawer sub-nav (the Desk)
+  sideWrap: { paddingHorizontal: theme.sp.lg, paddingTop: theme.sp.md, paddingBottom: theme.sp.sm },
+  sideBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.sp.md,
+    alignSelf: 'flex-start',
+    minWidth: 232,
+    maxWidth: 360,
+    backgroundColor: theme.surface2,
+    borderColor: theme.border2,
+    borderWidth: 1,
+    borderRadius: theme.radius.md,
+    paddingHorizontal: theme.sp.lg,
+    paddingVertical: theme.sp.md - 3,
+  },
+  drawer: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    left: 0,
+    width: 320,
+    maxWidth: '86%',
+    backgroundColor: theme.surface,
+    borderRightColor: theme.border2,
+    borderRightWidth: 1,
+    zIndex: 30,
+  },
+  drawerHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: theme.sp.lg,
+    paddingVertical: theme.sp.md,
+    borderBottomColor: theme.border2,
+    borderBottomWidth: 1,
+  },
+  drawerTitle: { color: theme.text, fontSize: theme.fs.md, fontWeight: '800', letterSpacing: 0.4 },
+  drawerX: { color: theme.muted2, fontSize: theme.fs.lg },
   menuScrim: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: '#0009', zIndex: 25 },
   menuSheet: {
     position: 'absolute',

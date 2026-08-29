@@ -598,6 +598,98 @@ function check(name, ok, detail) {
       return page.evaluate(() => document.body.innerText);
     };
 
+    // The sections are a hamburger and a left drawer at every width — a pill
+    // row spends a band of the page on the nine sections you are not on, and
+    // has no room for the one-line description each one carries.
+    await page.evaluate(() => {
+      const el = document.querySelector('[aria-label="Desk"]');
+      if (el) el.click();
+    });
+    await page.waitForTimeout(4500);
+    const landed = await page.evaluate(() => document.body.innerText);
+    check(
+      'pressing Desk lands on the Desk home',
+      /Corporate calendar/i.test(landed),
+      landed.slice(0, 300),
+    );
+    check(
+      'the section pill row is gone',
+      !/Watchlist[\s\S]{0,25}Portfolio[\s\S]{0,25}Paper trades/.test(landed),
+      (landed.match(/Watchlist[\s\S]{0,80}/) || [''])[0],
+    );
+    await page.evaluate(() => {
+      const el = [...document.querySelectorAll('[role="button"]')].find((e) =>
+        (e.getAttribute('aria-label') || '').startsWith('Sections menu'));
+      if (el) el.click();
+    });
+    await page.waitForTimeout(900);
+    const drawer = await page.evaluate(() => {
+      const t = [...document.querySelectorAll('*')]
+        .find((e) => !e.children.length && (e.textContent || '').trim() === 'DESK');
+      if (!t) return { found: false };
+      // Walk out to the panel itself: pinned to the left edge AND as tall as
+      // the viewport. Stopping at the first element with left 0 lands on the
+      // drawer's own header row, which is neither.
+      let n = t;
+      while (n) {
+        const b = n.getBoundingClientRect();
+        if (b.left <= 1 && b.height >= window.innerHeight - 2) break;
+        n = n.parentElement;
+      }
+      if (!n) return { found: false };
+      const r = n.getBoundingClientRect();
+      const hit = document.elementFromPoint(r.left + 20, r.top + 160);
+      return {
+        found: true,
+        left: Math.round(r.left),
+        top: Math.round(r.top),
+        fullHeight: r.height >= window.innerHeight - 2,
+        onTop: !!hit && n.contains(hit),
+        text: (n.textContent || '').slice(0, 400),
+      };
+    });
+    check(
+      'the drawer opens against the left edge, full height',
+      drawer.found && drawer.left === 0 && drawer.top === 0 && drawer.fullHeight,
+      JSON.stringify({ ...drawer, text: undefined }),
+    );
+    check(
+      'it is drawn over the page, not under the header',
+      drawer.onTop,
+      JSON.stringify({ ...drawer, text: undefined }),
+    );
+    check(
+      'it lists every section with what it is for',
+      /Watchlist/.test(drawer.text || '') && /Reports/.test(drawer.text || '') &&
+        /live quotes/.test(drawer.text || ''),
+      (drawer.text || '').slice(0, 200),
+    );
+    // Picking a section closes it; leaving and coming back lands on Home again.
+    await tap('Portfolio');
+    await page.waitForTimeout(3000);
+    const picked = await page.evaluate(() => document.body.innerText);
+    check(
+      'picking a section switches the page and closes the drawer',
+      /Holdings/.test(picked) && !/Corporate calendar/i.test(picked),
+      picked.slice(0, 200),
+    );
+    await page.evaluate(() => {
+      const el = document.querySelector('[aria-label="Screens"]');
+      if (el) el.click();
+    });
+    await page.waitForTimeout(2500);
+    await page.evaluate(() => {
+      const el = document.querySelector('[aria-label="Desk"]');
+      if (el) el.click();
+    });
+    await page.waitForTimeout(4500);
+    const back = await page.evaluate(() => document.body.innerText);
+    check(
+      'coming back to Desk lands on Home, not on the last section',
+      /Corporate calendar/i.test(back) && !/Holdings/.test(back),
+      back.slice(0, 200),
+    );
+
     const desk = await openDeskSection('Home');
     check(
       'the Desk opens on a page, not on a bar of tabs',

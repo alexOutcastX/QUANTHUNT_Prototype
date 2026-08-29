@@ -117,6 +117,95 @@ class DeskLandingTest(unittest.TestCase):
         self.assertIn("Show all {total}", self.home)
 
 
+class SideNavTest(unittest.TestCase):
+    """The Desk's ten sections are a hamburger and a drawer, not a pill row.
+
+    A row of pills spends a whole band of the page on the nine sections you are
+    not on, and at that width there was no room for the one-line description of
+    what each one is for — the description existed, and only the phone ever saw
+    it. The drawer costs one button and has room for all of it.
+    """
+
+    def setUp(self):
+        self.hosts = _screen("Hosts.tsx")
+
+    def test_the_desk_asks_for_the_drawer(self):
+        desk = self.hosts.split("export function DeskHub")[1]
+        self.assertIn('variant="side"', desk)
+        self.assertIn('menuTitle="DESK"', desk)
+
+    def test_the_drawer_is_a_variant_of_the_shared_sub_nav(self):
+        self.assertIn("variant?: 'pills' | 'side'", self.hosts)
+        self.assertIn("if (variant === 'side') {", self.hosts)
+
+    def test_it_sits_against_the_left_edge_and_runs_full_height(self):
+        drawer = self.hosts.split("  drawer: {")[1].split("},")[0]
+        for needle in ("position: 'absolute'", "top: 0", "bottom: 0", "left: 0", "width: 320"):
+            self.assertIn(needle, drawer, needle)
+
+    def test_it_is_portalled_so_the_header_cannot_paint_over_it(self):
+        """The header carries zIndex for its own popover; ranked inside the
+        page the drawer loses to it, which is how the universe sheet lost its
+        close button."""
+        side = self.hosts.split("if (variant === 'side') {")[1].split("return (\n    <View style={styles.host}>")[0]
+        self.assertIn("<Modal visible={menuOpen}", side)
+        self.assertIn("<Pressable style={styles.menuScrim}", side)
+
+    def test_the_drawer_can_be_dismissed_three_ways(self):
+        side = self.hosts.split("if (variant === 'side') {")[1]
+        self.assertIn("onRequestClose={close}", side)          # escape / back
+        self.assertIn("onPress={close}", side)                 # the scrim
+        self.assertIn('accessibilityLabel="Close the sections menu"', side)
+
+    def test_the_button_says_where_you_are_and_what_it_is_for(self):
+        side = self.hosts.split("if (variant === 'side') {")[1].split("</Modal>")[0]
+        self.assertIn("styles.hamIcon", side)
+        self.assertIn("{cur.label}", side)
+        self.assertIn("{cur.hint}", side)
+
+    def test_it_hugs_the_left_rather_than_stretching_the_page(self):
+        btn = self.hosts.split("  sideBtn: {")[1].split("},")[0]
+        self.assertIn("alignSelf: 'flex-start'", btn)
+
+    def test_every_section_carries_its_description_into_the_drawer(self):
+        desk = self.hosts.split("export function DeskHub")[1].split("ChartsHome")[0]
+        rows = [l for l in desk.splitlines() if "{ key: '" in l and "hidden: true" not in l]
+        self.assertTrue(rows)
+        for r in rows:
+            self.assertIn("hint:", r, r.strip()[:80])
+
+    def test_the_drawer_and_the_phone_menu_render_the_same_list(self):
+        """Two copies of the list is two places for a section to go missing."""
+        self.assertIn("const menuRows = shown.map((t) => (", self.hosts)
+        self.assertEqual(self.hosts.count("<ScrollView bounces={false}>{menuRows}</ScrollView>"), 2)
+
+
+class DeskLandsHomeTest(unittest.TestCase):
+    def setUp(self):
+        self.hosts = _screen("Hosts.tsx")
+
+    def test_pressing_desk_always_opens_the_desk_home(self):
+        """It used to restore whichever of ten sections you were last on, so
+        "Desk" meant a different page every time you pressed it."""
+        desk = self.hosts.split("export function DeskHub")[1].split("ChartsHome")[0]
+        self.assertNotIn('persistKey="', desk)
+
+    def test_with_no_persistKey_the_first_tab_is_the_landing(self):
+        self.assertIn("return has(p?.sub) ? (resolve(p!.sub) as string) : tabs[0].key;", self.hosts)
+        keys = re.findall(r"\{ key: '([a-z]+)',",
+                          self.hosts.split("export function DeskHub")[1])
+        self.assertEqual(keys[0], "home")
+
+    def test_a_deep_link_still_beats_the_landing(self):
+        """navigate('desk', { sub: 'inst' }) must still open Reports."""
+        self.assertIn("const p = peekNav();", self.hosts)
+        self.assertIn("if (has(p?.sub)) setActive(resolve(p!.sub) as string);", self.hosts)
+
+    def test_the_other_hubs_keep_remembering_where_you_were(self):
+        """Only the Desk resets: it is the one with a landing page to reset to."""
+        self.assertIn('persistKey="charts"', self.hosts)
+
+
 class FoldedScreensTest(unittest.TestCase):
     def test_calibration_is_a_mode_of_the_paper_trade_page(self):
         paper = _screen("PaperTradeScreen.tsx")
