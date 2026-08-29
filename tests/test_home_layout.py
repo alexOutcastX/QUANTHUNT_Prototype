@@ -12,8 +12,9 @@ What these hold:
   * The portfolio and watchlist show ROWS, not just a total. A flat total is as
     often two big opposite moves as it is a quiet day, and the summary made you
     leave the page to find out which.
-  * The index slider is customisable and can be emptied. Removing every panel
-    is a legitimate preference, not a broken page.
+  * The movers slider leads with the whole market rather than an index, is
+    customisable, and can be emptied. Removing every panel is a legitimate
+    preference, not a broken page.
 
 Geometry and clicking are checked against a real browser in e2e/smoke.js;
 these guard the wiring underneath.
@@ -113,8 +114,39 @@ class SliderTest(unittest.TestCase):
     def setUp(self):
         self.src = _read("mobile", "src", "components", "IndexSlider.tsx")
 
-    def test_it_opens_on_the_two_it_replaced(self):
-        self.assertIn("export const DEFAULT_INDICES = ['NIFTY 50', 'BSE SENSEX'];", self.src)
+    def test_it_is_called_movers_not_index_movers(self):
+        """It is no longer only about indices."""
+        self.assertIn("<SectionTitle>Movers</SectionTitle>", self.src)
+        self.assertNotIn("Index movers", self.src)
+
+    def test_it_opens_on_the_market_and_the_two_it_replaced(self):
+        self.assertIn("export const DEFAULT_INDICES = [MARKET, 'NIFTY 50', 'BSE SENSEX'];", self.src)
+        self.assertIn("export const MARKET = '__market__';", self.src)
+
+    def test_the_market_panel_leads(self):
+        """The day's biggest moves are almost never large caps, so the panel
+        that can show them should not be the one you have to swipe to."""
+        table = re.search(r"DEFAULT_INDICES = \[(.*?)\];", self.src).group(1)
+        self.assertTrue(table.strip().startswith("MARKET"), table)
+
+    def test_the_market_panel_asks_a_different_endpoint(self):
+        """Constituents are an index's list; the whole market is a sort over
+        the bhavcopy."""
+        self.assertIn("api\n          .marketMovers(4)", self.src.replace("\r", ""))
+        self.assertIn("if (name === MARKET)", self.src)
+
+    def test_it_states_the_floor_and_the_exclusions(self):
+        """"Top movers" over a filtered subset is a different claim from "top
+        movers"."""
+        self.assertIn("names over ₹${crore(m.min_turnover)} turnover", self.src)
+        self.assertIn("corporate action", self.src)
+
+    def test_an_old_stored_default_picks_up_the_new_panel(self):
+        """A list identical to the previous default was never customised — it
+        is the old default sitting in storage, and freezing it would withhold
+        a panel the user never had the chance to decline."""
+        self.assertIn("const LEGACY_DEFAULT = ['NIFTY 50', 'BSE SENSEX'];", self.src)
+        self.assertIn("untouched ? DEFAULT_INDICES : arr", self.src)
 
     def test_it_pages_rather_than_stacking(self):
         self.assertIn("pagingEnabled", self.src)
@@ -133,19 +165,24 @@ class SliderTest(unittest.TestCase):
         self.assertIn("No indices in the slider", self.src)
 
     def test_a_malformed_stored_list_is_ignored_but_an_empty_one_is_kept(self):
-        self.assertIn("Array.isArray(arr) && arr.every((x) => typeof x === 'string')", self.src)
+        self.assertIn(
+            "if (!Array.isArray(arr) || !arr.every((x) => typeof x === 'string')) return;",
+            self.src)
 
     def test_removing_the_last_panel_cannot_strand_the_page_index(self):
         self.assertIn("Math.max(0, Math.min(p, next.length - 1))", self.src)
 
-    def test_each_panel_shows_that_indexs_own_level(self):
-        self.assertIn("const lv = level?.(name) || null;", self.src)
+    def test_each_index_panel_shows_that_indexs_own_level(self):
+        """The market panel has no level to show — it is not an index — so it
+        carries the size of the ranked set instead."""
+        self.assertIn("const lv = name === MARKET ? null : level?.(name) || null;", self.src)
+        self.assertIn("split?.note ? (", self.src)
 
     def test_the_dots_are_reachable_without_swiping(self):
         """A pager with no other control is invisible to a keyboard and to
         anyone who does not think to drag it."""
         self.assertIn("onPress={() => goto(i)}", self.src)
-        self.assertIn("accessibilityLabel={`Show ${n}`}", self.src)
+        self.assertIn("accessibilityLabel={`Show ${labelFor(n)}`}", self.src)
 
 
 class NewsPanelTest(unittest.TestCase):

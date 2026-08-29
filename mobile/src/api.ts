@@ -361,6 +361,21 @@ export type MoversResp = {
   error?: string;
 };
 
+/** Biggest movers across the whole traded universe, not inside an index.
+ *  `universe` is how many names were ranked after the turnover floor;
+ *  `excluded` counts splits, bonuses and listings, whose "previous close" is
+ *  not a price the stock ever traded at. */
+export type MarketMoversResp = {
+  gainers: IndexConstituent[];
+  losers: IndexConstituent[];
+  universe: number;
+  traded: number;
+  excluded: number;
+  min_turnover: number;
+  session?: string | null;
+  running?: boolean;
+};
+
 export type ReturnsRow = { ret1y?: number | null; ret3y?: number | null; ret5y?: number | null };
 export type ReturnsResp = Record<string, ReturnsRow>;
 
@@ -1866,6 +1881,7 @@ export const api = {
   fundamentals: (symbol: string) =>
     getJson<Fundamentals>('/fundamentals?symbol=' + encodeURIComponent(symbol)),
   graph: (symbol?: string, ai?: AiCreds) => fetchGraph(symbol, ai),
+  marketMovers: (n = 6) => getJson<MarketMoversResp>('/movers/market?n=' + n),
   indexConstituents: (name: string, force = false) =>
     cachedGet<IndexResp>('/index?name=' + encodeURIComponent(name), TTL.index, force),
   // Server-computed breadth + top gainers/losers (resilient: NSE pChange, else a

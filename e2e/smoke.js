@@ -399,7 +399,23 @@ function check(name, ok, detail) {
     await aria('Latest');
     await page.waitForTimeout(500);
 
-    // The slider, and the customisation that is the point of it.
+    // The movers slider: the whole market first, then indices.
+    const movers = await page.evaluate(() => document.body.innerText);
+    check(
+      'the movers panel leads with the whole market',
+      /MOVERS[\s\S]{0,120}ACROSS THE MARKET/i.test(movers),
+      movers.slice(movers.search(/MOVERS/i), movers.search(/MOVERS/i) + 200),
+    );
+    check(
+      'it states the floor it ranked over and what it excluded',
+      /names over ₹1cr turnover/i.test(movers) && /corporate actions? excluded/i.test(movers),
+    );
+    check(
+      'market movers are whole-market names, not index constituents',
+      /MKTUP1/.test(movers) && /MKTDN1/.test(movers),
+    );
+
+    // …and the customisation that is the point of it.
     check('add opens the index picker', await aria('Add an index to this slider'));
     await page.waitForTimeout(700);
     check('an index can be added to the slider', await aria('Add NIFTY BANK'));

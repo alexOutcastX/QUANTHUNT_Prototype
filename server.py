@@ -4619,6 +4619,103 @@ def broker_logout():
     return jsonify({"connected": False})
 
 
+# Top movers across the WHOLE market, not inside an index.
+#
+# Every movers list on the page until now was scoped to a constituent list —
+# NIFTY 500 for breadth, NIFTY 50 and SENSEX for the slider — so the day's
+# biggest actual moves, which are usually nowhere near the large-cap indices,
+# never appeared anywhere.
+#
+# The bhavcopy is already in memory for all ~5,700 traded symbols with a close,
+# a previous close and a turnover, so this costs one sort and no network.
+#
+# The turnover floor is not tidying: with no floor at all the list is rights
+# entitlements and shells that printed one trade, several pegged at exactly
+# ±20% because they hit the circuit band rather than because anyone moved them.
+# A crore of turnover is a low bar that still leaves ~1,700 names, and the UI
+# states it rather than implying the whole market was considered.
+_MARKET_MOVERS_FLOOR = 1e7          # ₹1 crore of the day's turnover
+
+# How far the previous close may sit outside the day's traded range before it
+# stops being a previous close worth comparing to. NSE's widest price band is
+# 20% (×1.20), so a gap of half again cannot happen in an ordinary session.
+_PREV_CLOSE_GAP = 1.5
+
+
+def _comparable_prev_close(r) -> bool:
+    """Is this row's change a MOVE, or an artefact of the reference changing?
+
+    The bhavcopy's PREV_CLOSE is raw: it is not adjusted for splits, bonuses or
+    demergers, and on a listing day it is the issue price. So a 1:10 split
+    prints as −90% and a listing pop prints as +95%, and both would top a
+    "biggest movers" list while describing nothing that happened in the market.
+
+    The tell is not the size of the change — a stock really can fall 20% — it
+    is that the stock never traded anywhere NEAR its stated previous close.
+    A genuine limit-down day still opens close to yesterday and falls; a split
+    opens at a tenth of it. On the session this was written the rule excluded
+    exactly three names out of 1,691 (two 1:10 ETF splits and one listing),
+    while the widest real gap — a scrip locked at its 20% lower circuit — sat
+    at ×1.25, comfortably inside.
+    """
+    prev, lo, hi = (_finite(r.get("prevClose")), _finite(r.get("low")),
+                    _finite(r.get("high")))
+    if not prev or not lo or not hi or lo <= 0 or hi <= 0:
+        return True          # nothing to judge on; do not silently drop it
+    if prev > hi:
+        return prev / hi <= _PREV_CLOSE_GAP
+    if prev < lo:
+        return lo / prev <= _PREV_CLOSE_GAP
+    return True              # the previous close is inside the day's range
+
+
+@app.route("/movers/market")
+def market_movers():
+    """The day's biggest gainers and losers across every traded symbol."""
+    n = max(1, min(request.args.get("n", 6, type=int) or 6, 25))
+    try:
+        floor = float(request.args.get("min_turnover") or _MARKET_MOVERS_FLOOR)
+    except (TypeError, ValueError):
+        floor = _MARKET_MOVERS_FLOOR
+    floor = max(0.0, floor)
+
+    # Never blocks: a cold process warms in the background and says `running`
+    # rather than holding a request thread open on a multi-second bhavcopy
+    # fetch — a handful of those together saturate the worker pool.
+    rows, warming = get_universe_nonblocking()
+    if not rows:
+        return jsonify({"gainers": [], "losers": [], "running": bool(warming),
+                        "universe": 0, "traded": 0,
+                        "min_turnover": floor, "session": _BHAV_DATE})
+
+    traded = [r for r in rows
+              if r.get("chg") is not None and _finite(r.get("price"))]
+    liquid = [r for r in traded if (r.get("turnover") or 0) >= floor]
+    ranked = [r for r in liquid if _comparable_prev_close(r)]
+    skipped = len(liquid) - len(ranked)
+    ranked.sort(key=lambda r: r["chg"], reverse=True)
+    liquid = ranked
+
+    def out(r):
+        return {"symbol": r["symbol"], "name": r.get("name") or r["symbol"],
+                "price": r.get("price"), "chg": r.get("chg"),
+                "absChg": r.get("absChg"), "volume": r.get("volume"),
+                "turnover": r.get("turnover")}
+
+    return jsonify({
+        "gainers": [out(r) for r in liquid[:n]],
+        "losers": [out(r) for r in reversed(liquid[-n:])] if len(liquid) >= n
+                  else [out(r) for r in reversed(liquid)],
+        "universe": len(liquid),
+        "traded": len(traded),
+        # Splits, bonuses and listing days, whose "previous close" is not a
+        # price the stock ever traded at. Reported rather than hidden.
+        "excluded": skipped,
+        "min_turnover": floor,
+        "session": _BHAV_DATE,
+    })
+
+
 @app.route("/news")
 @rate_limit("news", 30, 300)
 def latest_news():

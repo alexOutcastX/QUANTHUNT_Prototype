@@ -1,10 +1,15 @@
-// Per-index gainers and losers, as one sliding panel instead of a column of
-// stacked cards.
+// Gainers and losers, as one sliding panel instead of a column of stacked
+// cards.
 //
 // NIFTY movers and SENSEX movers were two full-width cards, one under the
 // other, and every index anyone wanted to add would have been another. Side by
 // side in a slider they cost the height of one, and adding a fifth is a choice
 // the reader makes rather than a redesign.
+//
+// The first panel is the whole market rather than an index. Every movers list
+// on the page was scoped to a constituent list — NIFTY 500 for breadth, NIFTY
+// 50 and SENSEX here — so the day's biggest actual moves, which are almost
+// never large caps, appeared nowhere at all.
 //
 // Which indices are in it is remembered per device. Removing them all is
 // allowed: it leaves an empty slot with an Add button, which is a legitimate
@@ -29,18 +34,32 @@ import { navigate, openStock } from '../navIntent';
 
 const KEY = 'taureye.home.slider.v1';
 
-/** What the slider opens with. Both are already on the page's critical path. */
-export const DEFAULT_INDICES = ['NIFTY 50', 'BSE SENSEX'];
+/** The whole traded universe, as opposed to any one index's constituents. */
+export const MARKET = '__market__';
+
+/** What the slider opens with. */
+export const DEFAULT_INDICES = [MARKET, 'NIFTY 50', 'BSE SENSEX'];
+
+/** What it used to open with, before the market panel existed. A stored list
+ *  identical to this was never customised — it is the old default sitting in
+ *  storage — so it adopts the new one rather than being frozen without a
+ *  panel the user never had the chance to decline. */
+const LEGACY_DEFAULT = ['NIFTY 50', 'BSE SENSEX'];
+
+const labelFor = (name: string) => (name === MARKET ? 'Across the market' : name);
 
 /** Indices the picker offers. Anything /index serves is valid here. */
 export const PICKABLE = [
+  MARKET,
   'NIFTY 50', 'BSE SENSEX', 'NIFTY BANK', 'NIFTY IT', 'NIFTY AUTO',
   'NIFTY PHARMA', 'NIFTY FMCG', 'NIFTY METAL', 'NIFTY ENERGY',
   'NIFTY REALTY', 'NIFTY NEXT 50', 'NIFTY MIDCAP 100', 'NIFTY 500',
 ];
 
 type Row = { symbol: string; price?: number | null; chg?: number | null };
-type Panel = { rows: Row[] | null; failed?: boolean };
+/** Already split into the two lists a panel shows, because the market panel
+ *  arrives that way and an index's constituents have to be sorted into it. */
+type Panel = { up: Row[]; down: Row[]; note?: string } | 'loading' | 'failed';
 
 const pct = (v?: number | null) => (v == null ? '—' : (v >= 0 ? '+' : '') + v.toFixed(2) + '%');
 const colorOf = (v?: number | null) => (v == null ? theme.muted : v >= 0 ? theme.green : theme.red);
@@ -50,6 +69,8 @@ function topBottom(rows: Row[], n: number): { up: Row[]; down: Row[] } {
   priced.sort((a, b) => (b.chg as number) - (a.chg as number));
   return { up: priced.slice(0, n), down: priced.slice(-n).reverse() };
 }
+
+const crore = (v: number) => (v >= 1e7 ? `${Math.round(v / 1e7)}cr` : `${Math.round(v / 1e5)}L`);
 
 function MoverList({ title, rows }: { title: string; rows: Row[] }) {
   return (
@@ -87,7 +108,10 @@ export default function IndexSlider({ level }: { level?: (name: string) => { lev
         if (!v) return;
         const arr = JSON.parse(v);
         // An empty list is a real choice; a malformed one is not.
-        if (Array.isArray(arr) && arr.every((x) => typeof x === 'string')) setNames(arr);
+        if (!Array.isArray(arr) || !arr.every((x) => typeof x === 'string')) return;
+        const untouched =
+          arr.length === LEGACY_DEFAULT.length && arr.every((x, i) => x === LEGACY_DEFAULT[i]);
+        setNames(untouched ? DEFAULT_INDICES : arr);
       })
       .catch(() => {})
       .finally(() => setHydrated(true));
@@ -102,11 +126,37 @@ export default function IndexSlider({ level }: { level?: (name: string) => { lev
     if (!hydrated) return;
     for (const name of names) {
       if (data[name]) continue;
-      setData((d) => ({ ...d, [name]: { rows: null } }));
+      setData((d) => ({ ...d, [name]: 'loading' }));
+      const fail = () => setData((d) => ({ ...d, [name]: 'failed' }));
+      if (name === MARKET) {
+        api
+          .marketMovers(4)
+          .then((m) =>
+            setData((d) => ({
+              ...d,
+              [name]: {
+                up: (m.gainers || []) as Row[],
+                down: (m.losers || []) as Row[],
+                // The floor is not tidying and the exclusions are not
+                // rounding: without them this list is rights entitlements and
+                // shells that printed one trade, plus every split of the day
+                // sitting at -90%. Both are stated rather than assumed.
+                note: m.universe
+                  ? `${m.universe.toLocaleString('en-IN')} names over ₹${crore(m.min_turnover)} turnover` +
+                    (m.excluded ? ` · ${m.excluded} corporate action${m.excluded > 1 ? 's' : ''} excluded` : '')
+                  : undefined,
+              },
+            })),
+          )
+          .catch(fail);
+        continue;
+      }
       api
         .indexConstituents(name)
-        .then((idx) => setData((d) => ({ ...d, [name]: { rows: (idx.data || []) as Row[] } })))
-        .catch(() => setData((d) => ({ ...d, [name]: { rows: [], failed: true } })));
+        .then((idx) =>
+          setData((d) => ({ ...d, [name]: topBottom((idx.data || []) as Row[], 4) })),
+        )
+        .catch(fail);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [names, hydrated]);
@@ -143,7 +193,7 @@ export default function IndexSlider({ level }: { level?: (name: string) => { lev
   return (
     <Card style={s.card}>
       <View style={s.head}>
-        <SectionTitle>Index movers</SectionTitle>
+        <SectionTitle>Movers</SectionTitle>
         <View style={s.headR}>
           {names.length > 1 ? (
             <View style={s.dots}>
@@ -153,7 +203,7 @@ export default function IndexSlider({ level }: { level?: (name: string) => { lev
                   onPress={() => goto(i)}
                   hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
                   accessibilityRole="button"
-                  accessibilityLabel={`Show ${n}`}
+                  accessibilityLabel={`Show ${labelFor(n)}`}
                   accessibilityState={{ selected: i === page }}
                 >
                   <View style={[s.dot, i === page && s.dotOn]} />
@@ -184,9 +234,9 @@ export default function IndexSlider({ level }: { level?: (name: string) => { lev
                 onPress={() => add(n)}
                 activeOpacity={0.75}
                 accessibilityRole="button"
-                accessibilityLabel={`Add ${n}`}
+                accessibilityLabel={`Add ${labelFor(n)}`}
               >
-                <Text style={s.pickTxt}>{n}</Text>
+                <Text style={s.pickTxt}>{labelFor(n)}</Text>
               </TouchableOpacity>
             ))
           ) : (
@@ -199,7 +249,7 @@ export default function IndexSlider({ level }: { level?: (name: string) => { lev
         {!names.length ? (
           <EmptyState
             title="No indices in the slider"
-            hint="Add one and its gainers and losers show up here."
+            hint="Add the whole market, or an index, and its gainers and losers show up here."
             action={{ label: 'Add an index', onPress: () => setPicking(true) }}
           />
         ) : width ? (
@@ -214,8 +264,8 @@ export default function IndexSlider({ level }: { level?: (name: string) => { lev
           >
             {names.map((name) => {
               const p = data[name];
-              const lv = level?.(name) || null;
-              const split = p?.rows ? topBottom(p.rows, 4) : null;
+              const lv = name === MARKET ? null : level?.(name) || null;
+              const split = p && p !== 'loading' && p !== 'failed' ? p : null;
               return (
                 <View key={name} style={{ width }}>
                   <View style={s.panelHead}>
@@ -224,13 +274,13 @@ export default function IndexSlider({ level }: { level?: (name: string) => { lev
                           edge: there it landed directly under the card's Add
                           button, two small round targets in a stack. */}
                       <View style={s.nameRow}>
-                        <Text style={s.idxName} numberOfLines={1}>{name}</Text>
+                        <Text style={s.idxName} numberOfLines={1}>{labelFor(name)}</Text>
                         <TouchableOpacity
                           onPress={() => remove(name)}
                           hitSlop={{ top: 12, bottom: 12, left: 8, right: 12 }}
                           activeOpacity={0.7}
                           accessibilityRole="button"
-                          accessibilityLabel={`Remove ${name} from the slider`}
+                          accessibilityLabel={`Remove ${labelFor(name)} from the slider`}
                         >
                           <Icon name="close" size={11} color={theme.muted} />
                         </TouchableOpacity>
@@ -240,10 +290,12 @@ export default function IndexSlider({ level }: { level?: (name: string) => { lev
                           {lv.level.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
                           <Text style={{ color: colorOf(lv.chg) }}>  {pct(lv.chg)}</Text>
                         </Text>
+                      ) : split?.note ? (
+                        <Text style={s.note} numberOfLines={2}>{split.note}</Text>
                       ) : null}
                     </View>
                   </View>
-                  {!p || p.rows == null ? (
+                  {!p || p === 'loading' ? (
                     <Loading />
                   ) : split && (split.up.length || split.down.length) ? (
                     <View style={s.cols}>
@@ -252,15 +304,19 @@ export default function IndexSlider({ level }: { level?: (name: string) => { lev
                     </View>
                   ) : (
                     <EmptyState
-                      title="Constituents unavailable"
-                      hint={`${name} quotes are briefly unreachable — pull to refresh.`}
+                      title={name === MARKET ? 'Market movers unavailable' : 'Constituents unavailable'}
+                      hint={`${labelFor(name)} — quotes are briefly unreachable. Pull to refresh.`}
                     />
                   )}
                   <TouchableOpacity
-                    onPress={() => navigate('screens', { sub: 'screener', index: name })}
+                    onPress={() =>
+                      navigate('screens', name === MARKET
+                        ? { sub: 'screener' }
+                        : { sub: 'screener', index: name })
+                    }
                     activeOpacity={0.7}
                     accessibilityRole="link"
-                    accessibilityLabel={`Open ${name} in the screener`}
+                    accessibilityLabel={`Open ${labelFor(name)} in the screener`}
                   >
                     <Text style={s.more}>Open in screener ›</Text>
                   </TouchableOpacity>
@@ -298,6 +354,7 @@ const s = StyleSheet.create({
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
   idxName: { color: theme.muted2, fontSize: theme.fs.xs, fontWeight: '700', letterSpacing: 0.6 },
   idxLvl: { color: theme.text, fontSize: theme.fs.md, fontFamily: theme.mono, fontWeight: '700' },
+  note: { color: theme.muted, fontSize: theme.fs.xs, lineHeight: 15 },
   cols: { flexDirection: 'row', gap: theme.sp.md },
   half: { flex: 1, minWidth: 0 },
   colTitle: { color: theme.muted, fontSize: 9, fontWeight: '700', letterSpacing: 0.8, marginBottom: 2 },

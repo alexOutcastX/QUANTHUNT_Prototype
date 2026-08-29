@@ -962,6 +962,22 @@ class H(BaseHTTPRequestHandler):
             if "te_member=1" in (self.headers.get("Cookie") or "") or hdr == _MEMBER_TOKEN:
                 return self._json({"member": _MEMBER})
             return self._json({"member": None})
+        if path == "/movers/market":
+            # The whole-market panel. Deterministic, and deliberately carries
+            # an `excluded` count so the UI's "corporate actions excluded"
+            # note is exercised.
+            def mk(sym, chg, price):
+                return {"symbol": sym, "name": sym.title() + " Ltd", "price": price,
+                        "chg": chg, "absChg": round(price * chg / 100, 2),
+                        "volume": 1000000, "turnover": 5e8}
+            return self._json({
+                "gainers": [mk("MKTUP1", 19.9, 240.0), mk("MKTUP2", 14.2, 88.0),
+                            mk("MKTUP3", 11.7, 512.0), mk("MKTUP4", 9.4, 61.0)],
+                "losers": [mk("MKTDN1", -17.6, 143.0), mk("MKTDN2", -12.1, 78.0),
+                           mk("MKTDN3", -8.8, 402.0), mk("MKTDN4", -6.2, 25.0)],
+                "universe": 1688, "traded": 5191, "excluded": 3,
+                "min_turnover": 1e7, "session": "2026-07-23",
+            })
         if path == "/news/history":
             # The archive the rail's second tab reads. Stamped older than the
             # live feed so "recorded back to" has something to say.
