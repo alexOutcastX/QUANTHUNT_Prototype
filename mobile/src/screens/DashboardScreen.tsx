@@ -38,6 +38,7 @@ import { navigate, openStock } from '../navIntent';
 import { AsOfChip, Card, EmptyState, Loading, SectionTitle, StatTile } from '../ui';
 import { theme } from '../theme';
 import { sessionLabel } from '../format';
+import MarketClock from '../components/MarketClock';
 
 type Mover = { symbol: string; price?: number | null; chg?: number | null };
 type SocialLink = { label: string; url: string };
@@ -74,24 +75,6 @@ const topBottom = (rows: IndexConstituent[], n: number): Mover[] => {
 };
 
 // Live date + local-time widget (top of the page).
-function ClockWidget() {
-  const [now, setNow] = useState(() => new Date());
-  useEffect(() => {
-    const t = setInterval(() => setNow(new Date()), 1000);
-    return () => clearInterval(t);
-  }, []);
-  return (
-    <View>
-      <Text style={styles.h1}>Markets</Text>
-      <Text style={styles.h1sub}>
-        {now.toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' })}
-        {'  ·  '}
-        <Text style={styles.clock}>{now.toLocaleTimeString('en-IN', { hour12: false })}</Text>
-      </Text>
-    </View>
-  );
-}
-
 // Animated bullish/bearish breadth bar: segment widths spring to the live
 // advance/decline split and the leading side's dot pulses.
 function BreadthBar({ up, flat, down }: { up: number; flat: number; down: number }) {
@@ -354,14 +337,12 @@ export default function DashboardScreen({ onNavigate }: { onNavigate?: (page: st
       {/* ── Header: date+clock · market pill · Portfolio / Watchlist buttons ── */}
       <View style={styles.headRow}>
         <View style={{ flex: 1 }}>
-          <ClockWidget />
+          <Text style={styles.h1}>Markets</Text>
+          {/* The clock owns the status now. It used to sit in a second pill
+              over on the right that only ever spoke for India, which was a
+              separate answer to a question the clock was already being asked. */}
+          <MarketClock indiaOpen={market ? market.open : null} />
         </View>
-        {market ? (
-          <View style={[styles.pill, { borderColor: market.open ? theme.green : theme.border2 }]}>
-            <View style={[styles.dot, { backgroundColor: market.open ? theme.green : theme.red }]} />
-            <Text style={styles.pillTxt}>{market.open ? 'Market open' : 'Market closed'}</Text>
-          </View>
-        ) : null}
       </View>
       {/* ── News first: compact scrolling headline box + the user's feeds ── */}
       <Card style={{ marginBottom: theme.sp.md }}>
@@ -805,20 +786,6 @@ const styles = StyleSheet.create({
   content: { padding: theme.sp.lg, paddingBottom: 40, maxWidth: 1240, width: '100%', alignSelf: 'center' },
   headRow: { flexDirection: 'row', alignItems: 'center', marginBottom: theme.sp.md },
   h1: { color: theme.text, fontSize: theme.fs.h1, fontWeight: '700', letterSpacing: 0.2 },
-  h1sub: { color: theme.muted, fontSize: theme.fs.sm + 1, marginTop: 3 },
-  clock: { color: theme.muted2, fontFamily: theme.mono, fontVariant: ['tabular-nums'] },
-  pill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    borderWidth: 1,
-    borderRadius: 999,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    backgroundColor: theme.surface,
-  },
-  dot: { width: 8, height: 8, borderRadius: 4 },
-  pillTxt: { color: theme.muted2, fontSize: theme.fs.sm, fontWeight: '600' },
   // Portfolio / Watchlist jump buttons (replace the paper-portfolio card).
   jumpRow: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.sp.md, marginBottom: theme.sp.lg },
   jumpBtn: {
