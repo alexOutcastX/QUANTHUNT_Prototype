@@ -275,6 +275,61 @@ class SettledSessionTest(unittest.TestCase):
 
 
 @unittest.skipUnless(HAVE_FRAMES, "pandas/server unavailable in this environment")
+class IndexStripTest(unittest.TestCase):
+    """The index strip, where the same bug hid the longest.
+
+    Yahoo has quietly stopped updating several ^CNX* sector tickers. On the
+    Saturday this was written NIFTY Auto, FMCG, Metal, Energy, Realty and
+    Midcap were SIX WEEKS stale there while NSE had Friday, and the rest of
+    the strip was a day behind: NIFTY 50 showed Thursday's 24,090.85 called
+    -0.48% when NSE's Friday close was 24,175.65, +0.35%.
+    """
+
+    NSE_ROWS = {"NIFTY 50": {"indexSymbol": "NIFTY 50", "last": 24175.65,
+                             "percentChange": 0.35, "previousClose": 24090.85}}
+
+    def setUp(self):
+        self.saved = server._nse_idx_cache["rows"], server._nse_idx_cache["ts"]
+        server._nse_idx_cache["rows"] = self.NSE_ROWS
+        server._nse_idx_cache["ts"] = time.time()
+
+    def tearDown(self):
+        server._nse_idx_cache["rows"], server._nse_idx_cache["ts"] = self.saved
+
+    def test_the_exchange_supplies_the_level_and_the_change(self):
+        r = server._nse_index_row("NIFTY50")
+        self.assertEqual(r["level"], 24175.65)
+        self.assertEqual(r["chg"], 0.35)
+        self.assertEqual(r["session"], H.last_session())
+
+    def test_an_index_with_no_nse_feed_stays_on_yahoo(self):
+        """BSE SENSEX is not an NSE index."""
+        self.assertIsNone(server._nse_index_row("SENSEX"))
+
+    def test_the_card_reports_the_freshest_session_not_the_commonest(self):
+        """Six stale rows and six fresh ones is a tie, and the majority vote
+        resolved it to the stale date — labelling the whole strip six weeks
+        old."""
+        rows = ([{"session": "2026-07-17"}] * 6) + ([{"session": "2026-08-28"}] * 6)
+        self.assertEqual(server._indices_session(rows), "2026-08-28")
+
+    def test_a_strip_with_no_stamps_at_all_reports_nothing(self):
+        self.assertIsNone(server._indices_session([{"level": 1.0}]))
+        self.assertIsNone(server._indices_session([]))
+
+    def test_a_throttled_call_keeps_the_last_good_feed(self):
+        """Handing the strip back to a stale Yahoo ticker on one bad request
+        is the failure this whole path exists to correct."""
+        saved = server.nse_get
+        server.nse_get = lambda *a, **k: (_ for _ in ()).throw(RuntimeError("429"))
+        try:
+            server._nse_idx_cache["ts"] = 0.0        # force a refetch
+            self.assertEqual(server._nse_all_indices(), self.NSE_ROWS)
+        finally:
+            server.nse_get = saved
+
+
+@unittest.skipUnless(HAVE_FRAMES, "pandas/server unavailable in this environment")
 class PlaceholderZeroTest(unittest.TestCase):
     """A feed that answers a weekend request with zeros instead of Friday.
 

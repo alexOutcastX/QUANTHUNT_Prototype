@@ -4772,6 +4772,80 @@ _indices_cache = {}
 _INDICES_TTL = 300   # 5 minutes
 
 
+# NSE publishes every one of its indices in a single call, and it is the
+# exchange's own number. Yahoo has quietly stopped updating several of the
+# ^CNX* sector tickers: on the Saturday this was written NIFTY Auto, FMCG,
+# Metal, Energy, Realty and Midcap were all SIX WEEKS stale there, and the
+# rest were a day behind — the strip showed NIFTY 50 at Thursday's 24,090.85
+# and called it −0.48% while NSE had Friday's close at 24,175.65, +0.35%.
+#
+# BSE SENSEX is not an NSE index and has no entry here; it stays on Yahoo, and
+# the tile says so when it ends up a session behind the rest of the strip.
+_NSE_INDEX_NAMES = {
+    "NIFTY50": "NIFTY 50",
+    "BANKNIFTY": "NIFTY BANK",
+    "NIFTYIT": "NIFTY IT",
+    "NIFTYAUTO": "NIFTY AUTO",
+    "NIFTYPHARMA": "NIFTY PHARMA",
+    "NIFTYFMCG": "NIFTY FMCG",
+    "NIFTYMETAL": "NIFTY METAL",
+    "NIFTYENERGY": "NIFTY ENERGY",
+    "NIFTYREALTY": "NIFTY REALTY",
+    "NIFTYMIDCAP": "NIFTY MIDCAP 100",
+    "NIFTYNEXT50": "NIFTY NEXT 50",
+}
+_NSE_IDX_TTL = 120
+_nse_idx_cache = {"ts": 0.0, "rows": {}}
+_nse_idx_lock = threading.Lock()
+
+
+def _nse_all_indices():
+    """NSE's index feed keyed by index name. Cached, and never raises.
+
+    On failure the last good copy is returned rather than an empty dict: a
+    throttled call must not silently hand the strip back to a stale Yahoo
+    ticker, which is the exact failure this exists to correct.
+    """
+    with _nse_idx_lock:
+        if _nse_idx_cache["rows"] and time.time() - _nse_idx_cache["ts"] < _NSE_IDX_TTL:
+            return _nse_idx_cache["rows"]
+    rows = {}
+    try:
+        data = nse_get("/api/allIndices", retries=1)
+        for r in (data or {}).get("data") or []:
+            nm = (r.get("indexSymbol") or r.get("index") or "").strip().upper()
+            if nm and _finite(r.get("last")):
+                rows[nm] = r
+    except Exception as e:
+        log.debug("NSE allIndices failed: %s", e)
+    with _nse_idx_lock:
+        if rows:
+            _nse_idx_cache["rows"] = rows
+            _nse_idx_cache["ts"] = time.time()
+        return _nse_idx_cache["rows"]
+
+
+def _nse_index_row(key):
+    """Level + day change for one index, from the exchange, or None."""
+    nm = _NSE_INDEX_NAMES.get(key)
+    if not nm:
+        return None
+    r = _nse_all_indices().get(nm)
+    if not r:
+        return None
+    last = _finite(r.get("last"))
+    if not last or last <= 0:
+        return None
+    chg = _finite(r.get("percentChange"))
+    if chg is None:
+        prev = _finite(r.get("previousClose"))
+        chg = round((last / prev - 1) * 100, 2) if prev else None
+    # The feed carries no per-row date; a level read from it belongs to the
+    # session in progress, or to the last one that closed.
+    return {"level": round(last, 2), "chg": chg,
+            "session": _holidays.last_session()}
+
+
 def _fetch_index_row(key, name, yf_sym):
     """One index snapshot: last close, % day change, % 1-year return.
 
@@ -4781,35 +4855,47 @@ def _fetch_index_row(key, name, yf_sym):
     """
     import ydata
     df = ydata.history(yf_sym, "1y", "1d", auto_adjust=False)
-    if df is None or df.empty:
-        return {"key": key, "name": name, "symbol": yf_sym,
-                "level": None, "chg": None, "y1": None}
-    closes = df["Close"].dropna()
-    last = float(closes.iloc[-1])
-    prev = float(closes.iloc[-2]) if len(closes) >= 2 else None
-    first = float(closes.iloc[0]) if len(closes) >= 2 else None
-    # A year of closes means the last two rows are always two real sessions —
-    # which is why the index tiles kept showing Friday's move over a weekend
-    # while every other card on the page read +0.00%.
-    try:
-        session = pd.to_datetime(closes.index[-1]).strftime("%Y-%m-%d")
-    except Exception:
-        session = None
-    return {"key": key, "name": name, "symbol": yf_sym,
-            "level": round(last, 2),
-            "chg": round((last / prev - 1) * 100, 2) if prev else None,
-            "y1": round((last / first - 1) * 100, 1) if first else None,
-            "session": session}
+    row = {"key": key, "name": name, "symbol": yf_sym,
+           "level": None, "chg": None, "y1": None, "session": None}
+    first = None
+    if df is not None and not df.empty:
+        closes = df["Close"].dropna()
+        last = _finite(closes.iloc[-1]) if len(closes) else None
+        if last and last > 0:
+            prev = _finite(closes.iloc[-2]) if len(closes) >= 2 else None
+            first = _finite(closes.iloc[0]) if len(closes) >= 2 else None
+            # A year of closes means the last two rows are always two real
+            # sessions — which is why the index tiles kept showing a genuine
+            # move over a weekend while every other card read +0.00%.
+            try:
+                row["session"] = pd.to_datetime(closes.index[-1]).strftime("%Y-%m-%d")
+            except Exception:
+                pass
+            row["level"] = round(last, 2)
+            row["chg"] = round((last / prev - 1) * 100, 2) if prev else None
+            row["y1"] = round((last / first - 1) * 100, 1) if first else None
+    live = _nse_index_row(key)
+    if live and (live["session"] or "") > (row["session"] or ""):
+        row["level"] = live["level"]
+        row["chg"] = live["chg"]
+        row["session"] = live["session"]
+        # Recompute the 1-year figure against the level actually shown, or the
+        # tile would pair today's number with last month's return.
+        if first:
+            row["y1"] = round((live["level"] / first - 1) * 100, 1)
+    return row
 
 
 def _indices_session(rows):
-    """The session the levels are from — the one most of them agree on.
+    """The most recent session in the list.
 
-    Foreign indices in the same list keep their own calendar, so this is a
-    majority rather than the first row's stamp.
+    Not a majority: this list mixes sources, and when half the rows came from
+    a feed that had stopped updating, a majority vote labelled the whole strip
+    with the stale date. The card reports the freshest session it holds, and a
+    row behind it carries its own stamp so the tile is not read as current.
     """
     stamps = [r.get("session") for r in (rows or []) if r.get("session")]
-    return max(set(stamps), key=stamps.count) if stamps else None
+    return max(stamps) if stamps else None
 
 
 @app.route("/indices")

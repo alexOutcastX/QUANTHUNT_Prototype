@@ -459,16 +459,26 @@ export default function DashboardScreen({ onNavigate }: { onNavigate?: (page: st
 
       {/* ── Index tiles ── */}
       <View style={styles.tiles}>
-        {indices.slice(0, 6).map((ix) => (
-          <StatTile
-            key={ix.key}
-            label={ix.name}
-            value={ix.level.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
-            sub={pct(ix.chg)}
-            color={undefined}
-            style={{ maxWidth: 220 }}
-          />
-        ))}
+        {indices.slice(0, 6).map((ix) => {
+          // A tile whose own session is behind the strip's says which day it
+          // is from. BSE SENSEX has no NSE feed to fall back on, so it can sit
+          // a session behind the NIFTY tiles beside it — and a stale number
+          // presented as current is the whole bug this page just had.
+          const lag =
+            ix.session && indicesSession && ix.session < indicesSession
+              ? sessionLabel(ix.session).replace(/^on /, '')
+              : '';
+          return (
+            <StatTile
+              key={ix.key}
+              label={ix.name}
+              value={ix.level.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+              sub={lag ? `${pct(ix.chg)} · ${lag}` : pct(ix.chg)}
+              color={undefined}
+              style={{ maxWidth: 220 }}
+            />
+          );
+        })}
       </View>
       {indices.length ? (
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
