@@ -31,6 +31,7 @@ const TickerSettings = lazyScreen(() => import('./components/TickerSettings'));
 
 import { canGoBack, goBack, initHistory, navigate, peekNav, subscribeNav } from './navIntent';
 import { refreshSession } from './session';
+import { currentMember, memberLogout, subscribeMember } from './member';
 import { refreshFlags } from './flags';
 import { installErrorReporting } from './errorReport';
 import { theme, toggleThemeMode, useThemePref } from './theme';
@@ -242,6 +243,79 @@ function LegalLink({ style }: { style?: object }) {
   );
 }
 
+// Signing out, at the corner of the bar where account controls are looked for.
+// Until now the only way out was a row five items deep in More, which is not
+// anywhere a person hunting for "sign out" would think to open.
+//
+// Two presses, not one. This sits a few pixels from the theme toggle, and the
+// cost of a mis-click is retyping a password on a site that has no
+// self-service reset yet. The confirmation is absolutely positioned, so arming
+// it cannot widen the bar — the desktop header's width budget is fully spent
+// (see searchMaxWidth) and a control that grew on press would clip a nav tab.
+function SignOutBtn({ style, up }: { style?: object; up?: boolean }) {
+  const [, force] = useState(0);
+  const [armed, setArmed] = useState(false);
+  useEffect(() => subscribeMember(() => force((n) => n + 1)), []);
+  // Arming is not a state anyone should be left in: if the press was a
+  // mis-click, walking away has to be enough to undo it.
+  useEffect(() => {
+    if (!armed) return undefined;
+    const t = setTimeout(() => setArmed(false), 6000);
+    return () => clearTimeout(t);
+  }, [armed]);
+  const member = currentMember();
+  // Nothing to sign out of on the login gate, and no member name to show.
+  if (!member) return null;
+  return (
+    <View style={[styles.signOutWrap, style]}>
+      <TouchableOpacity
+        style={[styles.themeBtn, styles.signOutBtn, armed && styles.signOutBtnOn]}
+        onPress={() => setArmed((v) => !v)}
+        activeOpacity={0.75}
+        accessibilityRole="button"
+        accessibilityLabel={`Sign out of TaurEye. Signed in as ${member.username}`}
+        accessibilityState={{ expanded: armed }}
+        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        testID="header-signout"
+      >
+        <Icon name="signOut" size={16} color={armed ? theme.red : theme.muted2} />
+      </TouchableOpacity>
+      {armed ? (
+        <View style={[styles.signOutPop, up ? styles.signOutPopUp : styles.signOutPopDown]}>
+          <Text style={styles.signOutWho} numberOfLines={1}>
+            {member.username} · {member.plan.toUpperCase()}
+          </Text>
+          <Text style={styles.signOutAsk}>Sign out of TaurEye?</Text>
+          <View style={styles.signOutActs}>
+            <TouchableOpacity
+              style={[styles.signOutAct, styles.signOutStay]}
+              onPress={() => setArmed(false)}
+              activeOpacity={0.75}
+              accessibilityRole="button"
+              accessibilityLabel="Stay signed in"
+            >
+              <Text style={styles.signOutStayTxt}>Stay</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.signOutAct, styles.signOutGo]}
+              onPress={() => {
+                setArmed(false);
+                memberLogout();
+              }}
+              activeOpacity={0.75}
+              accessibilityRole="button"
+              accessibilityLabel="Confirm sign out"
+              testID="header-signout-confirm"
+            >
+              <Text style={styles.signOutGoTxt}>Sign out</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
 function mapTarget(page: string, sub?: string): string {
   // Backtest is a top-level destination at every width now.
   const bt = 'backtest';
@@ -334,11 +408,14 @@ function NewDesktopShell() {
                 accessibilityState={{ selected: on }}
               >
                 <Icon name={it.icon} size={15} color={on ? theme.accent : theme.muted2} />
-                {/* Between the desktop breakpoint and 1280 the six labels do
-                    not fit beside the rest of the bar, and a tab clipped
-                    mid-word reads as broken. The icons carry it in that band;
-                    the accessibility label always says the full name. */}
-                {width >= 1280 ? (
+                {/* Below 1360 the six labels do not fit beside the rest of
+                    the bar, and a tab clipped mid-word reads as broken. The
+                    icons carry it in that band; the accessibility label always
+                    says the full name. Measured with the Back affordance
+                    showing, which is the widest the bar ever gets — the old
+                    1280 was measured without it, and clipped once you had
+                    navigated anywhere. */}
+                {width >= 1360 ? (
                   <Text style={[styles.pageLabel, on && styles.pageTextOn]}>{it.label}</Text>
                 ) : null}
               </TouchableOpacity>
@@ -358,6 +435,7 @@ function NewDesktopShell() {
         <WalletChip />
         <ThemeToggle />
         <LegalLink />
+        <SignOutBtn />
       </View>
       <TickerStrip />
       <View style={styles.main}>{cur.render((k) => legacyNav(k, setActive))}</View>
@@ -417,7 +495,12 @@ function NewMobileShell() {
       </View>
       <TickerStrip />
       <View style={styles.mobileBody}>{tab.render((k) => legacyNav(k, setActive))}</View>
-      <LegalLink style={styles.legalBtnMobile} />
+      {/* The disclaimer stays optically centred whether or not anyone is
+          signed in: the sign-out sits on top of the strip, not in its flow. */}
+      <View style={styles.footerBar}>
+        <LegalLink style={styles.legalBtnMobile} />
+        <SignOutBtn up style={styles.signOutFooter} />
+      </View>
       {palette ? <CommandPalette open onClose={() => setPalette(false)} /> : null}
       {settings ? <TickerSettings onClose={() => setSettings(false)} /> : null}
       <View style={[styles.tabBar, { paddingBottom: insets.bottom || 8 }]}>
@@ -483,6 +566,10 @@ const styles = StyleSheet.create({
     backgroundColor: theme.surface,
     borderBottomColor: theme.border,
     borderBottomWidth: 1,
+    // The bar has to sit above the ticker strip and the page below it, or the
+    // sign-out confirmation — which hangs off the bottom of the bar — is
+    // painted underneath the content it overlaps and cannot be clicked.
+    zIndex: 20,
   },
   tagline: { color: theme.muted, fontSize: 10, fontFamily: theme.mono },
   // A legal link needs a real target, not a 10px sliver (QA finding D4).
@@ -490,23 +577,43 @@ const styles = StyleSheet.create({
   // Mobile: a full-width strip above the tab bar, centred, so it reads as a
   // footer rather than as another action crowding the header.
   legalBtnMobile: {
+    flex: 1,
     marginLeft: 0,
     paddingLeft: 0,
     paddingRight: 0,
     paddingVertical: 7,
     alignItems: 'center',
+  },
+  // The strip owns the rule now that it holds two things.
+  footerBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
     borderTopColor: theme.border,
     borderTopWidth: 1,
+    zIndex: 5,
   },
+  signOutFooter: { position: 'absolute', right: 10 },
   legalTxt: { color: theme.muted, fontSize: theme.fs.xs, fontFamily: theme.mono, letterSpacing: 1 },
-  navScroll: { flexGrow: 0, marginLeft: 10 },
+  // flexShrink 0 is the whole point: the nav and the search box were both
+  // elastic, so an over-subscribed bar took width from BOTH — and the nav is a
+  // horizontal ScrollView, so its share of the loss was silent. It scrolled
+  // instead of overflowing and the last tab went off the end unnoticed, while
+  // the search box beside it still had ~110px it could have given up.
+  // Navigation is the thing that must never be clipped; search is the elastic
+  // one.
+  navScroll: { flexGrow: 0, flexShrink: 0, marginLeft: 10 },
   pagesRow: { gap: 2, alignItems: 'center' },
   pageItem: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 7,
     paddingVertical: 13,
-    paddingHorizontal: 16,
+    // 12, not 16. The nav is a horizontal ScrollView, so an over-subscribed
+    // bar does not visibly overflow — it silently scrolls, and the last tab
+    // goes half off the end where nobody looks for it. Six tabs × 8px of
+    // padding is 48px, which is what it costs to keep every tab on screen
+    // from 1280 up with the sign-out button in the bar.
+    paddingHorizontal: 12,
     borderBottomWidth: 2,
     borderBottomColor: 'transparent',
   },
@@ -594,4 +701,44 @@ const styles = StyleSheet.create({
   },
   backGlyph: { color: theme.text, fontSize: 20, lineHeight: 22, fontWeight: '700', marginTop: -2 },
   themeGlyph: { color: theme.muted2, fontSize: 16, lineHeight: 20 },
+
+  // zIndex so the confirmation paints over the ticker strip below the bar,
+  // rather than being hidden by the content it overlaps.
+  signOutWrap: { zIndex: 30 },
+  signOutBtn: { width: 32, height: 32 },
+  signOutBtnOn: { borderColor: theme.red, backgroundColor: theme.surface3 },
+  signOutPop: {
+    position: 'absolute',
+    right: 0,
+    width: 214,
+    backgroundColor: theme.surface,
+    borderColor: theme.border,
+    borderWidth: 1,
+    borderRadius: theme.radius.md,
+    padding: theme.sp.md,
+    gap: 6,
+    ...theme.shadow.card,
+  },
+  signOutPopDown: { top: '100%', marginTop: 6 },
+  signOutPopUp: { bottom: '100%', marginBottom: 6 },
+  signOutWho: {
+    color: theme.muted,
+    fontSize: theme.fs.xs,
+    fontFamily: theme.mono,
+    letterSpacing: 0.4,
+  },
+  signOutAsk: { color: theme.text, fontSize: theme.fs.sm, fontWeight: '700' },
+  signOutActs: { flexDirection: 'row', gap: 8, marginTop: 4 },
+  signOutAct: {
+    flex: 1,
+    minHeight: 34,
+    borderRadius: theme.radius.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+  },
+  signOutStay: { backgroundColor: theme.surface2, borderColor: theme.border2 },
+  signOutStayTxt: { color: theme.text, fontSize: theme.fs.sm, fontWeight: '600' },
+  signOutGo: { backgroundColor: theme.red, borderColor: theme.red },
+  signOutGoTxt: { color: theme.onAccent, fontSize: theme.fs.sm, fontWeight: '700' },
 });

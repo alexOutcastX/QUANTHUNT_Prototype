@@ -286,6 +286,76 @@ function check(name, ok, detail) {
     check('a case opens its constituents', /CONSTITUENTS/i.test(one) && /WEIGHT/i.test(one));
     check('the engine action log renders', /What the engine has done/i.test(one) && /BOOKED|EXITED|ADDED|REBALANCED/.test(one));
 
+    // 8b · the sign-out control in the chrome, and the width budget it lives in.
+    //
+    // Two things are measured here that source-level tests cannot see. First,
+    // the header nav is a horizontal ScrollView: an over-subscribed bar does
+    // not overflow visibly, it silently scrolls, and the last tab is simply
+    // not on screen. Nothing looks broken, which is why it needs measuring.
+    // Second, the confirmation hangs off the bottom of the bar over the ticker
+    // strip — it has to actually be the element under the cursor, not painted
+    // beneath the page.
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.waitForTimeout(900);
+    const signOut = page.locator('[data-testid="header-signout"]');
+    check('sign-out sits in the app chrome', (await signOut.count()) === 1);
+
+    const bar = await page.evaluate(() => {
+      const disc = [...document.querySelectorAll('*')].find(
+        (e) => e.textContent === 'DISCLAIMER' && !e.children.length,
+      );
+      const btn = document.querySelector('[data-testid="header-signout"]');
+      if (!disc || !btn) return null;
+      let row = disc.parentElement;
+      while (row && getComputedStyle(row).flexDirection !== 'row') row = row.parentElement;
+      const kids = [...row.children];
+      const rb = row.getBoundingClientRect();
+      const last = kids[kids.length - 1].getBoundingClientRect();
+      const scroller = kids.find((k) => k.scrollWidth > k.clientWidth + 1 && k.clientWidth > 150);
+      const d = disc.getBoundingClientRect();
+      const b = btn.getBoundingClientRect();
+      return {
+        overflow: Math.round(Math.max(0, last.right - (rb.right - parseFloat(getComputedStyle(row).paddingRight)))),
+        navClip: scroller ? scroller.scrollWidth - scroller.clientWidth : 0,
+        wallet: kids.length,
+        besideDisclaimer: Math.abs((d.top + d.bottom) / 2 - (b.top + b.bottom) / 2) < 20 && b.left >= d.right - 5,
+      };
+    });
+    check('sign-out is beside the disclaimer', !!bar && bar.besideDisclaimer, JSON.stringify(bar));
+    check('the header bar does not overflow at 1440', !!bar && bar.overflow === 0, JSON.stringify(bar));
+    check('no nav tab is scrolled out of the header', !!bar && bar.navClip === 0, JSON.stringify(bar));
+
+    await signOut.click();
+    await page.waitForTimeout(400);
+    check(
+      'one press asks rather than signing out',
+      (await page.locator('text=Sign out of TaurEye?').count()) === 1 &&
+        (await page.locator('text=Members only').count()) === 0,
+    );
+    check(
+      'the confirmation is the element on top, not painted under the page',
+      await page.evaluate(() => {
+        const el = [...document.querySelectorAll('*')].find(
+          (e) => e.textContent === 'Sign out of TaurEye?' && !e.children.length,
+        );
+        if (!el) return false;
+        const r = el.getBoundingClientRect();
+        const hit = document.elementFromPoint((r.left + r.right) / 2, (r.top + r.bottom) / 2);
+        return !!hit && (hit === el || el.contains(hit) || hit.contains(el));
+      }),
+    );
+    await page.evaluate(() => {
+      const el = [...document.querySelectorAll('div,span')]
+        .filter((e) => (e.textContent || '').trim() === 'Stay').pop();
+      if (el) el.click();
+    });
+    await page.waitForTimeout(400);
+    check(
+      'Stay closes the confirmation and keeps you signed in',
+      (await page.locator('text=Sign out of TaurEye?').count()) === 0 &&
+        (await page.locator('text=Members only').count()) === 0,
+    );
+
     // 9 · no uncaught page errors during the whole run
     check('no uncaught page errors', errors.length === 0, errors[0]);
   } finally {

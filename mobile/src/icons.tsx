@@ -21,7 +21,7 @@ export type IconName =
   | 'home' | 'screens' | 'stock' | 'desk' | 'terminal' | 'grid' | 'doc'
   | 'chart' | 'candles' | 'watch' | 'watchFilled' | 'alert' | 'alertFilled'
   | 'export' | 'bolt' | 'trendUp' | 'rocket' | 'landmark' | 'calc' | 'paper'
-  | 'target' | 'flask';
+  | 'target' | 'flask' | 'signOut';
 
 type Def = { d: string; fill?: boolean };
 
@@ -65,6 +65,9 @@ const P: Record<IconName, Def> = {
   paper: { d: 'M5 4h14v16H5zM8.5 8.5h7M8.5 12h7M8.5 15.5h4' },
   target: { d: 'M12 3a9 9 0 1 1 0 18 9 9 0 0 1 0-18zM12 7.5a4.5 4.5 0 1 1 0 9 4.5 4.5 0 0 1 0-9zM12 11.2a.8.8 0 1 1 0 1.6.8.8 0 0 1 0-1.6z' },
   flask: { d: 'M9.5 3h5M10.5 3v6l-5.3 8.8A1.6 1.6 0 0 0 6.6 20.5h10.8a1.6 1.6 0 0 0 1.4-2.7L13.5 9V3M8 15h8' },
+  // Door on the left, arrow leaving to the right — the near-universal
+  // sign-out mark, so it needs no label to be understood.
+  signOut: { d: 'M10 4.5H5.5a1.5 1.5 0 0 0-1.5 1.5v12a1.5 1.5 0 0 0 1.5 1.5H10M20 12H10.5M20 12l-3.6-3.6M20 12l-3.6 3.6' },
 };
 
 export function Icon({

@@ -952,6 +952,14 @@ class H(BaseHTTPRequestHandler):
             if "te_member=1" in (self.headers.get("Cookie") or "") or hdr == _MEMBER_TOKEN:
                 return self._json({"member": _MEMBER})
             return self._json({"member": None})
+        if path == "/wallet/earn":
+            # The header's wallet chip hides itself when this 404s, and with the
+            # chip gone the smoke suite would measure a header 50px narrower
+            # than the real one — which is exactly the measurement the nav-clip
+            # check depends on. Deterministic values: a balance and a streak,
+            # nothing claimable, so the chip renders in its ordinary state.
+            return self._json({"balance": 120, "prices": {},
+                               "daily": {"streak": 3, "claimable": False, "amount": 5}})
         if path == "/sectors/members":
             from urllib.parse import urlparse, parse_qs
             sec = (parse_qs(urlparse(self.path).query).get("sector", ["Financials"])[0])
