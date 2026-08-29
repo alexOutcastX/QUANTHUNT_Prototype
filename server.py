@@ -190,15 +190,83 @@ def _quote_from_frame(df):
     }
 
 
+# ── The exchange's own settled session ──────────────────────────────────────
+# Yahoo can lag the exchange by a full day. On the Saturday this was written
+# NSE's bhavcopy held Friday and Yahoo's last NSE bar was Thursday, so a
+# correctly-computed Yahoo change was still the wrong session's change. The
+# bhavcopy row carries the whole OHLCV line, so nothing here is reconstructed —
+# it is read straight off the universe cache that every screen already uses.
+_settled_idx = (0.0, {})
+
+
+def _settled_rows():
+    """symbol -> bhavcopy row, rebuilt only when the universe cache turns over.
+
+    Reads the cache directly and never calls get_universe(): a cold process
+    must not turn a quote lookup into a blocking bhavcopy download.
+    """
+    global _settled_idx
+    ts, idx = _settled_idx
+    if ts != _universe_ts or not idx:
+        idx = {u["symbol"]: u for u in (_universe_cache or [])
+               if u.get("price") is not None}
+        _settled_idx = (_universe_ts, idx)
+    return idx
+
+
+def _settled_quote(symbol):
+    """The exchange's settled numbers for one symbol, or None."""
+    if not _BHAV_DATE:
+        return None
+    r = _settled_rows().get(symbol)
+    if not r:
+        return None
+    price = _finite(r.get("price"))
+    if not price or price <= 0:
+        return None
+    prev = _finite(r.get("prevClose"))
+    return {
+        "price": round(price, 2),
+        "prevClose": round(prev if prev else price, 2),
+        "chg": _finite(r.get("chg")),
+        "absChg": _finite(r.get("absChg")),
+        "open": _finite(r.get("open"), price),
+        "high": _finite(r.get("high"), price),
+        "low": _finite(r.get("low"), price),
+        "volume": int(_finite(r.get("volume"), 0) or 0),
+        "session": _BHAV_DATE,
+        "source": "NSE",
+    }
+
+
+def _freshest(*quotes):
+    """Whichever quote is from the later session.
+
+    Comparing sessions rather than consulting a clock is what makes this right
+    in both directions: during a live session Yahoo's bar is today and the
+    bhavcopy is last night's, so Yahoo wins; over a weekend the bhavcopy is
+    Friday and Yahoo's last bar may be Thursday, so the bhavcopy wins. Ties go
+    to the earlier argument, so an intraday bar is not displaced by the
+    previous close of the same day.
+    """
+    best = None
+    for q in quotes:
+        if q and (best is None
+                  or (q.get("session") or "") > (best.get("session") or "")):
+            best = q
+    return best
+
+
 def yf_price(symbol):
     """Fetch price from Yahoo Finance using NSE suffix (.NS)."""
     try:
         yf = yf_session()
         ticker = yf.Ticker(f"{symbol}.NS")
-        return _quote_from_frame(ticker.history(period=_YF_WINDOW))
+        return _freshest(_quote_from_frame(ticker.history(period=_YF_WINDOW)),
+                         _settled_quote(symbol))
     except Exception as e:
         log.debug("YF fallback failed for %s: %s", symbol, e)
-        return None
+        return _settled_quote(symbol)
 
 
 # ── Universe cache (bhavcopy + microcap index) ───────────────────────────────
@@ -2336,12 +2404,19 @@ def _yf_batch(symbols):
             try:
                 df = data[s + ".NS"] if (s + ".NS") in top else data
                 entry = _quote_from_frame(df)
-                if entry:
-                    out[s] = entry
             except Exception:
-                continue
+                entry = None
+            entry = _freshest(entry, _settled_quote(s))
+            if entry:
+                out[s] = entry
     except Exception as e:
         log.debug("YF batch failed: %s", e)
+        # A dead Yahoo is not a dead quote: the exchange's own settled close is
+        # already in memory for every symbol that traded.
+        for s in symbols:
+            entry = _settled_quote(s)
+            if entry:
+                out[s] = entry
     return out
 
 

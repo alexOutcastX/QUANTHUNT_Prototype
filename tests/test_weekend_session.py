@@ -19,6 +19,7 @@ a test that fails on a Sunday for the wrong reason.
 import datetime
 import json
 import math
+import time
 import os
 import sys
 import unittest
@@ -188,6 +189,89 @@ class MoversSessionTest(unittest.TestCase):
         rows = [{"symbol": "A", "chg": 1.0, "volume": 1} for _ in range(3)]
         p = server._movers_aggregate("NIFTY 500", rows, 2)
         self.assertTrue(H.is_trading_day(p["session"]))
+
+
+@unittest.skipUnless(HAVE_FRAMES, "pandas/server unavailable in this environment")
+class SettledSessionTest(unittest.TestCase):
+    """Yahoo can be a whole session behind the exchange.
+
+    Fixing the window got a real percentage out of Yahoo, and it was still the
+    wrong day's: on the Saturday this was written NSE's bhavcopy held Friday
+    and Yahoo's last NSE bar was Thursday. The bhavcopy row carries the full
+    OHLCV line and is already in memory, so the tie is settled by comparing
+    sessions rather than by trusting either feed.
+    """
+
+    BHAV = {"symbol": "ACME", "price": 1200.0, "chg": -0.33, "prevClose": 1204.0,
+            "absChg": -4.0, "open": 1205.0, "high": 1210.0, "low": 1198.0,
+            "volume": 317442.0}
+
+    def setUp(self):
+        self.saved = (server._universe_cache, server._universe_ts, server._BHAV_DATE)
+        server._universe_cache = [self.BHAV]
+        server._universe_ts = time.time()
+        server._BHAV_DATE = "2026-08-28"          # Friday
+        server._settled_idx = (0.0, {})
+
+    def tearDown(self):
+        (server._universe_cache, server._universe_ts, server._BHAV_DATE) = self.saved
+        server._settled_idx = (0.0, {})
+
+    def test_the_exchanges_own_close_is_a_complete_quote(self):
+        q = server._settled_quote("ACME")
+        self.assertEqual(q["price"], 1200.0)
+        self.assertEqual(q["chg"], -0.33)
+        self.assertEqual(q["session"], "2026-08-28")
+        self.assertEqual(q["source"], "NSE")
+        json.dumps(q, allow_nan=False)
+
+    def test_a_stale_yahoo_bar_loses_to_fridays_bhavcopy(self):
+        stale = server._quote_from_frame(frame([THU, FRI]))   # last bar 28 Aug
+        older = dict(stale, session="2026-08-27")
+        self.assertEqual(server._freshest(older, server._settled_quote("ACME"))["session"],
+                         "2026-08-28")
+        self.assertEqual(server._freshest(older, server._settled_quote("ACME"))["source"],
+                         "NSE")
+
+    def test_a_live_bar_beats_last_nights_bhavcopy(self):
+        """The other direction, which is why this compares sessions instead of
+        asking a clock: mid-session Yahoo is today and the bhavcopy is not."""
+        live = dict(server._quote_from_frame(frame([THU, FRI])), session="2026-08-31")
+        self.assertEqual(server._freshest(live, server._settled_quote("ACME"))["session"],
+                         "2026-08-31")
+
+    def test_the_same_session_from_both_keeps_the_live_bar(self):
+        same = dict(server._quote_from_frame(frame([THU, FRI])), session="2026-08-28")
+        self.assertEqual(server._freshest(same, server._settled_quote("ACME"))["source"],
+                         "YF")
+
+    def test_an_unknown_symbol_has_no_settled_quote(self):
+        self.assertIsNone(server._settled_quote("NOSUCH"))
+
+    def test_a_listed_but_untraded_scrip_has_no_settled_quote(self):
+        """The universe carries every LISTED name; the ones that never printed
+        a tick have no price, and inventing one is the thing this file exists
+        to prevent."""
+        server._universe_cache = [{"symbol": "QUIET", "price": None, "chg": None}]
+        server._universe_ts = time.time()
+        server._settled_idx = (0.0, {})
+        self.assertIsNone(server._settled_quote("QUIET"))
+
+    def test_freshest_ignores_nothing_at_all(self):
+        self.assertIsNone(server._freshest(None, None))
+        self.assertEqual(server._freshest(None, server._settled_quote("ACME"))["source"], "NSE")
+
+    def test_a_dead_yahoo_still_serves_the_exchanges_close(self):
+        def boom(*a, **k):
+            raise RuntimeError("yahoo is down")
+        saved = server.yf_session
+        server.yf_session = boom
+        try:
+            out = server._yf_batch(["ACME"])
+        finally:
+            server.yf_session = saved
+        self.assertEqual(out["ACME"]["price"], 1200.0)
+        self.assertEqual(out["ACME"]["session"], "2026-08-28")
 
 
 @unittest.skipUnless(HAVE_FRAMES, "pandas/server unavailable in this environment")
