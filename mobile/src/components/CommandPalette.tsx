@@ -43,7 +43,11 @@ const DESTS: Dest[] = [
   { label: 'Calculator', hint: 'Position size · SIP · CAGR', icon: 'desk', page: 'desk', sub: 'calc' },
   { label: 'Terminal', hint: 'Workspace, graph & compare', icon: 'terminal', page: 'terminal' },
   { label: 'Symbol', hint: 'One page per stock', icon: 'stock', page: 'stock', sub: 'stock' },
-  { label: 'More', hint: 'Charts, community, corporate data & settings', icon: 'desk', page: 'desk', sub: 'more' },
+  // What the old "More" menu held, as the destinations it dissolved into.
+  { label: 'Account', hint: 'Sign in, cloud sync, credits & plan', icon: 'desk', page: 'desk', sub: 'wallet' },
+  { label: 'Corporate', hint: 'Calendar, filings, shareholding', icon: 'desk', page: 'desk', sub: 'home' },
+  { label: 'Community', hint: 'Global room, channels & direct messages', icon: 'desk', page: 'desk', sub: 'community' },
+  { label: 'Holidays', hint: 'NSE holiday calendar · market open/closed', icon: 'clock', page: 'desk', sub: 'holidays' },
 ];
 
 const MAX_SYMBOLS = 8;

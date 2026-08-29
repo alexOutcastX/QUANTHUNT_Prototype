@@ -2,7 +2,7 @@
 //
 // A "store" holds MULTIPLE named lists (id + name + de-duplicated, uppercase NSE
 // symbols) plus an "active" list id. The active list is the one the rest of the
-// app (Screener / Chart / Dashboard) reads and writes through the legacy
+// app (Screener / Dashboard / symbol sheet) reads and writes through the legacy
 // single-list API (`loadWatchlist` / `addSymbol` / `removeSymbol`), which is kept
 // intact so those callers don't need to know about multiple lists.
 //
@@ -190,8 +190,8 @@ export async function removeSymbolFromWatchlist(id: string, sym: string): Promis
 }
 
 // ── Legacy single-list API — operates on the ACTIVE list ─────────────────────
-// Kept identical in signature/behavior so ScreenerScreen / ChartScreen /
-// DashboardScreen keep working without change.
+// Kept identical in signature/behavior so ScreenerScreen / DashboardScreen and
+// the rest keep working without change.
 
 export async function loadWatchlist(): Promise<string[]> {
   const store = await loadStore();

@@ -42,6 +42,8 @@ import MarketClock from '../components/MarketClock';
 import NewsPanel from '../components/NewsPanel';
 import IndexSlider from '../components/IndexSlider';
 import HeatmapScreen from './HeatmapScreen';
+import IndicesScreen from './IndicesScreen';
+import { MarketDeals } from './CorporateScreen';
 import {
   PortfolioPanel,
   PosRow,
@@ -540,6 +542,26 @@ export default function DashboardScreen({ onNavigate }: { onNavigate?: (page: st
       {/* ── Index movers, as one slider instead of a card per index ── */}
       <IndexSlider level={indexLevel} />
 
+      {/* ── Index levels, off the old More menu. The strip at the top of every
+          page carries a dozen; this is the full board with the day and the
+          year beside each, plus global, currency and depository. It belongs on
+          the page you land on, not four taps inside a menu. ── */}
+      <Card style={{ marginTop: theme.sp.lg }}>
+        <SectionTitle>Index levels</SectionTitle>
+        <IndicesScreen embedded />
+      </Card>
+
+      {/* ── Today's bulk and block deals: who took a large position. A
+          market-wide fact, so it sits with the market, not inside a
+          per-company lookup. ── */}
+      <Card style={{ marginTop: theme.sp.lg }}>
+        <View style={styles.dealsHead}>
+          <SectionTitle>Bulk &amp; block deals</SectionTitle>
+          <Text style={styles.dealsNote}>latest session · NSE</Text>
+        </View>
+        <MarketDeals limit={12} />
+      </Card>
+
       {/* ── G-SEC · Upcoming IPOs · Fixed returns ── */}
       <View style={styles.cols}>
         <Card style={styles.col}>
@@ -760,6 +782,8 @@ export default function DashboardScreen({ onNavigate }: { onNavigate?: (page: st
 }
 
 const styles = StyleSheet.create({
+  dealsHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  dealsNote: { color: theme.muted, fontSize: theme.fs.xs, fontFamily: theme.mono },
   container: { flex: 1, backgroundColor: theme.bg },
   content: { padding: theme.sp.lg, paddingBottom: 40, maxWidth: 1480, width: '100%', alignSelf: 'center' },
   // One column that becomes two. `alignItems: flex-start` matters: without it

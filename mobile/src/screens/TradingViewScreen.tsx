@@ -32,25 +32,32 @@ function widgetHtml(symbol: string): string {
   </body></html>`;
 }
 
-// Full TradingView charting widget — the "TradingView area". Advanced tooling,
-// symbol search, and drawing come from TradingView itself.
-export default function TradingViewScreen() {
+// Full TradingView charting widget — advanced tooling, symbol search and
+// drawing come from TradingView itself.
+//
+// `symbol` drives it from outside: on the chart page this is the second view of
+// ONE symbol you already chose, so it must not carry a second search box that
+// can disagree with the first.
+export default function TradingViewScreen({ symbol: fixed }: { symbol?: string } = {}) {
   const [input, setInput] = useState('NSE:RELIANCE');
-  const [symbol, setSymbol] = useState('NSE:RELIANCE');
+  const [own, setOwn] = useState('NSE:RELIANCE');
+  const symbol = fixed ? normSymbol(fixed) : own;
   const themeMode = useThemeMode();
   const html = useMemo(() => widgetHtml(symbol), [symbol, themeMode]);
 
   return (
     <View style={styles.container}>
-      <SymbolInput
-        containerStyle={styles.searchWrap}
-        inputStyle={styles.search}
-        value={input}
-        onChangeText={setInput}
-        onSelect={(s) => setSymbol(normSymbol(s))}
-        onSubmit={() => setSymbol(normSymbol(input))}
-        placeholder="Symbol — e.g. NSE:RELIANCE"
-      />
+      {fixed ? null : (
+        <SymbolInput
+          containerStyle={styles.searchWrap}
+          inputStyle={styles.search}
+          value={input}
+          onChangeText={setInput}
+          onSelect={(s) => setOwn(normSymbol(s))}
+          onSubmit={() => setOwn(normSymbol(input))}
+          placeholder="Symbol — e.g. NSE:RELIANCE"
+        />
+      )}
       <HtmlView html={html} style={styles.web} />
     </View>
   );

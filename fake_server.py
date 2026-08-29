@@ -916,6 +916,18 @@ class H(BaseHTTPRequestHandler):
             return self._entity_graph()
         if path == "/corporate/shareholding":
             return self._shareholding()
+        if path == "/corporate/deals":
+            # The generic /api stub answers without bulk/block keys, which used
+            # to throw inside render and blank the whole app — see MarketDeals.
+            return self._json({"source": "NSE", "bulk": [
+                {"symbol": "BULKCO", "client": "Some Fund A/C One", "side": "BUY",
+                 "qty": 250000, "price": 412.5, "date": "2026-07-23"},
+                {"symbol": "BULKCO", "client": "Another Fund", "side": "SELL",
+                 "qty": 180000, "price": 410.2, "date": "2026-07-23"},
+            ], "block": [
+                {"symbol": "BLOCKCO", "client": "A Big Investor", "side": "BUY",
+                 "qty": 1000000, "price": 88.4, "date": "2026-07-23"},
+            ]})
         if path == "/corporate/calendar":
             # A deterministic window with more rows than the card shows and
             # more than one kind, so the chip row, the "Show all" branch and —

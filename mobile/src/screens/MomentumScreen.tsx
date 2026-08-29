@@ -913,6 +913,7 @@ export default function MomentumScreen() {
                       <View key={col.key} style={{ width: col.w, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                         <Text style={styles.sym} numberOfLines={1}>{h.symbol}</Text>
                         <SymInline
+                          sym={h.symbol}
                           starred={isWatched(h.symbol)}
                           onChart={() => openChart(h)}
                           onStar={() => toggleWatch(h.symbol)}

@@ -266,6 +266,59 @@ function check(name, ok, detail) {
       (/\/(\d+) technicals/.test(techLine) ? Number(techLine.match(/(\d+)\/\d+ technicals/)[1]) : 0);
     check('screener fills technicals for the visible page', got > 0, techLine);
 
+    // 8j · TradingView, where the chart actually opens.
+    //
+    // The Charts page was the only route to a chart page, so removing that menu
+    // entry orphaned it; the chart people open is the symbol sheet behind every
+    // row's chart glyph. Its TradingView control used to navigate OUT to
+    // tradingview.com — off the app, with no way back to the row underneath.
+    // It swaps the chart in place now. Checked here, where the table has rows.
+    const openedSheet = await page.evaluate(() => {
+      const el = [...document.querySelectorAll('[role="button"]')]
+        .find((e) => (e.getAttribute('aria-label') || '').startsWith('Chart for '));
+      if (!el) return false;
+      el.click();
+      return true;
+    });
+    await page.waitForTimeout(2500);
+    const sheet = await page.evaluate(() => document.body.innerText);
+    check(
+      'a row opens the symbol sheet with its chart',
+      openedSheet && /TradingView/.test(sheet) && /Technicals/i.test(sheet),
+      sheet.slice(0, 200),
+    );
+    const urlBeforeTv = page.url();
+    await page.evaluate(() => {
+      const el = document.querySelector('[aria-label="Show this symbol on TradingView"]');
+      if (el) el.click();
+    });
+    await page.waitForTimeout(1500);
+    const stayed = page.url() === urlBeforeTv;
+    const swapped = await page.evaluate(() =>
+      !!document.querySelector('[aria-label="Back to the TaurEye chart"]'));
+    check(
+      'TradingView opens inside the sheet, not off the site',
+      stayed && swapped,
+      JSON.stringify({ stayed, swapped, url: page.url() }),
+    );
+    await page.evaluate(() => {
+      const el = document.querySelector('[aria-label="Back to the TaurEye chart"]');
+      if (el) el.click();
+    });
+    await page.waitForTimeout(1200);
+    check(
+      'and you can switch back',
+      await page.evaluate(() =>
+        !!document.querySelector('[aria-label="Show this symbol on TradingView"]')),
+    );
+    await page.evaluate(() => {
+      const el = [...document.querySelectorAll('div,span')]
+        .find((e) => (e.textContent || '').trim() === '✕' && e.offsetParent !== null);
+      if (el) (el.closest('[role="button"]') || el.parentElement).click();
+    });
+    await page.waitForTimeout(900);
+
+
     // 4b · Penny tab — graded by the real screen in the fixture server, so a
     // grading regression shows up as a missing warning rather than a cheap
     // stock quietly reading as safe.
@@ -939,6 +992,82 @@ function check(name, ok, detail) {
       'and hands back the page you were on',
       dismissed.slice(0, 400) === pageBefore.slice(0, 400),
       dismissed.slice(0, 120),
+    );
+
+    // 8h · what the Desk's "More" menu held, in the places it dissolved into.
+    //
+    // Seven entries, each a page nobody opened twice. The menu is gone; these
+    // check that its contents did not go with it. The bulk-deals card is here
+    // for a sharper reason: the deals feed answering without its `bulk` key
+    // threw inside render and blanked the entire app, and a blank page is not
+    // something a source-level test can see.
+    await page.evaluate(() => {
+      const el = document.querySelector('[aria-label="TaurEye — go to the home page"]');
+      if (el) el.click();
+    });
+    await page.waitForTimeout(4000);
+    const homeText = await page.evaluate(() => document.body.innerText);
+    check(
+      'index levels are on the app home',
+      /INDEX LEVELS/i.test(homeText) && /Domestic/.test(homeText),
+      (homeText.match(/INDEX LEVELS[\s\S]{0,120}/i) || [''])[0],
+    );
+    check(
+      "the session's bulk and block deals are on the app home",
+      /BULK & BLOCK DEALS/i.test(homeText) && /BULKCO/.test(homeText) && /BLOCKCO/.test(homeText),
+      (homeText.match(/BULK & BLOCK DEALS[\s\S]{0,140}/i) || [''])[0],
+    );
+
+    const deskAgain = await openDeskSection('Home');
+    check(
+      'the corporate card covers the market and one company',
+      /The market/.test(deskAgain) && /A company/.test(deskAgain),
+      (deskAgain.match(/CORPORATE CALENDAR[\s\S]{0,120}/i) || [''])[0],
+    );
+    await tap('A company');
+    await page.waitForTimeout(2500);
+    const company = await page.evaluate(() => document.body.innerText);
+    check(
+      "one company's filings open in that card",
+      /Shareholding pattern/i.test(company) && /Announcements/i.test(company)
+        && /CORPORATE CALENDAR/i.test(company),
+      company.slice(0, 250),
+    );
+
+    const sections = await page.evaluate(() => {
+      const el = [...document.querySelectorAll('[role="button"]')].find((e) =>
+        (e.getAttribute('aria-label') || '').startsWith('Sections menu'));
+      if (el) el.click();
+      return null;
+    });
+    void sections;
+    await page.waitForTimeout(800);
+    check(
+      'the Desk no longer offers a More section',
+      await page.evaluate(() => ![...document.querySelectorAll('[role="menuitem"]')]
+        .some((e) => (e.textContent || '').trim().startsWith('More'))),
+    );
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(500);
+
+    // 8i · the signed-in name in the bar, and where it goes.
+    const acct = await page.evaluate(() => {
+      const el = document.querySelector('[aria-label^="Signed in as"]');
+      return el ? { label: el.getAttribute('aria-label'), text: (el.textContent || '').trim() } : null;
+    });
+    check(
+      'the bar says who is signed in',
+      !!acct && /Taureye/i.test(acct.text),
+      JSON.stringify(acct),
+    );
+    await page.evaluate(() => {
+      const el = document.querySelector('[aria-label^="Signed in as"]');
+      if (el) el.click();
+    });
+    await page.waitForTimeout(3000);
+    check(
+      'and tapping it opens the account page',
+      /(SIGNED IN AS|Sign in|CLOUD SYNC)/i.test(await page.evaluate(() => document.body.innerText)),
     );
 
     // 9 · no uncaught page errors during the whole run

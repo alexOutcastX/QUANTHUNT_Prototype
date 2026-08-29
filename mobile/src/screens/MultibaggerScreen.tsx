@@ -764,7 +764,7 @@ function MbList({
                           <TouchableOpacity onPress={() => onAnalyse(item.sym)} activeOpacity={0.75}>
                             {c.render(item, rowIdx)}
                           </TouchableOpacity>
-                          <SymInline starred={starred} onChart={() => onDetail(item)} onStar={() => onToggleWatch(item)} />
+                          <SymInline sym={item.sym} starred={starred} onChart={() => onDetail(item)} onStar={() => onToggleWatch(item)} />
                         </View>
                       ) : c.key === 'name' ? (
                         <TouchableOpacity

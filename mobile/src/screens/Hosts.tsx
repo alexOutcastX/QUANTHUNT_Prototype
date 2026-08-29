@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Modal, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { api } from '../api';
 import { peekNav, subscribeNav } from '../navIntent';
 import { useResponsive } from '../responsive';
 import { theme } from '../theme';
@@ -18,30 +17,20 @@ const ScreenerScreen = lazyScreen<ScreenerScreenProps>(() => import('./ScreenerS
 const AnalysisScreen = lazyScreen(() => import('./AnalysisScreen'));
 const BacktestScreen = lazyScreen(() => import('./BacktestScreen'));
 const CalculatorScreen = lazyScreen(() => import('./CalculatorScreen'));
-const AnnouncementsScreen = lazyScreen(() => import('./AnnouncementsScreen'));
 const ChatScreen = lazyScreen(() => import('./ChatScreen'));
-const ChartScreen = lazyScreen(() => import('./ChartScreen'));
-const PortfolioScreen = lazyScreen(() => import('./PortfolioScreen'));
-const TradingViewScreen = lazyScreen(() => import('./TradingViewScreen'));
-const WatchlistScreen = lazyScreen(() => import('./WatchlistScreen'));
-const UniverseScreen = lazyScreen(() => import('./UniverseScreen'));
-const HolidaysScreen = lazyScreen(() => import('./HolidaysScreen'));
-const IndicesScreen = lazyScreen(() => import('./IndicesScreen'));
 const HeatmapScreen = lazyScreen(() => import('./HeatmapScreen'));
-const CorporateScreen = lazyScreen(() => import('./CorporateScreen'));
-const DerivativesScreen = lazyScreen(() => import('./DerivativesScreen'));
+const UniverseScreen = lazyScreen(() => import('./UniverseScreen'));
+const PortfolioScreen = lazyScreen(() => import('./PortfolioScreen'));
+const WatchlistScreen = lazyScreen(() => import('./WatchlistScreen'));
+const HolidaysScreen = lazyScreen(() => import('./HolidaysScreen'));
 const MomentumScreen = lazyScreen(() => import('./MomentumScreen'));
 const MultibaggerScreen = lazyScreen(() => import('./MultibaggerScreen'));
 const PennyScreen = lazyScreen(() => import('./PennyScreen'));
 const PatternScreen = lazyScreen(() => import('./PatternScreen'));
 const RecommendationsScreen = lazyScreen(() => import('./RecommendationsScreen'));
-const RiskScreen = lazyScreen(() => import('./RiskScreen'));
 const EntityGraphScreen = lazyScreen(() => import('./EntityGraphScreen'));
 const PaperTradeScreen = lazyScreen(() => import('./PaperTradeScreen'));
 const AlertsScreen = lazyScreen(() => import('./AlertsScreen'));
-const AccountScreen = lazyScreen(() => import('./AccountScreen'));
-const MethodologyScreen = lazyScreen(() => import('./MethodologyScreen'));
-const DeveloperScreen = lazyScreen(() => import('./DeveloperScreen'));
 const AccountWalletScreen = lazyScreen(() => import('./AccountWalletScreen'));
 const DeskHome = lazyScreen(() => import('./DeskHome'));
 
@@ -483,7 +472,6 @@ export function DeskHub() {
         // deep inside a nineteen-item menu, which is where the whole credit
         // economy went to be forgotten. The header pill links straight here.
         { key: 'wallet', label: preview ? 'Account & wallet' : 'Account', hint: 'Sign in, cloud sync, membership · credits, daily bonus, refer and earn', render: () => <AccountWalletScreen /> },
-        { key: 'more', label: 'More', hint: 'Charts, community, corporate data, indices & settings', render: () => <MoreScreen />, titled: false },
         // Not pills — the Desk home links straight into these, so its
         // "Full calendar ›" and "Open community ›" land on the screen they
         // name instead of on a menu that lists it.
@@ -493,156 +481,6 @@ export function DeskHub() {
         // Desk tab only where that top-level entry doesn't exist (mobile).
       ].filter((t) => !(isDesktop && t.key === 'bt'))}
     />
-  );
-}
-
-export function ChartsHome() {
-  return (
-    <SubTabs
-      persistKey="charts"
-      tabs={[
-        { key: 'native', label: 'Chart', hint: 'Native candlestick chart with moving averages', render: () => <ChartScreen /> },
-        { key: 'tv', label: 'TradingView', hint: 'Full TradingView charting widget', render: () => <TradingViewScreen /> },
-      ]}
-    />
-  );
-}
-
-// "More" menu: a list of secondary tools; tapping opens one full-screen with a
-// back header. Keeps the bottom tab bar to five primary destinations.
-const MORE_ITEMS: {
-  key: string; label: string; hint: string;
-  render: () => React.ReactElement;
-  /** Only listed on a preview host — see usePreview / preview.py. */
-  preview?: boolean;
-}[] = [
-  { key: 'account', label: 'Account', hint: 'Sign in · cloud sync across devices', render: () => <AccountScreen /> },
-  { key: 'methodology', label: 'Methodology', hint: 'How every score is computed — the published rules', render: () => <MethodologyScreen /> },
-  { key: 'community', label: 'Community chat', hint: 'Global room, topic channels & direct messages with other traders', render: () => <ChatScreen /> },
-  { key: 'announcements', label: 'Announcements', hint: 'Updates & notices from the team', render: () => <AnnouncementsScreen /> },
-  { key: 'heatmap', label: 'Heatmap', hint: 'Sector & index day-change map · drill into constituents', render: () => <HeatmapScreen /> },
-  { key: 'universe', label: 'Universe', hint: 'Index constituents · mcap segments · heatmap', render: () => <UniverseScreen /> },
-  { key: 'charts', label: 'Charts', hint: 'Native charts + TradingView', render: () => <ChartsHome /> },
-  { key: 'portfolio', label: 'Portfolio', hint: 'Holdings with live P&L · broker sync', render: () => <PortfolioScreen /> },
-  { key: 'watchlist', label: 'Watchlist', hint: 'Symbols with entry price + since-add move · live quotes', render: () => <WatchlistScreen /> },
-  { key: 'calc', label: 'Calculator', hint: 'Position size · SIP · CAGR', render: () => <CalculatorScreen /> },
-  { key: 'corporate', label: 'Corporate', hint: 'Filings, actions, shareholding, bulk/block deals', render: () => <CorporateScreen /> },
-  { key: 'derivatives', label: 'Derivatives', hint: 'F&O option chain · PCR · max-pain · payoff builder', render: () => <DerivativesScreen /> },
-  { key: 'risk', label: 'Risk', hint: 'VaR · volatility · beta · drawdown · correlation', render: () => <RiskScreen /> },
-  { key: 'entities', label: 'Shareholders', hint: "Institutions, promoters & political funding · every link cited", render: () => <EntityGraphScreen /> },
-  { key: 'alerts', label: 'Alerts', hint: 'Server-side price / % / RSI alerts', render: () => <AlertsScreen /> },
-  { key: 'developer', label: 'Developer', hint: 'Fundamentals cache · API keys · public /api/v1', render: () => <DeveloperScreen /> },
-  { key: 'indices', label: 'Indices', hint: 'Live index levels · day & 1Y change', render: () => <IndicesScreen /> },
-  { key: 'holidays', label: 'Holidays', hint: 'NSE holiday calendar · market open/closed', render: () => <HolidaysScreen /> },
-  // Preview-only. usePreview() filters this out on taureye.com, where the
-  // endpoints behind it 404 — an entry that always errored would be worse
-  // than no entry.
-];
-
-// Destinations that already have a first-class tab on the Screens or Desk
-// bars. One home per screen, so More never lists them a second time.
-const MORE_DUP_KEYS = new Set([
-  'account', 'heatmap', 'universe', 'portfolio', 'watchlist', 'calc', 'risk', 'entities', 'alerts',
-  // Both now live on the Desk home page.
-  'methodology', 'announcements',
-]);
-const MORE_MENU = MORE_ITEMS.filter((i) => !MORE_DUP_KEYS.has(i.key));
-
-// Groups for the All-features list. A flat eighteen-item menu ordered by
-// neither frequency nor category is where features go to be forgotten; the
-// hints already exist on every entry and were wasted in a list.
-const MORE_GROUPS: { title: string; keys: string[] }[] = [
-  { title: 'Markets', keys: ['heatmap', 'universe', 'indices', 'charts', 'holidays'] },
-  { title: 'Research', keys: ['corporate', 'derivatives', 'entities', 'risk', 'methodology'] },
-  { title: 'Your desk', keys: ['portfolio', 'watchlist', 'alerts', 'calc'] },
-  { title: 'Community', keys: ['community', 'announcements'] },
-  { title: 'Account', keys: ['account', 'developer'] },
-];
-
-export function MoreScreen() {
-  const preview = usePreview();
-  const menu = MORE_MENU.filter((i) => !i.preview || preview);
-  const [sel, setSel] = useState<string | null>(null);
-  const [q, setQ] = useState('');
-  const [version, setVersion] = useState('');
-  useEffect(() => {
-    api.version().then((v) => setVersion(v.version)).catch(() => {});
-  }, []);
-  const items = menu;
-  const item = items.find((i) => i.key === sel);
-
-  if (item) {
-    return (
-      <View style={styles.host}>
-        <View style={styles.moreHeader}>
-          <TouchableOpacity onPress={() => setSel(null)} hitSlop={10} activeOpacity={0.75}>
-            <Text style={styles.back}>‹ More</Text>
-          </TouchableOpacity>
-          <Text style={styles.moreTitle}>{item.label}</Text>
-          <View style={{ width: 54 }} />
-        </View>
-        <View style={styles.hostBody}>{item.render()}</View>
-      </View>
-    );
-  }
-
-  const term = q.trim().toLowerCase();
-  const match = (i: typeof items[number]) =>
-    !term || i.label.toLowerCase().includes(term) || (i.hint || '').toLowerCase().includes(term);
-
-  const row = (i: typeof items[number]) => (
-    <TouchableOpacity
-      key={i.key}
-      style={styles.menuRow}
-      onPress={() => setSel(i.key)}
-      activeOpacity={0.75}
-      accessibilityRole="button"
-      accessibilityLabel={`${i.label}. ${i.hint || ''}`}
-    >
-      <View style={{ flex: 1 }}>
-        <Text style={styles.menuLabel}>{i.label}</Text>
-        <Text style={styles.menuHint}>{i.hint}</Text>
-      </View>
-      <Text style={styles.menuChevron}>›</Text>
-    </TouchableOpacity>
-  );
-
-  // Anything a group forgot to list still shows, so adding a MORE_MENU entry
-  // can never make a feature disappear from the only page that lists them all.
-  const grouped = new Set(MORE_GROUPS.flatMap((g) => g.keys));
-  const ungrouped = items.filter((i) => !grouped.has(i.key));
-
-  return (
-    <ScrollView style={styles.host} contentContainerStyle={styles.menuPad}>
-      <TextInput
-        value={q}
-        onChangeText={setQ}
-        placeholder="Search features…"
-        placeholderTextColor={theme.muted}
-        style={styles.menuSearch}
-        autoCapitalize="none"
-        autoCorrect={false}
-      />
-      {MORE_GROUPS.map((g) => {
-        const rows = g.keys
-          .map((k) => items.find((i) => i.key === k))
-          .filter((i): i is typeof items[number] => !!i && match(i));
-        if (!rows.length) return null;
-        return (
-          <View key={g.title}>
-            <Text style={styles.menuGroup}>{g.title.toUpperCase()}</Text>
-            {rows.map(row)}
-          </View>
-        );
-      })}
-      {ungrouped.filter(match).length ? (
-        <View>
-          <Text style={styles.menuGroup}>MORE</Text>
-          {ungrouped.filter(match).map(row)}
-        </View>
-      ) : null}
-      {version ? <Text style={styles.versionFoot}>TaurEye v{version}</Text> : null}
-    </ScrollView>
   );
 }
 
@@ -662,8 +500,6 @@ const styles = StyleSheet.create({
   screenName: { color: theme.text, fontSize: theme.fs.sm, fontWeight: '600' },
   screenHint: { color: theme.muted, fontSize: theme.fs.xs },
   hostBody: { flex: 1 },
-  subNav: { paddingTop: theme.sp.md },
-  subNavHint: { color: theme.muted, fontSize: theme.fs.xs + 1, paddingHorizontal: theme.sp.lg, marginTop: 2 },
   subBarWrap: { paddingHorizontal: theme.sp.lg, paddingTop: theme.sp.md, paddingBottom: theme.sp.sm },
   subBarHint: { color: theme.muted, fontSize: theme.fs.xs + 1, textAlign: 'center', marginTop: 6 },
   subBar: {
@@ -680,7 +516,6 @@ const styles = StyleSheet.create({
   // Hug content + center in the row (desktop bars are center-aligned).
   subBarHug: { alignSelf: 'center' },
   subScrollCenter: { flexGrow: 1, justifyContent: 'center' },
-  innerBarWrap: { paddingHorizontal: theme.sp.lg, paddingBottom: theme.sp.sm, alignItems: 'center' },
   subBtnOn: { backgroundColor: theme.accent },
   subTxt: { color: theme.muted2, fontSize: theme.fs.sm },
   subTxtOn: { color: theme.onAccent, fontWeight: '700' },
@@ -785,58 +620,4 @@ const styles = StyleSheet.create({
   menuLabel2On: { color: theme.accent },
   menuHint2: { color: theme.muted, fontSize: theme.fs.sm, marginTop: 2 },
   menuTick: { color: theme.accent, fontSize: theme.fs.md, fontWeight: '700' },
-  moreHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: theme.sp.lg,
-    paddingVertical: theme.sp.md - 2,
-    borderBottomColor: theme.border,
-    borderBottomWidth: 1,
-  },
-  back: { color: theme.text, fontSize: theme.fs.md + 1, width: 54 },
-  moreTitle: { color: theme.text, fontSize: theme.fs.md + 1, fontWeight: '700' },
-  menuGroup: { color: theme.muted, fontSize: theme.fs.xs, fontWeight: '700',
-    letterSpacing: 1.4, marginTop: theme.sp.lg, marginBottom: theme.sp.xs,
-    paddingHorizontal: theme.sp.lg },
-  menuSearch: {
-    backgroundColor: theme.surface2, borderColor: theme.border2, borderWidth: 1,
-    borderRadius: theme.radius.md, color: theme.text, fontSize: theme.fs.md,
-    paddingHorizontal: theme.sp.md, paddingVertical: theme.sp.sm + 2,
-    marginHorizontal: theme.sp.lg, marginBottom: theme.sp.sm,
-  },
-  menuPad: { padding: theme.sp.lg },
-  menuRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: theme.surface,
-    borderColor: theme.border,
-    borderWidth: 1,
-    borderRadius: theme.radius.md,
-    padding: theme.sp.lg,
-    marginBottom: theme.sp.md - 2,
-  },
-  menuLabel: { color: theme.text, fontSize: theme.fs.md, fontWeight: '700' },
-  menuHint: { color: theme.muted, fontSize: theme.fs.sm, marginTop: 3 },
-  menuChevron: { color: theme.muted2, fontSize: 22 },
-  navToggle: {
-    width: 44,
-    height: 26,
-    borderRadius: 999,
-    backgroundColor: theme.surface3,
-    borderColor: theme.border2,
-    borderWidth: 1,
-    padding: 2,
-    justifyContent: 'center',
-  },
-  navToggleOn: { backgroundColor: theme.brandSoft, borderColor: theme.brand },
-  navKnob: { width: 20, height: 20, borderRadius: 999, backgroundColor: theme.muted2 },
-  navKnobOn: { backgroundColor: theme.brand, alignSelf: 'flex-end' },
-  versionFoot: {
-    color: theme.muted,
-    fontSize: theme.fs.xs + 1,
-    fontFamily: theme.mono,
-    textAlign: 'center',
-    marginTop: theme.sp.md,
-  },
 });

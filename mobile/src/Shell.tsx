@@ -265,6 +265,29 @@ function usePaletteHotkey(setPalette: (fn: (v: boolean) => boolean) => void) {
 // The disclaimer is a regulatory obligation, not desktop chrome — it renders at
 // every width. Mobile puts it under the content rather than in the crowded
 // header, where a full word would not fit beside the icon row.
+// Who you are signed in as, next to the disclaimer, linking to the page that
+// can do something about it. The name was only visible four taps deep inside
+// the account page — which is the one place you do not need to be told.
+function AccountChip({ style }: { style?: object }) {
+  const [, force] = useState(0);
+  useEffect(() => subscribeMember(() => force((n) => n + 1)), []);
+  const member = currentMember();
+  if (!member) return null;
+  return (
+    <TouchableOpacity
+      style={[styles.acctBtn, style]}
+      onPress={() => navigate('desk', { sub: 'wallet' })}
+      activeOpacity={0.75}
+      accessibilityRole="link"
+      accessibilityLabel={`Signed in as ${member.username} — open your account`}
+      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+    >
+      <Icon name="desk" size={13} color={theme.muted2} />
+      <Text style={styles.acctTxt} numberOfLines={1}>{member.username}</Text>
+    </TouchableOpacity>
+  );
+}
+
 // Over the page, not instead of it. This used to hand the browser to
 // /legal.html: on the web that replaced the app, and in a standalone install
 // it opened a document with nothing to go back to — you could read the
@@ -397,7 +420,9 @@ function mapTarget(page: string, sub?: string): string {
 function legacyNav(k: string, setActive: (k: string) => void) {
   if (k === 'screener') navigate('screens', { sub: 'screener' });
   else if (k === 'lists') navigate('desk', { sub: 'watchlist' });
-  else if (k === 'tools') navigate('desk', { sub: 'more' });
+  // 'tools' was the More menu, which no longer exists — its contents live on
+  // the Desk home and the app home now, so the key lands on the former.
+  else if (k === 'tools') navigate('desk', { sub: 'home' });
   else setActive(mapTarget(k));
 }
 
@@ -483,6 +508,7 @@ function NewDesktopShell() {
         </TouchableOpacity>
         <WalletChip />
         <ThemeToggle />
+        <AccountChip />
         <LegalLink />
         <SignOutBtn />
       </View>
@@ -547,6 +573,7 @@ function NewMobileShell() {
       {/* The disclaimer stays optically centred whether or not anyone is
           signed in: the sign-out sits on top of the strip, not in its flow. */}
       <View style={styles.footerBar}>
+        <AccountChip style={styles.acctBtnMobile} />
         <LegalLink style={styles.legalBtnMobile} />
         <SignOutBtn up style={styles.signOutFooter} />
       </View>
@@ -634,7 +661,19 @@ const styles = StyleSheet.create({
   },
   tagline: { color: theme.muted, fontSize: 10, fontFamily: theme.mono },
   // A legal link needs a real target, not a 10px sliver (QA finding D4).
-  legalBtn: { marginLeft: 'auto', paddingLeft: 10, paddingRight: 4, paddingVertical: 12 },
+  // The account chip takes the auto margin that used to push the disclaimer
+  // right; the two then sit together at the end of the bar.
+  acctBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    marginLeft: 'auto', paddingHorizontal: 8, paddingVertical: 6,
+    maxWidth: 170,
+  },
+  acctBtnMobile: { marginLeft: 0, flexShrink: 1 },
+  acctTxt: {
+    color: theme.muted2, fontSize: theme.fs.xs, fontFamily: theme.mono,
+    fontWeight: '700', letterSpacing: 0.4,
+  },
+  legalBtn: { paddingLeft: 10, paddingRight: 4, paddingVertical: 12 },
   // Mobile: a full-width strip above the tab bar, centred, so it reads as a
   // footer rather than as another action crowding the header.
   legalBtnMobile: {

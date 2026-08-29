@@ -20,7 +20,10 @@ const TABS: { key: Tab; label: string }[] = [
 type MktState = { rows: IndexQuote[] | null; asof: number | null; err: string | null };
 const EMPTY: MktState = { rows: null, asof: null, err: null };
 
-export default function IndicesScreen() {
+// `embedded` drops the page heading and the scroller: on the home page this is
+// a section of a longer page, and a ScrollView inside a ScrollView traps the
+// wheel over the table.
+export default function IndicesScreen({ embedded = false }: { embedded?: boolean }) {
   const [tab, setTab] = useState<Tab>('domestic');
   const [mkt, setMkt] = useState<Record<MktCat, MktState>>({
     domestic: EMPTY,
@@ -138,10 +141,8 @@ export default function IndicesScreen() {
         )
         : undefined;
 
-  return (
-    <View style={styles.container}>
-      <ScreenTitle title="Indices" sub={subFor[tab]} right={right} />
-
+  const body = (
+    <>
       <View style={styles.tabs}>
         {TABS.map((t) => {
           const c = countFor(t.key);
@@ -156,12 +157,7 @@ export default function IndicesScreen() {
         })}
       </View>
 
-      <ScrollView
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.accent} />
-        }
-      >
-        {tab === 'currency' ? (
+      {tab === 'currency' ? (
           !fxLoaded ? (
             <Loading label="Loading currency rates…" />
           ) : fxRows.length === 0 ? (
@@ -214,6 +210,19 @@ export default function IndicesScreen() {
             ))}
           </>
         )}
+    </>
+  );
+
+  if (embedded) return <View>{body}</View>;
+  return (
+    <View style={styles.container}>
+      <ScreenTitle title="Indices" sub={subFor[tab]} right={right} />
+      <ScrollView
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.accent} />
+        }
+      >
+        {body}
       </ScrollView>
     </View>
   );

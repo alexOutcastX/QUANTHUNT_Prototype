@@ -12,7 +12,7 @@
 // read once and then scroll past — not something to lead with.
 import React, { useEffect, useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { Card, EmptyState, Fold, Loading, ScreenTitle, SectionTitle } from '../ui';
+import { Card, EmptyState, Fold, Loading, ScreenTitle, SectionTitle, Segmented } from '../ui';
 import { Icon } from '../icons';
 import { theme } from '../theme';
 import { useResponsive } from '../responsive';
@@ -20,6 +20,7 @@ import { navigate, openStock } from '../navIntent';
 import { CalendarAction, HolidaysResp, api } from '../api';
 import { SECTIONS as METHOD_SECTIONS } from './MethodologyScreen';
 import AnnouncementsScreen from './AnnouncementsScreen';
+import { CompanyCorporate } from './CorporateScreen';
 import { Overview, loadIdentity, overview } from '../chat';
 
 // The kinds the card can show, in the order they are offered. The server
@@ -110,7 +111,11 @@ function ActionRow({ a }: { a: CalendarAction }) {
   );
 }
 
+// The corporate card, at two zoom levels: what is coming for the market, and
+// everything filed by one company. The company half was a page of its own
+// inside a nineteen-item menu; it is the same subject, so it is the same card.
 function CorporateCalendar() {
+  const [view, setView] = useState<'market' | 'company'>('market');
   const [items, setItems] = useState<CalendarAction[] | null>(null);
   const [covers, setCovers] = useState<string[] | null>(null);
   const [kind, setKind] = useState<Kind>('All');
@@ -148,9 +153,21 @@ function CorporateCalendar() {
     <Card style={s.card}>
       <View style={s.head}>
         <SectionTitle>Corporate calendar</SectionTitle>
-        <Text style={s.headNote}>next 30 days · NSE</Text>
+        <Text style={s.headNote}>
+          {view === 'market' ? 'next 30 days · NSE' : 'filings · NSE'}
+        </Text>
       </View>
-      {items == null ? (
+      <Segmented
+        items={[
+          { key: 'market', label: 'The market' },
+          { key: 'company', label: 'A company' },
+        ]}
+        value={view}
+        onChange={setView}
+      />
+      {view === 'company' ? (
+        <CompanyCorporate />
+      ) : items == null ? (
         <Loading />
       ) : items.length === 0 ? (
         <EmptyState

@@ -2,35 +2,34 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Announcement, CorpAction, Deal, Shareholding, api } from '../api';
 import SymbolInput from '../components/SymbolInput';
-import { Card, EmptyState, Loading, ScreenTitle, SectionTitle } from '../ui';
+import { Card, EmptyState, Loading, SectionTitle } from '../ui';
 import { theme } from '../theme';
 
 const pct = (v: number | null) => (v == null ? '—' : v.toFixed(1) + '%');
 const num = (v: number | null) => (v == null ? '—' : v.toLocaleString('en-IN'));
 
-export default function CorporateScreen() {
+// One company's filings: who owns it, what it has declared, what it has said.
+//
+// This was a page of its own inside a nineteen-item menu, which is where it
+// went to be forgotten. It renders inline in the Desk home's corporate card
+// now, beside the market-wide calendar — the same subject at two zoom levels.
+export function CompanyCorporate() {
   const [sym, setSym] = useState('RELIANCE');
   const [input, setInput] = useState('RELIANCE');
   const [ann, setAnn] = useState<Announcement[] | null>(null);
   const [acts, setActs] = useState<CorpAction[] | null>(null);
   const [shp, setShp] = useState<Shareholding | null | undefined>(undefined);
-  const [deals, setDeals] = useState<{ bulk: Deal[]; block: Deal[] } | null>(null);
-  const [err, setErr] = useState<string | null>(null);
 
   const load = useCallback((symbol: string) => {
     setAnn(null);
     setActs(null);
     setShp(undefined);
-    setErr(null);
     api.corpAnnouncements(symbol).then((d) => setAnn(d.items)).catch(() => setAnn([]));
     api.corpActions(symbol).then((d) => setActs(d.items)).catch(() => setActs([]));
     api.corpShareholding(symbol).then((d) => setShp(d.latest)).catch(() => setShp(null));
   }, []);
 
-  useEffect(() => {
-    load(sym);
-    api.corpDeals().then((d) => setDeals({ bulk: d.bulk, block: d.block })).catch(() => setDeals({ bulk: [], block: [] }));
-  }, [sym, load]);
+  useEffect(() => { load(sym); }, [sym, load]);
 
   const go = (s: string) => {
     const v = s.trim().toUpperCase().replace(/^NSE:/, '');
@@ -38,8 +37,7 @@ export default function CorporateScreen() {
   };
 
   return (
-    <View style={styles.container}>
-      <ScreenTitle title="Corporate" sub="Announcements · actions · shareholding · deals (NSE)" />
+    <View>
       <View style={styles.searchWrap}>
         <SymbolInput
           value={input}
@@ -51,7 +49,7 @@ export default function CorporateScreen() {
         />
       </View>
 
-      <ScrollView contentContainerStyle={styles.body}>
+      <View style={styles.body}>
         <SectionTitle>{sym} · Shareholding pattern</SectionTitle>
         {shp === undefined ? (
           <Loading />
@@ -101,29 +99,52 @@ export default function CorporateScreen() {
           <EmptyState title="No recent announcements" hint="Best from an Indian IP — the server fetches these live from NSE." />
         )}
 
-        <SectionTitle>Market bulk / block deals</SectionTitle>
-        {deals === null ? (
-          <Loading />
-        ) : deals.bulk.length || deals.block.length ? (
-          [...deals.bulk, ...deals.block].slice(0, 25).map((d, i) => (
-            <View key={i} style={styles.dealRow}>
-              <Text style={styles.dealSym}>{d.symbol}</Text>
-              <Text style={styles.dealClient} numberOfLines={1}>{d.client}</Text>
-              <Text style={[styles.dealSide, { color: /buy/i.test(d.side) ? theme.green : theme.red }]}>{d.side}</Text>
-              <Text style={styles.dealNum}>{num(d.qty)}</Text>
-              <Text style={styles.dealNum}>{num(d.price)}</Text>
-            </View>
-          ))
-        ) : (
-          <EmptyState title="No deals for the latest session" />
-        )}
-
         <Text style={styles.note}>
           Sourced live from NSE public feeds; best from an Indian IP. Indicative — verify against
           official filings.
         </Text>
-      </ScrollView>
-      {err ? <Text style={styles.note}>{err}</Text> : null}
+      </View>
+    </View>
+  );
+}
+
+// The session's bulk and block deals — who took a large position today.
+//
+// This is a market-wide fact, not a company one, and it belongs on the page you
+// open in the morning rather than four taps inside a company lookup.
+export function MarketDeals({ limit = 12 }: { limit?: number }) {
+  const [deals, setDeals] = useState<{ bulk: Deal[]; block: Deal[] } | null>(null);
+  useEffect(() => {
+    // A response missing either key is not an exception to handle later: the
+    // spread below would throw inside render and take the whole page with it.
+    // This section sits on the app's landing page, so "the deals feed answered
+    // oddly" must cost the deals card and nothing else.
+    const list = (v: unknown) => (Array.isArray(v) ? (v as Deal[]) : []);
+    api.corpDeals()
+      .then((d) => setDeals({ bulk: list(d?.bulk), block: list(d?.block) }))
+      .catch(() => setDeals({ bulk: [], block: [] }));
+  }, []);
+  const rows = deals ? [...deals.bulk, ...deals.block].slice(0, limit) : [];
+  return (
+    <View>
+      {deals === null ? (
+        <Loading />
+      ) : rows.length ? (
+        rows.map((d, i) => (
+          <View key={i} style={styles.dealRow}>
+            <Text style={styles.dealSym}>{d.symbol}</Text>
+            <Text style={styles.dealClient} numberOfLines={1}>{d.client}</Text>
+            <Text style={[styles.dealSide, { color: /buy/i.test(d.side) ? theme.green : theme.red }]}>{d.side}</Text>
+            <Text style={styles.dealNum}>{num(d.qty)}</Text>
+            <Text style={styles.dealNum}>{num(d.price)}</Text>
+          </View>
+        ))
+      ) : (
+        <EmptyState
+          title="No deals for the latest session"
+          hint="NSE publishes bulk and block deals after the close."
+        />
+      )}
     </View>
   );
 }

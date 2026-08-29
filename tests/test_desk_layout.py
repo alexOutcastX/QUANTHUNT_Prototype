@@ -328,9 +328,11 @@ class DeskLandsHomeTest(unittest.TestCase):
         self.assertIn("const p = peekNav();", self.hosts)
         self.assertIn("if (has(p?.sub)) setActive(resolve(p!.sub) as string);", self.hosts)
 
-    def test_the_other_hubs_keep_remembering_where_you_were(self):
-        """Only the Desk resets: it is the one with a landing page to reset to."""
-        self.assertIn('persistKey="charts"', self.hosts)
+    def test_the_shared_nav_can_still_remember_where_you_were(self):
+        """The Desk opts OUT of persistence; the mechanism stays, because it is
+        right for a group with no landing page to come back to."""
+        self.assertIn("persistKey?: string;", self.hosts)
+        self.assertIn("AsyncStorage.getItem('taureye.subnav.' + persistKey)", self.hosts)
 
 
 class FoldedScreensTest(unittest.TestCase):
@@ -416,13 +418,15 @@ class DeskChromeTest(unittest.TestCase):
                     offenders.append(f + ": " + m.group(0))
         self.assertEqual(offenders, [], offenders)
 
-    def test_the_desk_home_owns_methodology_and_announcements(self):
-        """One home per screen: More listed both, and now the landing page
-        shows both, so More stops listing them."""
+    def test_the_more_menu_is_gone_and_so_is_every_orphan_it_held(self):
+        """A nineteen-item menu of secondary tools is where features go to be
+        forgotten. Each entry now has one home, so the menu has none."""
         hosts = _screen("Hosts.tsx")
-        dup = hosts.split("MORE_DUP_KEYS = new Set([")[1].split("])")[0]
-        self.assertIn("'methodology'", dup)
-        self.assertIn("'announcements'", dup)
+        self.assertNotIn("MoreScreen", hosts)
+        self.assertNotIn("MORE_ITEMS", hosts)
+        self.assertNotIn("MORE_DUP_KEYS", hosts)
+        desk = hosts.split("export function DeskHub")[1].split("const styles")[0]
+        self.assertNotIn("key: 'more'", desk)
 
 
 if __name__ == "__main__":

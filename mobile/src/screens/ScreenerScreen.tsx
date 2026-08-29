@@ -255,13 +255,33 @@ let namesPromise: Promise<Record<string, { name: string; exchange: string }>> | 
 // Inline chart + watch-star controls that sit beside the symbol in every
 // screener table (Custom, Multibagger, Momentum). Fixed same-size boxes so
 // the two glyphs centre on the same axis as the symbol text.
-export function SymInline({ starred, onChart, onStar }: { starred: boolean; onChart: () => void; onStar: () => void }) {
+export function SymInline({ sym, starred, onChart, onStar }: {
+  sym?: string; starred: boolean; onChart: () => void; onStar: () => void;
+}) {
+  // Two icon-only buttons per row: to a screen reader they were an unlabelled
+  // glyph and a star, repeated once per result.
+  const of = (what: string) => (sym ? `${what} ${sym}` : what);
   return (
     <>
-      <TouchableOpacity style={symInlineStyles.box} onPress={onChart} hitSlop={6} activeOpacity={0.75}>
+      <TouchableOpacity
+        style={symInlineStyles.box}
+        onPress={onChart}
+        hitSlop={6}
+        activeOpacity={0.75}
+        accessibilityRole="button"
+        accessibilityLabel={of('Chart for')}
+      >
         <Icon name="candles" size={14} color={theme.muted2} />
       </TouchableOpacity>
-      <TouchableOpacity style={symInlineStyles.box} onPress={onStar} hitSlop={6} activeOpacity={0.75}>
+      <TouchableOpacity
+        style={symInlineStyles.box}
+        onPress={onStar}
+        hitSlop={6}
+        activeOpacity={0.75}
+        accessibilityRole="button"
+        accessibilityState={{ selected: starred }}
+        accessibilityLabel={of(starred ? 'Remove from watchlist:' : 'Add to watchlist:')}
+      >
         <Text style={[symInlineStyles.star, starred && symInlineStyles.starOn]}>{starred ? '★' : '☆'}</Text>
       </TouchableOpacity>
     </>
@@ -1067,7 +1087,7 @@ export default function ScreenerScreen({
               <TouchableOpacity onPress={() => setDetail(item)} activeOpacity={0.75}>
                 {c.render(item, absIdx)}
               </TouchableOpacity>
-              <SymInline starred={starred} onChart={() => onChart(item)} onStar={() => onToggleWatch(item)} />
+              <SymInline sym={item.sym} starred={starred} onChart={() => onChart(item)} onStar={() => onToggleWatch(item)} />
             </View>
           ) : (
             <View key={c.key} style={[styles.td, cellFlex(c), { alignItems: c.align === 'left' ? 'flex-start' : 'flex-end' }]}>

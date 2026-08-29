@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
 import {
-  Linking,
   Modal,
   Pressable,
   ScrollView,
@@ -16,6 +15,7 @@ import { Row, calcSignal } from '../screener';
 import { theme } from '../theme';
 import { Card, EmptyState, Loading, SectionTitle } from '../ui';
 import HtmlView from './HtmlView';
+import TradingViewScreen from '../screens/TradingViewScreen';
 
 // Timeframes, each fetching the deepest history its feed allows: Yahoo caps
 // 5m/15m at 60 days and 1h (which also feeds the 4h resample) at 2 years;
@@ -30,7 +30,7 @@ const TFS: { k: string; interval: string; period: string; barSec: number }[] = [
   { k: '1M', interval: '1mo', period: 'max', barSec: 2592000 },
 ];
 
-// TradingView deep link for the symbol (indices map to TV's index tickers).
+// TradingView's own ticker for the symbol (indices map to TV's index names).
 const TV_MAP: Record<string, string> = {
   'NIFTY 50': 'NSE:NIFTY', 'NIFTY': 'NSE:NIFTY',
   'NIFTY BANK': 'NSE:BANKNIFTY', 'BANKNIFTY': 'NSE:BANKNIFTY',
@@ -38,10 +38,9 @@ const TV_MAP: Record<string, string> = {
   'NIFTY IT': 'NSE:CNXIT', 'NIFTY 100': 'NSE:CNX100', 'NIFTY 500': 'NSE:CNX500',
   'NIFTY MIDCAP 100': 'NSE:NIFTYMIDCAP100', 'NIFTY SMALLCAP 100': 'NSE:NIFTYSMLCAP100',
 };
-const tvUrl = (sym: string) => {
+const tvSymbol = (sym: string) => {
   const s = sym.trim().toUpperCase();
-  const tv = TV_MAP[s] || 'NSE:' + s.replace(/\s+/g, '');
-  return 'https://www.tradingview.com/chart/?symbol=' + encodeURIComponent(tv);
+  return TV_MAP[s] || 'NSE:' + s.replace(/\s+/g, '');
 };
 
 const num = (v: number | null | undefined, d = 2) =>
@@ -54,6 +53,7 @@ const money = (v: number | null | undefined) =>
 // Per-stock research view: 6-month chart, live technicals from the scan row,
 // and fundamentals — the RN counterpart of the web app's report modal.
 export default function StockDetail({ row, onClose }: { row: Row; onClose: () => void }) {
+  const [tv, setTv] = useState(false);
   const { isDesktop } = useResponsive();
   const [candles, setCandles] = useState<Candle[]>([]);
   const [fund, setFund] = useState<Fundamentals | null>(null);
@@ -143,16 +143,27 @@ export default function StockDetail({ row, onClose }: { row: Row; onClose: () =>
                 <Text style={[styles.tfTxt, tf === t.k && styles.tfTxtOn]}>{t.k}</Text>
               </TouchableOpacity>
             ))}
+            {/* TradingView used to be a link OUT of the app: it left the page
+                you were reading to open tradingview.com on the same symbol,
+                with no way back to the row you had open. It is the other view
+                of this chart now. */}
             <TouchableOpacity
-              style={[styles.tfChip, styles.tvBtn]}
-              onPress={() => Linking.openURL(tvUrl(row.sym)).catch(() => {})}
+              style={[styles.tfChip, styles.tvBtn, tv && styles.tfChipOn]}
+              onPress={() => setTv((v) => !v)}
               activeOpacity={0.75}
+              accessibilityRole="button"
+              accessibilityState={{ selected: tv }}
+              accessibilityLabel={tv ? 'Back to the TaurEye chart' : 'Show this symbol on TradingView'}
             >
-              <Text style={styles.tvTxt}>TradingView ⤴</Text>
+              <Text style={[styles.tvTxt, tv && styles.tfTxtOn]}>
+                {tv ? 'TaurEye chart' : 'TradingView'}
+              </Text>
             </TouchableOpacity>
           </View>
           <View style={[styles.chartBox, { height: isDesktop ? 500 : 400 }]}>
-            {busy ? (
+            {tv ? (
+              <TradingViewScreen symbol={tvSymbol(row.sym)} />
+            ) : busy ? (
               <Loading label={`Loading ${row.sym} chart…`} />
             ) : candles.length ? (
               <HtmlView html={chartHtml(candles, tfDef.barSec, undefined, undefined, { panes: true })} style={styles.web} />
