@@ -36,6 +36,7 @@ import { currentMember, memberLogout, subscribeMember } from './member';
 import { refreshFlags } from './flags';
 import { installErrorReporting } from './errorReport';
 import { theme, toggleThemeMode, useThemePref } from './theme';
+import { AnchoredMenu, useMenuAnchor } from './ui';
 
 // Light/dark switch — glyph shows the mode you'll switch TO. Present in both the
 // desktop brand bar and the mobile header.
@@ -320,9 +321,14 @@ function LegalLink({ style }: { style?: object }) {
 // self-service reset yet. The confirmation is absolutely positioned, so arming
 // it cannot widen the bar — the desktop header's width budget is fully spent
 // (see searchMaxWidth) and a control that grew on press would clip a nav tab.
-function SignOutBtn({ style, up }: { style?: object; up?: boolean }) {
+function SignOutBtn({ style }: { style?: object }) {
   const [, force] = useState(0);
   const [armed, setArmed] = useState(false);
+  // Portalled, not absolutely positioned inside the bar. A React Native View
+  // clips its children, so on the phone — where this now sits in a two-row
+  // header — the confirmation was cut off at the header's bottom edge, taking
+  // the "signed in as" line and half the question with it.
+  const anchor = useMenuAnchor();
   useEffect(() => subscribeMember(() => force((n) => n + 1)), []);
   // Arming is not a state anyone should be left in: if the press was a
   // mis-click, walking away has to be enough to undo it.
@@ -334,11 +340,22 @@ function SignOutBtn({ style, up }: { style?: object; up?: boolean }) {
   const member = currentMember();
   // Nothing to sign out of on the login gate, and no member name to show.
   if (!member) return null;
+  const close = () => {
+    setArmed(false);
+    anchor.close();
+  };
   return (
     <View style={[styles.signOutWrap, style]}>
       <TouchableOpacity
+        ref={anchor.ref}
         style={[styles.themeBtn, styles.signOutBtn, armed && styles.signOutBtnOn]}
-        onPress={() => setArmed((v) => !v)}
+        onPress={() => {
+          if (armed) close();
+          else {
+            anchor.open();
+            setArmed(true);
+          }
+        }}
         activeOpacity={0.75}
         accessibilityRole="button"
         accessibilityLabel={`Sign out of TaurEye. Signed in as ${member.username}`}
@@ -348,8 +365,9 @@ function SignOutBtn({ style, up }: { style?: object; up?: boolean }) {
       >
         <Icon name="signOut" size={16} color={armed ? theme.red : theme.muted2} />
       </TouchableOpacity>
-      {armed ? (
-        <View style={[styles.signOutPop, up ? styles.signOutPopUp : styles.signOutPopDown]}>
+      {armed && anchor.anchor ? (
+        <AnchoredMenu anchor={anchor.anchor} width={214} align="right" onClose={close}>
+          <View style={styles.signOutPop}>
           <Text style={styles.signOutWho} numberOfLines={1}>
             {member.username} · {member.plan.toUpperCase()}
           </Text>
@@ -357,7 +375,7 @@ function SignOutBtn({ style, up }: { style?: object; up?: boolean }) {
           <View style={styles.signOutActs}>
             <TouchableOpacity
               style={[styles.signOutAct, styles.signOutStay]}
-              onPress={() => setArmed(false)}
+              onPress={close}
               activeOpacity={0.75}
               accessibilityRole="button"
               accessibilityLabel="Stay signed in"
@@ -367,7 +385,7 @@ function SignOutBtn({ style, up }: { style?: object; up?: boolean }) {
             <TouchableOpacity
               style={[styles.signOutAct, styles.signOutGo]}
               onPress={() => {
-                setArmed(false);
+                close();
                 memberLogout();
               }}
               activeOpacity={0.75}
@@ -378,7 +396,8 @@ function SignOutBtn({ style, up }: { style?: object; up?: boolean }) {
               <Text style={styles.signOutGoTxt}>Sign out</Text>
             </TouchableOpacity>
           </View>
-        </View>
+          </View>
+        </AnchoredMenu>
       ) : null}
     </View>
   );
@@ -522,6 +541,7 @@ function NewDesktopShell() {
 
 function NewMobileShell() {
   const insets = useSafeAreaInsets();
+  const { width } = useResponsive();
   const [active, setActive, hydrated] = usePersistedTab();
   const [palette, setPalette] = useState(false);
   const [settings, setSettings] = useState(false);
@@ -539,20 +559,44 @@ function NewMobileShell() {
   );
   return (
     <View style={styles.mobile}>
+      {/* Two rows, because one could not hold this honestly.
+          Row 1 is who and where: the wordmark, the session, your credits, the
+          theme, who you are signed in as and the way out. The account name and
+          sign-out used to live in the footer strip above the tab bar, at 10px
+          and half off the edge — the two account controls, in the one place
+          nobody looks for account controls.
+          Row 2 is the search box. It was a 16px magnifier competing with three
+          other glyphs; on the desktop bar the same control is a full-width
+          field that says what it does, and there is room here for the same. */}
       <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
-        {showBack ? <BackBtn onPress={goBack} /> : null}
-        <Brand />
-        <View style={styles.headerRight}>
-          <MarketChip />
+        <View style={styles.headerRow}>
+          {showBack ? <BackBtn onPress={goBack} /> : null}
+          <Brand />
+          {/* Row 1 is identity: the session, your credits, your name, the way
+              out. The theme and ticker toggles moved down beside the search
+              box — they are settings, and they were taking the width the
+              account name needs to be a name rather than "Taur…". */}
+          <View style={styles.headerRight}>
+            {/* On a narrow phone the market chip is what squeezed the account
+                name down to "T". It is the most repeated thing on the screen —
+                the ticker strip is directly below it and the home page opens
+                on a market clock — so it is the one that gives way. */}
+            {width >= 360 ? <MarketChip compact /> : null}
+            <WalletChip />
+            <AccountChip style={styles.acctBtnMobile} />
+            <SignOutBtn />
+          </View>
+        </View>
+        <View style={styles.headerRow2}>
           <TouchableOpacity
-            style={styles.themeBtn}
+            style={styles.searchBtnMobile}
             onPress={() => setPalette(true)}
             activeOpacity={0.75}
             accessibilityRole="button"
             accessibilityLabel="Search symbols and pages"
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
-            <Icon name="search" size={16} color={theme.muted2} />
+            <Icon name="search" size={15} color={theme.muted} />
+            <Text style={styles.searchTxt} numberOfLines={1}>Search symbols &amp; pages…</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.themeBtn}
@@ -564,18 +608,16 @@ function NewMobileShell() {
           >
             <Icon name="settings" size={16} color={theme.muted2} />
           </TouchableOpacity>
-          <WalletChip />
-        <ThemeToggle />
+          <ThemeToggle />
         </View>
       </View>
       <TickerStrip />
       <View style={styles.mobileBody}>{tab.render((k) => legacyNav(k, setActive))}</View>
-      {/* The disclaimer stays optically centred whether or not anyone is
-          signed in: the sign-out sits on top of the strip, not in its flow. */}
+      {/* One thing in the strip, so "centred" means centred. It used to hold
+          three, with the disclaimer given the leftover width between them —
+          which is not the middle of anything. */}
       <View style={styles.footerBar}>
-        <AccountChip style={styles.acctBtnMobile} />
         <LegalLink style={styles.legalBtnMobile} />
-        <SignOutBtn up style={styles.signOutFooter} />
       </View>
       {palette ? <CommandPalette open onClose={() => setPalette(false)} /> : null}
       {settings ? <TickerSettings onClose={() => setSettings(false)} /> : null}
@@ -668,7 +710,7 @@ const styles = StyleSheet.create({
     marginLeft: 'auto', paddingHorizontal: 8, paddingVertical: 6,
     maxWidth: 170,
   },
-  acctBtnMobile: { marginLeft: 0, flexShrink: 1 },
+  acctBtnMobile: { marginLeft: 0, flexShrink: 0, paddingHorizontal: 4, maxWidth: 150 },
   acctTxt: {
     color: theme.muted2, fontSize: theme.fs.xs, fontFamily: theme.mono,
     fontWeight: '700', letterSpacing: 0.4,
@@ -677,22 +719,19 @@ const styles = StyleSheet.create({
   // Mobile: a full-width strip above the tab bar, centred, so it reads as a
   // footer rather than as another action crowding the header.
   legalBtnMobile: {
-    flex: 1,
+    alignSelf: 'stretch',
     marginLeft: 0,
     paddingLeft: 0,
     paddingRight: 0,
     paddingVertical: 7,
     alignItems: 'center',
   },
-  // The strip owns the rule now that it holds two things.
   footerBar: {
-    flexDirection: 'row',
     alignItems: 'center',
     borderTopColor: theme.border,
     borderTopWidth: 1,
     zIndex: 5,
   },
-  signOutFooter: { position: 'absolute', right: 10 },
   legalTxt: { color: theme.muted, fontSize: theme.fs.xs, fontFamily: theme.mono, letterSpacing: 1 },
   // flexShrink 0 is the whole point: the nav and the search box were both
   // elastic, so an over-subscribed bar took width from BOTH — and the nav is a
@@ -725,16 +764,34 @@ const styles = StyleSheet.create({
 
   mobile: { flex: 1, backgroundColor: theme.bg },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    // The sign-out confirmation drops out of this bar over the ticker strip
+    // and the page; without a stacking order of its own it is painted under
+    // both. Overlays that must clear it (sheets, the command palette) portal
+    // to the document root, and the Desk drawer starts below it.
+    zIndex: 20,
     backgroundColor: theme.surface,
     borderBottomColor: theme.border,
     borderBottomWidth: 1,
-    paddingHorizontal: 16,
-    paddingBottom: 12,
+    paddingHorizontal: 12,
+    paddingBottom: 10,
+    gap: 8,
   },
-  headerRight: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  headerRow2: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  headerRight: { flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 1 },
+  searchBtnMobile: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flex: 1,
+    minWidth: 0,
+    backgroundColor: theme.surface2,
+    borderColor: theme.border2,
+    borderWidth: 1,
+    borderRadius: theme.radius.md,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+  },
   mobileBody: { flex: 1 },
   tabBar: { flexDirection: 'row', backgroundColor: theme.surface, borderTopColor: theme.border, borderTopWidth: 1, paddingTop: 8 },
   tab: { flex: 1, alignItems: 'center', gap: 3 },
@@ -808,20 +865,9 @@ const styles = StyleSheet.create({
   signOutWrap: { zIndex: 30 },
   signOutBtn: { width: 32, height: 32 },
   signOutBtnOn: { borderColor: theme.red, backgroundColor: theme.surface3 },
-  signOutPop: {
-    position: 'absolute',
-    right: 0,
-    width: 214,
-    backgroundColor: theme.surface,
-    borderColor: theme.border,
-    borderWidth: 1,
-    borderRadius: theme.radius.md,
-    padding: theme.sp.md,
-    gap: 6,
-    ...theme.shadow.card,
-  },
-  signOutPopDown: { top: '100%', marginTop: 6 },
-  signOutPopUp: { bottom: '100%', marginBottom: 6 },
+  // AnchoredMenu supplies the panel, its placement and its shadow; this is
+  // only the padding inside it.
+  signOutPop: { padding: theme.sp.md, gap: 6 },
   signOutWho: {
     color: theme.muted,
     fontSize: theme.fs.xs,

@@ -566,6 +566,61 @@ function check(name, ok, detail) {
     // Second, the confirmation hangs off the bottom of the bar over the ticker
     // strip — it has to actually be the element under the cursor, not painted
     // beneath the page.
+    // 8k · the phone header holds the account controls and a real search box.
+    //
+    // The account name and sign-out used to live in a strip above the tab bar,
+    // at 10px and half off the edge — the two account controls, in the one
+    // place nobody looks for account controls. Search was a 16px magnifier
+    // competing with three other glyphs. The strip now holds the disclaimer
+    // alone, which is what lets "centred" mean centred.
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.waitForTimeout(1200);
+    const phone = await page.evaluate(() => {
+      const g = (sel) => {
+        const e = document.querySelector(sel);
+        if (!e) return null;
+        const r = e.getBoundingClientRect();
+        return { t: Math.round(r.top), l: Math.round(r.left), r: Math.round(r.right),
+                 w: Math.round(r.width), text: (e.textContent || '').trim() };
+      };
+      return {
+        acct: g('[aria-label^="Signed in as"]'),
+        out: g('[data-testid="header-signout"]'),
+        search: g('[aria-label="Search symbols and pages"]'),
+        legal: g('[aria-label="Disclaimer and legal terms"]'),
+        vw: window.innerWidth,
+      };
+    });
+    check(
+      'the phone header carries the account name and the way out',
+      !!phone.acct && phone.acct.t < 120 && !!phone.out && phone.out.t < 120,
+      JSON.stringify(phone),
+    );
+    check(
+      'the name is a name, not a truncation',
+      !!phone.acct && /^Taureye$/.test(phone.acct.text),
+      JSON.stringify(phone.acct),
+    );
+    check(
+      'both sit fully on screen',
+      !!phone.acct && phone.acct.l >= 0 && !!phone.out && phone.out.r <= phone.vw,
+      JSON.stringify(phone),
+    );
+    check(
+      'search is a labelled box, not a lone glyph',
+      !!phone.search && phone.search.w > phone.vw * 0.55
+        && /Search symbols/.test(phone.search.text),
+      JSON.stringify(phone.search),
+    );
+    check(
+      'and the disclaimer strip is actually centred',
+      !!phone.legal
+        && Math.abs((phone.legal.l + phone.legal.r) / 2 - phone.vw / 2) <= 2,
+      JSON.stringify({ legal: phone.legal, vw: phone.vw }),
+    );
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.waitForTimeout(1000);
+
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.waitForTimeout(900);
     const signOut = page.locator('[data-testid="header-signout"]');

@@ -42,25 +42,35 @@ class SignOutControlTest(unittest.TestCase):
         self.assertIn("<SignOutBtn />", bar)
         self.assertLess(bar.index("<LegalLink />"), bar.index("<SignOutBtn />"))
 
-    def test_it_is_in_the_mobile_footer_next_to_the_disclaimer(self):
+    def test_it_is_in_the_phone_header_beside_the_account_name(self):
+        """It used to sit in a strip above the tab bar at 10px, half off the
+        edge — the two account controls, in the one place nobody looks for
+        account controls. The strip now holds the disclaimer alone, which is
+        what lets "centred" mean centred."""
         shell = self.src[self.src.index("function NewMobileShell"):]
         shell = shell[:shell.index("export default function Shell")]
-        self.assertIn("<LegalLink style={styles.legalBtnMobile} />", shell)
-        self.assertIn("<SignOutBtn up style={styles.signOutFooter} />", shell)
+        head = shell[shell.index("styles.headerRight"):shell.index("headerRow2")]
+        self.assertIn("<AccountChip style={styles.acctBtnMobile} />", head)
+        self.assertIn("<SignOutBtn />", head)
+        strip = shell[shell.index("styles.footerBar"):]
+        self.assertIn("<LegalLink style={styles.legalBtnMobile} />", strip)
+        self.assertNotIn("SignOutBtn", strip)
 
-    def test_it_opens_upward_on_the_phone(self):
-        """The mobile strip sits directly above the tab bar — a menu dropped
-        below it would render off the bottom of the screen."""
-        self.assertIn("up ? styles.signOutPopUp : styles.signOutPopDown", self.body)
-        self.assertIn("signOutPopUp: { bottom: '100%'", self.src)
+    def test_the_confirmation_is_portalled_rather_than_clipped(self):
+        """A React Native View clips its children. In a two-row phone header
+        the confirmation was cut off at the header's bottom edge, losing the
+        "signed in as" line and half the question."""
+        self.assertIn("const anchor = useMenuAnchor();", self.body)
+        self.assertIn("<AnchoredMenu anchor={anchor.anchor} width={214} align=\"right\"", self.body)
+        self.assertNotIn("signOutPopUp", self.src)
+        self.assertNotIn("signOutPopDown", self.src)
 
     def test_one_press_asks_rather_than_signing_out(self):
-        arm = self.body.index("onPress={() => setArmed((v) => !v)}")
-        self.assertGreater(arm, 0)
+        self.assertIn("if (armed) close();", self.body)
         # memberLogout is reachable only from the confirm button inside the
         # popover, which only exists while armed.
         self.assertEqual(self.body.count("memberLogout()"), 1)
-        self.assertGreater(self.body.index("memberLogout()"), self.body.index("armed ? ("))
+        self.assertGreater(self.body.index("memberLogout()"), self.body.index("armed && anchor.anchor ? ("))
 
     def test_arming_expires_on_its_own(self):
         """A mis-click must not leave a red 'sign out?' hanging over the page
@@ -86,9 +96,13 @@ class SignOutControlTest(unittest.TestCase):
 
     def test_the_confirmation_cannot_widen_the_bar(self):
         """The desktop header is fully subscribed; a control that grew when
-        pressed would push the last nav tab out of the scroller."""
-        pop = re.search(r"signOutPop: \{(.*?)\n  \},", self.src, re.S).group(1)
-        self.assertIn("position: 'absolute'", pop)
+        pressed would push the last nav tab out of the scroller. AnchoredMenu
+        renders it outside the bar entirely."""
+        ui = _read(os.path.join(ROOT, "mobile", "src", "ui.tsx"))
+        # AnchoredMenu's own panel — `am`, not the Sheet's.
+        am = ui.split("const am = StyleSheet.create({", 1)[1]
+        panel = re.search(r"panel: \{(.*?)\n  \},", am, re.S).group(1)
+        self.assertIn("position: 'absolute'", panel)
 
     def test_the_confirmation_paints_above_the_page(self):
         """It hangs off the bottom of the bar, over the ticker strip and the
