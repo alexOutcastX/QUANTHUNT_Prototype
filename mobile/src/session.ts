@@ -33,6 +33,7 @@ const SYNC_KEYS: Record<string, string> = {
   'taureye.papertrades.v1': 'papertrades_v1',
   'taureye.papersim.v1': 'papersim_v1',
   'taureye.prefs.v1': 'prefs_v1',
+  'taureye.newsmarks.v1': 'newsmarks_v1',
 };
 const TS_PREFIX = 'taureye.sync.ts.';
 

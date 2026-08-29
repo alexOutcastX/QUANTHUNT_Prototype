@@ -110,26 +110,27 @@ function check(name, ok, detail) {
     // picking "Symbol" and seeing whatever stock you last looked at. Both
     // screens still exist — 2b proves the tabless ones still resolve.
     const tabs = await page.evaluate(() =>
-      [...document.querySelectorAll('[role="tab"]')].map((e) => e.getAttribute('aria-label')));
+      [...document.querySelectorAll('[data-testid="nav-tab"]')]
+        .map((e) => e.getAttribute('aria-label')));
     check(
       'the tab strip is the four browse destinations',
       JSON.stringify(tabs) === JSON.stringify(['Screens', 'Desk', 'Backtest', 'Terminal']),
       JSON.stringify(tabs),
     );
-    check('signing in lands on the home page', /LATEST MARKET NEWS/i.test(
+    check('signing in lands on the home page', /MARKET BREADTH/i.test(
       await page.evaluate(() => document.body.innerText)));
 
     // 2b · the wordmark is the way home, from wherever you are.
     await page.evaluate(() => document.querySelector('[aria-label="Terminal"]').click());
     await page.waitForTimeout(2200);
-    check('a tab still navigates away from home', !/LATEST MARKET NEWS/i.test(
+    check('a tab still navigates away from home', !/MARKET BREADTH/i.test(
       await page.evaluate(() => document.body.innerText)));
     await page.evaluate(() => {
       const el = document.querySelector('[aria-label="TaurEye — go to the home page"]');
       if (el) el.click();
     });
     await page.waitForTimeout(2200);
-    check('the wordmark goes home', /LATEST MARKET NEWS/i.test(
+    check('the wordmark goes home', /MARKET BREADTH/i.test(
       await page.evaluate(() => document.body.innerText)));
 
     // 3 · icons draw (the RNW createElement regression shipped empty <svg>)
@@ -336,6 +337,78 @@ function check(name, ok, detail) {
       /Thu 23 Jul\s*·\s*delayed/i.test(dash),
       (dash.match(/.{0,60}delayed.{0,20}/g) || []).join(' | '),
     );
+
+    // 8a2 · the home page's new shape, at a width where it has two columns.
+    //
+    // The rail is the claim worth measuring: news, feeds, portfolio and
+    // watchlist moved out of the main column so the market data leads. A
+    // regression here looks like "everything still renders", which is exactly
+    // why the check is geometric rather than textual.
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.waitForTimeout(1200);
+    const rail = await page.evaluate(() => {
+      // Section titles are uppercased by CSS; the DOM keeps the written casing.
+      const leaf = (t) => [...document.querySelectorAll('*')]
+        .find((e) => !e.children.length && (e.textContent || '').trim() === t);
+      const card = (t) => {
+        let el = leaf(t);
+        while (el && el.getBoundingClientRect().width < 120) el = el.parentElement;
+        return el;
+      };
+      const news = card('News');
+      const breadth = card('Market breadth \u00b7 NIFTY 500');
+      if (!news || !breadth) return null;
+      const n = news.getBoundingClientRect();
+      const m = breadth.getBoundingClientRect();
+      return { newsLeft: Math.round(n.left), newsW: Math.round(n.width), mainRight: Math.round(m.right) };
+    });
+    check(
+      'news sits in a narrow rail beside the market data',
+      !!rail && rail.newsLeft > rail.mainRight - 5 && rail.newsW < 420,
+      JSON.stringify(rail),
+    );
+
+    const aria = (label) =>
+      page.evaluate((l) => {
+        const el = document.querySelector(`[aria-label="${l}"]`);
+        if (el) { el.click(); return true; }
+        return false;
+      }, label);
+
+    // Saving a headline, and finding it again.
+    const saved = await page.evaluate(() => {
+      const el = [...document.querySelectorAll('[aria-label^="Save "]')][0];
+      if (el) { el.click(); return true; }
+      return false;
+    });
+    check('a headline can be saved', saved);
+    await page.waitForTimeout(700);
+    await aria('Saved');
+    await page.waitForTimeout(700);
+    check(
+      'the saved tab holds it',
+      !/Nothing saved yet/.test(await page.evaluate(() => document.body.innerText)),
+    );
+    await aria('Archive');
+    await page.waitForTimeout(1500);
+    check(
+      'the archive tab reads recorded history',
+      /Archived headline|Recorded back to/i.test(
+        await page.evaluate(() => document.body.innerText)),
+    );
+    await aria('Latest');
+    await page.waitForTimeout(500);
+
+    // The slider, and the customisation that is the point of it.
+    check('add opens the index picker', await aria('Add an index to this slider'));
+    await page.waitForTimeout(700);
+    check('an index can be added to the slider', await aria('Add NIFTY BANK'));
+    await page.waitForTimeout(2000);
+    check(
+      'the added index gets its own panel',
+      await aria('Remove NIFTY BANK from the slider'),
+    );
+    await page.waitForTimeout(500);
 
     // 8b · the sign-out control in the chrome, and the width budget it lives in.
     //

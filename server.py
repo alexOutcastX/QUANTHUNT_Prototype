@@ -16,6 +16,7 @@ import valuation as _valuation  # dossier valuation section (pure arithmetic, no
 import scanner as _scanner     # live per-symbol technical scan for the screener
 import relations as _relations # curated company-relationship graph (Terminal tab)
 import news as _news           # RSS news aggregation (Terminal news panel)
+import news_history as _newshist  # a month of recorded headlines (the feeds keep hours)
 import primary_feeds as _primary  # NSE IPO calendar + G-Sec/SGB quotes (landing page)
 import ai_graph as _ai         # AI-generated relationship graphs (any symbol)
 import broker as _broker       # BYOB Zerodha connect (read-only, single user)
@@ -4630,7 +4631,41 @@ def latest_news():
     sym = request.args.get("symbol", "").strip().upper()
     q = request.args.get("q", "").strip()
     force = request.args.get("force") == "1"
-    return jsonify(_news.get_news(sym, q, force))
+    payload = _news.get_news(sym, q, force)
+    # Write through whatever this poll saw. The feeds are a window — a few
+    # hours, at most a day — so a headline nobody recorded as it went past is
+    # gone. Market-wide only: a symbol-specific Google News query is a search
+    # result, not the market's record of the day.
+    if not sym:
+        try:
+            _newshist.record(payload.get("items"))
+        except Exception as e:
+            log.debug("news history write failed: %s", e)
+    return jsonify(payload)
+
+
+@app.route("/news/history")
+@rate_limit("news-history", 60, 300)
+def news_history():
+    """Headlines recorded from earlier polls, newest first.
+
+    `days` is capped at the retention window, and the response says how far
+    back the archive actually reaches — it starts accumulating the day the
+    server first runs this, and cannot reach backwards into stories that were
+    never recorded.
+    """
+    items = _newshist.history(
+        days=request.args.get("days", 30, type=int),
+        limit=request.args.get("limit", 200, type=int),
+        offset=request.args.get("offset", 0, type=int),
+        q=request.args.get("q", "").strip(),
+        source=request.args.get("source", "").strip(),
+    )
+    st = _newshist.stats()
+    return jsonify({"items": items, "sources": _newshist.sources(),
+                    "oldest": st.get("oldest"), "newest": st.get("newest"),
+                    "total": st.get("n") or 0,
+                    "keep_days": _newshist.KEEP_DAYS})
 
 
 @app.route("/holidays")
@@ -4853,8 +4888,16 @@ def _fetch_index_row(key, name, yf_sym):
     always computed, while `chg`/`y1` fall back to None when there aren't
     enough closes to compute them.
     """
-    import ydata
-    df = ydata.history(yf_sym, "1y", "1d", auto_adjust=False)
+    # Guarded: ydata.history promises not to raise, but that promise starts
+    # AFTER yfinance imports, and a Yahoo that is missing or broken must not
+    # take out an index NSE is publishing perfectly well. The overlay below is
+    # the whole point — it can build a row from nothing but the exchange.
+    df = None
+    try:
+        import ydata
+        df = ydata.history(yf_sym, "1y", "1d", auto_adjust=False)
+    except Exception as e:
+        log.debug("YF history failed for %s: %s", yf_sym, e)
     row = {"key": key, "name": name, "symbol": yf_sym,
            "level": None, "chg": None, "y1": None, "session": None}
     first = None

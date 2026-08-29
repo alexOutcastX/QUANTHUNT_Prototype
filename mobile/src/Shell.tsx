@@ -441,6 +441,11 @@ function NewDesktopShell() {
                 accessibilityRole="tab"
                 accessibilityLabel={it.label}
                 accessibilityState={{ selected: on }}
+                // Marks the top-level strip specifically. Other surfaces use
+                // accessibilityRole="tab" too (the news rail's Latest /
+                // Archive / Saved), and "every tab on the page" is not the
+                // same set as "the app's destinations".
+                testID="nav-tab"
               >
                 <Icon name={it.icon} size={15} color={on ? theme.accent : theme.muted2} />
                 {/* Below 1180 the labels do not fit beside the rest of the
@@ -552,6 +557,7 @@ function NewMobileShell() {
               accessibilityRole="tab"
               accessibilityLabel={t.label}
               accessibilityState={{ selected: on }}
+              testID="nav-tab"
             >
               <View style={[styles.tabPill, on && styles.tabPillOn]}>
                 <Icon name={t.icon} size={19} color={on ? theme.brand : theme.muted} strokeWidth={on ? 2 : 1.75} />

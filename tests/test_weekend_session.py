@@ -432,9 +432,13 @@ class DashboardWordingTest(unittest.TestCase):
                   encoding="utf-8") as fh:
             self.fmt = fh.read()
 
-    def test_the_watchlist_average_no_longer_hardcodes_today(self):
-        self.assertNotIn("' avg today'", self.dash)
-        self.assertIn("avg ${wlAgg.when || 'today'}", self.dash)
+    def test_nothing_on_the_page_calls_a_past_session_today(self):
+        """The watchlist summary button that carried "avg today" is gone — it
+        was replaced by a panel listing each symbol's own change, which is the
+        better answer to the same question. What must not come back is any
+        hardcoded "today" attached to a number that may be Friday's."""
+        self.assertNotIn("avg today", self.dash)
+        self.assertNotIn("' today'", self.dash)
 
     def test_the_session_label_is_empty_while_the_session_is_today(self):
         """Otherwise every card would carry a date during live trading, which

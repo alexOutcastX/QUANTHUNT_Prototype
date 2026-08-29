@@ -386,6 +386,17 @@ export type NewsItem = {
   summary?: string;
 };
 export type NewsResp = { items: NewsItem[]; fetched?: number; cached?: boolean };
+/** Headlines recorded from earlier polls. `oldest` says how far the archive
+ *  actually reaches — it starts filling the day the server first records, and
+ *  cannot reach backwards into stories nobody wrote down. */
+export type NewsHistoryResp = {
+  items: (NewsItem & { id: string })[];
+  sources: string[];
+  oldest?: number | null;
+  newest?: number | null;
+  total: number;
+  keep_days: number;
+};
 
 // Trade Scan: short-term pattern setups on the major indices, per timeframe.
 export type TradeScanRow = {
@@ -638,8 +649,10 @@ async function fetchGraph(symbol?: string, ai?: AiCreds): Promise<GraphResp> {
 export type IndexQuote = {
   key: string;
   name: string;
-  level: number;
-  chg: number;
+  // Nullable: an index whose feeds are all briefly unreachable still appears,
+  // with no number rather than an invented one.
+  level: number | null;
+  chg: number | null;
   y1: number;
   category?: string;
   country?: string;
@@ -1865,6 +1878,15 @@ export const api = {
   gsec: () => cachedGet<GsecResp>('/gsec', TTL.slow),
   news: (force = false) =>
     cachedGet<NewsResp>('/news' + (force ? '?force=1' : ''), TTL.news, force),
+  newsHistory: (opts: { days?: number; q?: string; source?: string; limit?: number } = {}) => {
+    const p = new URLSearchParams();
+    if (opts.days) p.set('days', String(opts.days));
+    if (opts.q) p.set('q', opts.q);
+    if (opts.source) p.set('source', opts.source);
+    if (opts.limit) p.set('limit', String(opts.limit));
+    const qs = p.toString();
+    return getJson<NewsHistoryResp>('/news/history' + (qs ? '?' + qs : ''));
+  },
   tradeScan: (refresh = false) =>
     getJson<TradeScanResp>('/patterns/trade-scan' + (refresh ? '?refresh=1' : ''), 30000),
   sectorMembers: (sector: string, level = 'macro') =>

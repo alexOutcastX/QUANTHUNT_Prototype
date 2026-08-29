@@ -962,6 +962,18 @@ class H(BaseHTTPRequestHandler):
             if "te_member=1" in (self.headers.get("Cookie") or "") or hdr == _MEMBER_TOKEN:
                 return self._json({"member": _MEMBER})
             return self._json({"member": None})
+        if path == "/news/history":
+            # The archive the rail's second tab reads. Stamped older than the
+            # live feed so "recorded back to" has something to say.
+            base = 1753200000
+            return self._json({
+                "items": [{"id": f"h{i}", "title": f"Archived headline {i} — a week ago",
+                           "link": f"https://example.com/h{i}", "source": "ET Markets",
+                           "ts": base - i * 86400, "summary": ""} for i in range(6)],
+                "sources": ["ET Markets", "Livemint"],
+                "oldest": base - 6 * 86400, "newest": base,
+                "total": 6, "keep_days": 35,
+            })
         if path == "/wallet/earn":
             # The header's wallet chip hides itself when this 404s, and with the
             # chip gone the smoke suite would measure a header 50px narrower

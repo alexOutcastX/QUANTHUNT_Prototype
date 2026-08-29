@@ -68,6 +68,21 @@ def _migrate(conn):
             rationale TEXT,                -- JSON list of strings
             meta     TEXT                  -- JSON dict (scores, sector, …)
         );
+        -- A month of headlines. An RSS feed is a WINDOW, not an archive: it
+        -- carries whatever the publisher has up right now, so anything older
+        -- than a few hours is simply gone unless it was written down as it
+        -- went past. Keyed on a hash of the link so the same story arriving
+        -- from two polls, or from two feeds, is one row.
+        CREATE TABLE IF NOT EXISTS news_items (
+            id      TEXT PRIMARY KEY,     -- sha1 of the link
+            ts      INTEGER NOT NULL,     -- publication time, epoch seconds
+            title   TEXT NOT NULL,
+            link    TEXT NOT NULL,
+            source  TEXT,
+            summary TEXT,
+            seen    INTEGER NOT NULL      -- when this row was first recorded
+        );
+        CREATE INDEX IF NOT EXISTS ix_news_ts ON news_items (ts DESC);
         CREATE INDEX IF NOT EXISTS ix_tl_status ON tradelog (status, symbol);
         CREATE INDEX IF NOT EXISTS ix_tl_src ON tradelog (source, opened);
         CREATE TABLE IF NOT EXISTS cases (

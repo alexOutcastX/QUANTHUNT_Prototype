@@ -92,7 +92,10 @@ export default function IndicesScreen() {
     setRefreshing(false);
   };
 
-  const fmt = (n: number) => n.toLocaleString('en-IN', { maximumFractionDigits: 2 });
+  // An index whose feeds are all briefly unreachable prints a dash, not a
+  // crash and not a zero.
+  const fmt = (n: number | null | undefined) =>
+    n == null ? '—' : n.toLocaleString('en-IN', { maximumFractionDigits: 2 });
   const fmtRate = (n: number) => n.toLocaleString('en-IN', { maximumFractionDigits: 4 });
 
   // A signed percentage cell that tolerates null (short-history ADRs).

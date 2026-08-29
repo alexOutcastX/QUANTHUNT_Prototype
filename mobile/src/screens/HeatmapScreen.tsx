@@ -626,7 +626,13 @@ function IndexTreemap({
         </TouchableOpacity>
         <View style={styles.drillTitleWrap}>
           <Text style={styles.drillTitle} numberOfLines={1}>{quote.name}</Text>
-          <Text style={[styles.drillChg, { color: quote.chg >= 0 ? theme.green : theme.red }]}>
+          <Text
+            style={[
+              styles.drillChg,
+              // An index with no reachable feed has no direction to colour.
+              { color: quote.chg == null ? theme.muted : quote.chg >= 0 ? theme.green : theme.red },
+            ]}
+          >
             {fmtLevel(quote.level)} · {pct(quote.chg)}
           </Text>
         </View>

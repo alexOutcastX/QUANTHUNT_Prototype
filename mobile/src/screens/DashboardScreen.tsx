@@ -1,7 +1,7 @@
 // Today — the market-universe landing page (report issue 4). News leads: a
 // compact scrolling headline box with on-demand refresh and the user's social
 // feeds sit at the top, followed by Portfolio / Watchlist jump-buttons, index
-// tiles, animated breadth, movers (NIFTY 50 + SENSEX), NSE/BSE sectors and
+// tiles, animated breadth, a per-index movers slider, NSE/BSE sectors and
 // the primary market (G-Sec · upcoming IPOs · fixed-income yields). Every
 // window degrades independently.
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -39,6 +39,15 @@ import { AsOfChip, Card, EmptyState, Loading, SectionTitle, StatTile } from '../
 import { theme } from '../theme';
 import { sessionLabel } from '../format';
 import MarketClock from '../components/MarketClock';
+import NewsPanel from '../components/NewsPanel';
+import IndexSlider from '../components/IndexSlider';
+import {
+  PortfolioPanel,
+  PosRow,
+  WatchlistPanel,
+  useChgMode,
+} from '../components/PositionsPanel';
+import { useResponsive } from '../responsive';
 
 type Mover = { symbol: string; price?: number | null; chg?: number | null };
 type SocialLink = { label: string; url: string };
@@ -56,10 +65,9 @@ const inr = (v: number) => '₹' + Math.round(v).toLocaleString('en-IN');
 const dash: {
   indices?: IndexQuote[] | null;
   market?: HolidaysResp | null;
-  movers?: Mover[] | null;
-  sensex?: Mover[] | null;
   mv?: MoversResp | null;
   watch?: { symbol: string; q?: Quote }[] | null;
+  pfRows?: PosRow[] | null;
   news?: NewsItem[] | null;
   sectors?: SectorAgg[] | null;
   gsec?: GsecResp | null;
@@ -155,8 +163,7 @@ export default function DashboardScreen({ onNavigate }: { onNavigate?: (page: st
   const [indicesAsof, setIndicesAsof] = useState<number | null>(null);
   const [indicesSession, setIndicesSession] = useState<string | null>(null);
   const [market, setMarket] = useState<HolidaysResp | null>(dash.market ?? null);
-  const [movers, setMovers] = useState<Mover[] | null>(dash.movers ?? null);
-  const [sensex, setSensex] = useState<Mover[] | null>(dash.sensex ?? null);
+  const [pfRows, setPfRows] = useState<PosRow[] | null>(dash.pfRows ?? null);
   const [mv, setMv] = useState<MoversResp | null>(dash.mv ?? null);
   const [mvFailed, setMvFailed] = useState(false);
   const [watch, setWatch] = useState<{ symbol: string; q?: Quote }[] | null>(dash.watch ?? null);
@@ -174,17 +181,17 @@ export default function DashboardScreen({ onNavigate }: { onNavigate?: (page: st
   const [socialOpen, setSocialOpen] = useState(false);
   const [socLabel, setSocLabel] = useState('');
   const [socUrl, setSocUrl] = useState('');
+  const { width } = useResponsive();
+  // 1100, not the app's desktop breakpoint: a 340px rail plus a main column
+  // that can still hold two mover lists side by side needs about this much,
+  // and below it the two stack rather than squeezing both.
+  const wide = width >= 1100;
+  const [chgMode, toggleChg] = useChgMode();
 
   // Every window loads independently and in parallel.
   const load = useCallback(async () => {
     api.indices().then((d) => { dash.indices = d.indices; setIndices(d.indices); setIndicesAsof(d.asof ?? null); setIndicesSession(d.session ?? null); }).catch(() => setIndices((v) => v ?? []));
     api.holidays().then((d) => { dash.market = d; setMarket(d); }).catch(() => {});
-    api.indexConstituents('NIFTY 50')
-      .then((idx) => { const m = topBottom(idx.data || [], 4); dash.movers = m; setMovers(m); })
-      .catch(() => setMovers((v) => v ?? []));
-    api.indexConstituents('BSE SENSEX')
-      .then((idx) => { const m = topBottom(idx.data || [], 4); dash.sensex = m; setSensex(m); })
-      .catch(() => setSensex((v) => v ?? []));
     // Breadth + top gainers/losers, computed server-side over NIFTY 500.
     setMvFailed(false);
     api.movers('NIFTY 500', 6)
@@ -224,22 +231,43 @@ export default function DashboardScreen({ onNavigate }: { onNavigate?: (page: st
     (async () => {
       try {
         const holdings = await loadPortfolio();
-        if (!holdings.length) { dash.pf = { value: 0, dayChg: 0, dayPct: 0, n: 0 }; setPf(dash.pf); return; }
+        if (!holdings.length) {
+          dash.pf = { value: 0, dayChg: 0, dayPct: 0, n: 0 };
+          dash.pfRows = [];
+          setPf(dash.pf);
+          setPfRows([]);
+          return;
+        }
         const q = await api.ltp([...new Set(holdings.map((h) => h.symbol))]);
         let value = 0;
         let dayChg = 0;
+        // The rows as well as the total. A flat total is as often two big
+        // opposite moves as it is a quiet day, and the summary alone made you
+        // leave the page to find out which.
+        const rows: PosRow[] = [];
         for (const h of holdings) {
           const p = q[h.symbol]?.price;
           value += h.qty * (p ?? h.avg);
           const a = q[h.symbol]?.absChg;
           if (p != null && a != null) dayChg += h.qty * a;
+          rows.push({
+            symbol: h.symbol,
+            price: p ?? h.avg,
+            chg: q[h.symbol]?.chg ?? null,
+            // The whole holding's rupee move, not one share's: what the day
+            // cost YOU is the number a portfolio is asked for.
+            abs: a != null ? h.qty * a : null,
+            sub: `${h.qty} @ ${Math.round(h.avg).toLocaleString('en-IN')}`,
+          });
         }
+        dash.pfRows = rows;
+        setPfRows(rows);
         const base = value - dayChg;
         const res = { value, dayChg, dayPct: base > 0 ? (dayChg / base) * 100 : 0, n: holdings.length };
         dash.pf = res;
         setPf(res);
       } catch {
-        /* button shows without live change */
+        setPfRows((v) => v ?? []);
       }
     })();
     api.news().then((d) => { const n = (d.items || []).slice(0, 12); dash.news = n; setNews(n); }).catch(() => setNews((v) => v ?? []));
@@ -288,29 +316,44 @@ export default function DashboardScreen({ onNavigate }: { onNavigate?: (page: st
     return (indices || [])
       .filter((i) => keys.has(i.key) && i.chg != null)
       .slice()
-      .sort((a, b) => b.chg - a.chg)
+      .sort((a, b) => (b.chg ?? 0) - (a.chg ?? 0))
       .map((i) => ({ sector: i.name.replace(/^NIFTY\s*/i, ''), count: 0, market_cap_cr: null, chg: i.chg }) as SectorAgg);
   }, [indices]);
   const sectorRows = (sectors2?.length ? sectors2 : sectorProxy).slice(0, 10);
   const sectorMax = Math.max(1, ...sectorRows.map((s) => Math.abs(s.chg ?? 0)));
-
-  // Watchlist aggregate for the header button.
-  const wlAgg = useMemo(() => {
-    if (!watch?.length) return null;
-    const chgs = watch.map((w) => w.q?.chg).filter((c): c is number => c != null);
-    // Which session the average is OF. Over a weekend every quote is Friday's,
-    // and calling that "today" is a statement about a session that has not
-    // happened — so the button borrows the stamp the quotes came with.
-    const when = sessionLabel(watch.map((w) => w.q?.session).find((d) => d) ?? null);
-    if (!chgs.length) return { n: watch.length, avg: null as number | null, when };
-    return { n: watch.length, avg: chgs.reduce((a, c) => a + c, 0) / chgs.length, when };
-  }, [watch]);
 
   // "Friday" rather than "today", wherever a number on this page is a closing
   // price from a session that has already ended. Written once, read by the
   // index strip, the breadth card and both mover lists.
   const indicesWhen = sessionLabel(indicesSession).replace(/^on /, '');
   const moversWhen = sessionLabel(mv?.session).replace(/^on /, '');
+
+  const wlRows: PosRow[] | null = useMemo(
+    () =>
+      watch
+        ? watch.map((w) => ({
+            symbol: w.symbol,
+            price: w.q?.price,
+            chg: w.q?.chg,
+            abs: w.q?.absChg,
+          }))
+        : null,
+    [watch],
+  );
+
+  // The slider labels each panel with that index's live level. Names differ
+  // between the two feeds ("NIFTY BANK" in /index, "NIFTY Bank" in /indices),
+  // so the match is case-insensitive on the compacted name.
+  const indexLevel = useCallback(
+    (name: string) => {
+      const want = name.replace(/\s+/g, '').toUpperCase();
+      const hit = (indices || []).find(
+        (i) => i.name.replace(/\s+/g, '').toUpperCase() === want,
+      );
+      return hit ? { level: hit.level, chg: hit.chg } : null;
+    },
+    [indices],
+  );
 
   const gsecRows = (gsec?.items || []).filter((g) => g.kind === 'gsec');
   const sgbRows = (gsec?.items || []).filter((g) => g.kind === 'sgb');
@@ -344,100 +387,15 @@ export default function DashboardScreen({ onNavigate }: { onNavigate?: (page: st
           <MarketClock indiaOpen={market ? market.open : null} />
         </View>
       </View>
-      {/* ── News first: compact scrolling headline box + the user's feeds ── */}
-      <Card style={{ marginBottom: theme.sp.md }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-          <SectionTitle>Latest market news</SectionTitle>
-          <TouchableOpacity onPress={refreshNews} disabled={newsBusy} activeOpacity={0.7}>
-            <Text style={styles.moreLinkInline}>{newsBusy ? REFRESHING : REFRESH}</Text>
-          </TouchableOpacity>
-        </View>
-        {!news ? (
-          <Loading />
-        ) : news.length ? (
-          <ScrollView style={styles.newsBox} nestedScrollEnabled showsVerticalScrollIndicator>
-            {news.map((n, i) => (
-              <TouchableOpacity
-                key={i}
-                style={[styles.newsRow, i === 0 && { borderTopWidth: 0 }]}
-                onPress={() => setArticle(n)}
-                activeOpacity={0.75}
-                accessibilityRole="button"
-                accessibilityLabel={`Open headline: ${n.title}`}
-              >
-                <Text style={styles.newsTitle} numberOfLines={2}>{n.title}</Text>
-                <Text style={styles.nmeta}>
-                  {n.source}
-                  {n.ts ? ' · ' + new Date(n.ts * 1000).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : ''}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        ) : (
-          <EmptyState title="No headlines right now" hint="Tap ⟳ Refresh to re-scrape the trusted feeds (ET Markets, Moneycontrol, Livemint)." />
-        )}
-        {/* Social accounts: the user's own feeds, one tap away. */}
-        <View style={styles.socialRow}>
-          <Text style={styles.socialLbl}>MY FEEDS</Text>
-          {social.map((s) => (
-            <View key={s.url} style={styles.socialChip}>
-              <TouchableOpacity onPress={() => Linking.openURL(s.url).catch(() => {})} activeOpacity={0.7}>
-                <Text style={styles.socialTxt}>{s.label}</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={() => saveSocial(social.filter((x) => x.url !== s.url))}
-                hitSlop={8}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.socialX}>✕</Text>
-              </TouchableOpacity>
-            </View>
-          ))}
-          <TouchableOpacity style={styles.socialChip} onPress={() => setSocialOpen(true)} activeOpacity={0.7}>
-            <Text style={styles.socialTxt}>＋ Add</Text>
-          </TouchableOpacity>
-        </View>
-      </Card>
-
-      <View style={styles.jumpRow}>
-        <TouchableOpacity
-          style={styles.jumpBtn}
-          onPress={() => navigate('desk', { sub: 'portfolio' })}
-          activeOpacity={0.75}
-        >
-          <Text style={styles.jumpLbl}>PORTFOLIO</Text>
-          {pf && pf.n ? (
-            <>
-              <Text style={styles.jumpVal}>{inr(pf.value)}</Text>
-              <Text style={[styles.jumpChg, { color: colorOf(pf.dayChg) }]}>
-                {(pf.dayChg >= 0 ? '+' : '−') + inr(Math.abs(pf.dayChg)).slice(1)} · {pct(pf.dayPct)}
-              </Text>
-            </>
-          ) : (
-            <Text style={styles.jumpEmpty}>No holdings yet ›</Text>
-          )}
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.jumpBtn}
-          onPress={() => navigate('desk', { sub: 'watchlist' })}
-          activeOpacity={0.75}
-        >
-          <Text style={styles.jumpLbl}>WATCHLIST</Text>
-          {wlAgg ? (
-            <>
-              <Text style={styles.jumpVal}>{wlAgg.n} symbols</Text>
-              <Text style={[styles.jumpChg, { color: colorOf(wlAgg.avg) }]}>
-                {wlAgg.avg == null
-                  ? 'quotes pending'
-                  : `${pct(wlAgg.avg)} avg ${wlAgg.when || 'today'}`}
-              </Text>
-            </>
-          ) : (
-            <Text style={styles.jumpEmpty}>Empty — add symbols ›</Text>
-          )}
-        </TouchableOpacity>
-      </View>
-
+      {/* ── Two columns: the market on the left, your desk on the right ──
+          News was a full-width card at the very top: a lot of the best space
+          on the screen for a list you skim, and it pushed the market data
+          below the fold. It reads better narrow, and the column beside it is
+          where everything about YOU now lives — headlines, your feeds, your
+          portfolio, your watchlist. Below the rail breakpoint the two stack,
+          because a 340px rail beside anything is not a phone layout. */}
+      <View style={[styles.page, wide && styles.pageWide]}>
+        <View style={styles.mainCol}>
       {/* ── Index tiles ── */}
       <View style={styles.tiles}>
         {indices.slice(0, 6).map((ix) => {
@@ -451,7 +409,11 @@ export default function DashboardScreen({ onNavigate }: { onNavigate?: (page: st
             <StatTile
               key={ix.key}
               label={ix.name}
-              value={ix.level.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+              value={
+                ix.level == null
+                  ? '—'
+                  : ix.level.toLocaleString('en-IN', { maximumFractionDigits: 0 })
+              }
               sub={lag ? `${pct(ix.chg)} · ${lag}` : pct(ix.chg)}
               color={undefined}
               style={{ maxWidth: 220 }}
@@ -568,6 +530,9 @@ export default function DashboardScreen({ onNavigate }: { onNavigate?: (page: st
         <ScreenerLink index="SME EMERGE" label="Screen SME Emerge ›" />
       </Card>
 
+      {/* ── Index movers, as one slider instead of a card per index ── */}
+      <IndexSlider level={indexLevel} />
+
       {/* ── G-SEC · Upcoming IPOs · Fixed returns ── */}
       <View style={styles.cols}>
         <Card style={styles.col}>
@@ -650,34 +615,40 @@ export default function DashboardScreen({ onNavigate }: { onNavigate?: (page: st
         </Card>
       </View>
 
-      {/* ── NIFTY 50 movers · SENSEX movers · Your watchlist ── */}
-      <View style={styles.cols}>
-        <Card style={styles.col}>
-          <SectionTitle>NIFTY 50 movers</SectionTitle>
-          {!movers ? <Loading /> : movers.length ? <MoverRows rows={movers} />
-            : <EmptyState title="Movers unavailable" hint="Index quotes are briefly unreachable — pull to refresh." />}
-          <ScreenerLink index="NIFTY 50" />
-        </Card>
-        <Card style={styles.col}>
-          <SectionTitle>SENSEX movers</SectionTitle>
-          {!sensex ? <Loading /> : sensex.length ? <MoverRows rows={sensex} />
-            : <EmptyState title="Movers unavailable" hint="BSE quotes are briefly unreachable — pull to refresh." />}
-          <ScreenerLink index="BSE SENSEX" />
-        </Card>
-        <Card style={styles.col}>
-          <SectionTitle>Your watchlist</SectionTitle>
-          {!watch ? (
-            <Loading />
-          ) : watch.length ? (
-            <MoverRows rows={watch.map((w) => ({ symbol: w.symbol, price: w.q?.price, chg: w.q?.chg }))} />
-          ) : (
-            <EmptyState title="Watchlist is empty" hint="Add symbols from any screen's ☆ and they'll appear here with live quotes." />
-          )}
-          <TouchableOpacity onPress={() => navigate('desk', { sub: 'watchlist' })} activeOpacity={0.7}>
-            <Text style={styles.moreLink}>Open watchlist ›</Text>
-          </TouchableOpacity>
-        </Card>
+        </View>
+
+        {/* The rail: what is yours, not what the market is doing. */}
+        <View style={[styles.rail, wide && styles.railWide]}>
+          <NewsPanel items={news} busy={newsBusy} onRefresh={refreshNews} onOpen={setArticle} />
+          <Card style={{ marginBottom: theme.sp.md }}>
+        {/* Social accounts: the user's own feeds, one tap away. */}
+          <View style={styles.socialRow}>
+            <Text style={styles.socialLbl}>MY FEEDS</Text>
+            {social.map((s) => (
+              <View key={s.url} style={styles.socialChip}>
+                <TouchableOpacity onPress={() => Linking.openURL(s.url).catch(() => {})} activeOpacity={0.7}>
+                  <Text style={styles.socialTxt}>{s.label}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => saveSocial(social.filter((x) => x.url !== s.url))}
+                  hitSlop={8}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.socialX}>✕</Text>
+                </TouchableOpacity>
+              </View>
+            ))}
+            <TouchableOpacity style={styles.socialChip} onPress={() => setSocialOpen(true)} activeOpacity={0.7}>
+              <Text style={styles.socialTxt}>＋ Add</Text>
+            </TouchableOpacity>
+          </View>
+
+          </Card>
+          <PortfolioPanel rows={pfRows} total={pf} mode={chgMode} onToggle={toggleChg} />
+          <WatchlistPanel rows={wlRows} mode={chgMode} onToggle={toggleChg} />
+        </View>
       </View>
+
 
       {/* Add-social sheet */}
       <Modal visible={socialOpen} animationType="fade" transparent onRequestClose={() => setSocialOpen(false)}>
@@ -783,25 +754,18 @@ export default function DashboardScreen({ onNavigate }: { onNavigate?: (page: st
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.bg },
-  content: { padding: theme.sp.lg, paddingBottom: 40, maxWidth: 1240, width: '100%', alignSelf: 'center' },
+  content: { padding: theme.sp.lg, paddingBottom: 40, maxWidth: 1480, width: '100%', alignSelf: 'center' },
+  // One column that becomes two. `alignItems: flex-start` matters: without it
+  // the rail stretches to the main column's height and its last card floats in
+  // the middle of a very tall empty box.
+  page: { flexDirection: 'column' },
+  pageWide: { flexDirection: 'row', alignItems: 'flex-start', gap: theme.sp.lg },
+  mainCol: { flex: 1, minWidth: 0 },
+  rail: { width: '100%' },
+  railWide: { width: 340, flexGrow: 0, flexShrink: 0 },
   headRow: { flexDirection: 'row', alignItems: 'center', marginBottom: theme.sp.md },
   h1: { color: theme.text, fontSize: theme.fs.h1, fontWeight: '700', letterSpacing: 0.2 },
   // Portfolio / Watchlist jump buttons (replace the paper-portfolio card).
-  jumpRow: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.sp.md, marginBottom: theme.sp.lg },
-  jumpBtn: {
-    flex: 1,
-    minWidth: 220,
-    backgroundColor: theme.surface,
-    borderColor: theme.border2,
-    borderWidth: 1,
-    borderRadius: theme.radius.md,
-    paddingHorizontal: theme.sp.lg,
-    paddingVertical: theme.sp.md,
-  },
-  jumpLbl: { color: theme.muted, fontSize: 10, fontFamily: theme.mono, letterSpacing: 1 },
-  jumpVal: { color: theme.text, fontFamily: theme.mono, fontSize: theme.fs.lg + 2, fontWeight: '800', marginTop: 3 },
-  jumpChg: { fontFamily: theme.mono, fontSize: theme.fs.sm, fontWeight: '700', marginTop: 2 },
-  jumpEmpty: { color: theme.muted, fontSize: theme.fs.sm, marginTop: 6 },
   tiles: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.sp.md },
   moreLink: { color: theme.muted, fontSize: theme.fs.sm, marginTop: theme.sp.md, fontWeight: '600' },
   moreLinkInline: { color: theme.muted, fontSize: theme.fs.sm, fontWeight: '600' },
@@ -871,7 +835,6 @@ const styles = StyleSheet.create({
   fixedLbl: { color: theme.muted, fontSize: theme.fs.xs + 1, marginTop: 2, lineHeight: 16 },
   finePrint: { color: theme.muted, fontSize: theme.fs.xs, marginTop: theme.sp.md, lineHeight: 14 },
   // news box: compact, scrolls inside its own frame
-  newsBox: { maxHeight: 170 },
   newsRow: { paddingVertical: theme.sp.sm + 1, borderTopColor: theme.border, borderTopWidth: 1 },
   newsTitle: { color: theme.text, fontSize: theme.fs.sm + 1, lineHeight: 19, fontWeight: '600' },
   nmeta: { color: theme.muted, fontSize: theme.fs.xs + 1, marginTop: 2 },
@@ -922,15 +885,14 @@ const styles = StyleSheet.create({
   artBtnTxt: { color: theme.onAccent, fontSize: theme.fs.sm + 1, fontWeight: '700' },
   artNote: { color: theme.muted, fontSize: theme.fs.xs, textAlign: 'center', marginTop: theme.sp.sm },
   // social feeds
+  // The rule and the top margin separated this from the headline list it used
+  // to sit under. It has its own card in the rail now, so both were drawing a
+  // divider under nothing.
   socialRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     alignItems: 'center',
     gap: theme.sp.sm,
-    marginTop: theme.sp.md,
-    borderTopColor: theme.border,
-    borderTopWidth: 1,
-    paddingTop: theme.sp.md,
   },
   socialLbl: { color: theme.muted, fontSize: 9, fontFamily: theme.mono, letterSpacing: 1 },
   socialChip: {
