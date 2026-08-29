@@ -17,7 +17,7 @@ import { InfoDot } from '../components/InfoCard';
 import { ExportCol, exportCsv, exportExcel, exportPdf } from '../csv';
 import { crore } from '../format';
 import { parseNL } from '../nlScreen';
-import { PRESETS, Preset } from '../presets';
+import { DEFAULT_PRESET_ID, PRESETS, Preset, defaultPreset } from '../presets';
 import {
   DEF_BY_KEY,
   ExprOp,
@@ -357,7 +357,22 @@ function readSharedScreen(): ScreenState | null {
   return m ? decodeScreen(m[1]) : null;
 }
 
-export default function ScreenerScreen() {
+/** One of the screeners the SCREEN dropdown offers. */
+export type ScreenChoice = { key: string; label: string; hint?: string };
+
+/** Supplied by ScreenerHub so the SCREEN picker can sit in this screen's own
+ *  top bar beside the universe, rather than in a pill bar above the page. */
+export type ScreenerScreenProps = {
+  screens?: ScreenChoice[];
+  screen?: string;
+  onScreen?: (k: string) => void;
+};
+
+export default function ScreenerScreen({
+  screens,
+  screen,
+  onScreen,
+}: ScreenerScreenProps = {}) {
   const { isDesktop } = useResponsive();
   // Mobile: the filter builder lives in a popup so it never buries the table.
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -395,7 +410,13 @@ export default function ScreenerScreen() {
   });
   // Expression filter rows (TaurEye-style `<metric> <op> <value>` chained
   // with AND/OR). Presets and the NL builder append rows into the same list.
-  const [expr, setExpr] = useState<ExprRow[]>([]);
+  // Every load starts on the golden crossover rather than on whatever was left
+  // here last time. A screener that reopens mid-thought is a screener you have
+  // to clear before you can think; deliberately kept screens have their own
+  // home under Save screen, and a shared #screen= link still wins outright.
+  const [expr, setExpr] = useState<ExprRow[]>(
+    () => filtersToExpr(defaultPreset().filters, 'preset:' + DEFAULT_PRESET_ID),
+  );
   const [sortCol, setSortCol] = useState('signal');
   const [sortDir, setSortDir] = useState<1 | -1>(-1);
   const [track, setTrack] = useState<TrackEntry[]>([]);
@@ -442,6 +463,8 @@ export default function ScreenerScreen() {
   const [page, setPage] = useState(0);
   // Dropdown/popup UI state: universe picker, export menu, per-row Analyse.
   const [idxOpen, setIdxOpen] = useState(false);
+  const [presetsOpen, setPresetsOpen] = useState(false);
+  const [screenOpen, setScreenOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [analyseFor, setAnalyseFor] = useState<Row | null>(null);
   const [flash, setFlash] = useState('');
@@ -471,16 +494,12 @@ export default function ScreenerScreen() {
             AsyncStorage.getItem(FILTERS_KEY),
             AsyncStorage.getItem(INDEX_KEY),
           ]);
-          if (x) {
-            const parsed = JSON.parse(x);
-            if (Array.isArray(parsed)) {
-              setExpr(parsed.filter((e) => e && typeof e.key === 'string' && typeof e.id === 'string'));
-            }
-          } else if (f) {
-            // One-time migration from the pre-expression keyed filters.
-            const parsed = JSON.parse(f);
-            if (parsed && typeof parsed === 'object') setExpr(filtersToExpr(parsed));
-          }
+          // Filters are NOT restored: the default screen is the golden
+          // crossover on every load. The stored keys are still read for the
+          // universe below, and left in place so a future "restore my last
+          // screen" has something to restore.
+          void x;
+          void f;
           if (idx) {
             let sel: string[] = [];
             try {
@@ -1048,6 +1067,12 @@ export default function ScreenerScreen() {
     );
   };
 
+  // How many preset scans are currently contributing rows — the button says so
+  // rather than making you open it to find out.
+  const presetCount = new Set(
+    expr.map((e) => e.src).filter((v): v is string => !!v && v.startsWith('preset:')),
+  ).size;
+
   if (loading) {
     return (
       <View style={styles.center}>
@@ -1062,10 +1087,73 @@ export default function ScreenerScreen() {
           columns/export, pagination and the table's header row never scroll
           away; only the result rows do. */}
       <View style={styles.topBar}>
+        {/* The three things a screen starts from, in one row: which screener,
+            over what universe, looking for what. They used to be two pill bars
+            above the page and a button buried in the filter panel. */}
+        {screens && onScreen ? (
+          <View style={styles.screenPickWrap}>
+            <TouchableOpacity
+              style={styles.idxDrop}
+              onPress={() => setScreenOpen((v) => !v)}
+              activeOpacity={0.75}
+              accessibilityRole="button"
+              accessibilityState={{ expanded: screenOpen }}
+              accessibilityLabel="Choose a screener"
+            >
+              <Text style={styles.idxDropLabel}>SCREEN</Text>
+              <Text style={styles.idxDropTxt}>
+                {screens.find((x) => x.key === screen)?.label ?? 'Custom'} ▾
+              </Text>
+            </TouchableOpacity>
+            {screenOpen ? (
+              <View style={[styles.pickerDrop, styles.screenDrop]}>
+                {screens.map((x) => (
+                  <TouchableOpacity
+                    key={x.key}
+                    style={styles.presetItem}
+                    onPress={() => {
+                      setScreenOpen(false);
+                      onScreen(x.key);
+                    }}
+                    activeOpacity={0.75}
+                    accessibilityRole="button"
+                    accessibilityLabel={x.label}
+                  >
+                    <Text style={[styles.presetMark, x.key === screen && { color: theme.green }]}>
+                      {x.key === screen ? '✓' : '○'}
+                    </Text>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.presetName}>{x.label}</Text>
+                      {x.hint ? <Text style={styles.presetDesc} numberOfLines={1}>{x.hint}</Text> : null}
+                    </View>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            ) : null}
+          </View>
+        ) : null}
         <TouchableOpacity style={styles.idxDrop} onPress={() => setIdxOpen(true)} activeOpacity={0.75}>
           <Text style={styles.idxDropLabel}>UNIVERSE</Text>
           <Text style={styles.idxDropTxt}>{selLabel(indexSel)} ▾</Text>
         </TouchableOpacity>
+        <View style={styles.screenPickWrap}>
+          <TouchableOpacity
+            style={[styles.idxDrop, presetsOpen && styles.idxDropOn]}
+            onPress={() => setPresetsOpen((v) => !v)}
+            activeOpacity={0.75}
+            accessibilityRole="button"
+            accessibilityState={{ expanded: presetsOpen }}
+            accessibilityLabel="Preset scans"
+          >
+            <Text style={styles.idxDropLabel}>PRESET SCANS</Text>
+            <Text style={styles.idxDropTxt}>
+              {presetCount ? `${presetCount} applied` : 'Pick one'} ▾
+            </Text>
+          </TouchableOpacity>
+          {presetsOpen ? (
+            <PresetMenu expr={expr} setExpr={setExpr} onClose={() => setPresetsOpen(false)} />
+          ) : null}
+        </View>
         {!isDesktop ? (
           <>
             <TouchableOpacity
@@ -1421,6 +1509,72 @@ function UniversePicker({
   );
 }
 
+
+// The preset library, lifted out of the filter panel so it can sit beside the
+// Universe picker — the two questions a screen starts from are "over what" and
+// "looking for what", and they belong next to each other.
+function PresetMenu({
+  expr,
+  setExpr,
+  onClose,
+}: {
+  expr: ExprRow[];
+  setExpr: React.Dispatch<React.SetStateAction<ExprRow[]>>;
+  onClose: () => void;
+}) {
+  // Presets append their conditions as tagged rows; toggling off removes them.
+  const presetOn = (p: Preset) => expr.some((e) => e.src === 'preset:' + p.id);
+  const togglePresetExpr = (p: Preset) => {
+    const tag = 'preset:' + p.id;
+    setExpr((prev) =>
+      prev.some((e) => e.src === tag)
+        ? prev.filter((e) => e.src !== tag)
+        : [...prev, ...filtersToExpr(p.filters, tag)],
+    );
+  };
+  return (
+    <View style={[styles.pickerDrop, styles.presetDrop]}>
+            <View style={styles.presetHead}>
+              <Text style={styles.presetHeadTxt}>PRESET SCANS</Text>
+              <TouchableOpacity onPress={onClose} hitSlop={12} activeOpacity={0.75}>
+                <Text style={styles.presetClose}>✕ Close</Text>
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={styles.pickerScroll} keyboardShouldPersistTaps="handled" nestedScrollEnabled>
+              {PRESET_GROUPS.map((g) => {
+                const ps = PRESETS.filter((p) => p.group === g);
+                if (!ps.length) return null;
+                return (
+                  <View key={g} style={styles.group}>
+                    <Text style={styles.groupTitle}>{g}</Text>
+                    {ps.map((p) => {
+                      const on = presetOn(p);
+                      return (
+                        <TouchableOpacity
+                          key={p.id}
+                          style={styles.presetItem}
+                          onPress={() => togglePresetExpr(p)}
+                          activeOpacity={0.75}
+                        >
+                          <Text style={[styles.presetMark, on && { color: theme.green }]}>
+                            {on ? '✓' : '○'}
+                          </Text>
+                          <View style={{ flex: 1 }}>
+                            <Text style={styles.presetName}>{p.name}</Text>
+                            <Text style={styles.presetDesc} numberOfLines={1}>{p.desc}</Text>
+                          </View>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                );
+              })}
+              <Text style={styles.fundNote}>Presets add their conditions as filter rows below — edit or remove them like any row.</Text>
+            </ScrollView>
+    </View>
+  );
+}
+
 // ── Expression filter panel (TaurEye-style rows with AND/OR) ─────────────────
 // Dropdown select for the expression rows (RN-web has no native <select>).
 type SelItem = { v?: string; label: string; header?: boolean };
@@ -1621,7 +1775,6 @@ function FilterPanel({
   onOpenFieldPicker: (rowId: string) => void;
 }) {
   const [nlText, setNlText] = useState('');
-  const [presetsOpen, setPresetsOpen] = useState(false);
   const [openSel, setOpenSel] = useState(''); // '<rowId>:f' | '<rowId>:o' | '<rowId>:v'
   const toggleSel = (id: string) => setOpenSel((cur) => (cur === id ? '' : id));
 
@@ -1641,17 +1794,6 @@ function FilterPanel({
   const clearAll = () => {
     setExpr([]);
     setOpenSel('');
-  };
-
-  // Presets append their conditions as tagged rows; toggling off removes them.
-  const presetOn = (p: Preset) => expr.some((e) => e.src === 'preset:' + p.id);
-  const togglePresetExpr = (p: Preset) => {
-    const tag = 'preset:' + p.id;
-    setExpr((prev) =>
-      prev.some((e) => e.src === tag)
-        ? prev.filter((e) => e.src !== tag)
-        : [...prev, ...filtersToExpr(p.filters, tag)],
-    );
   };
 
   return (
@@ -1687,15 +1829,6 @@ function FilterPanel({
 
       <View style={styles.ctrlWrap}>
         <View style={styles.ctrlRow}>
-          <TouchableOpacity
-            style={[styles.addFilterBtn, presetsOpen && styles.addFilterBtnOn]}
-            onPress={() => setPresetsOpen((v) => !v)}
-            activeOpacity={0.75}
-          >
-            <Text style={[styles.addFilterTxt, presetsOpen && { color: theme.onAccent }]}>
-              Preset scans {presetsOpen ? '▾' : '▸'}
-            </Text>
-          </TouchableOpacity>
           <TouchableOpacity style={styles.addFilterBtn} onPress={addRow} activeOpacity={0.75}>
             <Text style={styles.addFilterTxt}>+ Add filter</Text>
           </TouchableOpacity>
@@ -1713,47 +1846,6 @@ function FilterPanel({
             </TouchableOpacity>
           </View>
         </View>
-        {presetsOpen ? (
-          <View style={[styles.pickerDrop, { width: 480 }]}>
-            <View style={styles.presetHead}>
-              <Text style={styles.presetHeadTxt}>PRESET SCANS</Text>
-              <TouchableOpacity onPress={() => setPresetsOpen(false)} hitSlop={12} activeOpacity={0.75}>
-                <Text style={styles.presetClose}>✕ Close</Text>
-              </TouchableOpacity>
-            </View>
-            <ScrollView style={styles.pickerScroll} keyboardShouldPersistTaps="handled" nestedScrollEnabled>
-              {PRESET_GROUPS.map((g) => {
-                const ps = PRESETS.filter((p) => p.group === g);
-                if (!ps.length) return null;
-                return (
-                  <View key={g} style={styles.group}>
-                    <Text style={styles.groupTitle}>{g}</Text>
-                    {ps.map((p) => {
-                      const on = presetOn(p);
-                      return (
-                        <TouchableOpacity
-                          key={p.id}
-                          style={styles.presetItem}
-                          onPress={() => togglePresetExpr(p)}
-                          activeOpacity={0.75}
-                        >
-                          <Text style={[styles.presetMark, on && { color: theme.green }]}>
-                            {on ? '✓' : '○'}
-                          </Text>
-                          <View style={{ flex: 1 }}>
-                            <Text style={styles.presetName}>{p.name}</Text>
-                            <Text style={styles.presetDesc} numberOfLines={1}>{p.desc}</Text>
-                          </View>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </View>
-                );
-              })}
-              <Text style={styles.fundNote}>Presets add their conditions as filter rows below — edit or remove them like any row.</Text>
-            </ScrollView>
-          </View>
-        ) : null}
       </View>
 
       <View style={styles.panelBody}>
@@ -2092,6 +2184,13 @@ const styles = StyleSheet.create({
   idxChipOn: { backgroundColor: theme.brandSoft, borderColor: theme.brand },
   idxTxt: { color: theme.muted2, fontSize: theme.fs.sm },
   idxTxtOn: { color: theme.brand, fontWeight: '800' },
+  // Anchored under the Preset scans button in the top bar.
+  presetDrop: { width: 480, top: 44, left: 0 },
+  // Anchors the two dropdowns to their buttons, and keeps them above the
+  // fixed toolbar rows below (which use zIndex ~60).
+  screenPickWrap: { position: 'relative', zIndex: 90 },
+  screenDrop: { width: 280, top: 44, left: 0 },
+  idxDropOn: { borderColor: theme.brand },
   presetRow: { paddingHorizontal: theme.sp.lg, paddingTop: theme.sp.md, gap: theme.sp.sm, alignItems: 'center' },
   presetLabel: {
     color: theme.muted,

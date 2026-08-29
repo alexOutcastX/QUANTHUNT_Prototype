@@ -144,7 +144,33 @@ function check(name, ok, detail) {
     await page.locator('text=Screens').last().click();
     await page.waitForTimeout(2500);
     const bodyText = await page.evaluate(() => document.body.innerText);
-    check('Screens hub renders', /Screener|Momentum|Multibagger/.test(bodyText));
+    // One toolbar row now, not two pill bars: which screener, over what
+    // universe, looking for what.
+    check(
+      'the screening console has one toolbar row',
+      /SCREEN[\s\S]{0,60}UNIVERSE[\s\S]{0,60}PRESET SCANS/i.test(bodyText),
+      bodyText.slice(0, 200),
+    );
+    check(
+      'it opens on the golden crossover',
+      /Golden cross/i.test(bodyText),
+      bodyText.slice(0, 300),
+    );
+
+    // Switching screener is the SCREEN dropdown. Defined here because 4b uses
+    // it too — reaching Penny is no longer a pill on a bar.
+    const pickScreen = async (label) => {
+      await page.evaluate(() => {
+        const el = document.querySelector('[aria-label="Choose a screener"]');
+        if (el) el.click();
+      });
+      await page.waitForTimeout(600);
+      return page.evaluate((l) => {
+        const el = document.querySelector(`[aria-label="${l}"]`);
+        if (el) { el.click(); return true; }
+        return false;
+      }, label);
+    };
 
     // 4a · the screener table actually carries DATA.
     //
@@ -154,6 +180,26 @@ function check(name, ok, detail) {
     // fixture now answers /index the way production does — a quoteless CSV list
     // that the server backfills from the bhavcopy — so a blank table here means
     // the client dropped the prices it was handed.
+    // Clear the default screen first. The console now opens on the golden
+    // crossover, and the fixture has no crosses — so the table is legitimately
+    // empty and there would be no prices to check.
+    //
+    // Toggled off through the preset menu rather than "Clear all": that button
+    // is desktop-only (mobile keeps the filter builder in a popup), and this
+    // suite runs at 400px.
+    const tapText = (t) =>
+      page.evaluate((x) => {
+        const el = [...document.querySelectorAll('*')]
+          .filter((n) => !n.children.length && (n.textContent || '').trim() === x).pop();
+        if (el) { (el.closest('[role="button"]') || el.parentElement).click(); return true; }
+        return false;
+      }, t);
+    check('the preset menu opens from the toolbar', await tapText('PRESET SCANS'));
+    await page.waitForTimeout(600);
+    check('a preset can be toggled back off', await tapText('Golden cross today'));
+    await page.waitForTimeout(500);
+    await tapText('✕ Close');
+    await page.waitForTimeout(2500);
     const table = await page.evaluate(() => {
       const t = document.body.innerText;
       const dash = (t.match(/^—$/gm) || []).length;
@@ -182,16 +228,7 @@ function check(name, ok, detail) {
     // 4b · Penny tab — graded by the real screen in the fixture server, so a
     // grading regression shows up as a missing warning rather than a cheap
     // stock quietly reading as safe.
-    const tapEl = async (t) =>
-      page.evaluate((txt) => {
-        const el = [...document.querySelectorAll('div,span,a,button')].filter(
-          (n) => (n.textContent || '').trim() === txt && n.offsetParent !== null,
-        );
-        const last = el.pop();
-        if (last) last.click();
-        return !!last;
-      }, t);
-    await tapEl('Penny');
+    check('the screen dropdown reaches Penny', await pickScreen('Penny'));
     await page.waitForTimeout(2500);
     const penny = await page.evaluate(() => document.body.innerText);
     check('Penny tab renders', /Read this before you use this screen/i.test(penny), penny.slice(0, 200));
@@ -235,7 +272,7 @@ function check(name, ok, detail) {
     );
     check(
       'browser back returns to the previous screen',
-      /Screener|Multibagger|Momentum|Penny/.test(afterBack.text),
+      /SCREEN|UNIVERSE|PRESET SCANS/i.test(afterBack.text),
       afterBack.text.slice(0, 160),
     );
 

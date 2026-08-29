@@ -230,6 +230,23 @@ export const FILTER_DEFS: FilterDef[] = [
   // Strategies — multi-rule chart strategies computed server-side
   { key: 'minervini', label: 'Minervini Trend Template', group: 'Strategies', type: 'toggle', get: (s) => s.minervini === true },
   { key: 'dma200_rising', label: '200-DMA rising', group: 'Strategies', type: 'toggle', get: (s) => s.dma200_rising === true },
+  // Derived, not fetched. d50/d150/d200 are each (price / that DMA − 1) × 100,
+  // so a SMALLER percentage means a HIGHER moving average: sma50 > sma150 is
+  // exactly d50 < d150. That makes the classic 50 > 150 > 200 stack expressible
+  // as a filter row, which is what lets the Minervini preset decompose into
+  // rules you can see and edit instead of one opaque flag.
+  {
+    key: 'dma_stack',
+    label: 'DMA stack 50 > 150 > 200',
+    group: 'Strategies',
+    type: 'toggle',
+    get: (s) => {
+      const a = n(s.d50);
+      const b = n(s.d150);
+      const c = n(s.d200);
+      return a != null && b != null && c != null && a < b && b < c;
+    },
+  },
   { key: 'ret_6m', label: '6-month return', group: 'Strategies', type: 'range', unit: '%', get: (s) => n(s.ret_6m) },
   // Candlestick patterns on the latest bar
   { key: 'cs_bullish', label: 'Any bullish candle', group: 'Candlesticks', type: 'toggle', get: (s) => s.cs_bullish === true },

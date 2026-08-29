@@ -432,22 +432,35 @@ export function Sheet({
   }, [a]);
   const translateY = a.interpolate({ inputRange: [0, 1], outputRange: [48, 0] });
   return (
-    <View style={sh.wrap}>
-      <Animated.View style={[sh.scrim, { opacity: a }]}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
-      </Animated.View>
-      <Animated.View
-        style={[
-          sh.panel,
-          fill
-            ? sh.panelFill
-            : { maxHeight: maxHeight as number, maxWidth },
-          { opacity: a, transform: [{ translateY }] },
-        ]}
-      >
-        {children}
-      </Animated.View>
-    </View>
+    // Modal, not a bare fixed View. z-index is only comparable INSIDE a
+    // stacking context, and a sheet rendered in the page tree is a descendant
+    // of the shell's content area — so the moment the header bar took a
+    // z-index of its own (for the sign-out confirmation), it began painting
+    // over the top 44px of every full-height sheet. That band is exactly where
+    // sheet titles and their close buttons live: the Universe picker still had
+    // its ✕, and it was underneath the header, unclickable.
+    //
+    // react-native-web's Modal portals to the document root, which puts the
+    // sheet outside every stacking context in the app rather than merely high
+    // within one. Dropdown, InfoModal and CommandPalette already do this.
+    <Modal visible transparent animationType="none" onRequestClose={onClose}>
+      <View style={sh.wrap}>
+        <Animated.View style={[sh.scrim, { opacity: a }]}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+        </Animated.View>
+        <Animated.View
+          style={[
+            sh.panel,
+            fill
+              ? sh.panelFill
+              : { maxHeight: maxHeight as number, maxWidth },
+            { opacity: a, transform: [{ translateY }] },
+          ]}
+        >
+          {children}
+        </Animated.View>
+      </View>
+    </Modal>
   );
 }
 

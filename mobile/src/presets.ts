@@ -43,7 +43,23 @@ export const PRESETS: Preset[] = [
   { id: 'low-debt', name: 'D/E below 0.5', desc: 'Debt-to-equity under 0.5', group: 'Fundamentals', filters: { debt_equity: { max: 0.5 } } },
 
   // ── Strategies ── (multi-rule chart strategies computed server-side)
-  { id: 'minervini', name: 'Minervini Trend Template', desc: 'All 8 of Mark Minervini’s trend-template rules: price above the 50/150/200-DMA (50>150>200), a rising 200-DMA, ≥30% above the 52w low, within 25% of the 52w high, and positive relative strength', group: 'Strategies', filters: { minervini: true } },
+  // Spelled out, not flagged. `minervini: true` is a single server-side
+  // boolean: selecting it put ONE row on the screen saying "Minervini is
+  // true", which you could not read, edit, loosen or learn anything from — the
+  // whole point of a custom screener is that a preset is a starting position,
+  // not a black box. These eight rows are the same nine rules the server
+  // computes (rule 3, 150>200, is contained in the stack), so the screen is
+  // identical and every line of it is now yours to change.
+  { id: 'minervini', name: 'Minervini Trend Template', desc: 'Mark Minervini’s trend template, as editable rows: price above the 50/150/200-DMA with the 50>150>200 stack, a rising 200-DMA, ≥30% above the 52w low, within 25% of the 52w high, and a positive 6-month return', group: 'Strategies', filters: {
+    d50: { min: 0 },
+    d150: { min: 0 },
+    d200: { min: 0 },
+    dma_stack: true,
+    dma200_rising: true,
+    pct_from_low: { min: 30 },
+    pct_from_high: { min: -25 },
+    ret_6m: { min: 0 },
+  } },
   { id: 'stage2-uptrend', name: 'Stage-2 uptrend (price>150>200, rising)', desc: 'Price above the 150 & 200-DMA with the 200-DMA rising — the core of a stage-2 advance', group: 'Strategies', filters: { d150: { min: 0 }, d200: { min: 0 }, dma200_rising: true } },
   { id: 'near-high-strong-rs', name: 'Near highs + strong 6m return', desc: 'Within 15% of the 52-week high with a positive 6-month return', group: 'Strategies', filters: { pct_from_high: { min: -15 }, ret_6m: { min: 0 } } },
 
@@ -60,6 +76,13 @@ export const PRESETS: Preset[] = [
   { id: 'cs-three-white', name: 'Three white soldiers', desc: 'Three rising bullish candles — strong reversal / continuation', group: 'Candlesticks', filters: { cs_three_white: true } },
   { id: 'cs-three-black', name: 'Three black crows', desc: 'Three falling bearish candles — strong bearish signal', group: 'Candlesticks', filters: { cs_three_black: true } },
 ];
+
+/** What an empty screener starts as, every load. */
+export const DEFAULT_PRESET_ID = 'golden-cross';
+
+export function defaultPreset(): Preset {
+  return PRESETS.find((p) => p.id === DEFAULT_PRESET_ID) || PRESETS[0];
+}
 
 const sameVal = (a: FilterValue | undefined, b: FilterValue): boolean =>
   JSON.stringify(a) === JSON.stringify(b);

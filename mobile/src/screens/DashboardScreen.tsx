@@ -41,6 +41,7 @@ import { sessionLabel } from '../format';
 import MarketClock from '../components/MarketClock';
 import NewsPanel from '../components/NewsPanel';
 import IndexSlider from '../components/IndexSlider';
+import HeatmapScreen from './HeatmapScreen';
 import {
   PortfolioPanel,
   PosRow,
@@ -497,9 +498,6 @@ export default function DashboardScreen({ onNavigate }: { onNavigate?: (page: st
       <Card style={{ marginTop: theme.sp.lg }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
           <SectionTitle>Sectors · NSE + BSE{sectors2?.length ? ' · full universe' : ''}</SectionTitle>
-          <TouchableOpacity onPress={() => navigate('screens', { sub: 'heatmap' })} activeOpacity={0.7}>
-            <Text style={styles.moreLinkInline}>Heatmap ›</Text>
-          </TouchableOpacity>
         </View>
         {sectorRows.length ? (
           sectorRows.map((sct, i) => (
@@ -528,6 +526,15 @@ export default function DashboardScreen({ onNavigate }: { onNavigate?: (page: st
           <EmptyState title="Sector data unavailable" hint="The NSE+BSE sector sweep is warming — pull to refresh in a minute." />
         )}
         <ScreenerLink index="SME EMERGE" label="Screen SME Emerge ›" />
+      </Card>
+
+      {/* ── The heatmap, moved here off the Screens bar. The bars above rank
+          sectors; this maps every index and sector by the day's change, and
+          a map belongs on the page you land on rather than three tabs into a
+          screening console. ── */}
+      <Card style={{ marginTop: theme.sp.lg }}>
+        <SectionTitle>Heatmap</SectionTitle>
+        <HeatmapScreen embedded />
       </Card>
 
       {/* ── Index movers, as one slider instead of a card per index ── */}

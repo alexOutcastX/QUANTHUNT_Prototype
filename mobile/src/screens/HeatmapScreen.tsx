@@ -101,7 +101,14 @@ type Node = { sym: string; chg: number | null; mcap: number | null; price: numbe
 // Session cache so re-opening the tab doesn't refetch the index list.
 let idxCache: Record<string, IndexQuote[]> = {};
 
-export default function HeatmapScreen() {
+/**
+ * `embedded` renders it inline on the home page: no screen title, and the grid
+ * scrolls with the page rather than inside a box of its own. Nesting a
+ * scroller in a scroller means one of them eats your wheel and neither
+ * finishes — and a "Heatmap" title under the home page's own headings is a
+ * heading for a section, not for a screen.
+ */
+export default function HeatmapScreen({ embedded = false }: { embedded?: boolean } = {}) {
   const [cat, setCat] = useState('domestic');
   const [indices, setIndices] = useState<IndexQuote[]>(idxCache.domestic || []);
   const [loading, setLoading] = useState(!idxCache.domestic);
@@ -167,29 +174,10 @@ export default function HeatmapScreen() {
   const gap = 8;
   const tileW = gridW ? (gridW - gap * (cols - 1)) / cols : 0;
 
-  return (
-    <View style={styles.container}>
-      <ScreenTitle
-        title="Heatmap"
-        sub="Sector & index day-change map · tap any tile to drill into its constituents"
-      />
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.catScroll} contentContainerStyle={styles.catRow}>
-        {CATS.map((c) => (
-          <TouchableOpacity
-            key={c.key}
-            style={[styles.catChip, cat === c.key && styles.catChipOn]}
-            onPress={() => setCat(c.key)}
-            activeOpacity={0.75}
-          >
-            <Text style={[styles.catTxt, cat === c.key && styles.catTxtOn]}>{c.label}</Text>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
-
-      {cat === 'sectors' ? (
-        <SectorMap />
-      ) : (
-      <ScrollView contentContainerStyle={styles.scrollPad}>
+  // One body, two containers: the page's scroller when embedded, its own
+  // when it is a screen.
+  const gridBody = (
+    <>
         {loading ? <Loading label="Loading live index levels…" /> : null}
         {!loading && err ? <EmptyState icon="⚠" title="Couldn't load indices" hint={err} /> : null}
         {!loading && !err && !indices.length ? (
@@ -220,7 +208,36 @@ export default function HeatmapScreen() {
         ) : null}
 
         {!loading && indices.length ? <Legend /> : null}
+    </>
+  );
+
+  return (
+    <View style={embedded ? styles.embedded : styles.container}>
+      {embedded ? null : (
+        <ScreenTitle
+          title="Heatmap"
+          sub="Sector & index day-change map · tap any tile to drill into its constituents"
+        />
+      )}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.catScroll} contentContainerStyle={styles.catRow}>
+        {CATS.map((c) => (
+          <TouchableOpacity
+            key={c.key}
+            style={[styles.catChip, cat === c.key && styles.catChipOn]}
+            onPress={() => setCat(c.key)}
+            activeOpacity={0.75}
+          >
+            <Text style={[styles.catTxt, cat === c.key && styles.catTxtOn]}>{c.label}</Text>
+          </TouchableOpacity>
+        ))}
       </ScrollView>
+
+      {cat === 'sectors' ? (
+        <SectorMap />
+      ) : embedded ? (
+        <View style={styles.scrollPad}>{gridBody}</View>
+      ) : (
+        <ScrollView contentContainerStyle={styles.scrollPad}>{gridBody}</ScrollView>
       )}
 
       {cat !== 'sectors' && detail ? (
@@ -716,6 +733,8 @@ function Legend() {
 }
 
 const styles = StyleSheet.create({
+  // Inline on the home page: no screen chrome, no height of its own.
+  embedded: {},
   container: { flex: 1, backgroundColor: theme.bg },
   catScroll: { flexGrow: 0, flexShrink: 0 },
   catRow: { flexDirection: 'row', gap: theme.sp.sm, paddingHorizontal: theme.sp.lg, paddingBottom: theme.sp.sm, alignItems: 'center' },

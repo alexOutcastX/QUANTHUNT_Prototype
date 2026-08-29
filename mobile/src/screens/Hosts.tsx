@@ -12,7 +12,9 @@ import { usePreview } from '../usePreview';
 // Every hosted screen is a lazy chunk: Metro splits each import() into its own
 // web bundle, fetched the first time the user opens that screen. First paint
 // only parses the shell + Dashboard instead of the whole app.
-const ScreenerScreen = lazyScreen(() => import('./ScreenerScreen'));
+import type { ScreenerScreenProps } from './ScreenerScreen';
+
+const ScreenerScreen = lazyScreen<ScreenerScreenProps>(() => import('./ScreenerScreen'));
 const AnalysisScreen = lazyScreen(() => import('./AnalysisScreen'));
 const BacktestScreen = lazyScreen(() => import('./BacktestScreen'));
 const CalculatorScreen = lazyScreen(() => import('./CalculatorScreen'));
@@ -207,40 +209,49 @@ function SubTabs({ tabs, persistKey, alias }: { tabs: SubTab[]; persistKey?: str
 // candidates). Sub-tab keys deliberately match the legacy analysis/* keys so
 // every existing navigate() intent lands unchanged.
 export function ScreensHub() {
-  return (
-    <SubTabs
-      persistKey="screens"
-      // Multibagger & Momentum are tabs inside the Screener page now; legacy
-      // intents targeting them land on the screener tab and ScreenerHub picks
-      // the right inner tab from the same intent.
-      alias={{ mb: 'screener', momentum: 'screener' }}
-      tabs={[
-        { key: 'screener', label: 'Screener', hint: 'Custom filters · Multibagger · Momentum — one screening console', render: () => <ScreenerHub /> },
-        { key: 'reco', label: 'Recommendations', hint: 'Ranked buy setups from the Multibagger candidates', render: () => <RecommendationsScreen /> },
-        { key: 'patterns', label: 'Patterns', hint: 'Classic chart-pattern scanner with confidence & targets', render: () => <PatternScreen /> },
-        { key: 'heatmap', label: 'Heatmap', hint: 'NSE + BSE sector map · tap a sector to screen it', render: () => <HeatmapScreen /> },
-        // The Universe left this bar when Today became the market-universe
-        // landing page (report issue 4); the constituent table stays reachable
-        // via intents so old navigate('screens', {sub:'universe'}) still works.
-        { key: 'universe', label: 'Universe', hint: 'Index constituents · mcap segments', render: () => <UniverseScreen />, hidden: true },
-      ]}
-    />
-  );
+  // No bar of its own any more. Everything under Screens is "a way of finding
+  // stocks", and which one you are using is now the SCREEN dropdown inside the
+  // console's own top bar, beside the universe and the preset library. Two
+  // stacked pill rows above the page were spending a lot of vertical space
+  // saying what one control says.
+  return <ScreenerHub />;
 }
 
-// Screener console tabs: the raw Custom screener is the default on load;
-// Multibagger and Momentum live beside it instead of on the Screens bar.
-const SCREENER_TABS: SubTab[] = [
-  { key: 'custom', label: 'Custom', render: () => <ScreenerScreen /> },
-  { key: 'mb', label: 'Multibagger', render: () => <MultibaggerScreen /> },
-  { key: 'momentum', label: 'Momentum', render: () => <MomentumScreen /> },
-  { key: 'penny', label: 'Penny', render: () => <PennyScreen /> },
+// Every screener the SCREEN dropdown offers, in the order it lists them.
+// `hidden` keeps a destination reachable by intent without putting it in the
+// menu — the heatmap moved to the home page and the constituent table has its
+// own entry points.
+type ScreenDef = {
+  key: string;
+  label: string;
+  hint?: string;
+  hidden?: boolean;
+  // Custom renders nothing here — ScreenerHub gives it the picker as props so
+  // it can host the control itself.
+  render: () => React.ReactElement | null;
+};
+
+const SCREENS: ScreenDef[] = [
+  { key: 'custom', label: 'Custom', hint: 'Build a screen from any field', render: () => null },
+  { key: 'mb', label: 'Multibagger', hint: 'Long-run compounders by growth & quality', render: () => <MultibaggerScreen /> },
+  { key: 'momentum', label: 'Momentum', hint: 'Strength, trend and relative performance', render: () => <MomentumScreen /> },
+  { key: 'penny', label: 'Penny', hint: 'Low-priced names, graded for liquidity and risk', render: () => <PennyScreen /> },
+  { key: 'reco', label: 'Recommendations', hint: 'Ranked buy setups from the Multibagger candidates', render: () => <RecommendationsScreen /> },
+  { key: 'patterns', label: 'Patterns', hint: 'Chart patterns with confidence & targets', render: () => <PatternScreen /> },
+  { key: 'heatmap', label: 'Heatmap', render: () => <HeatmapScreen />, hidden: true },
+  { key: 'universe', label: 'Universe', render: () => <UniverseScreen />, hidden: true },
 ];
-// Legacy intent sub-keys → inner tab. 'screener' (the outer tab's own key)
+
+// Legacy intent sub-keys → a screen. 'screener' (the outer tab's old key)
 // means the raw custom screener.
 const SCREENER_SUBS: Record<string, string> = {
-  screener: 'custom', mb: 'mb', momentum: 'momentum', penny: 'penny',
+  screener: 'custom', custom: 'custom', mb: 'mb', momentum: 'momentum',
+  penny: 'penny', reco: 'reco', patterns: 'patterns', heatmap: 'heatmap',
+  universe: 'universe',
 };
+
+const SCREEN_CHOICES = SCREENS.filter((t) => !t.hidden)
+  .map((t) => ({ key: t.key, label: t.label, hint: t.hint }));
 
 export function ScreenerHub() {
   const pick = (sub?: string) => (sub && SCREENER_SUBS[sub]) || null;
@@ -253,24 +264,80 @@ export function ScreenerHub() {
       }),
     [],
   );
-  const cur = SCREENER_TABS.find((t) => t.key === active) || SCREENER_TABS[0];
+  const cur = SCREENS.find((t) => t.key === active) || SCREENS[0];
+  // The custom console renders the picker itself, in the row that already
+  // holds the universe. Every other screen has no such row, so it gets a slim
+  // one — otherwise picking Momentum would be a one-way trip.
+  if (cur.key === 'custom') {
+    return (
+      <View style={styles.host}>
+        <View style={styles.hostBody}>
+          <ScreenerScreen screens={SCREEN_CHOICES} screen={active} onScreen={setActive} />
+        </View>
+      </View>
+    );
+  }
   return (
     <View style={styles.host}>
-      <View style={styles.innerBarWrap}>
-        <View style={[styles.subBar, styles.subBarHug]}>
-          {SCREENER_TABS.map((t) => (
+      <View style={styles.screenBar}>
+        <ScreenPicker choices={SCREEN_CHOICES} active={active} onPick={setActive} />
+      </View>
+      <View style={styles.hostBody}>{cur.render()}</View>
+    </View>
+  );
+}
+
+/** The SCREEN dropdown, for the screens that have no top bar to host it. */
+function ScreenPicker({
+  choices,
+  active,
+  onPick,
+}: {
+  choices: { key: string; label: string; hint?: string }[];
+  active: string;
+  onPick: (k: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <View style={styles.screenPickWrap}>
+      <TouchableOpacity
+        style={styles.screenBtn}
+        onPress={() => setOpen((v) => !v)}
+        activeOpacity={0.75}
+        accessibilityRole="button"
+        accessibilityState={{ expanded: open }}
+        accessibilityLabel="Choose a screener"
+      >
+        <Text style={styles.screenBtnLbl}>SCREEN</Text>
+        <Text style={styles.screenBtnTxt}>
+          {choices.find((c) => c.key === active)?.label ?? 'Custom'} ▾
+        </Text>
+      </TouchableOpacity>
+      {open ? (
+        <View style={styles.screenMenu}>
+          {choices.map((c) => (
             <TouchableOpacity
-              key={t.key}
-              style={[styles.subBtn, styles.subBtnFixed, active === t.key && styles.subBtnOn]}
-              onPress={() => setActive(t.key)}
+              key={c.key}
+              style={styles.screenItem}
+              onPress={() => {
+                setOpen(false);
+                onPick(c.key);
+              }}
               activeOpacity={0.75}
+              accessibilityRole="button"
+              accessibilityLabel={c.label}
             >
-              <Text style={[styles.subTxt, active === t.key && styles.subTxtOn]}>{t.label}</Text>
+              <Text style={[styles.screenMark, c.key === active && { color: theme.green }]}>
+                {c.key === active ? '✓' : '○'}
+              </Text>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.screenName}>{c.label}</Text>
+                {c.hint ? <Text style={styles.screenHint} numberOfLines={1}>{c.hint}</Text> : null}
+              </View>
             </TouchableOpacity>
           ))}
         </View>
-      </View>
-      <View style={styles.hostBody}>{cur.render()}</View>
+      ) : null}
     </View>
   );
 }
@@ -467,6 +534,25 @@ export function MoreScreen() {
 
 const styles = StyleSheet.create({
   host: { flex: 1, backgroundColor: theme.bg },
+  // The SCREEN picker for screens that have no top bar of their own.
+  screenBar: { paddingHorizontal: theme.sp.lg, paddingTop: theme.sp.md, zIndex: 90 },
+  screenPickWrap: { position: 'relative', alignSelf: 'flex-start', zIndex: 90 },
+  screenBtn: {
+    backgroundColor: theme.surface2, borderColor: theme.border2, borderWidth: 1,
+    borderRadius: theme.radius.md, paddingHorizontal: 12, paddingVertical: 6,
+  },
+  screenBtnLbl: { color: theme.muted, fontSize: 9, fontFamily: theme.mono, letterSpacing: 1 },
+  screenBtnTxt: { color: theme.text, fontSize: theme.fs.sm, fontWeight: '700' },
+  screenMenu: {
+    position: 'absolute', top: 46, left: 0, width: 280,
+    backgroundColor: theme.surface, borderColor: theme.border2, borderWidth: 1,
+    borderRadius: theme.radius.md, paddingVertical: 6, zIndex: 95,
+    ...theme.shadow.card,
+  },
+  screenItem: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, paddingHorizontal: 12, paddingVertical: 7 },
+  screenMark: { color: theme.muted, fontSize: theme.fs.sm, width: 14 },
+  screenName: { color: theme.text, fontSize: theme.fs.sm, fontWeight: '600' },
+  screenHint: { color: theme.muted, fontSize: theme.fs.xs },
   hostBody: { flex: 1 },
   subNav: { paddingTop: theme.sp.md },
   subNavHint: { color: theme.muted, fontSize: theme.fs.xs + 1, paddingHorizontal: theme.sp.lg, marginTop: 2 },
