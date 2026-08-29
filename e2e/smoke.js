@@ -867,16 +867,21 @@ function check(name, ok, detail) {
       JSON.stringify(chips),
     );
     check(
-      'public issues are in the calendar, with their price band and close date',
-      /NEWIPO/.test(desk) && /closes/.test(desk),
-      (desk.match(/NEWIPO[\s\S]{0,90}/) || [''])[0],
+      'public issues are in the calendar, with their close date',
+      /OPENCO/.test(desk) && /LATERCO/.test(desk) && /closes/.test(desk),
+      (desk.match(/OPENCO[\s\S]{0,90}/) || [''])[0],
+    );
+    check(
+      'and a book that has already closed is in neither view',
+      !/CLOSEDCO/.test(desk),
+      (desk.match(/CLOSEDCO[\s\S]{0,60}/) || [''])[0],
     );
     // An IPO is filed under the day its book OPENS, so a live issue's date is
     // in the past. The row must count down to its close, not print "in -2d".
     check(
       'a book already open counts down to its close',
-      /OPENIPO/.test(desk) && !/in -\d+d/.test(desk) && /closes in 2d/.test(desk),
-      (desk.match(/[^\n]*\n[^\n]*\nOPENIPO/) || [''])[0] + ' | neg: '
+      /OPENCO/.test(desk) && !/in -\d+d/.test(desk) && /closes in 3d/.test(desk),
+      (desk.match(/[^\n]*\n[^\n]*\nOPENCO/) || [''])[0] + ' | neg: '
         + JSON.stringify(desk.match(/in -\d+d/g)),
     );
     // And an empty one explains itself rather than showing a blank list.

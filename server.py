@@ -4818,11 +4818,26 @@ def _feed_payload(name):
         return {"items": [], "error": err or "unavailable"}
 
 
+def _ipo_items():
+    """The public-issue rows, ranked for today — see primary_feeds.rank_ipos.
+
+    Ranked here rather than in the cache: whether a book is open, closed or
+    still to come is a fact about today, and the payload behind this can be a
+    disk copy written days ago.
+    """
+    try:
+        return _primary.rank_ipos((_feed_payload("ipos") or {}).get("items") or [])
+    except Exception:
+        return []
+
+
 @app.route("/ipos")
 @rate_limit("ipos", 30, 300)
 def upcoming_ipos():
     """Current + upcoming public issues (mainboard & SME) from NSE."""
-    return jsonify(_feed_payload("ipos"))
+    payload = dict(_feed_payload("ipos") or {})
+    payload["items"] = _ipo_items()
+    return jsonify(payload)
 
 
 @app.route("/gsec")
@@ -5192,12 +5207,10 @@ def corp_calendar():
     """
     days = request.args.get("days", 30, type=int)
     # The public issues come from the feed /ipos already serves — same rows,
-    # same last-good-on-disk cache, one NSE round trip instead of two.
-    try:
-        ipos = (_feed_payload("ipos") or {}).get("items") or []
-    except Exception:
-        ipos = []
-    return jsonify(_corp.calendar(_corp_fetch, days, ipos))
+    # same ranking, same last-good-on-disk cache, one NSE round trip instead of
+    # two. Sharing the ranking is the point: the two views disagreed on screen
+    # about which issues were still open.
+    return jsonify(_corp.calendar(_corp_fetch, days, _ipo_items()))
 
 
 @app.route("/corporate/shareholding")

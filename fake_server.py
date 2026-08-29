@@ -954,10 +954,12 @@ class H(BaseHTTPRequestHandler):
                         "subject": f"IPO — Rs.100 to Rs.110 · closes {c}",
                         "date": o, "ex_date": None, "record_date": None,
                         "close_date": c, "series": "EQ"}
-            items.append(_ipo("NEWIPO", "New Issue Ltd", 1, 4))
-            # A book that is ALREADY open: filed under a date in the past, so
-            # the row has to count down to its close rather than print "in -2d".
-            items.append(_ipo("OPENIPO", "Open Issue Ltd", -2, 2))
+            # The same three live issues /ipos serves, and for the same reason:
+            # the two views read one ranked feed, so they cannot disagree about
+            # which books are still open. CLOSEDCO is absent from both.
+            items.append(_ipo("OPENCO", "Open Issue Ltd", -1, 3))
+            items.append(_ipo("XYZSME", "XYZ Industries", 2, 4))
+            items.append(_ipo("LATERCO", "Later Issue Ltd", 6, 9))
             items.sort(key=lambda x: x["date"])
             return self._json({
                 "source": "NSE", "days": 30, "items": items,
@@ -1082,14 +1084,29 @@ class H(BaseHTTPRequestHandler):
                                            for i, n in enumerate(["Financials", "IT", "Energy", "Auto",
                                                                   "Pharma", "FMCG", "Metals", "SME Emerge"])]})
         if path == "/ipos":
-            return self._json({"items": [
-                {"symbol": "ABCLTD", "name": "ABC Manufacturing Ltd", "series": "EQ",
-                 "start": "21-Jul-2026", "end": "24-Jul-2026", "price_band": "95-100",
-                 "size": "₹1,200 cr", "status": "open"},
-                {"symbol": "XYZSME", "name": "XYZ Industries", "series": "SME",
-                 "start": "28-Jul-2026", "end": "30-Jul-2026", "price_band": "55-58",
-                 "size": "₹48 cr", "status": "upcoming"}],
-                "asof": "2026-07-23T12:00:00"})
+            # Ranked the way the real route ranks: a closed book dropped, the
+            # rest ordered by the day they open, OPEN/SOON from the dates. The
+            # CLOSED row is here on purpose — it is what the home page used to
+            # render as "SOON" for an issue nobody could apply to any more.
+            import datetime as _dt
+            _t = _dt.date.today()
+            def _iss(sym, name, series, o, c, band):
+                return {"symbol": sym, "name": name, "series": series,
+                        "start": (_t + _dt.timedelta(days=o)).strftime("%d-%b-%Y"),
+                        "end": (_t + _dt.timedelta(days=c)).strftime("%d-%b-%Y"),
+                        "price_band": band, "size": "₹1,200 cr", "status": "upcoming"}
+            raw = [
+                _iss("LATERCO", "Later Issue Ltd", "EQ", 6, 9, "150-160"),
+                _iss("CLOSEDCO", "Closed Issue Ltd", "EQ", -8, -4, "10-12"),
+                _iss("OPENCO", "Open Issue Ltd", "EQ", -1, 3, "95-100"),
+                _iss("XYZSME", "XYZ Industries", "SME", 2, 4, "55-58"),
+            ]
+            try:
+                import primary_feeds as _pf
+                raw = _pf.rank_ipos(raw)
+            except Exception:
+                pass
+            return self._json({"items": raw, "asof": "2026-07-23T12:00:00"})
         if path == "/gsec":
             return self._json({"items": [
                 {"symbol": "726GS2033", "series": "GS", "kind": "gsec", "ltp": 99.61,

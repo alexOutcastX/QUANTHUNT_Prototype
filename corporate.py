@@ -338,13 +338,27 @@ def calendar(fetch, days: int = 30, ipos=None) -> dict:
            f"&from_date={today.strftime('%d-%m-%Y')}"
            f"&to_date={end.strftime('%d-%m-%Y')}")
 
-    def build():
-        out = parse_calendar(fetch(url))
-        items = out["items"] + ipo_rows(ipos, today, end)
-        items.sort(key=lambda x: (x.get("date") is None, x.get("date") or "", x["symbol"]))
-        out["items"] = items
-        out["covers"] = list(KINDS)
-        out["days"] = days
-        return out
-
-    return _cached(f"calendar:{days}", 1800, build)
+    # Only the actions half is cached, and that is the point.
+    #
+    # Caching the MERGED list froze whichever public issues happened to be in
+    # hand when it was built — and right after a restart the /ipos feed has not
+    # warmed yet, so the calendar baked in "no issues" and served it for the
+    # next half hour while the home page, reading the same feed directly,
+    # listed five. Two views of one feed disagreeing on screen is worse than
+    # either being briefly empty.
+    #
+    # The NSE round trip is the expensive part and the only thing worth
+    # caching; the issues are merged fresh on every request from a feed that
+    # does its own caching.
+    actions = _cached(f"calendar:{days}", 1800, lambda: parse_calendar(fetch(url)))
+    items = list(actions.get("items") or []) + ipo_rows(ipos, today, end)
+    items.sort(key=lambda x: (x.get("date") is None, x.get("date") or "", x["symbol"]))
+    out = {
+        "items": items,
+        "source": actions.get("source", "NSE"),
+        "covers": list(KINDS),
+        "days": days,
+    }
+    if actions.get("error"):
+        out["error"] = actions["error"]
+    return out

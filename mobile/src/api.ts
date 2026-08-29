@@ -409,7 +409,12 @@ export type ReturnsResp = Record<string, ReturnsRow>;
 // Landing-page windows: NSE public-issue calendar + traded G-Sec/SGB quotes.
 export type IpoItem = {
   symbol: string; name: string; series: string; start: string; end: string;
-  price_band: string; size: string; status: 'open' | 'upcoming';
+  price_band: string; size: string;
+  /** Computed from the dates when the feed is served, not from which NSE list
+   *  the row came from — its "upcoming" list carries books that are open. */
+  status: 'open' | 'upcoming';
+  opens_on?: string | null;
+  closes_on?: string | null;
 };
 export type IpoResp = { items: IpoItem[]; asof?: string; stale?: boolean; error?: string };
 export type GsecItem = {

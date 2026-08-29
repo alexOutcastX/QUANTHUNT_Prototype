@@ -215,6 +215,42 @@ class CalendarParseTest(unittest.TestCase):
         self.assertEqual(len(out["items"]), 1)
         self.assertEqual(out["items"][0]["kind"], "Dividend")
 
+    def test_an_empty_issue_feed_is_not_frozen_into_the_cache(self):
+        """The bug this exists for: right after a restart the /ipos feed has
+        not warmed, so the first caller merged NO issues — and because the
+        merged list was what got cached, the calendar served "IPO 0" for the
+        next half hour while the home page, reading the same feed directly,
+        listed five. Two views of one feed disagreeing on screen is worse than
+        either being briefly empty."""
+        import datetime
+        soon = (datetime.date.today() + datetime.timedelta(days=2)).strftime("%d-%b-%Y")
+        shut = (datetime.date.today() + datetime.timedelta(days=6)).strftime("%d-%b-%Y")
+        calls = []
+        fetch = lambda u: calls.append(u) or {"data": []}      # noqa: E731
+
+        cold = self.c.calendar(fetch, 30, [])                  # feed not warm yet
+        self.assertEqual([i for i in cold["items"] if i["kind"] == "IPO"], [])
+
+        warm = self.c.calendar(fetch, 30, [
+            {"symbol": "NEWCO", "name": "New Co", "start": soon, "end": shut}])
+        self.assertEqual([i["symbol"] for i in warm["items"] if i["kind"] == "IPO"], ["NEWCO"])
+        # …and the expensive half was still only fetched once.
+        self.assertEqual(len(calls), 1, calls)
+
+    def test_the_cached_half_is_never_mutated_by_a_merge(self):
+        """It is shared with every later caller; appending issues to it in
+        place would make the list grow by one copy of them per request."""
+        fetch = lambda u: {"data": [{"symbol": "AAA", "subject": "Dividend",   # noqa: E731
+                                     "exDate": "01-Sep-2026"}]}
+        import datetime
+        soon = (datetime.date.today() + datetime.timedelta(days=2)).strftime("%d-%b-%Y")
+        shut = (datetime.date.today() + datetime.timedelta(days=6)).strftime("%d-%b-%Y")
+        ipos = [{"symbol": "NEWCO", "name": "New Co", "start": soon, "end": shut}]
+        first = self.c.calendar(fetch, 30, ipos)
+        second = self.c.calendar(fetch, 30, ipos)
+        self.assertEqual(len(first["items"]), len(second["items"]))
+        self.assertEqual(len(second["items"]), 2)
+
     def test_it_reports_every_kind_it_can_contain(self):
         """An absent chip and an absent feature look identical. The page can
         only say "no bonus issues" if the server says bonus is in scope."""

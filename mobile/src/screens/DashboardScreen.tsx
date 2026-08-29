@@ -586,6 +586,10 @@ export default function DashboardScreen({ onNavigate }: { onNavigate?: (page: st
         </Card>
 
         <Card style={styles.col}>
+          {/* The server ranks these: closed books dropped, ordered by the day
+              they open, OPEN/SOON from the dates. The Desk's corporate
+              calendar reads the same ranked rows, so the two cannot disagree
+              on screen about which issues are still live. */}
           <SectionTitle>Upcoming IPOs</SectionTitle>
           {!ipos ? (
             <Loading />
