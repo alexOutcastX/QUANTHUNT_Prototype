@@ -379,16 +379,29 @@ export type MarketMoversResp = {
 /** Upcoming corporate actions across the whole market.
  *  `kind` is read out of NSE's free-text subject line — it publishes no type
  *  code — so "Other" is a real answer, not a parse failure. */
+export type CalendarKind =
+  'Dividend' | 'Bonus' | 'Split' | 'Rights' | 'Buyback' | 'IPO' | 'Other';
 export type CalendarAction = {
   symbol: string;
   name: string;
-  kind: 'Dividend' | 'Bonus' | 'Split' | 'Rights' | 'Buyback' | 'Other';
+  kind: CalendarKind;
   subject: string;
+  /** What the row is filed under: an action's ex-date, an issue's open date. */
+  date?: string | null;
   ex_date?: string | null;
   record_date?: string | null;
+  close_date?: string | null;
   series?: string;
 };
-export type CorpCalendarResp = { items: CalendarAction[]; source?: string; error?: string };
+export type CorpCalendarResp = {
+  items: CalendarAction[];
+  /** Every kind the list can hold — so the page can say "no bonus issues"
+   *  rather than silently offering no such filter. */
+  covers?: CalendarKind[];
+  days?: number;
+  source?: string;
+  error?: string;
+};
 
 export type ReturnsRow = { ret1y?: number | null; ret3y?: number | null; ret5y?: number | null };
 export type ReturnsResp = Record<string, ReturnsRow>;

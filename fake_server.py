@@ -917,25 +917,35 @@ class H(BaseHTTPRequestHandler):
         if path == "/corporate/shareholding":
             return self._shareholding()
         if path == "/corporate/calendar":
-            # A deterministic window with more rows than the card shows, and
-            # more than one kind, so the chip row and the "Show all" branch
-            # are both exercised.
-            # Dates are relative to today: the card renders "in 3d" and
-            # filters on what is still ahead, so a fixture pinned to a fixed
-            # week silently empties itself the moment that week passes.
+            # A deterministic window with more rows than the card shows and
+            # more than one kind, so the chip row, the "Show all" branch and —
+            # via Buyback and Rights, which are deliberately absent — the
+            # zero-count chip and its empty state are all exercised.
             import datetime as _dt
             _t = _dt.date.today()
             days = [(_t + _dt.timedelta(days=n)).isoformat()
                     for n in (1, 2, 3, 5, 8, 10, 13, 16, 20, 25)]
-            kinds = ["Dividend"] * 7 + ["Bonus", "Split", "Rights"]
+            kinds = ["Dividend"] * 7 + ["Bonus", "Split", "Other"]
             subj = {"Dividend": "Interim Dividend - Rs 6 Per Share",
                     "Bonus": "Bonus Issue 1:1",
                     "Split": "Face Value Split - From Rs 10/- To Rs 2/-",
-                    "Rights": "Rights Issue 1:4"}
-            return self._json({"source": "NSE", "items": [
+                    "Other": "Demerger"}
+            items = [
                 {"symbol": f"CORP{i + 1}", "name": f"Corp {i + 1} Ltd", "kind": k,
-                 "subject": subj[k], "ex_date": d, "record_date": d, "series": "EQ"}
-                for i, (d, k) in enumerate(zip(days, kinds))]})
+                 "subject": subj[k], "date": d, "ex_date": d, "record_date": d,
+                 "close_date": None, "series": "EQ"}
+                for i, (d, k) in enumerate(zip(days, kinds))]
+            _open = (_t + _dt.timedelta(days=1)).isoformat()
+            _close = (_t + _dt.timedelta(days=4)).isoformat()
+            items.append({"symbol": "NEWIPO", "name": "New Issue Ltd", "kind": "IPO",
+                          "subject": f"IPO — Rs.100 to Rs.110 · closes {_close}",
+                          "date": _open, "ex_date": None, "record_date": None,
+                          "close_date": _close, "series": "EQ"})
+            items.sort(key=lambda x: x["date"])
+            return self._json({
+                "source": "NSE", "days": 30, "items": items,
+                "covers": ["Dividend", "Bonus", "Split", "Rights", "Buyback", "IPO", "Other"],
+            })
         if path == "/holidays":
             # Ahead of today for the same reason as the calendar above: the
             # card lists only holidays still to come.

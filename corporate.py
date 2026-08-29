@@ -184,7 +184,10 @@ _KINDS = (
     ("dividend", "Dividend"),
 )
 
-KINDS = ("Dividend", "Bonus", "Split", "Rights", "Buyback", "Other")
+# IPO is not a corporate action and never appears in the actions feed — it
+# comes from NSE's upcoming-issues list and is merged in, because "what is
+# coming up for the market" is one question, not two.
+KINDS = ("Dividend", "Bonus", "Split", "Rights", "Buyback", "IPO", "Other")
 
 
 def classify_action(subject: str) -> str:
@@ -252,18 +255,80 @@ def parse_calendar(raw) -> dict:
             "name": _s(r.get("comp")) or sym,
             "kind": classify_action(subject),
             "subject": subject,
+            # `date` is what the row is filed under; for an action that is its
+            # ex-date, for a public issue the day its book opens. One field to
+            # sort and render, so the two kinds can share a list.
+            "date": ex,
             "ex_date": ex,
             "record_date": parse_ca_date(r.get("recDate")),
             "series": _s(r.get("series")),
         })
     # Undated entries last rather than first: an empty string sorts before
     # every real date, which would put the least useful rows at the top.
-    out.sort(key=lambda x: (x["ex_date"] is None, x["ex_date"] or "", x["symbol"]))
+    out.sort(key=lambda x: (x["date"] is None, x["date"] or "", x["symbol"]))
     return {"items": out, "source": "NSE"}
 
 
-def calendar(fetch, days: int = 30) -> dict:
-    """Upcoming actions across the whole market, for the next `days`."""
+def ipo_rows(ipos, today=None, end=None) -> list:
+    """NSE's public-issue list, as calendar rows.
+
+    Takes the rows /ipos already serves (primary_feeds.parse_ipos), rather than
+    fetching NSE a second time: that feed already merges the open and upcoming
+    lists, de-duplicates them and keeps a last-good copy on disk.
+
+    An issue is anchored on the day its book opens rather than an ex-date, and
+    it is kept while the book is still open — an issue that opened yesterday
+    and closes on Thursday is the most actionable row on the page, and dropping
+    it for being "in the past" would be exactly wrong.
+    """
+    import datetime
+    if not isinstance(ipos, list):
+        return []
+    today = today or datetime.date.today()
+    out = []
+    for r in ipos:
+        if not isinstance(r, dict):
+            continue
+        sym = _s(r.get("symbol"))
+        name = _s(r.get("name")) or sym
+        if not sym and not name:
+            continue
+        opens = parse_ca_date(r.get("start"))
+        closes = parse_ca_date(r.get("end"))
+        if closes and closes < today.isoformat():
+            continue                       # a closed book is history
+        if end and opens and opens > end.isoformat():
+            continue                       # not in this window yet
+        band = _s(r.get("price_band"))
+        parts = ["IPO" + (" — " + band if band else "")]
+        if closes:
+            parts.append("closes " + closes)
+        out.append({
+            "symbol": sym or name[:12].upper(),
+            "name": name,
+            "kind": "IPO",
+            "subject": " · ".join(parts),
+            "date": opens or closes,
+            "ex_date": None,
+            "record_date": None,
+            "close_date": closes,
+            "series": _s(r.get("series")),
+        })
+    return out
+
+
+def calendar(fetch, days: int = 30, ipos=None) -> dict:
+    """Upcoming actions across the whole market, for the next `days`.
+
+    Corporate actions and public issues, in one list ordered by date, because
+    "what is coming up" is one question and not two.
+
+    NSE publishes ex-dates only a few weeks ahead, so a 90-day window returns
+    no more than a 30-day one, and in a quiet stretch there are genuinely no
+    bonus or rights issues in it. `covers` names every kind the list CAN hold
+    so the page can say "no bonus issues" instead of silently offering no such
+    filter — an absent chip and an absent feature look identical.
+    """
     import datetime
     days = max(1, min(int(days or 30), 90))
     today = datetime.date.today()
@@ -272,4 +337,14 @@ def calendar(fetch, days: int = 30) -> dict:
     url = (BASE + "/api/corporates-corporateActions?index=equities"
            f"&from_date={today.strftime('%d-%m-%Y')}"
            f"&to_date={end.strftime('%d-%m-%Y')}")
-    return _cached(f"calendar:{days}", 1800, lambda: parse_calendar(fetch(url)))
+
+    def build():
+        out = parse_calendar(fetch(url))
+        items = out["items"] + ipo_rows(ipos, today, end)
+        items.sort(key=lambda x: (x.get("date") is None, x.get("date") or "", x["symbol"]))
+        out["items"] = items
+        out["covers"] = list(KINDS)
+        out["days"] = days
+        return out
+
+    return _cached(f"calendar:{days}", 1800, build)

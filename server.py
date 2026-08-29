@@ -5191,7 +5191,13 @@ def corp_calendar():
     and the one the Desk landing page is built on.
     """
     days = request.args.get("days", 30, type=int)
-    return jsonify(_corp.calendar(_corp_fetch, days))
+    # The public issues come from the feed /ipos already serves — same rows,
+    # same last-good-on-disk cache, one NSE round trip instead of two.
+    try:
+        ipos = (_feed_payload("ipos") or {}).get("items") or []
+    except Exception:
+        ipos = []
+    return jsonify(_corp.calendar(_corp_fetch, days, ipos))
 
 
 @app.route("/corporate/shareholding")

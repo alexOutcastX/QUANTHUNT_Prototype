@@ -793,12 +793,49 @@ function check(name, ok, detail) {
       /CORP1/.test(desk) && /Interim Dividend/i.test(desk) && /in \d+d/.test(desk),
       (desk.match(/CORPORATE CALENDAR[\s\S]{0,220}/i) || [''])[0],
     );
+    // Every kind the calendar covers gets a chip, whether or not this window
+    // holds one. Filtering the row down to what is present read as a missing
+    // feature: in a quiet month it said "All · Dividend · Split" and there was
+    // no way to tell whether bonus issues were absent or simply not covered.
+    const chips = await page.evaluate(() =>
+      [...document.querySelectorAll('[role="button"]')]
+        .map((e) => e.getAttribute('aria-label') || '')
+        .filter((a) => /, \d+ action/.test(a)));
+    for (const kind of ['Dividend', 'Bonus', 'Split', 'Rights', 'Buyback', 'IPO', 'Other']) {
+      check(
+        `the calendar offers a ${kind} filter`,
+        chips.some((c) => c.startsWith(kind + ',')),
+        JSON.stringify(chips),
+      );
+    }
     check(
-      'and offers a filter only for the kinds in the window',
-      /Dividend[\s\S]{0,40}Bonus[\s\S]{0,40}Split[\s\S]{0,40}Rights/i.test(desk) &&
-        !/Buyback/i.test(desk),
-      (desk.match(/CORPORATE CALENDAR[\s\S]{0,160}/i) || [''])[0],
+      'a kind with nothing in it says zero rather than vanishing',
+      chips.some((c) => /^(Rights|Buyback), 0 actions$/.test(c)),
+      JSON.stringify(chips),
     );
+    check(
+      'public issues are in the calendar, with their price band and close date',
+      /NEWIPO/.test(desk) && /closes/.test(desk),
+      (desk.match(/NEWIPO[\s\S]{0,90}/) || [''])[0],
+    );
+    // And an empty one explains itself rather than showing a blank list.
+    await page.evaluate(() => {
+      const el = document.querySelector('[aria-label="Rights, 0 actions"]');
+      if (el) el.click();
+    });
+    await page.waitForTimeout(800);
+    const emptyKind = await page.evaluate(() => document.body.innerText);
+    check(
+      'tapping an empty kind says why it is empty',
+      /No rights actions/i.test(emptyKind) && /No rights issues announced/i.test(emptyKind),
+      (emptyKind.match(/No rights[\s\S]{0,120}/) || [''])[0],
+    );
+    await page.evaluate(() => {
+      const el = [...document.querySelectorAll('[role="button"]')]
+        .find((e) => (e.getAttribute('aria-label') || '').startsWith('All,'));
+      if (el) el.click();
+    });
+    await page.waitForTimeout(700);
     check(
       'market days name the next holidays and say the calendar is indicative',
       /Independence Day/i.test(desk) && /verify against NSE circulars/i.test(desk),

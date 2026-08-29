@@ -132,25 +132,96 @@ class CalendarParseTest(unittest.TestCase):
             return {"data": []}
 
         self.c.calendar(fetch, 30)
-        self.assertEqual(len(seen), 1)
-        url = seen[0]
+        acts = [u for u in seen if "corporateActions" in u]
+        self.assertEqual(len(acts), 1)
+        url = acts[0]
         self.assertTrue(url.startswith("https://"), url)
-        self.assertIn("corporates-corporateActions", url)
         self.assertIn("from_date=", url)
         self.assertIn("to_date=", url)
 
-    def test_clamps_an_absurd_window(self):
+    def test_it_does_not_fetch_nse_twice_for_the_issues(self):
+        """The public issues arrive from the feed /ipos already serves."""
         seen = []
-        self.c.calendar(lambda u: seen.append(u) or {"data": []}, 9999)
-        self.c.calendar(lambda u: seen.append(u) or {"data": []}, -5)
-        self.assertEqual(len(seen), 2)   # both ran; neither raised
+        self.c.calendar(lambda u: seen.append(u) or [], 30)
+        self.assertEqual(len(seen), 1, seen)
+
+    def test_clamps_an_absurd_window(self):
+        big = self.c.calendar(lambda u: {"data": []}, 9999)
+        small = self.c.calendar(lambda u: {"data": []}, -5)
+        self.assertEqual(big["days"], 90)
+        self.assertEqual(small["days"], 1)
 
     def test_caches_so_a_reload_is_not_a_second_nse_hit(self):
         calls = []
         fetch = lambda u: calls.append(u) or {"data": []}     # noqa: E731
         self.c.calendar(fetch, 30)
+        before = len(calls)
         self.c.calendar(fetch, 30)
-        self.assertEqual(len(calls), 1)
+        self.assertEqual(len(calls), before)
+
+    # ── public issues ────────────────────────────────────────────────────────
+    def test_an_open_issue_is_kept_even_though_it_started_yesterday(self):
+        """The most actionable row on the page is the book that closes on
+        Thursday; dropping it for opening before today would be exactly
+        wrong."""
+        import datetime
+        today = datetime.date(2026, 8, 29)
+        rows = self.c.ipo_rows([{
+            "symbol": "ESDS", "name": "ESDS Software Solution Limited",
+            "start": "28-Aug-2026", "end": "01-Sep-2026",
+            "price_band": "Rs.408 to Rs.429", "series": "EQ",
+        }], today, today + datetime.timedelta(days=30))
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["kind"], "IPO")
+        self.assertEqual(rows[0]["date"], "2026-08-28")
+        self.assertEqual(rows[0]["close_date"], "2026-09-01")
+        self.assertIn("Rs.408 to Rs.429", rows[0]["subject"])
+        self.assertIn("closes 2026-09-01", rows[0]["subject"])
+
+    def test_a_closed_book_is_history(self):
+        import datetime
+        today = datetime.date(2026, 8, 29)
+        rows = self.c.ipo_rows([{
+            "symbol": "OLD", "name": "Old Ltd",
+            "start": "01-Aug-2026", "end": "05-Aug-2026",
+        }], today, today + datetime.timedelta(days=30))
+        self.assertEqual(rows, [])
+
+    def test_an_issue_beyond_the_window_is_not_shown_yet(self):
+        import datetime
+        today = datetime.date(2026, 8, 29)
+        rows = self.c.ipo_rows([{
+            "symbol": "LATER", "name": "Later Ltd",
+            "start": "01-Dec-2026", "end": "05-Dec-2026",
+        }], today, today + datetime.timedelta(days=30))
+        self.assertEqual(rows, [])
+
+    def test_public_issues_sort_into_the_same_list_as_the_actions(self):
+        import datetime
+        soon = datetime.date.today() + datetime.timedelta(days=4)
+        later = datetime.date.today() + datetime.timedelta(days=9)
+        fetch = lambda u: {"data": [{"symbol": "AAA", "subject": "Dividend",     # noqa: E731
+                                     "exDate": later.strftime("%d-%b-%Y")}]}
+        out = self.c.calendar(fetch, 30, [{
+            "symbol": "NEWCO", "name": "New Co",
+            "start": soon.strftime("%d-%b-%Y"), "end": later.strftime("%d-%b-%Y"),
+        }])
+        self.assertEqual([i["kind"] for i in out["items"]], ["IPO", "Dividend"])
+
+    def test_a_missing_ipo_feed_does_not_empty_the_actions(self):
+        out = self.c.calendar(
+            lambda u: {"data": [{"symbol": "AAA", "subject": "Dividend",
+                                 "exDate": "01-Sep-2026"}]}, 30, None)
+        self.assertEqual(len(out["items"]), 1)
+        self.assertEqual(out["items"][0]["kind"], "Dividend")
+
+    def test_it_reports_every_kind_it_can_contain(self):
+        """An absent chip and an absent feature look identical. The page can
+        only say "no bonus issues" if the server says bonus is in scope."""
+        out = self.c.calendar(lambda u: {"data": []}, 30)
+        self.assertEqual(out["covers"], list(self.c.KINDS))
+        for kind in ("Dividend", "Bonus", "Split", "Rights", "Buyback", "IPO"):
+            self.assertIn(kind, out["covers"])
 
 
 @unittest.skipUnless(server, "needs Flask")
@@ -162,7 +233,7 @@ class CalendarRouteTest(unittest.TestCase):
     def test_it_serves_the_calendar_as_json(self):
         import corporate
         real = corporate.calendar
-        corporate.calendar = lambda fetch, days=30: {
+        corporate.calendar = lambda fetch, days=30, ipos=None: {
             "items": [{"symbol": "AAA", "name": "AAA", "kind": "Dividend",
                        "subject": "Dividend", "ex_date": "2026-09-01",
                        "record_date": None, "series": "EQ"}],

@@ -98,9 +98,37 @@ class DeskLandingTest(unittest.TestCase):
         for key in ("holidays", "community"):
             self.assertRegex(self.hosts, r"\{ key: '%s'[^\n]*hidden: true" % key)
 
-    def test_the_calendar_only_offers_a_filter_for_what_is_in_the_window(self):
-        self.assertIn("const have = new Set((items || []).map((i) => i.kind));", self.home)
-        self.assertIn("KINDS.filter((k) => k === 'All' || have.has(k))", self.home)
+    def test_the_calendar_offers_a_filter_for_every_kind_it_covers(self):
+        """Filtering the chips down to what is present read as a missing
+        feature: in a quiet month the row said "All · Dividend · Split" and
+        there was no way to tell whether bonus issues were absent from the
+        month or from the product."""
+        self.assertIn("const cov = covers && covers.length ? covers : null;", self.home)
+        self.assertIn("KINDS.filter((k) => k === 'All' || !cov || (cov as string[]).includes(k))",
+                      self.home)
+        # …and the server says which kinds those are.
+        self.assertIn("setCovers(d.covers || null)", self.home)
+
+    def test_an_empty_kind_is_shown_and_explained(self):
+        self.assertIn("chipEmpty: { opacity: 0.5 }", self.home)
+        self.assertIn("const NONE_HINT", self.home)
+        for kind in ("Dividend", "Bonus", "Split", "Rights", "Buyback", "IPO", "Other"):
+            self.assertIn(kind + ":", self.home.split("const NONE_HINT")[1].split("};")[0], kind)
+
+    def test_public_issues_are_in_the_calendar(self):
+        """The original ask listed IPOs beside dividends and splits; they are
+        not corporate actions and never appear in that feed."""
+        self.assertIn("'IPO'", self.home)
+        import importlib
+        import corporate
+        c = importlib.reload(corporate)
+        self.assertIn("IPO", c.KINDS)
+
+    def test_a_row_is_filed_under_one_date_whatever_kind_it_is(self):
+        """An action has an ex-date and an issue has an open date; the list
+        sorts and renders one field so the two can share it."""
+        self.assertIn("const away = daysAway(a.date);", self.home)
+        self.assertIn("{shortDate(a.date)}", self.home)
 
     def test_the_calendar_kinds_are_the_ones_the_server_classifies(self):
         import importlib

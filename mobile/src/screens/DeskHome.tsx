@@ -22,8 +22,23 @@ import { SECTIONS as METHOD_SECTIONS } from './MethodologyScreen';
 import AnnouncementsScreen from './AnnouncementsScreen';
 import { Overview, loadIdentity, overview } from '../chat';
 
-const KINDS = ['All', 'Dividend', 'Bonus', 'Split', 'Rights', 'Buyback'] as const;
+// The kinds the card can show, in the order they are offered. The server
+// reports the same set as `covers`; this is the fallback if an old response
+// arrives without it.
+const KINDS = ['All', 'Dividend', 'Bonus', 'Split', 'Rights', 'Buyback', 'IPO', 'Other'] as const;
 type Kind = (typeof KINDS)[number];
+
+// What "nothing here" means, per kind. NSE publishes ex-dates only a few weeks
+// out, so an empty Bonus filter is a fact about the next month, not a fault.
+const NONE_HINT: Record<string, string> = {
+  Dividend: 'No dividends have gone to an ex-date in this window yet.',
+  Bonus: 'No bonus issues announced with an ex-date in this window.',
+  Split: 'No stock splits announced with an ex-date in this window.',
+  Rights: 'No rights issues announced with an ex-date in this window.',
+  Buyback: 'No buybacks announced with an ex-date in this window.',
+  IPO: 'No public issues open or opening in this window.',
+  Other: 'No demergers, schemes or other actions in this window.',
+};
 
 /** "31 Aug" from an ISO date, or the raw value if it is not one. */
 function shortDate(iso?: string | null): string {
@@ -44,6 +59,7 @@ function daysAway(iso?: string | null): number | null {
 
 /** A colour per action type, so the list is scannable without reading it. */
 const KIND_TONE: Record<string, string> = {
+  IPO: theme.accent,
   Dividend: theme.green,
   Bonus: theme.brand,
   Split: theme.brand,
@@ -53,17 +69,19 @@ const KIND_TONE: Record<string, string> = {
 };
 
 function ActionRow({ a }: { a: CalendarAction }) {
-  const away = daysAway(a.ex_date);
+  const away = daysAway(a.date);
   return (
     <TouchableOpacity
       style={s.row}
       onPress={() => openStock(a.symbol)}
       activeOpacity={0.7}
       accessibilityRole="link"
-      accessibilityLabel={`${a.symbol}, ${a.subject}, ex-date ${shortDate(a.ex_date)}`}
+      accessibilityLabel={
+        `${a.symbol}, ${a.subject}, ${a.kind === 'IPO' ? 'opens' : 'ex-date'} ${shortDate(a.date)}`
+      }
     >
       <View style={s.dateCol}>
-        <Text style={s.date}>{shortDate(a.ex_date)}</Text>
+        <Text style={s.date}>{shortDate(a.date)}</Text>
         {away != null ? (
           <Text style={s.away}>{away === 0 ? 'today' : away === 1 ? 'tomorrow' : `in ${away}d`}</Text>
         ) : null}
@@ -79,19 +97,30 @@ function ActionRow({ a }: { a: CalendarAction }) {
 
 function CorporateCalendar() {
   const [items, setItems] = useState<CalendarAction[] | null>(null);
+  const [covers, setCovers] = useState<string[] | null>(null);
   const [kind, setKind] = useState<Kind>('All');
   const [all, setAll] = useState(false);
 
   useEffect(() => {
-    api.corpCalendar(30).then((d) => setItems(d.items || [])).catch(() => setItems([]));
+    api.corpCalendar(30)
+      .then((d) => { setItems(d.items || []); setCovers(d.covers || null); })
+      .catch(() => setItems([]));
   }, []);
 
-  // Only offer a filter for a type that is actually in the window. A row of
-  // chips where four of six return nothing is a worse list, not a richer one.
-  const present = useMemo(() => {
-    const have = new Set((items || []).map((i) => i.kind));
-    return KINDS.filter((k) => k === 'All' || have.has(k));
-  }, [items]);
+  // Every kind the calendar covers, whether or not this window contains one.
+  //
+  // These chips used to be filtered down to the kinds actually present, on the
+  // reasoning that a chip returning nothing is noise. It reads as a missing
+  // feature instead: in a quiet month the row said "All · Dividend · Split"
+  // and there was no way to tell whether bonus issues were absent or simply
+  // not covered. A chip reading "Bonus 0" answers the question.
+  const offered = useMemo<Kind[]>(() => {
+    const cov = covers && covers.length ? covers : null;
+    return KINDS.filter((k) => k === 'All' || !cov || (cov as string[]).includes(k));
+  }, [covers]);
+
+  const count = (k: Kind) =>
+    k === 'All' ? (items || []).length : (items || []).filter((i) => i.kind === k).length;
 
   const shown = useMemo(() => {
     const f = (items || []).filter((i) => kind === 'All' || i.kind === kind);
@@ -116,26 +145,33 @@ function CorporateCalendar() {
       ) : (
         <>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.chips}>
-            {present.map((k) => {
+            {offered.map((k) => {
               const on = k === kind;
-              const n = k === 'All' ? items.length : items.filter((i) => i.kind === k).length;
+              const n = count(k);
               return (
                 <TouchableOpacity
                   key={k}
-                  style={[s.chip, on && s.chipOn]}
+                  style={[s.chip, on && s.chipOn, !n && !on && s.chipEmpty]}
                   onPress={() => { setKind(k); setAll(false); }}
                   activeOpacity={0.75}
                   accessibilityRole="button"
                   accessibilityState={{ selected: on }}
                   accessibilityLabel={`${k}, ${n} action${n === 1 ? '' : 's'}`}
                 >
-                  <Text style={[s.chipTxt, on && s.chipTxtOn]}>{k}</Text>
-                  <Text style={[s.chipN, on && s.chipTxtOn]}>{n}</Text>
+                  <Text style={[s.chipTxt, on && s.chipTxtOn, !n && !on && s.chipTxtEmpty]}>{k}</Text>
+                  <Text style={[s.chipN, on && s.chipTxtOn, !n && !on && s.chipTxtEmpty]}>{n}</Text>
                 </TouchableOpacity>
               );
             })}
           </ScrollView>
-          {shown.map((a, i) => <ActionRow key={a.symbol + a.ex_date + i} a={a} />)}
+          {shown.length === 0 ? (
+            <EmptyState
+              title={`No ${kind.toLowerCase()} actions`}
+              hint={NONE_HINT[kind] || 'Nothing of this kind in the next 30 days.'}
+            />
+          ) : (
+            shown.map((a, i) => <ActionRow key={a.symbol + (a.date || '') + i} a={a} />)
+          )}
           {total > shown.length ? (
             <TouchableOpacity onPress={() => setAll(true)} activeOpacity={0.7} accessibilityRole="button">
               <Text style={s.more}>Show all {total} ›</Text>
@@ -341,6 +377,10 @@ const s = StyleSheet.create({
   link: { color: theme.brand, fontSize: theme.fs.xs, fontWeight: '700' },
 
   chips: { flexDirection: 'row', gap: 6, paddingVertical: 8 },
+  // A kind with nothing in it is still worth showing — dimmed, so the row
+  // still reads at a glance as "these are the ones that have something".
+  chipEmpty: { opacity: 0.5 },
+  chipTxtEmpty: { color: theme.muted },
   chip: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
     borderWidth: 1, borderColor: theme.border, backgroundColor: theme.surface2,
