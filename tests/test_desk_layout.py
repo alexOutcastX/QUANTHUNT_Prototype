@@ -112,6 +112,30 @@ class DeskLandingTest(unittest.TestCase):
                 continue
             self.assertIn(kind, c.KINDS, kind)
 
+    def test_the_page_has_the_same_shape_as_every_other_desk_screen(self):
+        """It was the one screen in the app that did not start at the left
+        edge: capped at 1480 and centred, it grew margins on a wide monitor
+        that no sibling has, and its heading sat inside the scroller so it
+        carried the title row's top padding on top of the container's."""
+        self.assertNotIn("maxWidth: 1480", self.home)
+        self.assertNotIn("alignSelf: 'center'", self.home)
+        self.assertIn(
+            "content: { paddingHorizontal: theme.sp.lg, paddingBottom: theme.sp.xl },", self.home)
+
+    def test_the_title_row_sits_outside_the_scroller(self):
+        body = self.home.split("export default function DeskHome")[1]
+        title = body.index("<ScreenTitle")
+        scroller = body.index("<ScrollView contentContainerStyle={s.content}>")
+        self.assertLess(title, scroller)
+        self.assertIn("<View style={s.container}>", body)
+
+    def test_it_pads_its_sides_the_same_as_its_siblings(self):
+        """Same declaration, so a change to one is visibly a change to one."""
+        want = "paddingHorizontal: theme.sp.lg"
+        self.assertIn(want, self.home)
+        for screen in ("PortfolioScreen.tsx", "WatchlistScreen.tsx"):
+            self.assertIn(want, _screen(screen), screen)
+
     def test_the_calendar_does_not_render_an_unsorted_wall(self):
         self.assertIn("f.slice(0, 8)", self.home)
         self.assertIn("Show all {total}", self.home)

@@ -272,55 +272,64 @@ export default function DeskHome() {
   const { width } = useResponsive();
   const wide = width >= 1100;
   return (
-    <ScrollView style={s.container} contentContainerStyle={s.content}>
+    // Same shape as every other Desk screen: the title row sits outside the
+    // scroller and supplies its own padding, and the scroller pads only its
+    // sides. Inside the scroller the page carried the title row's padding on
+    // top of the container's, which set the heading down from the top by
+    // twice what the other pages use.
+    <View style={s.container}>
       <ScreenTitle
         title="Desk"
         sub="Your positions, your research, and the calendar around them"
       />
+      <ScrollView contentContainerStyle={s.content}>
+        <View style={[s.page, wide && s.pageWide]}>
+          <View style={s.mainCol}>
+            <CorporateCalendar />
+            {/* Expandable in place: the method is what an institution reads
+                before it trusts a number, and sending them to another page to
+                read it is how it goes unread. Collapsed by default — it is
+                reference, not news. */}
+            <Card style={s.card}>
+              <Fold
+                title="Methodology"
+                summary="How every score in the app is computed — the published rules"
+                open={false}
+                persistKey="desk.methodology"
+                flat
+              >
+                {METHOD_SECTIONS.map((sec) => (
+                  <View key={sec.title} style={s.methodSec}>
+                    <Text style={s.methodTitle}>{sec.title}</Text>
+                    <Text style={s.methodBody}>{sec.body}</Text>
+                  </View>
+                ))}
+              </Fold>
+            </Card>
+          </View>
 
-      <View style={[s.page, wide && s.pageWide]}>
-        <View style={s.mainCol}>
-          <CorporateCalendar />
-          {/* Expandable in place: the method is what an institution reads
-              before it trusts a number, and sending them to another page to
-              read it is how it goes unread. Collapsed by default — it is
-              reference, not news. */}
-          <Card style={s.card}>
-            <Fold
-              title="Methodology"
-              summary="How every score in the app is computed — the published rules"
-              open={false}
-              persistKey="desk.methodology"
-              flat
-            >
-              {METHOD_SECTIONS.map((sec) => (
-                <View key={sec.title} style={s.methodSec}>
-                  <Text style={s.methodTitle}>{sec.title}</Text>
-                  <Text style={s.methodBody}>{sec.body}</Text>
-                </View>
-              ))}
-            </Fold>
-          </Card>
+          <View style={[s.rail, wide && s.railWide]}>
+            <MarketDates />
+            <Community />
+          </View>
         </View>
 
-        <View style={[s.rail, wide && s.railWide]}>
-          <MarketDates />
-          <Community />
+        {/* Below everything: notices are read once, not led with. */}
+        <View style={s.announce}>
+          <SectionTitle>Announcements from the Dev</SectionTitle>
+          <AnnouncementsScreen embedded />
         </View>
-      </View>
-
-      {/* Below everything: notices are read once, not led with. */}
-      <View style={s.announce}>
-        <SectionTitle>Announcements from the Dev</SectionTitle>
-        <AnnouncementsScreen embedded />
-      </View>
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 }
 
 const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.bg },
-  content: { padding: theme.sp.lg, paddingBottom: 40, maxWidth: 1480, width: '100%', alignSelf: 'center' },
+  // No maxWidth and no centring: capped at 1480 and centred, the page grew
+  // margins on a wide monitor that no other page in the app has, so the Desk
+  // home was the one screen that did not start at the left edge.
+  content: { paddingHorizontal: theme.sp.lg, paddingBottom: theme.sp.xl },
   page: { flexDirection: 'column' },
   pageWide: { flexDirection: 'row', alignItems: 'flex-start', gap: theme.sp.lg },
   mainCol: { flex: 1, minWidth: 0 },

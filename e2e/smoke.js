@@ -754,6 +754,34 @@ function check(name, ok, detail) {
       }),
     );
 
+    // The Desk home is laid out like every other Desk screen: no gutters of
+    // its own, and its heading at the same height. It used to be capped at
+    // 1480 and centred, so on a wide monitor it was the one page in the app
+    // that did not start at the left edge.
+    const geo = async (heading) => page.evaluate((h) => {
+      const btn = [...document.querySelectorAll('[role="button"]')].find((e) =>
+        (e.getAttribute('aria-label') || '').startsWith('Sections menu'));
+      const t = [...document.querySelectorAll('*')].find((e) => !e.children.length
+        && (e.textContent || '').trim() === h && e.getBoundingClientRect().top > 60);
+      return {
+        btnLeft: btn ? Math.round(btn.getBoundingClientRect().left) : null,
+        headTop: t ? Math.round(t.getBoundingClientRect().top) : null,
+      };
+    }, heading);
+    await openDeskSection('Watchlist');
+    const wlGeo = await geo('Watchlist');
+    const homeGeo = await (async () => { await openDeskSection('Home'); return geo('Desk'); })();
+    check(
+      'the Desk home starts at the same left edge as its siblings',
+      homeGeo.btnLeft !== null && homeGeo.btnLeft === wlGeo.btnLeft,
+      JSON.stringify({ home: homeGeo, watchlist: wlGeo }),
+    );
+    check(
+      'and its heading sits at the same height',
+      homeGeo.headTop !== null && Math.abs(homeGeo.headTop - wlGeo.headTop) < 4,
+      JSON.stringify({ home: homeGeo, watchlist: wlGeo }),
+    );
+
     const desk = await openDeskSection('Home');
     check(
       'the Desk opens on a page, not on a bar of tabs',
