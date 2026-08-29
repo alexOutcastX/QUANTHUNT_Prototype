@@ -4886,6 +4886,28 @@ def _fetch_index_row(key, name, yf_sym):
     return row
 
 
+_INDICES_STALE_TTL = 60   # re-check cadence while a feed is behind the session
+
+
+def _mark_stale(rows):
+    """Flag every row whose session is behind the last one that traded.
+
+    An absolute test, not a comparison against the other rows: when a whole
+    feed stops updating, "behind its neighbours" marks nothing at all, which is
+    precisely the case that needs marking.
+    """
+    last = _holidays.last_session()
+    for r in (rows or []):
+        sess = r.get("session")
+        r["stale"] = bool(sess and sess < last)
+    return rows
+
+
+def _indices_behind(rows):
+    """True when the strip as a whole has not caught up to the last session."""
+    return (_indices_session(rows) or "") < _holidays.last_session()
+
+
 def _indices_session(rows):
     """The most recent session in the list.
 
@@ -4912,7 +4934,16 @@ def indices_live():
         category = "domestic"
     now = time.time()
     entry = _indices_cache.get(category)
-    cached = entry is not None and entry["data"] is not None and (now - entry["ts"]) < _INDICES_TTL
+    # A payload that has not caught up to the last completed session gets a
+    # much shorter life, so every load re-checks it instead of sitting on it
+    # for the full five minutes. Shortening the TTL rather than bypassing the
+    # cache is deliberate: an index that upstream simply never updates (a
+    # delisted ticker, a feed that has gone quiet) must not turn every page
+    # load into a fetch.
+    ttl = _INDICES_TTL
+    if entry is not None and entry["data"] and _indices_behind(entry["data"]):
+        ttl = _INDICES_STALE_TTL
+    cached = entry is not None and entry["data"] is not None and (now - entry["ts"]) < ttl
     if not cached:
         # Stale-while-revalidate: 12 serial 1-year yfinance fetches took
         # 10-25 s and the dashboard's index strip blocked on them every time
@@ -4925,13 +4956,14 @@ def indices_live():
                 threading.Thread(
                     target=_refresh_indices, args=(category,), daemon=True
                 ).start()
-            stale = dict(entry)
-            return jsonify({"indices": stale["data"], "asof": int(time.time()),
-                            "session": _indices_session(stale["data"]),
+            prev = dict(entry)
+            return jsonify({"indices": _mark_stale(prev["data"]),
+                            "asof": int(time.time()),
+                            "session": _indices_session(prev["data"]),
                             "cached": True, "stale": True})
         _refresh_indices(category)
         entry = _indices_cache[category]
-    return jsonify({"indices": entry["data"],
+    return jsonify({"indices": _mark_stale(entry["data"]),
                     "asof": int(time.time()),
                     "session": _indices_session(entry["data"]),
                     "cached": cached})

@@ -39,6 +39,12 @@ except Exception:                                            # pragma: no cover
 import holidays as H
 
 
+def _read_server():
+    with open(os.path.join(os.path.dirname(os.path.dirname(
+            os.path.abspath(__file__))), "server.py"), encoding="utf-8") as fh:
+        return fh.read()
+
+
 def frame(rows):
     """rows: [(date, open, high, low, close, volume)] → a daily OHLCV frame."""
     idx = pd.to_datetime([r[0] for r in rows])
@@ -316,6 +322,35 @@ class IndexStripTest(unittest.TestCase):
     def test_a_strip_with_no_stamps_at_all_reports_nothing(self):
         self.assertIsNone(server._indices_session([{"level": 1.0}]))
         self.assertIsNone(server._indices_session([]))
+
+    def test_a_row_behind_the_session_is_marked_stale(self):
+        rows = [{"key": "A", "session": H.last_session()},
+                {"key": "B", "session": "2026-07-17"},
+                {"key": "C"}]
+        server._mark_stale(rows)
+        self.assertEqual([r["stale"] for r in rows], [False, True, False])
+
+    def test_staleness_is_measured_against_the_calendar_not_the_neighbours(self):
+        """When a whole feed stops updating, every row agrees with every other
+        row — 'behind its neighbours' marks nothing, which is exactly the case
+        that needs marking."""
+        rows = [{"key": k, "session": "2026-07-17"} for k in "ABC"]
+        server._mark_stale(rows)
+        self.assertTrue(all(r["stale"] for r in rows))
+
+    def test_a_strip_behind_the_session_is_rechecked_sooner(self):
+        """Every load should re-check a feed that has not caught up, instead of
+        sitting on it for the full five minutes."""
+        self.assertLess(server._INDICES_STALE_TTL, server._INDICES_TTL)
+        self.assertTrue(server._indices_behind([{"session": "2026-07-17"}]))
+        self.assertFalse(server._indices_behind([{"session": H.last_session()}]))
+
+    def test_a_feed_that_never_catches_up_still_gets_a_cache(self):
+        """Shortening the TTL rather than bypassing the cache: a ticker upstream
+        has abandoned must not turn every page load into a fetch."""
+        src = _read_server()
+        self.assertIn("ttl = _INDICES_STALE_TTL", src)
+        self.assertIn("(now - entry[\"ts\"]) < ttl", src)
 
     def test_a_throttled_call_keeps_the_last_good_feed(self):
         """Handing the strip back to a stale Yahoo ticker on one bad request

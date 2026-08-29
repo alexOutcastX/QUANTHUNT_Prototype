@@ -29,7 +29,7 @@ import PdfPreview from './components/PdfPreview';
 const CommandPalette = lazyScreen(() => import('./components/CommandPalette'));
 const TickerSettings = lazyScreen(() => import('./components/TickerSettings'));
 
-import { canGoBack, goBack, initHistory, navigate, peekNav, subscribeNav } from './navIntent';
+import { TAB_KEY, canGoBack, goBack, initHistory, navigate, peekNav, subscribeNav } from './navIntent';
 import { refreshSession } from './session';
 import { currentMember, memberLogout, subscribeMember } from './member';
 import { refreshFlags } from './flags';
@@ -81,12 +81,23 @@ function MarketChip({ compact }: { compact?: boolean } = {}) {
   );
 }
 
+// The wordmark is the way home. Every site puts home behind its logo, and once
+// it does, a Home tab beside it is a second button for the same destination —
+// which is why Today could go.
 function Brand({ version, big }: { version?: string; big?: boolean }) {
   return (
-    <Text style={{ color: theme.text, fontSize: big ? 20 : 17, fontWeight: '800' }}>
-      Taur<Text style={{ color: theme.accent }}>Eye</Text>
-      {version ? <Text style={{ color: theme.muted, fontSize: 11, fontWeight: '600' }}>{'  v' + version}</Text> : null}
-    </Text>
+    <TouchableOpacity
+      onPress={() => navigate(HOME)}
+      activeOpacity={0.75}
+      accessibilityRole="link"
+      accessibilityLabel="TaurEye — go to the home page"
+      hitSlop={{ top: 8, bottom: 8, left: 4, right: 8 }}
+    >
+      <Text style={{ color: theme.text, fontSize: big ? 20 : 17, fontWeight: '800' }}>
+        Taur<Text style={{ color: theme.accent }}>Eye</Text>
+        {version ? <Text style={{ color: theme.muted, fontSize: 11, fontWeight: '600' }}>{'  v' + version}</Text> : null}
+      </Text>
+    </TouchableOpacity>
   );
 }
 
@@ -110,14 +121,36 @@ function useVersion() {
 // call landed on different screens depending on window width, and resizing past
 // the breakpoint silently moved things. Layout still adapts (a top row on
 // desktop, a bottom bar on phones); the destinations no longer do.
-const NAV: { k: string; label: string; icon: IconName; render: (nav: (k: string) => void) => React.ReactElement }[] = [
-  { k: 'today', label: 'Today', icon: 'home', render: (nav) => <DashboardScreen onNavigate={nav} /> },
+// Every destination the app can render, and — separately — the subset that
+// earns a tab.
+//
+// Two of these are reachable without being tabs. HOME is what the brand mark
+// goes to and where a fresh sign-in lands, so a tab for it was a second button
+// for a thing the wordmark already does. Symbol is a destination, not a place
+// you browse to: every mover row, watchlist row, sector member and search
+// result opens a specific company, and the header search reaches any of them
+// by name — a tab landing on whichever stock you happened to look at last was
+// the redundant one. The SCREEN stays; only its tab is gone.
+type Route = {
+  k: string;
+  label: string;
+  icon: IconName;
+  tab?: boolean;
+  render: (nav: (k: string) => void) => React.ReactElement;
+};
+
+const HOME = 'today';
+
+const ROUTES: Route[] = [
+  { k: HOME, label: 'Home', icon: 'home', tab: false, render: (nav) => <DashboardScreen onNavigate={nav} /> },
   { k: 'screens', label: 'Screens', icon: 'screens', render: () => <ScreensHub /> },
-  { k: 'stock', label: 'Symbol', icon: 'stock', render: () => <StockScreen /> },
+  { k: 'stock', label: 'Symbol', icon: 'stock', tab: false, render: () => <StockScreen /> },
   { k: 'desk', label: 'Desk', icon: 'desk', render: () => <DeskHub /> },
   { k: 'backtest', label: 'Backtest', icon: 'flask', render: () => <BacktestScreen /> },
   { k: 'terminal', label: 'Terminal', icon: 'terminal', render: () => <TerminalScreen /> },
 ];
+
+const NAV = ROUTES.filter((r) => r.tab !== false);
 
 // Analysis sub-tabs that moved into the Desk hub; the rest went to Screens.
 const DESK_ANALYSIS_SUBS = new Set(['inst', 'shareholders', 'paper', 'risk', 'bt']);
@@ -125,7 +158,6 @@ const DESK_ANALYSIS_SUBS = new Set(['inst', 'shareholders', 'paper', 'risk', 'bt
 // Shared by both shells so a reload — or dragging a browser window across the
 // breakpoint, which swaps one shell component for the other — puts you back
 // where you were instead of on Today.
-const TAB_KEY = 'taureye.nav.tab2';
 
 /**
  * How wide the header search may grow.
@@ -151,7 +183,10 @@ function usePersistedTab() {
   useEffect(() => {
     AsyncStorage.getItem(TAB_KEY)
       .then((v) => {
-        if (v && NAV.some((t) => t.k === v)) setActive(v);
+        // ROUTES, not NAV: Home and Symbol are restorable destinations that no
+        // longer have a tab, and validating against the tab list alone would
+        // have quietly bounced you to Home from either one on every reload.
+        if (v && ROUTES.some((t) => t.k === v)) setActive(v);
       })
       .finally(() => setHydrated(true));
   }, []);
@@ -363,7 +398,7 @@ function NewDesktopShell() {
   const [settings, setSettings] = useState(false);
   const showBack = useBackNav(active, hydrated);
   usePrefetch(hydrated);
-  const cur = NAV.find((t) => t.k === active) || NAV[0];
+  const cur = ROUTES.find((t) => t.k === active) || ROUTES[0];
   useEffect(
     () =>
       subscribeNav(() => {
@@ -408,14 +443,13 @@ function NewDesktopShell() {
                 accessibilityState={{ selected: on }}
               >
                 <Icon name={it.icon} size={15} color={on ? theme.accent : theme.muted2} />
-                {/* Below 1360 the six labels do not fit beside the rest of
-                    the bar, and a tab clipped mid-word reads as broken. The
-                    icons carry it in that band; the accessibility label always
-                    says the full name. Measured with the Back affordance
-                    showing, which is the widest the bar ever gets — the old
-                    1280 was measured without it, and clipped once you had
-                    navigated anywhere. */}
-                {width >= 1360 ? (
+                {/* Below 1180 the labels do not fit beside the rest of the
+                    bar, and a tab clipped mid-word reads as broken. The icons
+                    carry it in that band; the accessibility label always says
+                    the full name. Measured with the Back affordance showing,
+                    which is the widest the bar ever gets. Four tabs reach
+                    their labels far earlier than six did — this was 1360. */}
+                {width >= 1180 ? (
                   <Text style={[styles.pageLabel, on && styles.pageTextOn]}>{it.label}</Text>
                 ) : null}
               </TouchableOpacity>
@@ -452,7 +486,7 @@ function NewMobileShell() {
   const [settings, setSettings] = useState(false);
   const showBack = useBackNav(active, hydrated);
   usePrefetch(hydrated);
-  const tab = NAV.find((t) => t.k === active) || NAV[0];
+  const tab = ROUTES.find((t) => t.k === active) || ROUTES[0];
   usePaletteHotkey(setPalette);
   useEffect(
     () =>
@@ -507,7 +541,18 @@ function NewMobileShell() {
         {NAV.map((t) => {
           const on = active === t.k;
           return (
-            <TouchableOpacity key={t.k} style={styles.tab} onPress={() => navigate(t.k)} activeOpacity={0.7}>
+            <TouchableOpacity
+              key={t.k}
+              style={styles.tab}
+              onPress={() => navigate(t.k)}
+              activeOpacity={0.7}
+              // The bottom bar had no roles at all: to a screen reader it was
+              // four unlabelled buttons with a decorative icon inside, and
+              // nothing said which one you were on.
+              accessibilityRole="tab"
+              accessibilityLabel={t.label}
+              accessibilityState={{ selected: on }}
+            >
               <View style={[styles.tabPill, on && styles.tabPillOn]}>
                 <Icon name={t.icon} size={19} color={on ? theme.brand : theme.muted} strokeWidth={on ? 2 : 1.75} />
               </View>
@@ -608,12 +653,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 7,
     paddingVertical: 13,
-    // 12, not 16. The nav is a horizontal ScrollView, so an over-subscribed
-    // bar does not visibly overflow — it silently scrolls, and the last tab
-    // goes half off the end where nobody looks for it. Six tabs × 8px of
-    // padding is 48px, which is what it costs to keep every tab on screen
-    // from 1280 up with the sign-out button in the bar.
-    paddingHorizontal: 12,
+    // Back at 16 now that Home and Symbol have given up their tabs. It was cut
+    // to 12 to buy room for the sign-out button when there were six; four tabs
+    // hand back nearly 190px, and the nav is a horizontal ScrollView, so a bar
+    // that is over-subscribed does not visibly overflow — it silently scrolls
+    // and the last tab goes half off the end where nobody looks for it.
+    // Re-measured at every width below before widening it again.
+    paddingHorizontal: 16,
     borderBottomWidth: 2,
     borderBottomColor: 'transparent',
   },

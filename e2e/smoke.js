@@ -103,11 +103,34 @@ function check(name, ok, detail) {
       );
     }
 
-    // 2 · five tabs
-    for (const tab of ['Today', 'Screens', 'Symbol', 'Desk', 'Terminal']) {
-      const n = await page.locator(`text=${tab}`).count();
-      check(`tab renders: ${tab}`, n > 0);
-    }
+    // 2 · the tab strip is the four places you BROWSE to.
+    //
+    // Home and Symbol are destinations without tabs: the wordmark is the way
+    // home, and a company page is opened by a row or by search, never by
+    // picking "Symbol" and seeing whatever stock you last looked at. Both
+    // screens still exist — 2b proves the tabless ones still resolve.
+    const tabs = await page.evaluate(() =>
+      [...document.querySelectorAll('[role="tab"]')].map((e) => e.getAttribute('aria-label')));
+    check(
+      'the tab strip is the four browse destinations',
+      JSON.stringify(tabs) === JSON.stringify(['Screens', 'Desk', 'Backtest', 'Terminal']),
+      JSON.stringify(tabs),
+    );
+    check('signing in lands on the home page', /LATEST MARKET NEWS/i.test(
+      await page.evaluate(() => document.body.innerText)));
+
+    // 2b · the wordmark is the way home, from wherever you are.
+    await page.evaluate(() => document.querySelector('[aria-label="Terminal"]').click());
+    await page.waitForTimeout(2200);
+    check('a tab still navigates away from home', !/LATEST MARKET NEWS/i.test(
+      await page.evaluate(() => document.body.innerText)));
+    await page.evaluate(() => {
+      const el = document.querySelector('[aria-label="TaurEye — go to the home page"]');
+      if (el) el.click();
+    });
+    await page.waitForTimeout(2200);
+    check('the wordmark goes home', /LATEST MARKET NEWS/i.test(
+      await page.evaluate(() => document.body.innerText)));
 
     // 3 · icons draw (the RNW createElement regression shipped empty <svg>)
     const svg = await page.evaluate(() => ({
@@ -174,9 +197,13 @@ function check(name, ok, detail) {
     check('Penny grades liquidity and risk', /ILLIQUID|TRADEABLE/.test(penny) && /EXTREME RISK|HIGH RISK|MODERATE RISK/.test(penny));
     check('Penny offers a volume floor', /cr\+\/day/.test(penny));
 
-    // 5 · Symbol page renders RELIANCE from the fake scan
-    await page.locator('text=Symbol').last().click();
-    await page.waitForTimeout(1200);
+    // 5 · the company page, reached the way it is reached now.
+    //
+    // This used to click the Symbol tab. That tab is gone, and the search bar
+    // is the reason it could go — so the suite opens a company the way a user
+    // does, which also proves the screen did not go with the tab.
+    await page.locator('[aria-label="Search symbols and pages"]').first().click();
+    await page.waitForTimeout(900);
     const input = page.locator('input').first();
     await input.fill('RELIANCE');
     await input.press('Enter');
@@ -293,7 +320,10 @@ function check(name, ok, detail) {
     // and, worse, computed it as Friday against Friday, so the whole dashboard
     // read +0.00%. The fixture stamps its quotes with a fixed past date, so
     // the "not today" wording has to appear here.
-    await tap('Today');
+    await page.evaluate(() => {
+      const el = document.querySelector('[aria-label="TaurEye — go to the home page"]');
+      if (el) el.click();
+    });
     await page.waitForTimeout(2500);
     const dash = await page.evaluate(() => document.body.innerText);
     check(

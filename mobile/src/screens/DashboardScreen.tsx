@@ -460,14 +460,12 @@ export default function DashboardScreen({ onNavigate }: { onNavigate?: (page: st
       {/* ── Index tiles ── */}
       <View style={styles.tiles}>
         {indices.slice(0, 6).map((ix) => {
-          // A tile whose own session is behind the strip's says which day it
-          // is from. BSE SENSEX has no NSE feed to fall back on, so it can sit
-          // a session behind the NIFTY tiles beside it — and a stale number
-          // presented as current is the whole bug this page just had.
-          const lag =
-            ix.session && indicesSession && ix.session < indicesSession
-              ? sessionLabel(ix.session).replace(/^on /, '')
-              : '';
+          // A tile that has not caught up to the last completed session says
+          // which day it IS from. The server makes that call against the
+          // trading calendar rather than against the neighbouring tiles: when
+          // a whole feed goes quiet, "behind its neighbours" marks nothing,
+          // which is exactly the case that needs marking.
+          const lag = ix.stale ? sessionLabel(ix.session).replace(/^on /, '') : '';
           return (
             <StatTile
               key={ix.key}

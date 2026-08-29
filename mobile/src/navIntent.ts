@@ -9,7 +9,25 @@
 //   → the Analysis SubTabs group switches its active sub-tab to 'mb'
 //   → MultibaggerScreen consumes the pending symbol on mount and analyses it.
 
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
 export type NavIntent = { page: string; sub?: string; symbol?: string; sector?: string; index?: string };
+
+// Where the app opens.
+//
+// Shell persists the active destination so a reload puts you back where you
+// were. A fresh sign-in is not a reload: it should open on Home rather than on
+// whichever screen the last session happened to end on.
+export const TAB_KEY = 'taureye.nav.tab2';
+export const HOME_TAB = 'today';
+
+export async function landOnHome(): Promise<void> {
+  try {
+    await AsyncStorage.setItem(TAB_KEY, HOME_TAB);
+  } catch {
+    /* storage is unavailable — Shell falls back to Home anyway */
+  }
+}
 
 let pending: NavIntent | null = null;
 const listeners = new Set<() => void>();

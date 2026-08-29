@@ -14,6 +14,7 @@ import BullRun from './BullRun';
 import { Btn } from '../ui';
 import { theme } from '../theme';
 import { currentMember, memberLogin, restoreMember, subscribeMember } from '../member';
+import { landOnHome } from '../navIntent';
 
 // The app's front door: nothing renders until a member signs in. Credentials
 // are checked server-side (/auth/member/login) and the signed session cookie
@@ -55,6 +56,9 @@ export default function LoginGate({ children }: { children: React.ReactNode }) {
     setShowPw(false);
     try {
       await memberLogin(user.trim(), pw);
+      // Sign in and you are on the home page, not on whatever screen the last
+      // session was left open at.
+      await landOnHome();
       setPw('');
     } catch {
       setMsg('Wrong username or password.');

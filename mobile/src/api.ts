@@ -645,6 +645,8 @@ export type IndexQuote = {
   country?: string;
   // Trading date of the close this level and change are from.
   session?: string | null;
+  /** True when this row has not caught up to the last completed session. */
+  stale?: boolean;
 };
 export type IndicesResp = {
   indices: IndexQuote[];

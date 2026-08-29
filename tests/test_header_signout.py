@@ -118,7 +118,9 @@ class HeaderWidthBudgetTest(unittest.TestCase):
     def test_nav_tab_padding_stays_within_the_measured_budget(self):
         item = re.search(r"pageItem: \{(.*?)\n  \},", self.src, re.S).group(1)
         pad = int(re.search(r"paddingHorizontal: (\d+)", item).group(1))
-        self.assertLessEqual(pad, 12, "measured at 1360px with Back and sign-out both in the bar")
+        # 16 fits again now that Home and Symbol have given up their tabs; it
+        # was 12 when six tabs had to share the bar with the sign-out button.
+        self.assertLessEqual(pad, 16, "measured at 1180px with Back and sign-out both in the bar")
 
     def test_the_search_box_is_the_elastic_one_not_the_nav(self):
         """Both used to shrink, so an over-subscribed bar took width from the
@@ -133,7 +135,7 @@ class HeaderWidthBudgetTest(unittest.TestCase):
         """1280 was measured without the Back affordance, so the labels showed
         at a width where the nav clipped as soon as you had navigated
         anywhere."""
-        self.assertIn("width >= 1360 ?", self.src)
+        self.assertIn("width >= 1180 ?", self.src)
         self.assertNotIn("width >= 1280 ?", self.src)
 
 
