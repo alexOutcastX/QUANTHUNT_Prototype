@@ -124,6 +124,17 @@ class DeskLandingTest(unittest.TestCase):
         c = importlib.reload(corporate)
         self.assertIn("IPO", c.KINDS)
 
+    def test_a_book_already_open_counts_down_to_its_close(self):
+        """An IPO is filed under the day its book opens, which for a live issue
+        is in the past. "in -2d" is not a thing to tell anyone; what matters
+        about an open book is when it shuts."""
+        self.assertIn("if (away != null && away < 0) {", self.home)
+        self.assertIn("const shuts = daysAway(a.close_date);", self.home)
+        self.assertIn("`closes in ${shuts}d`", self.home)
+        self.assertIn("return 'open';", self.home)
+        # and nothing renders a raw negative any more
+        self.assertNotIn("`in ${away}d`}</Text>", self.home)
+
     def test_a_row_is_filed_under_one_date_whatever_kind_it_is(self):
         """An action has an ex-date and an issue has an open date; the list
         sorts and renders one field so the two can share it."""

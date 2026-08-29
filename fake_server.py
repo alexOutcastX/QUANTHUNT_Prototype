@@ -935,12 +935,17 @@ class H(BaseHTTPRequestHandler):
                  "subject": subj[k], "date": d, "ex_date": d, "record_date": d,
                  "close_date": None, "series": "EQ"}
                 for i, (d, k) in enumerate(zip(days, kinds))]
-            _open = (_t + _dt.timedelta(days=1)).isoformat()
-            _close = (_t + _dt.timedelta(days=4)).isoformat()
-            items.append({"symbol": "NEWIPO", "name": "New Issue Ltd", "kind": "IPO",
-                          "subject": f"IPO — Rs.100 to Rs.110 · closes {_close}",
-                          "date": _open, "ex_date": None, "record_date": None,
-                          "close_date": _close, "series": "EQ"})
+            def _ipo(sym, name, opens, closes):
+                o = (_t + _dt.timedelta(days=opens)).isoformat()
+                c = (_t + _dt.timedelta(days=closes)).isoformat()
+                return {"symbol": sym, "name": name, "kind": "IPO",
+                        "subject": f"IPO — Rs.100 to Rs.110 · closes {c}",
+                        "date": o, "ex_date": None, "record_date": None,
+                        "close_date": c, "series": "EQ"}
+            items.append(_ipo("NEWIPO", "New Issue Ltd", 1, 4))
+            # A book that is ALREADY open: filed under a date in the past, so
+            # the row has to count down to its close rather than print "in -2d".
+            items.append(_ipo("OPENIPO", "Open Issue Ltd", -2, 2))
             items.sort(key=lambda x: x["date"])
             return self._json({
                 "source": "NSE", "days": 30, "items": items,

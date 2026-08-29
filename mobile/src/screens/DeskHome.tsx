@@ -68,8 +68,25 @@ const KIND_TONE: Record<string, string> = {
   Other: theme.muted,
 };
 
-function ActionRow({ a }: { a: CalendarAction }) {
+/** The second line of the date column: how long until this matters.
+ *
+ * An IPO is filed under the day its book OPENS, which for a live issue is in
+ * the past — "in -2d" is not a thing to tell anyone. What matters about a book
+ * that is already open is when it shuts, so that is what it counts down to.
+ */
+function whenLabel(a: CalendarAction): string | null {
   const away = daysAway(a.date);
+  if (away != null && away < 0) {
+    const shuts = daysAway(a.close_date);
+    if (shuts == null || shuts < 0) return 'open';
+    return shuts === 0 ? 'closes today' : shuts === 1 ? 'closes tomorrow' : `closes in ${shuts}d`;
+  }
+  if (away == null) return null;
+  return away === 0 ? 'today' : away === 1 ? 'tomorrow' : `in ${away}d`;
+}
+
+function ActionRow({ a }: { a: CalendarAction }) {
+  const when = whenLabel(a);
   return (
     <TouchableOpacity
       style={s.row}
@@ -82,9 +99,7 @@ function ActionRow({ a }: { a: CalendarAction }) {
     >
       <View style={s.dateCol}>
         <Text style={s.date}>{shortDate(a.date)}</Text>
-        {away != null ? (
-          <Text style={s.away}>{away === 0 ? 'today' : away === 1 ? 'tomorrow' : `in ${away}d`}</Text>
-        ) : null}
+        {when ? <Text style={s.away}>{when}</Text> : null}
       </View>
       <View style={{ flex: 1, minWidth: 0 }}>
         <Text style={s.sym} numberOfLines={1}>{a.symbol}</Text>

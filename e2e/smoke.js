@@ -818,6 +818,14 @@ function check(name, ok, detail) {
       /NEWIPO/.test(desk) && /closes/.test(desk),
       (desk.match(/NEWIPO[\s\S]{0,90}/) || [''])[0],
     );
+    // An IPO is filed under the day its book OPENS, so a live issue's date is
+    // in the past. The row must count down to its close, not print "in -2d".
+    check(
+      'a book already open counts down to its close',
+      /OPENIPO/.test(desk) && !/in -\d+d/.test(desk) && /closes in 2d/.test(desk),
+      (desk.match(/[^\n]*\n[^\n]*\nOPENIPO/) || [''])[0] + ' | neg: '
+        + JSON.stringify(desk.match(/in -\d+d/g)),
+    );
     // And an empty one explains itself rather than showing a blank list.
     await page.evaluate(() => {
       const el = document.querySelector('[aria-label="Rights, 0 actions"]');
