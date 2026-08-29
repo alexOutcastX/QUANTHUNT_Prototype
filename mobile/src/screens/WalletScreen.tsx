@@ -16,7 +16,8 @@ import {
  * buttons record an intent and say so plainly rather than pretending to be a
  * checkout that will work.
  */
-export default function WalletScreen() {
+// `embedded` drops the page heading — the merged Account page supplies one.
+export default function WalletScreen({ embedded = false }: { embedded?: boolean }) {
   const [wallet, setWallet] = useState<WalletResp | null>(null);
   const [ref, setRef] = useState<ReferralResp | null>(null);
   const [plans, setPlans] = useState<PlansResp | null>(null);
@@ -117,7 +118,7 @@ export default function WalletScreen() {
   if (err) {
     return (
       <View style={styles.container}>
-        <ScreenTitle title="Wallet" sub="Credits, referrals and plan" />
+        {embedded ? null : <ScreenTitle title="Wallet" sub="Credits, referrals and plan" />}
         <EmptyState
           title="Couldn't load your wallet"
           hint={`${err} — these features are only available on the preview host for now.`}
@@ -128,7 +129,7 @@ export default function WalletScreen() {
   if (!wallet || !ref || !plans) {
     return (
       <View style={styles.container}>
-        <ScreenTitle title="Wallet" sub="Credits, referrals and plan" />
+        {embedded ? null : <ScreenTitle title="Wallet" sub="Credits, referrals and plan" />}
         <Loading label="Loading your wallet…" />
       </View>
     );
@@ -138,7 +139,7 @@ export default function WalletScreen() {
 
   return (
     <View style={styles.container}>
-      <ScreenTitle title="Wallet" sub={`Signed in as ${wallet.account}`} />
+      {embedded ? null : <ScreenTitle title="Wallet" sub={`Signed in as ${wallet.account}`} />}
       <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
         {note ? <Card style={styles.note}><Text style={styles.noteTxt}>{note}</Text></Card> : null}
 

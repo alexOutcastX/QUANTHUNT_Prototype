@@ -216,7 +216,7 @@ function AnalysisInner() {
     if (!d) return;
     try {
       const ok = openPdfPreview(dossierHtml(d), {
-        docType: 'Institutional dossier',
+        docType: 'Institutional report',
         fileName: docFileName('Dossier', d.sym),
       });
       setMsg(ok ? 'Opening the report preview…' : "Couldn't open the report preview on this device.");
@@ -308,7 +308,7 @@ function AnalysisInner() {
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <ScreenTitle
-        title="Institutional dossier"
+        title="Institutional report"
         sub="A full-stack company report — fundamentals, valuation, in-depth technicals, ownership, relationships, risk, filings & an investment score with multibagging potential."
       />
       <View style={styles.body}>
@@ -339,7 +339,7 @@ function AnalysisInner() {
           </View>
           <View style={styles.setupBtns}>
             <TouchableOpacity style={styles.btn} onPress={() => run()} disabled={busy} activeOpacity={0.75}>
-              {busy ? <ActivityIndicator color={theme.onAccent} /> : <Text style={styles.btnText}>Build dossier</Text>}
+              {busy ? <ActivityIndicator color={theme.onAccent} /> : <Text style={styles.btnText}>Build report</Text>}
             </TouchableOpacity>
             {d && !busy ? (
               <TouchableOpacity style={styles.btnGhost} onPress={exportPdf} activeOpacity={0.75}>
@@ -909,7 +909,7 @@ function AnalysisInner() {
             </Text>
           </View>
         ) : !busy && !msg ? (
-          <EmptyState icon="◆" title="Build an institutional dossier" hint="Search any NSE symbol for a full company report — fundamentals, valuation, in-depth technicals, ownership, relationships, risk, filings and an investment score with multibagging potential." />
+          <EmptyState icon="◆" title="Build an institutional report" hint="Search any NSE symbol for a full company report — fundamentals, valuation, in-depth technicals, ownership, relationships, risk, filings and an investment score with multibagging potential." />
         ) : null}
       </View>
     </ScrollView>
@@ -1087,7 +1087,7 @@ function dossierHtml(d: Dossier): string {
     ['Total assets', fmtCr(b2.total_assets)],
     ['Operating cash flow', fmtCr(rep?.cash_flow?.ocf)], ['Free cash flow', fmtCr(rep?.cash_flow?.fcf)],
   ].map(([k, v]) => row(k, v)).join('')}</table>` : '';
-  return `<html><head><title>TaurEye — Institutional dossier — ${esc(d.sym)}</title>
+  return `<html><head><title>TaurEye — Institutional report — ${esc(d.sym)}</title>
 <style>body{font-family:Arial,sans-serif;color:#111;background:#fff;max-width:800px;margin:24px auto;padding:0 16px}
 h1{font-size:20px;margin-bottom:0}h2{font-size:14px;margin:18px 0 6px}
 table{border-collapse:collapse;width:100%}td{border-bottom:1px solid #ddd;padding:5px 4px;font-size:12px}
@@ -1207,7 +1207,7 @@ export default function AnalysisScreen() {
       feature="dossier"
       requiredPlan="pro"
       mode="replace"
-      title="Institutional company dossier"
+      title="Institutional company report"
       blurb="Valuation against sector medians, cash flow, shareholding and promoter pledges — one printable report per company."
       creditAction="dossier"
       creditCost={25}

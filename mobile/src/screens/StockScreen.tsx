@@ -355,7 +355,7 @@ export default function StockScreen() {
             <View style={s.actions}>
               <IconChip icon={watched ? 'watchFilled' : 'watch'} label={watched ? 'Watching' : 'Watch'} on={watched} onPress={toggleWatch} />
               <IconChip icon="chart" label="Chart" onPress={() => setDetail({ sym: active, name: meta.name || active, price: scan?.price ?? null, chg } as Row)} />
-              <IconChip icon="landmark" label="Dossier" onPress={() => navigate('analysis', { sub: 'inst', symbol: active })} />
+              <IconChip icon="landmark" label="Report" onPress={() => navigate('analysis', { sub: 'inst', symbol: active })} />
               <IconChip icon="export" label={exporting ? 'Exporting…' : 'PDF'} onPress={onExport} disabled={exporting} />
             </View>
           </View>

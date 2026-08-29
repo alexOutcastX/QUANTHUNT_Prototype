@@ -1157,7 +1157,7 @@ function PatternHitCard({ h, enr, onClose, onOpenSymbol, onFullScan }: {
           <Text style={styles.hitBtnTxt}>Momentum</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.hitBtn} onPress={() => navigate('analysis', { sub: 'inst', symbol: h.symbol })} activeOpacity={0.75}>
-          <Text style={styles.hitBtnTxt}>Dossier</Text>
+          <Text style={styles.hitBtnTxt}>Report</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.hitBtn}

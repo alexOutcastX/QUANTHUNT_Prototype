@@ -916,6 +916,39 @@ class H(BaseHTTPRequestHandler):
             return self._entity_graph()
         if path == "/corporate/shareholding":
             return self._shareholding()
+        if path == "/corporate/calendar":
+            # A deterministic window with more rows than the card shows, and
+            # more than one kind, so the chip row and the "Show all" branch
+            # are both exercised.
+            # Dates are relative to today: the card renders "in 3d" and
+            # filters on what is still ahead, so a fixture pinned to a fixed
+            # week silently empties itself the moment that week passes.
+            import datetime as _dt
+            _t = _dt.date.today()
+            days = [(_t + _dt.timedelta(days=n)).isoformat()
+                    for n in (1, 2, 3, 5, 8, 10, 13, 16, 20, 25)]
+            kinds = ["Dividend"] * 7 + ["Bonus", "Split", "Rights"]
+            subj = {"Dividend": "Interim Dividend - Rs 6 Per Share",
+                    "Bonus": "Bonus Issue 1:1",
+                    "Split": "Face Value Split - From Rs 10/- To Rs 2/-",
+                    "Rights": "Rights Issue 1:4"}
+            return self._json({"source": "NSE", "items": [
+                {"symbol": f"CORP{i + 1}", "name": f"Corp {i + 1} Ltd", "kind": k,
+                 "subject": subj[k], "ex_date": d, "record_date": d, "series": "EQ"}
+                for i, (d, k) in enumerate(zip(days, kinds))]})
+        if path == "/holidays":
+            # Ahead of today for the same reason as the calendar above: the
+            # card lists only holidays still to come.
+            import datetime as _dt
+            _t = _dt.date.today()
+            _hol = [((_t + _dt.timedelta(days=n)).isoformat(), name) for n, name in
+                    ((17, "Independence Day"), (51, "Mahatma Gandhi Jayanti"),
+                     (88, "Diwali Laxmi Pujan"))]
+            return self._json({
+                "open": False, "now_ist": "2026-07-25 11:04",
+                "note": "Indicative NSE calendar",
+                "next_holiday": {"date": _hol[0][0], "name": _hol[0][1], "day": "Saturday"},
+                "holidays": [{"date": d, "name": n, "day": "Saturday"} for d, n in _hol]})
         if path == "/indices":
             return self._indices()
         if path == "/movers":

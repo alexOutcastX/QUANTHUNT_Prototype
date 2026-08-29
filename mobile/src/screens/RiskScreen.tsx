@@ -5,7 +5,7 @@ import SymbolInput from '../components/SymbolInput';
 import { Btn, Card, EmptyState, Loading, ScreenTitle, SectionTitle, StatTile } from '../ui';
 import { theme } from '../theme';
 
-type Row = { symbol: string; qty: string };
+export type Row = { symbol: string; qty: string };
 const SEED: Row[] = [
   { symbol: 'RELIANCE', qty: '10' },
   { symbol: 'TCS', qty: '5' },
@@ -16,8 +16,11 @@ const pct = (v: number | null | undefined) => (v == null ? '—' : (v * 100).toF
 const inr = (v: number | null | undefined) =>
   v == null ? '—' : '₹' + Math.round(v).toLocaleString('en-IN');
 
-export default function RiskScreen() {
-  const [rows, setRows] = useState<Row[]>(SEED);
+// `embedded` drops the page heading (the host page names itself); `seed`
+// replaces the demo basket with the caller's real holdings, so opening Risk
+// from Portfolio measures the portfolio you actually hold.
+export default function RiskScreen({ embedded = false, seed }: { embedded?: boolean; seed?: Row[] }) {
+  const [rows, setRows] = useState<Row[]>(seed?.length ? seed : SEED);
   const [conf, setConf] = useState(0.95);
   const [report, setReport] = useState<RiskReport | null | undefined>(undefined);
   const [busy, setBusy] = useState(false);
@@ -46,7 +49,7 @@ export default function RiskScreen() {
 
   return (
     <View style={styles.container}>
-      <ScreenTitle title="Portfolio risk" sub="VaR · volatility · beta · drawdown · correlation" />
+      {embedded ? null : <ScreenTitle title="Portfolio risk" sub="VaR · volatility · beta · drawdown · correlation" />}
       <ScrollView contentContainerStyle={styles.body}>
         <SectionTitle>Holdings</SectionTitle>
         <Card>

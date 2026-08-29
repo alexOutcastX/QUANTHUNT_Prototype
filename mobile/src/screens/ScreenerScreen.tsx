@@ -1091,7 +1091,7 @@ export default function ScreenerScreen({
             <Text style={[styles.tBtnTxt, dir === 'sell' && styles.tOnTxt]}>{dir === 'sell' ? '✓S' : 'S'}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.aBtn} onPress={() => setDetail(item)} activeOpacity={0.75}>
-            <Text style={styles.aBtnTxt}>Dossier</Text>
+            <Text style={styles.aBtnTxt}>Report</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.aBtn} onPress={() => setAnalyseFor(item)} activeOpacity={0.75}>
             <Text style={styles.aBtnTxt}>Analyse ▾</Text>

@@ -5181,6 +5181,19 @@ def corp_actions():
     return jsonify(_corp.actions(sym, _corp_fetch))
 
 
+@app.route("/corporate/calendar")
+@rate_limit("corp", 60, 300)
+def corp_calendar():
+    """Upcoming corporate actions across the whole market.
+
+    /corporate/actions answers "what is coming for THIS company". A desk needs
+    the other question — what is coming at all — which is a different NSE feed
+    and the one the Desk landing page is built on.
+    """
+    days = request.args.get("days", 30, type=int)
+    return jsonify(_corp.calendar(_corp_fetch, days))
+
+
 @app.route("/corporate/shareholding")
 @rate_limit("corp", 60, 300)
 def corp_shareholding():

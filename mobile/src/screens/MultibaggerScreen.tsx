@@ -837,7 +837,7 @@ function MbList({
           { icon: '◆', label: 'Symbol overview', hint: 'Price, technicals, fundamentals & patterns on one page', run: () => openStock(analyseMenu) },
           { icon: '◈', label: 'Multibagger', hint: '5x-potential score + fundamental checklist', run: () => onAnalyse(analyseMenu) },
           { icon: '▲', label: 'Momentum', hint: 'Multi-timeframe trade rating, S/R, momentum', run: () => navigate('analysis', { sub: 'momentum', symbol: analyseMenu }) },
-          { icon: '▦', label: 'Institutional dossier', hint: 'Full company report — financials, ownership, filings', run: () => navigate('analysis', { sub: 'inst', symbol: analyseMenu }) },
+          { icon: '▦', label: 'Institutional report', hint: 'Full company report — financials, ownership, filings', run: () => navigate('analysis', { sub: 'inst', symbol: analyseMenu }) },
         ].map((o) => (
           <TouchableOpacity
             key={o.label}
@@ -1124,7 +1124,7 @@ export default function MultibaggerScreen() {
                       <Text style={styles.actTxt}>★ Watchlist</Text>
                     </TouchableOpacity>
                     <TouchableOpacity style={styles.actBtn} onPress={() => navigate('analysis', { sub: 'inst', symbol: report.symbol })} activeOpacity={0.75}>
-                      <Text style={styles.actTxt}>Dossier</Text>
+                      <Text style={styles.actTxt}>Report</Text>
                     </TouchableOpacity>
                     <TouchableOpacity style={styles.actBtn} onPress={() => navigate('analysis', { sub: 'momentum', symbol: report.symbol })} activeOpacity={0.75}>
                       <Text style={styles.actTxt}>Momentum</Text>

@@ -496,7 +496,7 @@ function PennyDetail({
           onPress={go(() => navigate('desk', { sub: 'inst', symbol: r.symbol }))}
           activeOpacity={0.8}
         >
-          <Text style={[styles.dActTxt, styles.dActPrimaryTxt]}>Dossier</Text>
+          <Text style={[styles.dActTxt, styles.dActPrimaryTxt]}>Report</Text>
         </TouchableOpacity>
       </View>
     </Sheet>

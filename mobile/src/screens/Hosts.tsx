@@ -2,7 +2,6 @@ import React, { useEffect, useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { api } from '../api';
-import { currentMember, memberLogout } from '../member';
 import { peekNav, subscribeNav } from '../navIntent';
 import { useResponsive } from '../responsive';
 import { theme } from '../theme';
@@ -41,10 +40,10 @@ const EntityGraphScreen = lazyScreen(() => import('./EntityGraphScreen'));
 const PaperTradeScreen = lazyScreen(() => import('./PaperTradeScreen'));
 const AlertsScreen = lazyScreen(() => import('./AlertsScreen'));
 const AccountScreen = lazyScreen(() => import('./AccountScreen'));
-const CalibrationScreen = lazyScreen(() => import('./CalibrationScreen'));
 const MethodologyScreen = lazyScreen(() => import('./MethodologyScreen'));
 const DeveloperScreen = lazyScreen(() => import('./DeveloperScreen'));
-const WalletScreen = lazyScreen(() => import('./WalletScreen'));
+const AccountWalletScreen = lazyScreen(() => import('./AccountWalletScreen'));
+const DeskHome = lazyScreen(() => import('./DeskHome'));
 
 // hidden: routable via nav intents but not shown as a pill/menu entry (e.g.
 // Universe after it left the Screens bar for the Today landing page).
@@ -353,23 +352,32 @@ export function DeskHub() {
   return (
     <SubTabs
       persistKey="desk"
+      // Calibration now lives inside Paper trades (it grades those very
+      // trades), Risk inside Portfolio (it measures that very basket) and
+      // Account inside Wallet — the old keys still resolve so every saved
+      // sub-tab and every navigate('desk', { sub }) lands where the screen
+      // moved to.
+      alias={{ calibration: 'paper', risk: 'portfolio', account: 'wallet' }}
       tabs={[
+        { key: 'home', label: 'Home', hint: 'Corporate actions, market dates, methodology, community & notices', render: () => <DeskHome /> },
         { key: 'watchlist', label: 'Watchlist', hint: 'Symbols with entry price + since-add move · live quotes', render: () => <WatchlistScreen /> },
-        { key: 'portfolio', label: 'Portfolio', hint: 'Holdings with live P&L · broker sync', render: () => <PortfolioScreen /> },
-        { key: 'paper', label: 'Paper trades', hint: 'Your logged setups, a virtual portfolio, and the engines’ own track record', render: () => <PaperTradeScreen /> },
-        { key: 'calibration', label: 'Calibration', hint: 'Realised hit-rate & avg R per engine — the honesty page', render: () => <CalibrationScreen /> },
+        { key: 'portfolio', label: 'Portfolio', hint: 'Holdings with live P&L, broker sync and portfolio risk', render: () => <PortfolioScreen /> },
+        { key: 'paper', label: 'Paper trades', hint: 'Your logged setups, a virtual portfolio, the engines’ track record and their calibration', render: () => <PaperTradeScreen /> },
         { key: 'alerts', label: 'Alerts', hint: 'Price / % / RSI alerts', render: () => <AlertsScreen /> },
-        { key: 'inst', label: 'Dossier', hint: 'Full company dossier · fundamentals, valuation, ownership, filings', render: () => <AnalysisScreen /> },
+        { key: 'inst', label: 'Reports', hint: 'Full company report · fundamentals, valuation, ownership, filings', render: () => <AnalysisScreen /> },
         { key: 'shareholders', label: 'Shareholders', hint: 'Institutions, promoters & political funding · every link cited', render: () => <EntityGraphScreen /> },
-        { key: 'risk', label: 'Risk', hint: 'Portfolio VaR · volatility · beta · drawdown · correlation', render: () => <RiskScreen /> },
         { key: 'bt', label: 'Backtest', hint: 'Test a strategy against historical data before risking capital', render: () => <BacktestScreen /> },
         { key: 'calc', label: 'Calculator', hint: 'Position size · SIP · CAGR', render: () => <CalculatorScreen /> },
         // Wallet sits here rather than inside More: it used to be four taps
         // deep inside a nineteen-item menu, which is where the whole credit
         // economy went to be forgotten. The header pill links straight here.
-        { key: 'wallet', label: 'Wallet', hint: 'Credits · daily bonus · refer and earn · your plan', render: () => <WalletScreen />, hidden: !preview },
-        { key: 'account', label: 'Account', hint: 'Sign in · cloud sync across devices', render: () => <AccountScreen /> },
+        { key: 'wallet', label: preview ? 'Account & wallet' : 'Account', hint: 'Sign in, cloud sync, membership · credits, daily bonus, refer and earn', render: () => <AccountWalletScreen /> },
         { key: 'more', label: 'More', hint: 'Charts, community, corporate data, indices & settings', render: () => <MoreScreen /> },
+        // Not pills — the Desk home links straight into these, so its
+        // "Full calendar ›" and "Open community ›" land on the screen they
+        // name instead of on a menu that lists it.
+        { key: 'holidays', label: 'Holidays', render: () => <HolidaysScreen />, hidden: true },
+        { key: 'community', label: 'Community', render: () => <ChatScreen />, hidden: true },
         // Desktop promotes Backtest to the top bar beside Terminal; keep the
         // Desk tab only where that top-level entry doesn't exist (mobile).
       ].filter((t) => !(isDesktop && t.key === 'bt'))}
@@ -422,7 +430,11 @@ const MORE_ITEMS: {
 
 // Destinations that already have a first-class tab on the Screens or Desk
 // bars. One home per screen, so More never lists them a second time.
-const MORE_DUP_KEYS = new Set(['account', 'heatmap', 'universe', 'portfolio', 'watchlist', 'calc', 'risk', 'entities', 'alerts']);
+const MORE_DUP_KEYS = new Set([
+  'account', 'heatmap', 'universe', 'portfolio', 'watchlist', 'calc', 'risk', 'entities', 'alerts',
+  // Both now live on the Desk home page.
+  'methodology', 'announcements',
+]);
 const MORE_MENU = MORE_ITEMS.filter((i) => !MORE_DUP_KEYS.has(i.key));
 
 // Groups for the All-features list. A flat eighteen-item menu ordered by
@@ -517,17 +529,6 @@ export function MoreScreen() {
           <Text style={styles.menuGroup}>MORE</Text>
           {ungrouped.filter(match).map(row)}
         </View>
-      ) : null}
-      {currentMember() ? (
-        <TouchableOpacity style={styles.menuRow} onPress={() => memberLogout()} activeOpacity={0.75}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.menuLabel}>Sign out</Text>
-            <Text style={styles.menuHint}>
-              Signed in as {currentMember()!.username} · {currentMember()!.plan.toUpperCase()} membership
-            </Text>
-          </View>
-          <Text style={styles.menuChevron}>›</Text>
-        </TouchableOpacity>
       ) : null}
       {version ? <Text style={styles.versionFoot}>TaurEye v{version}</Text> : null}
     </ScrollView>

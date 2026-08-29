@@ -574,6 +574,99 @@ function check(name, ok, detail) {
         (await page.locator('text=Members only').count()) === 0,
     );
 
+    // 8e · the Desk landing page.
+    //
+    // Desk opened onto the Watchlist — one of its destinations, an overview of
+    // none of them — so the first thing it showed was a bar of tabs asking you
+    // to choose before anything had been said. It now opens on a page, and the
+    // three screens that stopped being tabs moved to where they are used.
+    const openDeskSection = async (label) => {
+      await page.evaluate(() => {
+        const el = document.querySelector('[aria-label="Desk"]');
+        if (el) el.click();
+      });
+      await page.waitForTimeout(1400);
+      await page.evaluate(() => {
+        const el = [...document.querySelectorAll('[role="button"]')].find((e) =>
+          (e.getAttribute('aria-label') || '').startsWith('Sections menu'));
+        if (el) el.click();
+      });
+      await page.waitForTimeout(800);
+      await tap(label);
+      // Each of these pages fetches before it has anything to show.
+      await page.waitForTimeout(4500);
+      return page.evaluate(() => document.body.innerText);
+    };
+
+    const desk = await openDeskSection('Home');
+    check(
+      'the Desk opens on a page, not on a bar of tabs',
+      /Corporate calendar/i.test(desk) && /Market days/i.test(desk),
+      desk.slice(0, 300),
+    );
+    check(
+      'the corporate calendar lists dated actions',
+      /CORP1/.test(desk) && /Interim Dividend/i.test(desk) && /in \d+d/.test(desk),
+      (desk.match(/CORPORATE CALENDAR[\s\S]{0,220}/i) || [''])[0],
+    );
+    check(
+      'and offers a filter only for the kinds in the window',
+      /Dividend[\s\S]{0,40}Bonus[\s\S]{0,40}Split[\s\S]{0,40}Rights/i.test(desk) &&
+        !/Buyback/i.test(desk),
+      (desk.match(/CORPORATE CALENDAR[\s\S]{0,160}/i) || [''])[0],
+    );
+    check(
+      'market days name the next holidays and say the calendar is indicative',
+      /Independence Day/i.test(desk) && /verify against NSE circulars/i.test(desk),
+      (desk.match(/MARKET DAYS[\s\S]{0,220}/i) || [''])[0],
+    );
+    check(
+      'announcements sit at the bottom, renamed',
+      /Announcements from the Dev/i.test(desk) &&
+        desk.search(/Announcements from the Dev/i) > desk.search(/Corporate calendar/i),
+    );
+    // Methodology is offered folded, and opens in place rather than linking
+    // away — sending someone to another page to read the method is how the
+    // method goes unread.
+    check(
+      'methodology is offered folded',
+      /Methodology/i.test(desk) && !/House view \(Symbol page\)/i.test(desk),
+      (desk.match(/METHODOLOGY[\s\S]{0,120}/i) || [''])[0],
+    );
+    // The heading is uppercased by CSS; the DOM text is not.
+    await tap('Methodology');
+    await page.waitForTimeout(1200);
+    const folded = await page.evaluate(() => document.body.innerText);
+    check(
+      'and it expands in place, without leaving the page',
+      /House view \(Symbol page\)/i.test(folded) && /Corporate calendar/i.test(folded),
+      folded.slice(0, 200),
+    );
+
+    // 8f · the two screens that became modes of the page that uses them.
+    // (That they are no longer tabs of their own is asserted against the
+    // source in tests/test_desk_layout.py — this checks they still render.)
+    await openDeskSection('Paper trades');
+    await tap('Calibration');
+    await page.waitForTimeout(2500);
+    const cal = await page.evaluate(() => document.body.innerText);
+    check(
+      'Calibration is a mode of the Paper trades page',
+      /Paper trades/i.test(cal) && /insufficient sample|Your log|closed trades/i.test(cal),
+      cal.slice(0, 300),
+    );
+
+    const pf = await openDeskSection('Portfolio');
+    check('Portfolio offers a Risk tab', /Risk/i.test(pf), pf.slice(0, 300));
+    await tap('Risk');
+    await page.waitForTimeout(2500);
+    const risk = await page.evaluate(() => document.body.innerText);
+    check(
+      'Risk runs inside Portfolio, under its heading',
+      /Portfolio/i.test(risk) && /Holdings/i.test(risk) && /Value at risk|Run risk|Confidence/i.test(risk),
+      risk.slice(0, 400),
+    );
+
     // 9 · no uncaught page errors during the whole run
     check('no uncaught page errors', errors.length === 0, errors[0]);
   } finally {

@@ -291,7 +291,7 @@ function MomDetail({
             <Text style={styles.dActTxt}>Pattern</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.dActBtn} onPress={onDossier} activeOpacity={0.75}>
-            <Text style={styles.dActTxt}>Dossier</Text>
+            <Text style={styles.dActTxt}>Report</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.dActBtn} onPress={onExport} activeOpacity={0.75} disabled={exporting}>
             <Text style={styles.dActTxt}>{exporting ? '… Exporting' : '⤓ Export PDF'}</Text>
@@ -516,7 +516,7 @@ function MomAnalyser({
               <Text style={styles.dActTxt}>Pattern</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.dActBtn} onPress={() => navigate('analysis', { sub: 'inst', symbol: active })} activeOpacity={0.75}>
-              <Text style={styles.dActTxt}>Dossier</Text>
+              <Text style={styles.dActTxt}>Report</Text>
             </TouchableOpacity>
           </View>
         </View>

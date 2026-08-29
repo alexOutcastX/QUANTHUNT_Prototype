@@ -36,7 +36,7 @@ const DESTS: Dest[] = [
   { label: 'Portfolio', hint: 'Holdings & live P&L', icon: 'desk', page: 'desk', sub: 'portfolio' },
   { label: 'Paper trades', hint: 'Logged setups, simulator & historic track record', icon: 'desk', page: 'desk', sub: 'paper' },
   { label: 'Alerts', hint: 'Price / % / RSI alerts', icon: 'desk', page: 'desk', sub: 'alerts' },
-  { label: 'Dossier', hint: 'Institutional company report', icon: 'desk', page: 'desk', sub: 'inst' },
+  { label: 'Reports', hint: 'Institutional company report', icon: 'desk', page: 'desk', sub: 'inst' },
   { label: 'Shareholders', hint: 'Ownership & entity graph', icon: 'desk', page: 'desk', sub: 'shareholders' },
   { label: 'Risk', hint: 'Portfolio VaR & drawdown', icon: 'desk', page: 'desk', sub: 'risk' },
   { label: 'Backtest', hint: 'Test a strategy on history', icon: 'flask', page: 'backtest', sub: 'bt' },

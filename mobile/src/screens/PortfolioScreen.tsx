@@ -17,7 +17,8 @@ import { BrokerStatus, api, Quote } from '../api';
 import { exportCsvRows, exportExcelRows } from '../csv';
 import { DEFAULT_GROUP, Holding, addHolding, groupOf, importHoldings, loadGroups, loadPortfolio, moveHolding, removeHolding, saveGroups } from '../portfolio';
 import { theme } from '../theme';
-import { Btn, Card, EmptyState, Loading, ScreenTitle, SectionTitle, StatTile } from '../ui';
+import { Btn, Card, EmptyState, Loading, ScreenTitle, SectionTitle, Segmented, StatTile } from '../ui';
+import RiskScreen from './RiskScreen';
 
 const money = (n: number) =>
   '₹' + n.toLocaleString('en-IN', { maximumFractionDigits: n >= 1000 ? 0 : 2 });
@@ -153,6 +154,7 @@ export default function PortfolioScreen() {
   // can't be touched while working the trading book.
   const [customGroups, setCustomGroups] = useState<string[]>([]);
   const [activeGroup, setActiveGroup] = useState<string>('all');
+  const [tab, setTab] = useState<'holdings' | 'risk'>('holdings');
   const [newGroupOpen, setNewGroupOpen] = useState(false);
   const [newGroupName, setNewGroupName] = useState('');
   const [moveFor, setMoveFor] = useState<{ symbol: string; group: string } | null>(null);
@@ -297,6 +299,12 @@ export default function PortfolioScreen() {
   const shown = useMemo(
     () => (activeGroup === 'all' ? list : list.filter((h) => groupOf(h) === activeGroup)),
     [list, activeGroup],
+  );
+
+  // Risk runs on what you actually hold, in the group you are looking at.
+  const riskSeed = useMemo(
+    () => shown.map((h) => ({ symbol: h.symbol, qty: String(h.qty) })),
+    [shown],
   );
 
   const createGroup = useCallback(() => {
@@ -489,11 +497,23 @@ export default function PortfolioScreen() {
       <ScreenTitle
         title="Portfolio"
         sub={
-          shown.length
-            ? `${activeGroup === 'all' ? '' : activeGroup + ' · '}${shown.length} holding${shown.length === 1 ? '' : 's'} · live valuation${totals.priced < shown.length ? ` · ${totals.priced}/${shown.length} priced` : ''}`
-            : 'Live-valued holdings · saved on this device'
+          tab === 'risk'
+            ? 'VaR · volatility · beta · drawdown · correlation, on the holdings below'
+            : shown.length
+              ? `${activeGroup === 'all' ? '' : activeGroup + ' · '}${shown.length} holding${shown.length === 1 ? '' : 's'} · live valuation${totals.priced < shown.length ? ` · ${totals.priced}/${shown.length} priced` : ''}`
+              : 'Live-valued holdings · saved on this device'
         }
       />
+      {/* Risk lives here rather than as its own desk tab: it measures this
+          exact basket, and on its own page it started from a demo one. */}
+      <Segmented
+        items={[{ key: 'holdings', label: 'Holdings' }, { key: 'risk', label: 'Risk' }]}
+        value={tab}
+        onChange={setTab}
+      />
+      {tab === 'risk' ? (
+        <RiskScreen embedded seed={riskSeed} />
+      ) : (
       <ScrollView
         contentContainerStyle={styles.scrollBody}
         refreshControl={
@@ -785,6 +805,7 @@ export default function PortfolioScreen() {
           />
         )}
       </ScrollView>
+      )}
 
       {/* New group */}
       <Modal visible={newGroupOpen} animationType="fade" transparent onRequestClose={() => setNewGroupOpen(false)}>

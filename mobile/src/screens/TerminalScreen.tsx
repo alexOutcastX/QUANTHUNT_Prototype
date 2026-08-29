@@ -1545,7 +1545,7 @@ function TerminalInner() {
           disabled={!centre}
           activeOpacity={0.75}
         >
-          <Text style={[styles.dossTxt, !centre && styles.dossTxtOff]}>▤ DOSSIER</Text>
+          <Text style={[styles.dossTxt, !centre && styles.dossTxtOff]}>▤ REPORT</Text>
         </TouchableOpacity>
       </View>
       {notFound ? (
@@ -1598,7 +1598,7 @@ function TerminalInner() {
             <View style={styles.dossHead}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.dossTitle}>{centre}</Text>
-                <Text style={styles.dossSub}>Company dossier · analyse & export</Text>
+                <Text style={styles.dossSub}>Company report · analyse & export</Text>
               </View>
               <TouchableOpacity onPress={() => setDossierOpen(false)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
                 <Text style={styles.dossX}>✕</Text>
@@ -1627,7 +1627,7 @@ function TerminalInner() {
                 navigate('analysis', { sub: 'inst', symbol: centre });
               }}
             >
-              <Text style={styles.dossActTxt}>Full Dossier &amp; Export</Text>
+              <Text style={styles.dossActTxt}>Full report &amp; export</Text>
               <Text style={styles.dossActSub}>Institutional deep report · PDF export</Text>
             </TouchableOpacity>
             <TouchableOpacity

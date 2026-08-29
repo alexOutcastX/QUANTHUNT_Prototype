@@ -7,7 +7,9 @@ import { ScrollView, StyleSheet, Text } from 'react-native';
 import { Card } from '../ui';
 import { theme } from '../theme';
 
-const SECTIONS: { title: string; body: string }[] = [
+// Exported so the Desk landing page can fold the same text open
+// in place. One source, so a rule cannot be described two ways.
+export const SECTIONS: { title: string; body: string }[] = [
   {
     title: 'House view (Symbol page)',
     body:

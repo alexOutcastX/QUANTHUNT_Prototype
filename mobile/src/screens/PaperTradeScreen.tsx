@@ -23,6 +23,7 @@ import {
 import { Card, EmptyState, ScreenTitle, SectionTitle, Segmented, StatTile } from '../ui';
 import HistoricTrades from '../components/HistoricTrades';
 import CasesPanel from '../components/CasesPanel';
+import CalibrationScreen from './CalibrationScreen';
 import { theme } from '../theme';
 
 const money = (v?: number | null) => (v == null ? '—' : '₹' + v.toLocaleString('en-IN', { maximumFractionDigits: 2 }));
@@ -34,7 +35,7 @@ const ago = (t: number) => {
   return `${Math.floor(s / 86400)}d ago`;
 };
 
-type Mode = 'tracker' | 'sim' | 'historic' | 'cases';
+type Mode = 'tracker' | 'sim' | 'historic' | 'cases' | 'calibration';
 
 export default function PaperTradeScreen() {
   const [mode, setMode] = useState<Mode>('tracker');
@@ -78,11 +79,13 @@ export default function PaperTradeScreen() {
         sub={
           mode === 'historic'
             ? 'Every trade the engines recommended, marked to market'
-            : mode === 'cases'
-              ? 'Baskets built and managed by the TaurEye engine'
-              : mode === 'sim'
-                ? 'A virtual cash account you trade yourself'
-                : 'Simulated outcomes from your logged setups'
+            : mode === 'calibration'
+              ? 'Realised hit-rate and average R per engine — the honesty page'
+              : mode === 'cases'
+                ? 'Baskets built and managed by the TaurEye engine'
+                : mode === 'sim'
+                  ? 'A virtual cash account you trade yourself'
+                  : 'Simulated outcomes from your logged setups'
         }
       />
       <Segmented
@@ -91,12 +94,18 @@ export default function PaperTradeScreen() {
           { key: 'sim', label: 'Full simulator' },
           { key: 'historic', label: 'Historic' },
           { key: 'cases', label: 'Cases' },
+          // Calibration lives here rather than as its own desk tab: it scores
+          // the very trades this page logs, and split across two destinations
+          // nobody checked it against the tracker it grades.
+          { key: 'calibration', label: 'Calibration' },
         ]}
         value={mode}
         onChange={setMode}
       />
 
-      {mode === 'cases' ? (
+      {mode === 'calibration' ? (
+        <CalibrationScreen embedded />
+      ) : mode === 'cases' ? (
         <CasesPanel />
       ) : mode === 'historic' ? (
         <HistoricTrades />

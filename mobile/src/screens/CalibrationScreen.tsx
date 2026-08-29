@@ -50,7 +50,9 @@ function CalTable({ rows, minSample }: { rows: EngineCal[] | ServerCal['engines'
   );
 }
 
-export default function CalibrationScreen() {
+// `embedded` drops the page heading: the host page (Paper trades) already
+// names itself, and a second h1 inside a tab reads as a second page.
+export default function CalibrationScreen({ embedded = false }: { embedded?: boolean }) {
   const [local, setLocal] = useState<EngineCal[]>([]);
   const [localOverall, setLocalOverall] = useState<EngineCal | null>(null);
   const [server, setServer] = useState<ServerCal | null>(null);
@@ -88,7 +90,7 @@ export default function CalibrationScreen() {
         />
       }
     >
-      <Text style={s.h1}>Calibration</Text>
+      {embedded ? null : <Text style={s.h1}>Calibration</Text>}
       <Text style={s.sub}>
         Realised outcomes of logged setups — target hit vs stop hit, from the paper-trade
         tracker. Hit-rates appear only after {MIN_SAMPLE} closed trades per engine; below that the

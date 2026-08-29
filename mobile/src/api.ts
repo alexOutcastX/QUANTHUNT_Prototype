@@ -376,6 +376,20 @@ export type MarketMoversResp = {
   running?: boolean;
 };
 
+/** Upcoming corporate actions across the whole market.
+ *  `kind` is read out of NSE's free-text subject line — it publishes no type
+ *  code — so "Other" is a real answer, not a parse failure. */
+export type CalendarAction = {
+  symbol: string;
+  name: string;
+  kind: 'Dividend' | 'Bonus' | 'Split' | 'Rights' | 'Buyback' | 'Other';
+  subject: string;
+  ex_date?: string | null;
+  record_date?: string | null;
+  series?: string;
+};
+export type CorpCalendarResp = { items: CalendarAction[]; source?: string; error?: string };
+
 export type ReturnsRow = { ret1y?: number | null; ret3y?: number | null; ret5y?: number | null };
 export type ReturnsResp = Record<string, ReturnsRow>;
 
@@ -1882,6 +1896,8 @@ export const api = {
     getJson<Fundamentals>('/fundamentals?symbol=' + encodeURIComponent(symbol)),
   graph: (symbol?: string, ai?: AiCreds) => fetchGraph(symbol, ai),
   marketMovers: (n = 6) => getJson<MarketMoversResp>('/movers/market?n=' + n),
+  corpCalendar: (days = 30) =>
+    cachedGet<CorpCalendarResp>('/corporate/calendar?days=' + days, TTL.slow),
   indexConstituents: (name: string, force = false) =>
     cachedGet<IndexResp>('/index?name=' + encodeURIComponent(name), TTL.index, force),
   // Server-computed breadth + top gainers/losers (resilient: NSE pChange, else a

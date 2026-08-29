@@ -54,7 +54,14 @@ def _s(v):
 
 # ── parsers (pure; take the raw decoded JSON) ──
 def parse_announcements(raw) -> dict:
-    rows = raw if isinstance(raw, list) else (raw or {}).get("data", raw) or []
+    # NSE answers either a bare list or {"data": [...]}, and on a bad day a
+    # bare error string — which must produce an empty calendar, not a 500.
+    if isinstance(raw, list):
+        rows = raw
+    elif isinstance(raw, dict):
+        rows = raw.get("data") or []
+    else:
+        rows = []
     if not isinstance(rows, list):
         rows = []
     out = []
@@ -69,7 +76,14 @@ def parse_announcements(raw) -> dict:
 
 
 def parse_actions(raw) -> dict:
-    rows = raw if isinstance(raw, list) else (raw or {}).get("data", raw) or []
+    # NSE answers either a bare list or {"data": [...]}, and on a bad day a
+    # bare error string — which must produce an empty calendar, not a 500.
+    if isinstance(raw, list):
+        rows = raw
+    elif isinstance(raw, dict):
+        rows = raw.get("data") or []
+    else:
+        rows = []
     if not isinstance(rows, list):
         rows = []
     out = []
@@ -149,3 +163,113 @@ def shareholding(symbol, fetch):
 
 def deals(fetch):
     return _cached("deals", DEALS_TTL, lambda: parse_deals(fetch(URLS["deals"])))
+
+
+# ── Market-wide corporate action calendar ───────────────────────────────────
+# The per-symbol feed above answers "what is coming for THIS company". A desk
+# needs the other question — "what is coming at all" — which is a different NSE
+# endpoint, and the one the Desk landing page is built on.
+
+_KINDS = (
+    # Order matters: a subject can mention more than one word, and the more
+    # specific reading wins. "Bonus" inside a dividend line is rare but a
+    # rights issue that also mentions a dividend is not.
+    ("bonus", "Bonus"),
+    ("split", "Split"),
+    ("sub-division", "Split"),
+    ("sub division", "Split"),
+    ("rights", "Rights"),
+    ("buy back", "Buyback"),
+    ("buyback", "Buyback"),
+    ("dividend", "Dividend"),
+)
+
+KINDS = ("Dividend", "Bonus", "Split", "Rights", "Buyback", "Other")
+
+
+def classify_action(subject: str) -> str:
+    """Which kind of corporate action a subject line describes.
+
+    NSE publishes the subject as free text ("Dividend - Rs 16 Per Share",
+    "Face Value Split (Sub-Division) - From Rs 10/- To Rs 2/-"), with no type
+    code, so the type has to be read out of the words.
+    """
+    s = (subject or "").lower()
+    for needle, kind in _KINDS:
+        if needle in s:
+            return kind
+    return "Other"
+
+
+_MONTHS = {m: i for i, m in enumerate(
+    ["jan", "feb", "mar", "apr", "may", "jun",
+     "jul", "aug", "sep", "oct", "nov", "dec"], 1)}
+
+
+def parse_ca_date(v):
+    """NSE writes '31-Aug-2026'. Returns YYYY-MM-DD, or None.
+
+    Sorting on the raw string would put every August before every February,
+    which for a calendar is the one thing that must not happen.
+    """
+    s = (v or "").strip()
+    parts = s.replace("/", "-").split("-")
+    if len(parts) != 3:
+        return None
+    try:
+        d = int(parts[0])
+        mon = _MONTHS.get(parts[1][:3].lower())
+        y = int(parts[2])
+        if not mon or not (1 <= d <= 31):
+            return None
+        return f"{y:04d}-{mon:02d}-{d:02d}"
+    except (ValueError, TypeError):
+        return None
+
+
+def parse_calendar(raw) -> dict:
+    # NSE answers either a bare list or {"data": [...]}, and on a bad day a
+    # bare error string — which must produce an empty calendar, not a 500.
+    if isinstance(raw, list):
+        rows = raw
+    elif isinstance(raw, dict):
+        rows = raw.get("data") or []
+    else:
+        rows = []
+    if not isinstance(rows, list):
+        rows = []
+    out = []
+    for r in rows:
+        if not isinstance(r, dict):
+            continue
+        sym = _s(r.get("symbol"))
+        subject = _s(r.get("subject"))
+        if not sym or not subject:
+            continue
+        ex = parse_ca_date(r.get("exDate"))
+        out.append({
+            "symbol": sym,
+            "name": _s(r.get("comp")) or sym,
+            "kind": classify_action(subject),
+            "subject": subject,
+            "ex_date": ex,
+            "record_date": parse_ca_date(r.get("recDate")),
+            "series": _s(r.get("series")),
+        })
+    # Undated entries last rather than first: an empty string sorts before
+    # every real date, which would put the least useful rows at the top.
+    out.sort(key=lambda x: (x["ex_date"] is None, x["ex_date"] or "", x["symbol"]))
+    return {"items": out, "source": "NSE"}
+
+
+def calendar(fetch, days: int = 30) -> dict:
+    """Upcoming actions across the whole market, for the next `days`."""
+    import datetime
+    days = max(1, min(int(days or 30), 90))
+    today = datetime.date.today()
+    end = today + datetime.timedelta(days=days)
+    # A full URL, like every other entry in URLS: the injected fetch takes one.
+    url = (BASE + "/api/corporates-corporateActions?index=equities"
+           f"&from_date={today.strftime('%d-%m-%Y')}"
+           f"&to_date={end.strftime('%d-%m-%Y')}")
+    return _cached(f"calendar:{days}", 1800, lambda: parse_calendar(fetch(url)))
