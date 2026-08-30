@@ -223,6 +223,10 @@ export default function WalletScreen({
               <Text style={styles.freeNote}>
                 Quotes, charts, news and your watchlist are always free.
               </Text>
+              <Text style={styles.freeNote}>
+                Credits meter how much you use — they do not buy a plan. Anything
+                your plan does not include stays locked whatever your balance.
+              </Text>
             </Card>
           </>
         ) : null}

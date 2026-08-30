@@ -9,13 +9,19 @@
 // Deliberately soft. A hard "Pro only" door teaches a visitor the product is
 // not for them; a blurred result with the count still readable teaches them
 // what they are missing, which is the difference between a bounce and a sale.
+//
+// Soft, but not porous. This sheet used to offer "Use 10 credits" beside the
+// upgrade, so anyone who collected a week of daily bonuses could open the
+// backtest without ever subscribing — the wallet was a second, cheaper paywall
+// running beside the real one, undercutting the ladder it sat next to. The
+// plan is the only way through now. Credits meter how much of a feature you
+// use once you have it; they do not sell the feature. See credits.ts.
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Btn } from '../ui';
 import { theme } from '../theme';
 import { hasFeature } from '../member';
 import { navigate } from '../navIntent';
-import { chargeFor, chargeMessage } from '../credits';
 
 export type GateMode = 'blur' | 'replace';
 
@@ -31,9 +37,6 @@ export function Gate({
   blurb,
   requiredPlan = 'max',
   mode = 'replace',
-  creditAction,
-  creditCost,
-  creditRef,
   children,
 }: {
   feature: string;
@@ -41,31 +44,12 @@ export function Gate({
   blurb?: string;
   requiredPlan?: 'pro' | 'max';
   mode?: GateMode;
-  /** When set, the sheet offers paying with credits as the second way in. */
-  creditAction?: string;
-  creditCost?: number;
-  /** Stable per unlock, so a retried charge cannot bill twice. */
-  creditRef?: string;
   children: React.ReactNode;
 }) {
-  // An unlock bought with credits lasts for this mount. It is deliberately not
-  // persisted here: the ledger is the record, and re-deriving entitlement from
-  // client state would let a reload grant it for free.
-  const [unlocked, setUnlocked] = React.useState(false);
-  const [busy, setBusy] = React.useState(false);
-  const [note, setNote] = React.useState<string | null>(null);
-
-  const buy = React.useCallback(async () => {
-    if (!creditAction || busy) return;
-    setBusy(true);
-    setNote(null);
-    const r = await chargeFor(creditAction, creditRef || `gate:${feature}`);
-    if (r.ok || (!r.ok && r.reason === 'covered-by-plan')) setUnlocked(true);
-    else setNote(chargeMessage(r));
-    setBusy(false);
-  }, [creditAction, creditRef, feature, busy]);
-
-  if (hasFeature(feature) || unlocked) return <>{children}</>;
+  // One condition, and it is the plan. There is deliberately no local
+  // "unlocked" state: anything a component could set to open this door is
+  // something a reload could set for free.
+  if (hasFeature(feature)) return <>{children}</>;
 
   const sheet = (
     <View style={s.sheet} accessibilityRole="summary">
@@ -76,21 +60,7 @@ export function Gate({
           label={`Unlock with ${PLAN_LABEL[requiredPlan] ?? requiredPlan}`}
           onPress={() => navigate('desk', { sub: 'wallet' })}
         />
-        {creditAction && creditCost ? (
-          <Btn
-            label={busy ? 'Charging…' : `Use ${creditCost} credits`}
-            onPress={buy}
-            kind="ghost"
-            disabled={busy}
-          />
-        ) : null}
       </View>
-      {note ? <Text style={s.note}>{note}</Text> : null}
-      {creditAction && creditCost ? (
-        <Text style={s.alt}>
-          No subscription needed — credits work as a one-off.
-        </Text>
-      ) : null}
     </View>
   );
 
@@ -126,8 +96,6 @@ const s = StyleSheet.create({
   blurb: { color: theme.muted2, fontSize: theme.fs.sm, textAlign: 'center', lineHeight: 19 },
   actions: { flexDirection: 'row', gap: theme.sp.sm, flexWrap: 'wrap',
     justifyContent: 'center', marginTop: theme.sp.xs },
-  alt: { color: theme.muted, fontSize: theme.fs.xs, textAlign: 'center' },
-  note: { color: theme.red, fontSize: theme.fs.sm, textAlign: 'center' },
 });
 
 export default Gate;

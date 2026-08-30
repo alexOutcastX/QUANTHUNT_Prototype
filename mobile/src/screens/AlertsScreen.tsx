@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { chargeFor, chargeMessage } from '../credits';
+import { blocks, chargeFor, chargeMessage } from '../credits';
 import { navigate } from '../navIntent';
 import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { Alert, Quote, api } from '../api';
@@ -142,12 +142,11 @@ function AlertsInner() {
       // server-side cost, so it is metered. Charge BEFORE creating it — an
       // alert that exists but was never paid for is the worse failure.
       if ((alerts?.length ?? 0) >= FREE_ALERTS) {
-        // chargeFor knows the plan: a plan that includes alerts returns
-        // 'covered-by-plan' and nothing is charged. Keeping that check inside
-        // it means no screen has to reason about entitlement itself.
-        const r = await chargeFor('extra_alert', `alert:${s}:${type}:${v}`,
-                                  { feature: 'alerts' });
-        if (!r.ok && r.reason !== 'covered-by-plan') {
+        // The server decides both halves: it refuses outright if the plan does
+        // not carry alerts, and charges if it does. No screen reasons about
+        // entitlement itself — that is how credits stopped being a way in.
+        const r = await chargeFor('extra_alert', `alert:${s}:${type}:${v}`);
+        if (blocks(r)) {
           setCreditNote(chargeMessage(r));
           return;
         }

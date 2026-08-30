@@ -1846,6 +1846,24 @@ def wallet_spend():
         return jsonify({"error": "unknown-action",
                         "detail": f"Nothing is priced as {action!r}."}), 400
     acct = _acct()
+
+    # Credits meter usage. They do not sell entitlement: an account whose plan
+    # does not carry the feature is refused here rather than charged, at any
+    # balance. Enforced on the server because the client cannot be the thing
+    # that decides — a paywall a request can talk its way past is not one.
+    feature = _rewards.feature_for(action)
+    plan = request.member.get("plan") or "free"
+    if feature and not _billing.allows(acct, feature, plan):
+        need = _billing.required_plan(feature)
+        return jsonify({
+            "error": "plan-required",
+            "feature": feature,
+            "required_plan": need,
+            "plan": _billing.effective_plan(acct, plan),
+            "detail": f"{_billing.PLANS[need]['name']} includes this. "
+                      f"Credits pay for how much you use it, not for the plan itself.",
+        }), 403
+
     try:
         left = _wallet.spend(acct, cost, _rewards.PRICE_LABELS.get(action, action), ref=ref)
     except _wallet.InsufficientFunds:

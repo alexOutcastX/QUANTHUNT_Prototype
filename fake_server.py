@@ -33,6 +33,11 @@ _MEMBER = {"username": "Taureye", "uname": "taureye", "plan": "max", "owner": Tr
 
 _BT_SYMS = ["RELIANCE", "TCS", "INFY", "HDFCBANK", "SBIN"]
 
+# The one piece of mutable state in this fixture: a balance that
+# actually goes down when something is charged, so a check can tell a
+# real spend from a no-op.
+_SPENT = {"balance": 120}
+
 _tl_seeded = [False]
 
 
@@ -593,6 +598,18 @@ class H(BaseHTTPRequestHandler):
 
     def _json(self, payload):
         self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.end_headers()
+        self.wfile.write(json.dumps(payload).encode())
+
+    def _status(self, code, payload):
+        """A refusal with a status the client can branch on.
+
+        The app reads the status and the `error` tag, not just the sentence, so
+        a fixture that answered 200 to everything would never exercise the
+        paths that matter — an entitlement refusal above all.
+        """
+        self.send_response(code)
         self.send_header("Content-Type", "application/json")
         self.end_headers()
         self.wfile.write(json.dumps(payload).encode())
@@ -1276,6 +1293,28 @@ class H(BaseHTTPRequestHandler):
             _WARM["cancel"] = True
             _WARM["running"] = False
             return self._json({"stopping": True, "progress": _warm_snapshot()})
+        if self.path.split("?")[0] == "/wallet/spend":
+            # The metering endpoint, with the one rule that matters: credits
+            # buy usage, never entitlement. An action whose feature the plan
+            # does not carry is refused with 403 at any balance — same shape
+            # the real route returns, so the client's handling is exercised.
+            import rewards as _rw
+            n = int(self.headers.get("Content-Length") or 0)
+            body = json.loads(self.rfile.read(n) or b"{}")
+            action = (body.get("action") or "").strip()
+            cost = _rw.PRICES.get(action)
+            if not cost:
+                return self._status(400, {"error": "unknown-action",
+                                          "detail": f"Nothing is priced as {action!r}."})
+            feat = _rw.feature_for(action)
+            if feat and feat not in _MEMBER["features"]:
+                return self._status(403, {
+                    "error": "plan-required", "feature": feat, "required_plan": "max",
+                    "detail": "Max includes this. Credits pay for how much you "
+                              "use it, not for the plan itself."})
+            _SPENT["balance"] = max(0, _SPENT["balance"] - cost)
+            return self._json({"ok": True, "spent": cost,
+                               "balance": _SPENT["balance"], "action": action})
         if self.path.split("?")[0] == "/backtest/run":
             n = int(self.headers.get("Content-Length") or 0)
             cfg = json.loads(self.rfile.read(n) or b"{}")

@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Gate } from '../components/Gate';
+import { blocks, chargeFor, chargeMessage } from '../credits';
 import {
   ActivityIndicator,
   Linking,
@@ -144,6 +145,17 @@ function AnalysisInner() {
     if (!s) { setMsg('Enter a symbol to analyse.'); return; }
     setBusy(true);
     setMsg(null);
+
+    // One dossier is one charge, metered where the work happens rather than at
+    // the gate — the plan says whether this screen opens, credits say how many
+    // reports you pull from it. The ref is the symbol and the day, so building
+    // the same company's report twice in a session costs once.
+    const charge = await chargeFor('dossier', `dossier:${s}:${new Date().toISOString().slice(0, 10)}`);
+    if (blocks(charge)) {
+      setMsg(chargeMessage(charge));
+      setBusy(false);
+      return;
+    }
     setD({ sym: s });
     setScr(null);
     setSym(s);
@@ -1216,8 +1228,6 @@ export default function AnalysisScreen() {
       mode="replace"
       title="Institutional company report"
       blurb="Valuation against sector medians, cash flow, shareholding and promoter pledges — one printable report per company."
-      creditAction="dossier"
-      creditCost={25}
     >
       <AnalysisInner />
     </Gate>

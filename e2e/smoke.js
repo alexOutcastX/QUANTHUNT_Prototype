@@ -1265,6 +1265,62 @@ function check(name, ok, detail) {
       );
     }
 
+    // 8m · the paywall, seen from outside it. Signed in as an owner every
+    // gate is open, which is exactly the state in which a hole in one goes
+    // unnoticed — so this signs out, creates a free account, and looks at the
+    // door the top tier exists to sell.
+    {
+      await page.evaluate(() => {
+        const el = document.querySelector('[aria-label^="Signed in as"]');
+        if (el) el.click();
+      });
+      await page.waitForTimeout(600);
+      await page.evaluate(() => {
+        const el = [...document.querySelectorAll('div,span')]
+          .filter((e) => (e.textContent || '').trim() === 'Sign out').pop();
+        if (el) el.click();
+      });
+      await page.waitForTimeout(1500);
+      const out = (await page.locator('text=Members only').count()) > 0;
+      check('signing out returns you to the gate', out);
+      if (out) {
+        await page.evaluate(() => {
+          const el = document.querySelector('[data-testid="mode-signup"]');
+          if (el) el.click();
+        });
+        await page.waitForTimeout(400);
+        await page.fill('[data-testid="login-user"]', 'freeuser');
+        await page.fill('[data-testid="login-pw"]', 'a-good-password');
+        await page.evaluate(() => {
+          const el = [...document.querySelectorAll('div,span')]
+            .filter((e) => (e.textContent || '').trim() === 'CREATE ACCOUNT').pop();
+          if (el) el.click();
+        });
+        await page.waitForTimeout(3000);
+        check(
+          'a new account is on the free plan and inside the app',
+          (await page.locator('text=Members only').count()) === 0,
+        );
+        await page.evaluate(() => {
+          const el = document.querySelector('[aria-label="Terminal"]');
+          if (el) el.click();
+        });
+        await page.waitForTimeout(2500);
+        const gate = await page.evaluate(() => document.body.innerText);
+        check(
+          'the terminal is behind the plan for a free account',
+          /Unlock with Max/.test(gate),
+          gate.slice(0, 240),
+        );
+        // The whole point of this section: the wallet is not a second door.
+        check(
+          'and credits are not offered as a way around it',
+          !/credits/i.test(gate) && !/No subscription needed/.test(gate),
+          gate.slice(0, 240),
+        );
+      }
+    }
+
     // 9 · no uncaught page errors during the whole run
     check('no uncaught page errors', errors.length === 0, errors[0]);
   } finally {

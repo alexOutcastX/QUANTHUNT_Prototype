@@ -219,12 +219,15 @@ function buildHtmlTableRows(headers: string[], rows: string[][]): string {
  * metering at all.
  */
 async function chargeExport(name: string): Promise<boolean> {
-  const { chargeFor } = await import('./credits');
+  const { blocks, chargeFor } = await import('./credits');
   // The ref is the export's name plus the day: re-exporting the same table
   // twice in one session is one charge, which is what a user would expect.
   const day = new Date().toISOString().slice(0, 10);
-  const r = await chargeFor('export', `export:${slug(name)}:${day}`, { feature: 'exports' });
-  return r.ok || (!r.ok && r.reason === 'covered-by-plan');
+  // No feature check here: the server refuses an account whose plan does not
+  // carry exports, and charges one whose plan does. Deciding entitlement on
+  // this side was what let credits stand in for a subscription.
+  const r = await chargeFor('export', `export:${slug(name)}:${day}`);
+  return !blocks(r);
 }
 
 export async function exportCsvRows(headers: string[], rows: string[][], name: string): Promise<void> {

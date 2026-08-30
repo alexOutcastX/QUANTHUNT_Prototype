@@ -49,6 +49,28 @@ PRICE_LABELS = {
     "extra_alert": "Price alert beyond the free five",
 }
 
+# Which plan feature each priced action belongs to.
+#
+# This is the line credits may not cross. Credits meter how MUCH of a feature
+# you use; the plan decides WHETHER you may use it at all. An account whose
+# plan does not carry the feature cannot buy its way in with credits at any
+# price — see server.wallet_spend, which refuses rather than charging.
+#
+# Without this map the wallet was a second, cheaper paywall running beside the
+# real one: a free account with a few daily bonuses could open the backtest,
+# which is the one thing the ladder exists to sell.
+ACTION_FEATURE = {
+    "dossier": "dossier",
+    "backtest": "backtest",
+    "export": "exports",
+    "extra_alert": "alerts",
+}
+
+
+def feature_for(action: str) -> str:
+    """The plan feature an action needs, or "" when it needs none."""
+    return ACTION_FEATURE.get((action or "").strip(), "")
+
 # ── earning ─────────────────────────────────────────────────────────────────
 DAILY_CREDITS = int(os.environ.get("DAILY_BONUS_CREDITS", "5"))
 STREAK_BONUS = {3: 15, 7: 50, 30: 300}

@@ -11,6 +11,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import TermTip from '../components/TermTip';
 import { navigate } from '../navIntent';
 import { Gate } from '../components/Gate';
+import { blocks, chargeFor, chargeMessage } from '../credits';
 import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -346,6 +347,16 @@ function BacktestConsole() {
     if (m) setParams({ ...m.params });
   };
 
+  // A stable fingerprint of a run's configuration. The same parameters twice
+  // are the same piece of work, and the server's unique index on the ref is
+  // what makes a retry free rather than a second charge.
+  const refOf = (cfg: unknown): string => {
+    const t = JSON.stringify(cfg);
+    let h = 5381;
+    for (let i = 0; i < t.length; i += 1) h = ((h * 33) ^ t.charCodeAt(i)) >>> 0;
+    return h.toString(36);
+  };
+
   const run = async () => {
     if (running) return;
     const cfg = buildCfg();
@@ -353,6 +364,16 @@ function BacktestConsole() {
     setError('');
     setRunning(true);
     setProgress('launching…');
+    // Metered at the point of use, not at the door. The plan decides whether
+    // this screen opens at all; credits pay for each run once it has. The ref
+    // is the configuration itself, so a retry after a dropped connection is
+    // the same run and is charged once.
+    const charge = await chargeFor('backtest', `bt:${refOf(cfg)}`);
+    if (blocks(charge)) {
+      setError(chargeMessage(charge));
+      setRunning(false);
+      return;
+    }
     try {
       const { run_id } = await api.btRun(cfg);
       let misses = 0;
@@ -998,13 +1019,14 @@ const styles = StyleSheet.create({
 });
 
 /**
- * Backtesting is a Pro feature. It is gated in `replace` mode rather than
+ * Backtesting is a Max feature. It is gated in `replace` mode rather than
  * `blur`: a blurred equity curve and a visible Sharpe would give away most of
  * the answer, which defeats the point of charging for it.
  *
- * Everyone gets one run regardless of plan — nobody subscribes to something
- * they have never watched work. That allowance is granted server-side so it
- * survives a reinstall.
+ * The gate offers the plan and nothing else. Credits used to open this door,
+ * which meant a free account with a fortnight of daily bonuses got the one
+ * feature the top tier exists to sell. They are charged per run inside the
+ * console instead — see run().
  */
 export default function BacktestScreen() {
   return (
@@ -1013,8 +1035,6 @@ export default function BacktestScreen() {
       requiredPlan="max"
       title="Test a strategy before you risk money on it"
       blurb="Run any strategy against years of history with real Indian charges and slippage, then see what it would actually have returned."
-      creditAction="backtest"
-      creditCost={10}
     >
       <BacktestConsole />
     </Gate>

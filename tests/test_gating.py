@@ -28,27 +28,43 @@ class GateComponentTest(unittest.TestCase):
     def test_an_allowed_user_sees_no_difference(self):
         """No badge, no watermark — a paying customer should not be reminded
         they are paying on every screen."""
-        self.assertIn("if (hasFeature(feature) || unlocked) return <>{children}</>;", self.src)
+        self.assertIn("if (hasFeature(feature)) return <>{children}</>;", self.src)
 
     def test_blur_keeps_the_content_on_screen(self):
         """A count of matches sells the upgrade; a description of them does not."""
         self.assertIn("mode === 'blur'", self.src)
         self.assertIn("blurred", self.src)
 
-    def test_credits_are_offered_as_the_alternative(self):
-        self.assertIn("chargeFor(", self.src)
-        self.assertIn("Use ${creditCost} credits", self.src)
+    def test_credits_cannot_open_this_door(self):
+        """The wallet used to sit beside the upgrade offering "Use 10 credits",
+        which made it a second, cheaper paywall: a fortnight of daily bonuses
+        bought the one feature the top tier exists to sell."""
+        self.assertNotIn("chargeFor", self.src)
+        self.assertNotIn("credit", self.src.lower().split("import")[-1])
+        self.assertNotIn("creditAction", self.src)
+        self.assertNotIn("creditCost", self.src)
 
-    def test_an_unlock_is_not_persisted_client_side(self):
-        """Re-deriving entitlement from client state would let a reload grant
-        it for free; the ledger is the record."""
-        self.assertIn("React.useState(false)", self.src)
+    def test_the_plan_is_the_only_way_through(self):
+        buttons = re.findall(r"label=\{?[`\"']([^`\"']+)", self.src)
+        self.assertEqual(len(buttons), 1, buttons)
+        self.assertIn("Unlock with", buttons[0])
+
+    def test_there_is_no_local_unlocked_state_at_all(self):
+        """Anything a component can set to open this door is something a
+        reload could set for free. The plan is the only input."""
+        self.assertNotIn("useState", self.src)
+        self.assertNotIn("setUnlocked", self.src)
         self.assertNotIn("AsyncStorage", self.src)
         self.assertNotIn("localStorage", self.src)
 
-    def test_a_failed_charge_does_not_unlock(self):
-        self.assertIn("if (r.ok || (!r.ok && r.reason === 'covered-by-plan')) setUnlocked(true);",
-                      self.src)
+    def test_no_screen_passes_credits_to_a_gate(self):
+        import glob
+        for path in glob.glob(os.path.join(SRC, "screens", "*.tsx")):
+            with self.subTest(screen=os.path.basename(path)):
+                with open(path, encoding="utf-8") as fh:
+                    body = fh.read()
+                self.assertNotIn("creditAction", body)
+                self.assertNotIn("creditCost", body)
 
 
 class GatedScreensTest(unittest.TestCase):
@@ -99,11 +115,30 @@ class CreditChargingTest(unittest.TestCase):
     def setUp(self):
         self.src = read("credits.ts")
 
-    def test_a_plan_that_covers_it_never_pays(self):
-        """Credits are the way IN for someone whose plan does not cover a
-        feature, not a second toll on people already paying."""
-        self.assertIn("if (opts.feature && hasFeature(opts.feature))", self.src)
-        self.assertIn("'covered-by-plan'", self.src)
+    def test_credits_never_stand_in_for_a_plan(self):
+        """The rule, stated in the type: a refusal for entitlement is its own
+        outcome, and there is no result that means "paid instead of subscribing".
+        """
+        self.assertIn("'plan-required'", self.src)
+        self.assertNotIn("covered-by-plan", self.src)
+
+    def test_it_does_not_decide_entitlement_itself(self):
+        """A paywall a client can talk its way past is not one. The server
+        refuses; this module only reports what it said."""
+        self.assertNotIn("hasFeature", self.src)
+
+    def test_an_unreachable_meter_does_not_block_a_paid_feature(self):
+        """Entitlement fails closed, metering fails open — one rule, one place,
+        so no screen decides it differently."""
+        self.assertIn("export function blocks(", self.src)
+        self.assertIn("return !r.ok && r.reason !== 'unavailable';", self.src)
+
+    def test_every_charging_screen_uses_that_one_rule(self):
+        for mod in (("screens", "AlertsScreen.tsx"), ("screens", "BacktestScreen.tsx"),
+                    ("screens", "AnalysisScreen.tsx"), ("csv.ts",)):
+            with self.subTest(module=mod[-1]):
+                body = read(*mod)
+                self.assertIn("blocks(", body)
 
     def test_the_caller_supplies_a_stable_ref(self):
         self.assertIn("ref: string", self.src)

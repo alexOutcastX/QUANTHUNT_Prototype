@@ -132,10 +132,14 @@ async function postJson<T>(path: string, body: unknown): Promise<T> {
     // a refusal the server had already explained.
     const d = data as { error?: string; detail?: string };
     const err = new Error(d.detail || d.error || 'HTTP ' + res.status) as Error & {
-      code?: string; status?: number;
+      code?: string; status?: number; body?: unknown;
     };
     err.code = d.error;
     err.status = res.status;
+    // The rest of the refusal comes too. A 402 says how many credits were
+    // needed and a 403 says which plan carries the feature; throwing only the
+    // tag and the sentence made the caller guess at both.
+    err.body = d;
     throw err;
   }
   return data;
