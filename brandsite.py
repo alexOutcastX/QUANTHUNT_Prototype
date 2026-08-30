@@ -247,7 +247,16 @@ font-family:"JetBrains Mono",ui-monospace,Menlo,monospace;font-size:13px}
 .auth{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);
 padding:24px;max-width:400px}
 .auth h3{margin:0 0 4px;font-size:20px}
-.auth-sub{margin:0 0 18px;color:var(--muted);font-size:13px}
+.auth-sub{margin:0 0 14px;color:var(--muted);font-size:13px}
+/* Sign in / Create account. One form, two modes: a separate page means
+   someone who typed a username into the wrong one types it again. */
+.auth-modes{display:flex;gap:4px;background:var(--surface-2);border-radius:999px;
+padding:3px;margin:0 0 16px}
+.auth-modes button{flex:1;border:0;border-radius:999px;padding:8px 10px;
+background:none;color:var(--muted);font-family:inherit;font-size:13px;
+font-weight:700;cursor:pointer}
+.auth-modes button[aria-selected="true"]{background:var(--brand);color:#07120c}
+.auth-rules{color:var(--faint);font-size:11.5px;line-height:1.5;margin:0 0 10px}
 .fl{display:block;margin-bottom:12px}
 .fl span{display:block;font-size:12px;color:var(--muted);margin-bottom:5px}
 .fl input{width:100%;background:var(--surface-2);border:1px solid var(--border);
@@ -374,8 +383,12 @@ def _social_buttons():
 def auth_panel():
     return f"""
 <div class="auth" id="signin">
-  <h3>Sign in</h3>
-  <p class="auth-sub">Members only. Access is by invitation while we are in beta.</p>
+  <h3 id="ah">Sign in</h3>
+  <p class="auth-sub" id="as">Welcome back.</p>
+  <div class="auth-modes" role="tablist" aria-label="Sign in or create an account">
+    <button type="button" id="mi" role="tab" aria-selected="true">Sign in</button>
+    <button type="button" id="mu" role="tab" aria-selected="false">Create account</button>
+  </div>
   <form id="lf" autocomplete="on">
     <label class="fl"><span>Username</span>
       <input id="lu" name="username" autocomplete="username" autocapitalize="none"
@@ -387,12 +400,16 @@ def auth_panel():
         <button type="button" id="lpx" class="pw-eye" aria-pressed="false"
                 aria-controls="lp" aria-label="Show password" title="Show password">Show</button>
       </span></label>
+    <label class="fl" id="cw" hidden><span>Invite code</span>
+      <input id="lc" name="code" autocapitalize="none" spellcheck="false"
+             placeholder="your invite code"></label>
+    <p class="auth-rules" id="lr" hidden></p>
     <p class="auth-err" id="le" role="alert"></p>
     <button class="btn btn-primary wide" type="submit" id="lb">Sign in</button>
   </form>
   <div class="sep"><span>or</span></div>
   {_social_buttons()}
-  <p class="auth-fine">By signing in you agree to our
+  <p class="auth-fine" id="af">By signing in you agree to our
     <a href="/site/legal/terms">Terms</a> and
     <a href="/site/legal/privacy">Privacy Policy</a>.</p>
 </div>
@@ -428,23 +445,78 @@ def auth_panel():
       eye.setAttribute('aria-label','Show password');
     }});
   }}
+  // ── two modes, one form ──────────────────────────────────────────────
+  // The server owns the rules — whether sign-up is open at all, how long a
+  // password has to be, whether an invite code is needed — so the form asks
+  // it rather than restating them. What the form says is then what the server
+  // enforces.
+  var mode='in', policy=null,
+      h=document.getElementById('ah'), sub=document.getElementById('as'),
+      mi=document.getElementById('mi'), mu=document.getElementById('mu'),
+      modes=document.querySelector('.auth-modes'),
+      cw=document.getElementById('cw'), lc=document.getElementById('lc'),
+      lr=document.getElementById('lr'), fine=document.getElementById('af'),
+      lp=document.getElementById('lp');
+
+  function paint(){{
+    var up = mode === 'up';
+    h.textContent = up ? 'Create your account' : 'Sign in';
+    sub.textContent = up ? 'Free to start. No card needed.' : 'Welcome back.';
+    b.textContent = up ? 'Create account' : 'Sign in';
+    mi.setAttribute('aria-selected', up ? 'false' : 'true');
+    mu.setAttribute('aria-selected', up ? 'true' : 'false');
+    if(lp) lp.setAttribute('autocomplete', up ? 'new-password' : 'current-password');
+    cw.hidden = !(up && policy && policy.invite_required);
+    lr.hidden = !(up && policy);
+    if(up && policy){{
+      lr.textContent = policy.username_min + '–' + policy.username_max
+        + ' characters, starting with a letter. Password at least '
+        + policy.password_min + '.';
+    }}
+    fine.firstChild.nodeValue = up
+      ? 'By creating an account you agree to our '
+      : 'By signing in you agree to our ';
+    e.textContent='';
+  }}
+  function swap(next){{ mode = next; paint(); }}
+  mi.addEventListener('click', function(){{ swap('in'); }});
+  mu.addEventListener('click', function(){{ swap('up'); }});
+
+  // Sign-up can be closed, in which case the switch has nothing to offer and
+  // showing it would be a button that only ever refuses.
+  fetch('/auth/member/signup-policy', {{credentials:'include'}})
+    .then(function(r){{ return r.json(); }})
+    .then(function(p){{
+      policy = p;
+      if(!p || !p.open){{ modes.hidden = true; }}
+      paint();
+    }})
+    .catch(function(){{ modes.hidden = true; }});
+
   f.addEventListener('submit', function(ev){{
     ev.preventDefault();
-    e.textContent=''; b.disabled=true; b.textContent='Signing in…';
-    fetch('/auth/member/login', {{
+    var up = mode === 'up';
+    e.textContent=''; b.disabled=true;
+    b.textContent = up ? 'Creating…' : 'Signing in…';
+    var body = {{username:document.getElementById('lu').value.trim(),
+                 password:lp.value}};
+    if(up && lc) body.code = lc.value.trim();
+    fetch(up ? '/auth/member/register' : '/auth/member/login', {{
       method:'POST', credentials:'include',
       headers:{{'Content-Type':'application/json'}},
-      body: JSON.stringify({{username:document.getElementById('lu').value.trim(),
-                            password:document.getElementById('lp').value}})
+      body: JSON.stringify(body)
     }}).then(function(r){{ return r.json().then(function(j){{ return {{ok:r.ok, j:j}}; }}); }})
       .then(function(res){{
         if(res.ok){{ window.location.href='/app'; return; }}
-        e.textContent = res.j.detail || 'Wrong username or password.';
-        b.disabled=false; b.textContent='Sign in';
+        // The server's own sentence — it is the only party that knows whether
+        // the name is taken, the password is short or the code is wrong.
+        e.textContent = res.j.detail ||
+          (up ? 'Could not create that account.' : 'Wrong username or password.');
+        b.disabled=false; b.textContent = up ? 'Create account' : 'Sign in';
       }})
       .catch(function(){{
         e.textContent='Could not reach the server. Please try again.';
-        b.disabled=false; b.textContent='Sign in';
+        b.disabled=false; b.textContent = up ? 'Create account' : 'Sign in';
       }});
   }});
 }})();

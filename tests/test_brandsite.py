@@ -5,6 +5,7 @@ the security boundary: anything in a body that reaches the page unescaped is an
 injection. The escaping tests are the point of this file.
 """
 import os
+import re
 import unittest
 
 import brandsite as bs
@@ -172,6 +173,62 @@ class SignInPanelTest(unittest.TestCase):
     def test_terms_and_privacy_are_linked_from_the_form(self):
         self.assertIn("/site/legal/terms", self.h)
         self.assertIn("/site/legal/privacy", self.h)
+
+
+class CreateAccountPanelTest(unittest.TestCase):
+    """The same card signs you in or signs you up — no invitation wall."""
+
+    def setUp(self):
+        self.h = bs.landing_html()
+
+    def test_the_invitation_only_copy_is_gone(self):
+        """Sign-up is open, so the card must not say otherwise."""
+        self.assertNotIn("Members only", self.h)
+        self.assertNotIn("invitation", self.h)
+        self.assertNotIn("while we are in beta", self.h)
+
+    def test_both_modes_are_offered(self):
+        self.assertIn('id="mi"', self.h)   # sign in
+        self.assertIn('id="mu"', self.h)   # create account
+        self.assertIn("Create account", self.h)
+        self.assertIn('role="tablist"', self.h)
+
+    def test_sign_in_is_the_one_selected_on_arrival(self):
+        """Most visitors already have an account; the default must suit them."""
+        mi = re.search(r'id="mi"[^>]*>', self.h).group(0)
+        mu = re.search(r'id="mu"[^>]*>', self.h).group(0)
+        self.assertIn('aria-selected="true"', mi)
+        self.assertIn('aria-selected="false"', mu)
+
+    def test_creating_an_account_posts_to_the_register_route(self):
+        self.assertIn("/auth/member/register", self.h)
+
+    def test_the_form_asks_the_server_what_the_rules_are(self):
+        """Rules stated here must be the rules the server enforces."""
+        self.assertIn("/auth/member/signup-policy", self.h)
+        self.assertIn("policy.password_min", self.h)
+        self.assertIn("policy.username_min", self.h)
+        self.assertIn("policy.invite_required", self.h)
+
+    def test_the_switch_hides_itself_when_sign_up_is_closed(self):
+        """A button that can only ever refuse is worse than no button."""
+        self.assertIn("modes.hidden = true", self.h)
+
+    def test_the_server_sentence_is_what_the_visitor_reads(self):
+        self.assertIn("res.j.detail", self.h)
+
+    def test_the_new_password_field_is_marked_as_new(self):
+        """Password managers offer to generate one only when told it is new."""
+        self.assertIn("'new-password'", self.h)
+
+    def test_the_fine_print_follows_the_mode(self):
+        self.assertIn("By creating an account you agree to our", self.h)
+        self.assertIn("By signing in you agree to our", self.h)
+
+    def test_an_invite_field_exists_but_is_hidden_until_it_is_needed(self):
+        code = re.search(r'id="cw"[^>]*>', self.h).group(0)
+        self.assertIn("hidden", code)
+        self.assertIn('id="lc"', self.h)
 
 
 class LegalTest(unittest.TestCase):
