@@ -866,13 +866,19 @@ export type ReportResp = {
 // Corporate / institutional data (NSE public feeds).
 export type Announcement = { date: string; subject: string; detail: string; attachment: string };
 export type CorpAction = { type: string; ex_date: string; record_date: string; detail: string };
+// What NSE's shareholding-master feed actually carries. FII, DII and promoter
+// pledge are NOT in it — they live in the XBRL document `xbrl` links to — so
+// they are not fields here either: four labelled cells that could never fill
+// is what the panel showed before.
 export type Shareholding = {
   date: string;
+  name?: string;
   promoter: number | null;
-  fii: number | null;
-  dii: number | null;
   public: number | null;
-  pledge: number | null;
+  trusts: number | null;
+  drs: number | null;
+  /** The full pattern, including the institutional split and the pledge. */
+  xbrl?: string;
 };
 export type Deal = {
   kind: string;

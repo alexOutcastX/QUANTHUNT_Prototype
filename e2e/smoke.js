@@ -1135,6 +1135,30 @@ function check(name, ok, detail) {
         && /CORPORATE CALENDAR/i.test(company),
       company.slice(0, 250),
     );
+    // The panel showed a correct date above five em-dashes for every company,
+    // because the parser read key names NSE has never served. Two of those
+    // five it never serves at all. The filings arrive after the card does, so
+    // wait for the block rather than for a fixed moment.
+    await page.waitForFunction(
+      () => /SHAREHOLDING PATTERN[\s\S]{0,200}%/i.test(document.body.innerText),
+      { timeout: 20000 },
+    ).catch(() => {});
+    // Up to the explanatory note, not through it: that sentence says where the
+    // institutional split and the pledge live, so a loose match reads its own
+    // prose as the labels it is checking are gone.
+    const shp = await page.evaluate(() =>
+      ((document.body.innerText.match(/SHAREHOLDING PATTERN[\s\S]{0,260}/i) || [''])[0])
+        .split('Promoter vs public')[0]);
+    check(
+      'the shareholding panel shows real percentages',
+      /54\.3%/.test(shp) && /45\.7%/.test(shp),
+      shp,
+    );
+    check(
+      'and no longer labels categories this feed cannot fill',
+      !/\bFII\b/.test(shp) && !/\bDII\b/.test(shp) && !/Pledge\b/i.test(shp),
+      shp,
+    );
 
     const sections = await page.evaluate(() => {
       const el = [...document.querySelectorAll('[role="button"]')].find((e) =>

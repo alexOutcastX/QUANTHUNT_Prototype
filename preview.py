@@ -5,14 +5,23 @@
 # on the domain" has to be decided per request, from the Host header, rather
 # than by deploying different code to different machines.
 #
-# Default: bare IP literals preview, named domains do not. Deploying this
-# branch therefore leaves taureye.com looking exactly as it does today while
-# every new surface is reachable at http://161.118.174.177.
+# Default: EVERY host sees everything. The gate was built to hold the
+# monetisation surface — wallet, credits, referrals, plans, gifting — back to
+# the bare IP while it was unfinished, so taureye.com kept looking as it did.
+# It is finished, and a feature that answers 401 on the IP and 404 on the
+# domain is not staged, it is hidden from the people it was built for.
+#
+# The machinery stays, because it is the only staging this single-box setup
+# has: set PREVIEW_OFF=1 to put everything behind the gate again, in one env
+# var and a restart, without a deploy.
 #
 # Overrides (server .env):
-#   PREVIEW_HOSTS=host1,host2   also treat these hostnames as preview
-#   PREVIEW_ALL=1               everything previews (use to go live)
-#   PREVIEW_OFF=1               nothing previews (kill switch, wins over all)
+#   PREVIEW_OFF=1               hide preview features from every host
+#                               (kill switch, wins over everything)
+#   PREVIEW_IPONLY=1            the old default: bare IPs and localhost only
+#   PREVIEW_HOSTS=host1,host2   also treat these hostnames as preview, which
+#                               only means anything alongside PREVIEW_IPONLY
+#   PREVIEW_ALL=1               redundant now, and still honoured
 
 import ipaddress
 import os
@@ -53,6 +62,8 @@ def enabled(host: str) -> bool:
         return False
     if os.environ.get("PREVIEW_ALL") == "1":
         return True
+    if os.environ.get("PREVIEW_IPONLY") != "1":
+        return True
     h = _bare(host)
     if not h:
         return False
@@ -69,6 +80,8 @@ def reason(host: str) -> str:
         return "disabled by PREVIEW_OFF"
     if os.environ.get("PREVIEW_ALL") == "1":
         return "enabled for every host by PREVIEW_ALL"
+    if os.environ.get("PREVIEW_IPONLY") != "1":
+        return "enabled for every host (the default)"
     h = _bare(host)
     if h in ("localhost", "localhost.localdomain"):
         return "local development host"

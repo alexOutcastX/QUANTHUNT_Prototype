@@ -746,19 +746,24 @@ function AnalysisInner() {
             {d.hold ? (
               <>
                 <SectionTitle>Ownership · shareholding {d.hold.date ? `(${d.hold.date})` : ''}</SectionTitle>
-                {/* Falls back to the screener.in split, field by field.
-                    This panel is fed by the exchange filings feed, which for
-                    plenty of companies returns a dated envelope with nothing in
-                    it — so every row rendered an em-dash directly above a
-                    screener.in block showing Promoters 50.48%, FII 17.19%,
-                    DII 21.10%. The number was on the screen twice; only one
-                    place was allowed to read it. */}
+                {/* Each row from whichever source actually carries it.
+                    The em-dashes here had two causes and only one was known.
+                    The known one: the exchange feed sometimes returns a dated
+                    envelope with nothing in it. The other, found later: it
+                    never carried FII, DII or pledge AT ALL, under any key —
+                    the parser was reading names NSE does not serve, so those
+                    three rows were dashes for every company, always, directly
+                    above a screener.in block showing FII 17.19%, DII 21.10%.
+                    Promoter and public come from the filing (authoritative,
+                    dated), the institutional split from screener.in, which is
+                    the only source that has it. Pledge has no source here at
+                    all, so it is no longer a row. */}
                 <Card>
                   <KV k="Promoters" v={num(d.hold.promoter ?? sh?.promoter ?? null, 2, '%')} />
-                  <KV k="FII" v={num(d.hold.fii ?? sh?.fii ?? null, 2, '%')} />
-                  <KV k="DII" v={num(d.hold.dii ?? sh?.dii ?? null, 2, '%')} />
+                  <KV k="FII" v={num(sh?.fii ?? null, 2, '%')} />
+                  <KV k="DII" v={num(sh?.dii ?? null, 2, '%')} />
                   <KV k="Public" v={num(d.hold.public ?? sh?.public ?? null, 2, '%')} />
-                  <KV k="Promoter pledge" v={num(d.hold.pledge, 2, '%')} color={(d.hold.pledge ?? 0) > 0 ? theme.red : undefined} />
+                  {d.hold.trusts ? <KV k="Employee trusts" v={num(d.hold.trusts, 2, '%')} /> : null}
                 </Card>
               </>
             ) : (mb || rep?.shareholding) ? (
@@ -953,10 +958,12 @@ function dossierHtml(d: Dossier): string {
     ['Reward:risk', rec.rr != null ? `${rec.rr.toFixed(1)}:1` : '—'],
     ['Support/resistance', `${money(rec.support)} / ${money(rec.resistance)}`],
   ].map(([k, val]) => row(k, val)).join('') : '';
+  // Same fields as the on-screen panel, and for the same reason: the exchange
+  // feed carries promoter and public, not the institutional split.
   const holdRows = d.hold ? [
-    ['Promoters', num(d.hold.promoter, 2, '%')], ['FII', num(d.hold.fii, 2, '%')],
-    ['DII', num(d.hold.dii, 2, '%')], ['Public', num(d.hold.public, 2, '%')],
-    ['Pledge', num(d.hold.pledge, 2, '%')],
+    ['Promoters', num(d.hold.promoter, 2, '%')],
+    ['Public', num(d.hold.public, 2, '%')],
+    ['Employee trusts', num(d.hold.trusts, 2, '%')],
   ].map(([k, val]) => row(k, val)).join('') : '';
   // Report date — also shown in the masthead, but stated in the body so it's
   // unambiguous on every printed page of the dossier.

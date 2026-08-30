@@ -224,42 +224,66 @@ class AnalyticsTest(unittest.TestCase):
 
 
 class PreviewGateTest(unittest.TestCase):
+    """The gate held the monetisation surface back to the bare IP while it was
+    unfinished. It is finished, so the default is now the other way: every host
+    sees everything, and the gate is the staging mechanism this single-box
+    setup would otherwise not have.
+    """
+
+    VARS = ("PREVIEW_HOSTS", "PREVIEW_ALL", "PREVIEW_OFF", "PREVIEW_IPONLY")
+
     def setUp(self):
-        for v in ("PREVIEW_HOSTS", "PREVIEW_ALL", "PREVIEW_OFF"):
+        for v in self.VARS:
             os.environ.pop(v, None)
         import preview
         self.p = importlib.reload(preview)
 
     def tearDown(self):
-        for v in ("PREVIEW_HOSTS", "PREVIEW_ALL", "PREVIEW_OFF"):
+        for v in self.VARS:
             os.environ.pop(v, None)
 
-    def test_bare_ip_previews_named_domain_does_not(self):
+    def test_every_host_sees_it_by_default(self):
+        """A feature that answers 401 on the IP and 404 on the domain is not
+        staged, it is hidden from the people it was built for."""
+        for host in ("taureye.com", "www.taureye.com", "161.118.174.177",
+                     "161.118.174.177:5000", "localhost:8081", "[::1]:5000"):
+            self.assertTrue(self.p.enabled(host), host)
+
+    def test_the_kill_switch_still_wins_over_everything(self):
+        """One env var and a restart puts it all back, without a deploy."""
+        os.environ["PREVIEW_OFF"] = "1"
+        for host in ("taureye.com", "161.118.174.177", "localhost"):
+            self.assertFalse(self.p.enabled(host), host)
+        os.environ["PREVIEW_ALL"] = "1"
+        self.assertFalse(self.p.enabled("taureye.com"), "PREVIEW_OFF must win")
+
+    def test_the_old_behaviour_is_one_env_var_away(self):
+        os.environ["PREVIEW_IPONLY"] = "1"
         self.assertTrue(self.p.enabled("161.118.174.177"))
         self.assertTrue(self.p.enabled("161.118.174.177:5000"))
+        self.assertTrue(self.p.enabled("localhost:8081"))
+        self.assertTrue(self.p.enabled("[::1]:5000"))
         self.assertFalse(self.p.enabled("taureye.com"))
         self.assertFalse(self.p.enabled("www.taureye.com"))
+        self.assertFalse(self.p.enabled(""))
 
-    def test_localhost_previews_so_development_sees_the_new_work(self):
-        self.assertTrue(self.p.enabled("localhost:8081"))
-
-    def test_named_hosts_can_be_opted_in(self):
+    def test_named_hosts_can_still_be_opted_in_when_staging(self):
+        os.environ["PREVIEW_IPONLY"] = "1"
         os.environ["PREVIEW_HOSTS"] = "beta.taureye.com"
         self.assertTrue(self.p.enabled("beta.taureye.com"))
         self.assertFalse(self.p.enabled("taureye.com"))
 
-    def test_preview_all_ships_it_and_preview_off_wins(self):
+    def test_preview_all_is_redundant_but_still_honoured(self):
+        os.environ["PREVIEW_IPONLY"] = "1"
         os.environ["PREVIEW_ALL"] = "1"
         self.assertTrue(self.p.enabled("taureye.com"))
+
+    def test_the_reason_says_which_rule_applied(self):
+        self.assertIn("every host", self.p.reason("taureye.com"))
+        os.environ["PREVIEW_IPONLY"] = "1"
+        self.assertIn("hidden", self.p.reason("taureye.com"))
         os.environ["PREVIEW_OFF"] = "1"
-        self.assertFalse(self.p.enabled("taureye.com"))
-        self.assertFalse(self.p.enabled("161.118.174.177"))
-
-    def test_ipv6_literal_is_a_preview_host(self):
-        self.assertTrue(self.p.enabled("[::1]:5000"))
-
-    def test_blank_host_does_not_preview(self):
-        self.assertFalse(self.p.enabled(""))
+        self.assertIn("PREVIEW_OFF", self.p.reason("taureye.com"))
 
 
 class IntegrationsTest(unittest.TestCase):

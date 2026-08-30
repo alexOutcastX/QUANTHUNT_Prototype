@@ -616,8 +616,13 @@ class H(BaseHTTPRequestHandler):
         # graceful "unavailable" path in the UI.
         if sym in ("CIANAGRO", ""):
             return self._json({"latest": None, "source": "NSE"})
-        self._json({"latest": {"date": "31-Mar-2026", "promoter": 54.32, "fii": 18.7,
-                               "dii": 9.15, "public": 17.83, "pledge": 2.4}, "source": "NSE"})
+        # The shape the real feed returns: promoter and public, no FII/DII and
+        # no pledge — those live in the XBRL filing, not in this endpoint.
+        self._json({"latest": {"date": "30-JUN-2026", "promoter": 54.32,
+                               "public": 45.68, "trusts": 0.0, "drs": None,
+                               "name": sym.title() + " Limited",
+                               "xbrl": "https://nsearchives.nseindia.com/corporate/xbrl/SHP_1_WEB.xml"},
+                    "source": "NSE"})
 
     def _multibagger(self):
         from urllib.parse import urlparse, parse_qs

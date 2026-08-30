@@ -58,22 +58,51 @@ class MonetisationRouteTest(unittest.TestCase):
         return {"Host": host or self.IP, "X-TE-Member": "Bearer " + self.token}
 
     # ── the gate ──
-    def test_preview_endpoint_reports_per_host(self):
-        ip = self.client.get("/preview", headers={"Host": self.IP}).json
-        dom = self.client.get("/preview", headers={"Host": self.DOMAIN}).json
-        self.assertTrue(ip["preview"])
-        self.assertFalse(dom["preview"])
-        self.assertIn("IP", ip["reason"])
+    # It held the money surface back to the bare IP while it was unfinished.
+    # It is finished, so the default is now the other way round; the machinery
+    # stays because it is the only staging a single box has.
+    PREVIEW_PATHS = ("/wallet", "/referral", "/billing/plans",
+                     "/billing/subscription", "/paywall/backtest",
+                     "/integrations/public", "/analytics/summary")
 
-    def test_every_preview_route_is_404_on_the_domain(self):
+    def test_preview_endpoint_reports_per_host(self):
+        for host in (self.IP, self.DOMAIN):
+            body = self.client.get("/preview", headers={"Host": host}).json
+            self.assertTrue(body["preview"], host)
+            self.assertIn("every host", body["reason"])
+
+    def test_the_money_routes_serve_on_the_domain_too(self):
+        """A feature that answers on the IP and 404s on the domain is not
+        staged, it is hidden from the people it was built for."""
+        for host in (self.IP, self.DOMAIN):
+            h = self._auth(host=host)
+            for path in self.PREVIEW_PATHS:
+                r = self.client.get(path, headers=h)
+                self.assertNotEqual(r.status_code, 404,
+                                    f"{path} is missing on {host}")
+
+    def test_staging_still_hides_them_from_the_domain(self):
         """404 rather than 403: an unreleased feature should look absent on the
         public domain, not merely forbidden."""
-        h = self._auth(host=self.DOMAIN)
-        for path in ("/wallet", "/referral", "/billing/plans",
-                     "/billing/subscription", "/paywall/backtest",
-                     "/integrations/public", "/analytics/summary"):
-            r = self.client.get(path, headers=h)
-            self.assertEqual(r.status_code, 404, f"{path} leaked on the domain")
+        os.environ["PREVIEW_IPONLY"] = "1"
+        try:
+            h = self._auth(host=self.DOMAIN)
+            for path in self.PREVIEW_PATHS:
+                r = self.client.get(path, headers=h)
+                self.assertEqual(r.status_code, 404, f"{path} leaked on the domain")
+            self.assertFalse(
+                self.client.get("/preview", headers={"Host": self.DOMAIN}).json["preview"])
+        finally:
+            os.environ.pop("PREVIEW_IPONLY", None)
+
+    def test_the_kill_switch_hides_them_everywhere(self):
+        os.environ["PREVIEW_OFF"] = "1"
+        try:
+            for host in (self.IP, self.DOMAIN):
+                r = self.client.get("/wallet", headers=self._auth(host=host))
+                self.assertEqual(r.status_code, 404, host)
+        finally:
+            os.environ.pop("PREVIEW_OFF", None)
 
     def test_the_same_routes_serve_on_the_ip(self):
         h = self._auth()

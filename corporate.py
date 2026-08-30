@@ -105,19 +105,45 @@ def _num(v):
 
 
 def parse_shareholding(raw) -> dict:
-    # NSE returns a list of quarterly records; take the latest and normalise the
-    # promoter / FII / DII / public split + promoter pledge if present.
-    rows = raw if isinstance(raw, list) else (raw or {}).get("data", raw) or []
+    """The latest quarterly shareholding pattern.
+
+    What this feed actually carries, checked against RELIANCE, TCS and
+    HDFCBANK: a date, promoter-and-promoter-group, public, employee trusts and
+    depository receipts. The keys are `pr_and_prgrp` and `public_val`, which is
+    why every field read as None before — the parser was looking for
+    `promoter` / `publicShareholding`, which this endpoint has never returned,
+    and the panel showed a dash in every cell under a correct date.
+
+    FII, DII and promoter pledge are NOT in it. They are in the XBRL document
+    each row links to, which is a per-symbol file fetch and a parse of its own.
+    Rather than keep four labelled cells that can never fill, this returns what
+    the feed has and names the rest as absent — `xbrl` carries the link for
+    whoever wants to go and get them.
+    """
+    # NSE answers a bare list, or {"data": [...]}, or on a bad day an error
+    # string — which must read as "no pattern", not raise inside the route.
+    if isinstance(raw, list):
+        rows = raw
+    elif isinstance(raw, dict):
+        rows = raw.get("data") or []
+    else:
+        rows = []
     if not isinstance(rows, list) or not rows:
         return {"latest": None, "source": "NSE"}
-    r = rows[0]
+    r = rows[0] if isinstance(rows[0], dict) else {}
     latest = {
         "date": _s(r.get("date") or r.get("submissionDate") or r.get("asOnDate")),
-        "promoter": _num(r.get("promoter") or r.get("promoterAndPromoterGroup")),
-        "fii": _num(r.get("fii") or r.get("foreignInstitutions")),
-        "dii": _num(r.get("dii") or r.get("domesticInstitutions")),
-        "public": _num(r.get("public") or r.get("publicShareholding")),
-        "pledge": _num(r.get("pledge") or r.get("pledgePercentage")),
+        # Both spellings: the documented one and the one NSE serves.
+        "promoter": _num(r.get("pr_and_prgrp") if r.get("pr_and_prgrp") is not None
+                         else (r.get("promoter") or r.get("promoterAndPromoterGroup"))),
+        "public": _num(r.get("public_val") if r.get("public_val") is not None
+                       else (r.get("public") or r.get("publicShareholding"))),
+        "trusts": _num(r.get("employeeTrusts")),
+        "drs": _num(r.get("underlyingDrs")),
+        "name": _s(r.get("name")),
+        # The full pattern — every institutional category and the pledge — is
+        # in this document, not in the JSON above.
+        "xbrl": _s(r.get("xbrl")),
     }
     return {"latest": latest, "source": "NSE"}
 

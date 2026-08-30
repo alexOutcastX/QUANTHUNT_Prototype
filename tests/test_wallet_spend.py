@@ -161,11 +161,22 @@ class SpendRouteTest(unittest.TestCase):
         r = self.client.get("/wallet/history?limit=abc", headers=self.h)
         self.assertEqual(r.status_code, 200)
 
-    def test_the_money_routes_are_hidden_on_the_public_domain(self):
+    def test_the_money_routes_serve_on_the_public_domain(self):
+        """They were held back to the bare IP while the credit economy was
+        unfinished. It is finished, so the domain gets it."""
         h = dict(self.h, Host="taureye.com")
         for path in ("/wallet/earn", "/wallet/history"):
-            self.assertEqual(self.client.get(path, headers=h).status_code, 404, path)
-        self.assertEqual(self.client.post("/wallet/daily", headers=h).status_code, 404)
+            self.assertNotEqual(self.client.get(path, headers=h).status_code, 404, path)
+
+    def test_staging_can_still_hide_them(self):
+        os.environ["PREVIEW_IPONLY"] = "1"
+        try:
+            h = dict(self.h, Host="taureye.com")
+            for path in ("/wallet/earn", "/wallet/history"):
+                self.assertEqual(self.client.get(path, headers=h).status_code, 404, path)
+            self.assertEqual(self.client.post("/wallet/daily", headers=h).status_code, 404)
+        finally:
+            os.environ.pop("PREVIEW_IPONLY", None)
 
     def test_signing_out_locks_the_wallet(self):
         anon = self.server.app.test_client()

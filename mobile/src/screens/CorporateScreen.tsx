@@ -56,13 +56,19 @@ export function CompanyCorporate() {
         ) : shp ? (
           <Card style={styles.shpCard}>
             <Text style={styles.shpDate}>{shp.date || 'latest'}</Text>
+            {/* Only what the feed carries. It used to list FII, DII and Pledge
+                too, and every one of them showed a dash for every company —
+                they are not in this endpoint at all. */}
             <View style={styles.shpRow}>
               <Sh label="Promoter" v={pct(shp.promoter)} />
-              <Sh label="FII" v={pct(shp.fii)} />
-              <Sh label="DII" v={pct(shp.dii)} />
               <Sh label="Public" v={pct(shp.public)} />
-              <Sh label="Pledge" v={pct(shp.pledge)} warn={(shp.pledge || 0) > 0} />
+              {shp.trusts ? <Sh label="Emp. trusts" v={pct(shp.trusts)} /> : null}
+              {shp.drs ? <Sh label="DRs" v={pct(shp.drs)} /> : null}
             </View>
+            <Text style={styles.shpNote}>
+              Promoter vs public, as filed with NSE. The institutional split and
+              any promoter pledge are in the company's full XBRL filing.
+            </Text>
           </Card>
         ) : (
           <EmptyState title="No shareholding data" hint="NSE may not expose it for this symbol, or the feed is briefly down." />
@@ -175,6 +181,10 @@ const styles = StyleSheet.create({
   },
   body: { padding: theme.sp.lg, paddingBottom: 40 },
   shpCard: {},
+  shpNote: {
+    color: theme.muted, fontSize: theme.fs.xs + 1, lineHeight: 16,
+    marginTop: theme.sp.sm,
+  },
   shpDate: { color: theme.muted, fontSize: theme.fs.sm, marginBottom: theme.sp.md },
   shpRow: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.sp.lg },
   sh: { minWidth: 72 },

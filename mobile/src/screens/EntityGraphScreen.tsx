@@ -248,14 +248,14 @@ export default function EntityGraphScreen() {
             </>
           )
         ) : /* stock pivot */ !sym ? (
-          <EmptyState icon="⌕" title="Enter a symbol" hint="See the ownership split (promoter / FII / DII / public), plus who traded it and the cited deals." />
+          <EmptyState icon="⌕" title="Enter a symbol" hint="See the ownership split (promoter / public), plus who traded it and the cited deals." />
         ) : (
           <>
             {/* 1 · Ownership split — the authoritative "who holds it" answer. */}
             <SectionTitle>{sym} · shareholding pattern</SectionTitle>
             {shp === undefined ? (
               <Loading label={`Loading ${sym} ownership…`} />
-            ) : !shp || (shp.promoter == null && shp.fii == null && shp.dii == null && shp.public == null) ? (
+            ) : !shp || (shp.promoter == null && shp.public == null) ? (
               <Text style={styles.none}>
                 Ownership split unavailable for {sym}. The quarterly pattern is sourced from NSE
                 filings — BSE-only scrips and freshly listed names may not be covered yet.
@@ -286,14 +286,20 @@ export default function EntityGraphScreen() {
   );
 }
 
-// The quarterly ownership split — promoter / FII / DII / public as labelled bars.
+// The quarterly ownership split, as labelled bars.
+//
+// Promoter and public only: the NSE filings feed this reads carries those two
+// (plus employee trusts and depository receipts) and has never carried the
+// FII/DII breakdown under any key. Those two bars were therefore filtered out
+// as null for every company on every render — a split that silently never
+// split. The institutional detail is in the company's XBRL filing.
 function SharePattern({ s }: { s: Shareholding }) {
   const rows = (
     [
       { k: 'Promoters', v: s.promoter, c: theme.accent },
-      { k: 'FII', v: s.fii, c: theme.green },
-      { k: 'DII', v: s.dii, c: GOLD },
       { k: 'Public', v: s.public, c: theme.muted2 },
+      { k: 'Employee trusts', v: s.trusts || null, c: GOLD },
+      { k: 'Depository receipts', v: s.drs || null, c: theme.green },
     ] as { k: string; v: number | null; c: string }[]
   ).filter((r) => r.v != null) as { k: string; v: number; c: string }[];
   return (
@@ -308,9 +314,10 @@ function SharePattern({ s }: { s: Shareholding }) {
           <Text style={styles.patVal}>{r.v.toFixed(2)}%</Text>
         </View>
       ))}
-      {s.pledge != null && s.pledge > 0 ? (
-        <Text style={styles.patPledge}>⚠ Promoter pledge {s.pledge.toFixed(2)}%</Text>
-      ) : null}
+      <Text style={styles.patNote}>
+        As filed with NSE. The institutional split and any promoter pledge are in
+        the company's full XBRL filing.
+      </Text>
     </Card>
   );
 }
@@ -537,7 +544,7 @@ const styles = StyleSheet.create({
   patTrack: { flex: 1, height: 8, borderRadius: 4, backgroundColor: theme.surface2, overflow: 'hidden' },
   patFill: { height: 8, borderRadius: 4 },
   patVal: { color: theme.text, fontFamily: theme.mono, fontSize: theme.fs.sm, fontWeight: '700', width: 62, textAlign: 'right' },
-  patPledge: { color: theme.red, fontSize: theme.fs.sm, fontWeight: '700', marginTop: 2 },
+  patNote: { color: theme.muted, fontSize: theme.fs.xs + 1, lineHeight: 16, marginTop: 6 },
   promBody: { paddingLeft: theme.sp.sm, paddingBottom: theme.sp.sm },
   promEdge: {
     flexDirection: 'row',

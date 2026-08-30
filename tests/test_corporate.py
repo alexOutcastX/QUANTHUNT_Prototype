@@ -30,11 +30,13 @@ class CorporateTest(unittest.TestCase):
         self.assertEqual(out["items"][0]["ex_date"], "20-Jul-2026")
 
     def test_shareholding(self):
-        raw = [{"date": "Jun 2026", "promoter": "45.3", "fii": "22,1", "dii": "18.0",
-                "public": "14.7", "pledge": "2.5%"}]
+        """The keys NSE actually serves — see tests/test_shareholding.py for
+        why the old ones read as nothing."""
+        raw = [{"date": "30-JUN-2026", "pr_and_prgrp": "45.3", "public_val": "54.7",
+                "employeeTrusts": "0"}]
         out = self.c.parse_shareholding(raw)
         self.assertEqual(out["latest"]["promoter"], 45.3)
-        self.assertEqual(out["latest"]["pledge"], 2.5)
+        self.assertEqual(out["latest"]["public"], 54.7)
         self.assertIsNone(self.c.parse_shareholding([])["latest"])
 
     def test_deals(self):
