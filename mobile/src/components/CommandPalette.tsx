@@ -39,9 +39,9 @@ const DESTS: Dest[] = [
   { label: 'Reports', hint: 'Institutional company report', icon: 'desk', page: 'desk', sub: 'inst' },
   { label: 'Shareholders', hint: 'Ownership & entity graph', icon: 'desk', page: 'desk', sub: 'shareholders' },
   { label: 'Risk', hint: 'Portfolio VaR & drawdown', icon: 'desk', page: 'desk', sub: 'risk' },
-  { label: 'Backtest', hint: 'Test a strategy on history', icon: 'flask', page: 'backtest', sub: 'bt' },
+  { label: 'Backtest', hint: 'Test a strategy on history · inside the Terminal', icon: 'flask', page: 'terminal', sub: 'bt' },
   { label: 'Calculator', hint: 'Position size · SIP · CAGR', icon: 'desk', page: 'desk', sub: 'calc' },
-  { label: 'Terminal', hint: 'Workspace, graph & compare', icon: 'terminal', page: 'terminal' },
+  { label: 'Terminal', hint: 'Workspace, graph & compare', icon: 'terminal', page: 'terminal', sub: 'graph' },
   { label: 'Symbol', hint: 'One page per stock', icon: 'stock', page: 'stock', sub: 'stock' },
   // What the old "More" menu held, as the destinations it dissolved into.
   { label: 'Account', hint: 'Sign in, cloud sync, credits & plan', icon: 'desk', page: 'desk', sub: 'wallet' },

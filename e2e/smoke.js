@@ -154,9 +154,12 @@ function check(name, ok, detail) {
     const tabs = await page.evaluate(() =>
       [...document.querySelectorAll('[data-testid="nav-tab"]')]
         .map((e) => e.getAttribute('aria-label')));
+    // Backtest lost its tab when it became a section of the Terminal — it is
+    // reached by the switch in the terminal's own header now, not by a button
+    // of its own here.
     check(
-      'the tab strip is the four browse destinations',
-      JSON.stringify(tabs) === JSON.stringify(['Screens', 'Desk', 'Backtest', 'Terminal']),
+      'the tab strip is the three browse destinations',
+      JSON.stringify(tabs) === JSON.stringify(['Screens', 'Desk', 'Terminal']),
       JSON.stringify(tabs),
     );
     check('signing in lands on the home page', /MARKET BREADTH/i.test(
@@ -1195,6 +1198,72 @@ function check(name, ok, detail) {
       'and tapping it opens the account page',
       /(SIGNED IN AS|Sign in|CLOUD SYNC)/i.test(await page.evaluate(() => document.body.innerText)),
     );
+
+    // 8j · that account page is ONE page. Account and Wallet used to be two
+    // tabs, then one page with a segmented control, which was the same split
+    // in a smaller hat. Both halves have to be on screen at once now.
+    {
+      const body = await page.evaluate(() => document.body.innerText);
+      check(
+        'the account page has no Account / Wallet switch',
+        !/\bAccount\b[\s\S]{0,40}\bWallet\b[\s\S]{0,40}(Credits|Balance)/.test(body)
+          && (await page.evaluate(() => ![...document.querySelectorAll('[role="tab"]')]
+            .some((e) => /^(Account|Wallet)$/i.test((e.textContent || '').trim())))),
+      );
+      check(
+        'both halves are on it — credits and the plan…',
+        /Credits/i.test(body) && /YOUR PLAN/i.test(body),
+      );
+      check(
+        '…and the account itself, further down',
+        /YOUR ACCOUNT/i.test(body) && /(CLOUD SYNC|DELETE ACCOUNT)/i.test(body),
+      );
+      // 8k · the published ladder. These are the numbers a customer is
+      // quoted, so a rename that only reached the server would show here.
+      check(
+        'the plans offered are Free, Pro and Max',
+        /\bFree\b/.test(body) && /\bPro\b/.test(body) && /\bMax\b/.test(body)
+          && !/\bMember\b/.test(body),
+      );
+      check(
+        'priced at ₹1499 and ₹4999 a month',
+        /1499/.test(body) && /4999/.test(body),
+        body.slice(body.indexOf('YOUR PLAN'), body.indexOf('YOUR PLAN') + 400),
+      );
+    }
+
+    // 8l · Backtest is a section of the Terminal, reached from the terminal's
+    // own header rather than a nav button of its own.
+    await page.evaluate(() => document.querySelector('[aria-label="Terminal"]').click());
+    await page.waitForTimeout(2500);
+    {
+      const sw = await page.evaluate(() => [...document.querySelectorAll('[role="tab"]')]
+        .map((e) => (e.textContent || '').trim()));
+      check(
+        'the terminal offers Graph and Backtest',
+        sw.includes('Graph') && sw.includes('Backtest'),
+        JSON.stringify(sw),
+      );
+      const before = await page.evaluate(() => document.body.innerText);
+      await page.evaluate(() => {
+        const b = [...document.querySelectorAll('[role="tab"]')]
+          .find((e) => (e.textContent || '').trim() === 'Backtest');
+        if (b) b.click();
+      });
+      await page.waitForTimeout(2500);
+      const after = await page.evaluate(() => document.body.innerText);
+      check('and the switch actually changes the page', after !== before);
+      check(
+        'the backtest console is what it changes to',
+        /Run backtest/i.test(after),
+        after.slice(0, 200),
+      );
+      check(
+        'the switch is still there to go back with',
+        await page.evaluate(() => [...document.querySelectorAll('[role="tab"]')]
+          .some((e) => (e.textContent || '').trim() === 'Graph')),
+      );
+    }
 
     // 9 · no uncaught page errors during the whole run
     check('no uncaught page errors', errors.length === 0, errors[0]);

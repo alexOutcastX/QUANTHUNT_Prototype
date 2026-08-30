@@ -5,7 +5,6 @@ import { peekNav, subscribeNav } from '../navIntent';
 import { useResponsive } from '../responsive';
 import { theme } from '../theme';
 import { lazyScreen } from '../lazyScreen';
-import { usePreview } from '../usePreview';
 import { AnchoredMenu, TitleSlotContext, useMenuAnchor } from '../ui';
 
 // Every hosted screen is a lazy chunk: Metro splits each import() into its own
@@ -15,7 +14,6 @@ import type { ScreenerScreenProps } from './ScreenerScreen';
 
 const ScreenerScreen = lazyScreen<ScreenerScreenProps>(() => import('./ScreenerScreen'));
 const AnalysisScreen = lazyScreen(() => import('./AnalysisScreen'));
-const BacktestScreen = lazyScreen(() => import('./BacktestScreen'));
 const CalculatorScreen = lazyScreen(() => import('./CalculatorScreen'));
 const ChatScreen = lazyScreen(() => import('./ChatScreen'));
 const HeatmapScreen = lazyScreen(() => import('./HeatmapScreen'));
@@ -441,8 +439,6 @@ function ScreenPicker({
 // utilities. Everything that used to live under Lists / Tools / the rest of
 // Analysis, plus the More list so no destination is lost.
 export function DeskHub() {
-  const { isDesktop } = useResponsive();
-  const preview = usePreview();
   return (
     <SubTabs
       variant="side"
@@ -466,20 +462,20 @@ export function DeskHub() {
         { key: 'alerts', label: 'Alerts', hint: 'Price / % / RSI alerts', render: () => <AlertsScreen /> },
         { key: 'inst', label: 'Reports', hint: 'Full company report · fundamentals, valuation, ownership, filings', render: () => <AnalysisScreen /> },
         { key: 'shareholders', label: 'Shareholders', hint: 'Institutions, promoters & political funding · every link cited', render: () => <EntityGraphScreen />, titled: false },
-        { key: 'bt', label: 'Backtest', hint: 'Test a strategy against historical data before risking capital', render: () => <BacktestScreen />, titled: false },
         { key: 'calc', label: 'Calculator', hint: 'Position size · SIP · CAGR', render: () => <CalculatorScreen /> },
         // Wallet sits here rather than inside More: it used to be four taps
         // deep inside a nineteen-item menu, which is where the whole credit
         // economy went to be forgotten. The header pill links straight here.
-        { key: 'wallet', label: preview ? 'Account & wallet' : 'Account', hint: 'Sign in, cloud sync, membership · credits, daily bonus, refer and earn', render: () => <AccountWalletScreen /> },
+        { key: 'wallet', label: 'Account', hint: 'Credits, daily bonus, referrals and your plan · sign-in, cloud sync and deletion', render: () => <AccountWalletScreen /> },
         // Not pills — the Desk home links straight into these, so its
         // "Full calendar ›" and "Open community ›" land on the screen they
         // name instead of on a menu that lists it.
         { key: 'holidays', label: 'Holidays', render: () => <HolidaysScreen />, hidden: true },
         { key: 'community', label: 'Community', render: () => <ChatScreen />, hidden: true, titled: false },
-        // Desktop promotes Backtest to the top bar beside Terminal; keep the
-        // Desk tab only where that top-level entry doesn't exist (mobile).
-      ].filter((t) => !(isDesktop && t.key === 'bt'))}
+        // Backtest is not here any more: it is a section of the Terminal, so
+        // a navigate('desk', { sub: 'bt' }) is routed there by Shell's
+        // mapTarget rather than being caught by a tab of the same name.
+      ]}
     />
   );
 }

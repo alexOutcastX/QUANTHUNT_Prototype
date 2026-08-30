@@ -15,9 +15,10 @@ import { lazyScreen, prefetchScreens } from './lazyScreen';
 // lazy chunk fetched on first open — see lazyScreen.tsx.
 const ScreenerScreen = lazyScreen(() => import('./screens/ScreenerScreen'));
 const StockScreen = lazyScreen(() => import('./screens/StockScreen'));
-const TerminalScreen = lazyScreen(() => import('./screens/TerminalScreen'));
+// The Terminal hub carries the backtest with it, so both arrive in one chunk
+// on first open rather than as two tabs that each pay their own download.
+const TerminalHub = lazyScreen(() => import('./screens/TerminalHub'));
 const HeatmapScreen = lazyScreen(() => import('./screens/HeatmapScreen'));
-const BacktestScreen = lazyScreen(() => import('./screens/BacktestScreen'));
 import TickerStrip from './components/TickerStrip';
 import PdfPreview from './components/PdfPreview';
 import LegalSheet from './components/LegalSheet';
@@ -148,14 +149,13 @@ const ROUTES: Route[] = [
   { k: 'screens', label: 'Screens', icon: 'screens', render: () => <ScreensHub /> },
   { k: 'stock', label: 'Symbol', icon: 'stock', tab: false, render: () => <StockScreen /> },
   { k: 'desk', label: 'Desk', icon: 'desk', render: () => <DeskHub /> },
-  { k: 'backtest', label: 'Backtest', icon: 'flask', render: () => <BacktestScreen /> },
-  { k: 'terminal', label: 'Terminal', icon: 'terminal', render: () => <TerminalScreen /> },
+  { k: 'terminal', label: 'Terminal', icon: 'terminal', render: () => <TerminalHub /> },
 ];
 
 const NAV = ROUTES.filter((r) => r.tab !== false);
 
 // Analysis sub-tabs that moved into the Desk hub; the rest went to Screens.
-const DESK_ANALYSIS_SUBS = new Set(['inst', 'shareholders', 'paper', 'risk', 'bt']);
+const DESK_ANALYSIS_SUBS = new Set(['inst', 'shareholders', 'paper', 'risk']);
 
 // Shared by both shells so a reload — or dragging a browser window across the
 // breakpoint, which swaps one shell component for the other — puts you back
@@ -404,8 +404,11 @@ function SignOutBtn({ style }: { style?: object }) {
 }
 
 function mapTarget(page: string, sub?: string): string {
-  // Backtest is a top-level destination at every width now.
-  const bt = 'backtest';
+  // Backtest stopped being a destination of its own — it is a section of the
+  // Terminal. Every key that used to open it lands on the terminal instead,
+  // and the { sub: 'bt' } riding along is what TerminalHub reads to open on
+  // the backtest rather than the graph.
+  const bt = 'terminal';
   switch (page) {
     case 'today':
     case 'dashboard':

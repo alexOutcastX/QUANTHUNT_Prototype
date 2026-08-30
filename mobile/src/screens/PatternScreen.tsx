@@ -1766,7 +1766,7 @@ export default function PatternScreen() {
   return (
     <Gate
       feature="patterns"
-      requiredPlan="member"
+      requiredPlan="pro"
       mode="blur"
       title="Chart patterns, drawn on the chart"
       blurb="Rule-based detection traces necklines, channels and trendlines, with a confidence and a measured target."

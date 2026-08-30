@@ -131,34 +131,60 @@ class BillingTest(unittest.TestCase):
 
     def test_plans_carry_price_and_features(self):
         keys = [p["key"] for p in self.b.plans()]
-        self.assertEqual(keys, ["free", "member", "pro"])
-        pro = [p for p in self.b.plans() if p["key"] == "pro"][0]
-        self.assertIn("backtest", pro["features"])
-        self.assertGreater(pro["price_paise"], 0)
+        self.assertEqual(keys, ["free", "pro", "max"])
+        by = {p["key"]: p for p in self.b.plans()}
+        self.assertIn("screener", by["pro"]["features"])
+        self.assertNotIn("backtest", by["pro"]["features"])
+        self.assertIn("backtest", by["max"]["features"])
+        self.assertGreater(by["pro"]["price_paise"], 0)
+        self.assertGreater(by["max"]["price_paise"], by["pro"]["price_paise"])
+
+    def test_the_published_prices(self):
+        """Money is stated in paise as an integer, and these are the two
+        numbers a customer is quoted."""
+        by = {p["key"]: p for p in self.b.plans()}
+        self.assertEqual(by["free"]["price_paise"], 0)
+        self.assertEqual(by["pro"]["price_paise"], 149900)
+        self.assertEqual(by["max"]["price_paise"], 499900)
+        self.assertEqual(by["pro"]["price_inr"], 1499.0)
+        self.assertEqual(by["max"]["price_inr"], 4999.0)
+        for p in self.b.plans():
+            self.assertIsInstance(p["price_paise"], int)
 
     def test_member_table_plan_applies_without_any_subscription(self):
-        """Owner accounts are on pro with no billing row — that must keep
-        working, or shipping this would lock the owners out of their own app."""
-        sub = self.b.subscription("taureye", "pro")
-        self.assertEqual(sub["plan"], "pro")
+        """Owner accounts are on the top plan with no billing row — that must
+        keep working, or shipping this would lock the owners out of their own
+        app."""
+        sub = self.b.subscription("taureye", "max")
+        self.assertEqual(sub["plan"], "max")
         self.assertEqual(sub["status"], "none")
-        self.assertTrue(self.b.allows("taureye", "backtest", "pro"))
+        self.assertTrue(self.b.allows("taureye", "backtest", "max"))
+
+    def test_a_plan_name_from_before_the_rename_still_resolves(self):
+        """A saved subscription row, or a members.json on the server, may
+        still say "member". It has to mean today's Pro, not nothing."""
+        self.assertEqual(self.b.subscription("alice", "member")["plan"], "pro")
+        self.b.activate("bob", "member", ref="old-1")
+        self.assertEqual(self.b.effective_plan("bob", "free"), "pro")
+        out = self.b.start_checkout("carol", "member")
+        self.assertEqual(out["plan"], "pro")
+        self.assertEqual(out["amount_paise"], 149900)
 
     def test_activate_upgrades_and_grants_the_allowance(self):
-        self.b.activate("alice", "pro", ref="pay-1")
-        self.assertEqual(self.b.effective_plan("alice", "free"), "pro")
+        self.b.activate("alice", "max", ref="pay-1")
+        self.assertEqual(self.b.effective_plan("alice", "free"), "max")
         self.assertEqual(self.w.balance("alice"),
-                         self.b.PLANS["pro"]["credits_per_period"])
+                         self.b.PLANS["max"]["credits_per_period"])
 
     def test_a_webhook_delivered_twice_grants_one_allowance(self):
-        self.b.activate("alice", "pro", ref="pay-1")
-        self.b.activate("alice", "pro", ref="pay-1")
+        self.b.activate("alice", "max", ref="pay-1")
+        self.b.activate("alice", "max", ref="pay-1")
         self.assertEqual(self.w.balance("alice"),
-                         self.b.PLANS["pro"]["credits_per_period"])
+                         self.b.PLANS["max"]["credits_per_period"])
 
     def test_expired_subscription_falls_back_to_the_member_plan(self):
         import time
-        self.b.activate("alice", "pro", ref="pay-1")
+        self.b.activate("alice", "max", ref="pay-1")
         with self.b._lock:
             self.b._db().execute(
                 "UPDATE subscriptions SET renews_at = ? WHERE acct = 'alice'",
@@ -170,7 +196,7 @@ class BillingTest(unittest.TestCase):
         self.assertFalse(self.b.allows("alice", "backtest", "free"))
 
     def test_checkout_charges_nothing_and_says_so(self):
-        out = self.b.start_checkout("alice", "pro")
+        out = self.b.start_checkout("alice", "max")
         self.assertEqual(out["status"], "pending")
         self.assertFalse(out["provider_configured"])
         self.assertIsNone(out["checkout_url"])
@@ -184,11 +210,12 @@ class BillingTest(unittest.TestCase):
 
     def test_required_plan_is_the_cheapest_that_unlocks(self):
         self.assertEqual(self.b.required_plan("quotes"), "free")
-        self.assertEqual(self.b.required_plan("screener"), "member")
-        self.assertEqual(self.b.required_plan("backtest"), "pro")
+        self.assertEqual(self.b.required_plan("screener"), "pro")
+        self.assertEqual(self.b.required_plan("backtest"), "max")
+        self.assertEqual(self.b.required_plan("terminal"), "max")
 
     def test_cancel_drops_back_to_the_member_plan(self):
-        self.b.activate("alice", "pro", ref="pay-1")
+        self.b.activate("alice", "max", ref="pay-1")
         self.b.cancel("alice")
         self.assertEqual(self.b.effective_plan("alice", "free"), "free")
 
@@ -210,7 +237,7 @@ class AnalyticsTest(unittest.TestCase):
     def test_summary_counts_events_and_people(self):
         self.a.track("alice", "screener.run", plan="pro")
         self.a.track("alice", "screener.run", plan="pro")
-        self.a.track("bob", "dossier.open", plan="member")
+        self.a.track("bob", "dossier.open", plan="pro")
         s = self.a.summary(30)
         self.assertEqual(s["events"], 3)
         self.assertEqual(s["people"], 2)

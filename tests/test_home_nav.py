@@ -35,8 +35,20 @@ class RouteTableTest(unittest.TestCase):
 
     def test_every_destination_still_renders(self):
         for screen in ("DashboardScreen", "ScreensHub", "StockScreen",
-                       "DeskHub", "BacktestScreen", "TerminalScreen"):
+                       "DeskHub", "TerminalHub"):
             self.assertIn(screen, self.routes, f"{screen} lost its route")
+
+    def test_backtest_is_not_a_destination_of_its_own(self):
+        """It is a section of the Terminal now. A route here as well would put
+        the same screen behind two buttons that disagree about where it is."""
+        self.assertNotIn("k: 'backtest'", self.routes)
+        self.assertNotIn("BacktestScreen", self.routes)
+
+    def test_the_keys_that_used_to_open_the_backtest_land_on_the_terminal(self):
+        """Saved tabs, dashboard quick-links and the command palette all still
+        say 'backtest'; none of them may land on a route that is gone."""
+        self.assertIn("const bt = 'terminal';", self.src)
+        self.assertIn("case 'backtest':\n      return bt;", self.src)
 
     def test_home_and_symbol_are_routes_without_tabs(self):
         for line in self.routes.splitlines():

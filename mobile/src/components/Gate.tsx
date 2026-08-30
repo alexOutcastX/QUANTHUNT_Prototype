@@ -21,15 +21,15 @@ export type GateMode = 'blur' | 'replace';
 
 const PLAN_LABEL: Record<string, string> = {
   free: 'Free',
-  member: 'Member — ₹499/month',
   pro: 'Pro — ₹1,499/month',
+  max: 'Max — ₹4,999/month',
 };
 
 export function Gate({
   feature,
   title,
   blurb,
-  requiredPlan = 'pro',
+  requiredPlan = 'max',
   mode = 'replace',
   creditAction,
   creditCost,
@@ -39,7 +39,7 @@ export function Gate({
   feature: string;
   title: string;
   blurb?: string;
-  requiredPlan?: 'member' | 'pro';
+  requiredPlan?: 'pro' | 'max';
   mode?: GateMode;
   /** When set, the sheet offers paying with credits as the second way in. */
   creditAction?: string;

@@ -31,18 +31,18 @@ PLANS = {
         "credits_per_period": 0,
         "blurb": "Quotes, heatmap, news and the stock universe.",
     },
-    "member": {
-        "name": "Member", "price_paise": 49900, "period": "month",
+    "pro": {
+        "name": "Pro", "price_paise": 149900, "period": "month",
         "credits_per_period": 500,
         "blurb": "Screeners, patterns, recommendations, watchlist and portfolio.",
     },
-    "pro": {
-        "name": "Pro", "price_paise": 149900, "period": "month",
+    "max": {
+        "name": "Max", "price_paise": 499900, "period": "month",
         "credits_per_period": 2000,
-        "blurb": "Everything: backtests, terminal, dossiers, alerts and exports.",
+        "blurb": "Everything: the terminal and its backtests, dossiers, alerts and exports.",
     },
 }
-PLAN_ORDER = ["free", "member", "pro"]
+PLAN_ORDER = _members.PLAN_LADDER
 
 _PERIOD_SECONDS = {"month": 30 * 24 * 3600, "year": 365 * 24 * 3600}
 
@@ -85,6 +85,19 @@ def _norm(acct: str) -> str:
     return (acct or "").strip().lower()
 
 
+def _plan_key(plan: str) -> str:
+    """A plan name from anywhere — a request, a webhook, an old row — or raise.
+
+    Legacy names resolve; unknown ones are refused rather than quietly treated
+    as free, because the caller here is about to take money for one.
+    """
+    key = (plan or "").strip().lower()
+    key = _members.LEGACY_PLANS.get(key, key)
+    if key not in PLANS:
+        raise ValueError(f"unknown plan {plan!r}")
+    return key
+
+
 def provider() -> str:
     """Which payment provider would take the money."""
     return (os.environ.get("PAYMENT_PROVIDER") or "razorpay").strip().lower()
@@ -124,7 +137,7 @@ def subscription(acct: str, member_plan: str = "") -> dict:
     what someone used to be on is not silently erased.
     """
     row = _row(acct)
-    base = (member_plan or "free").strip().lower()
+    base = _members.canonical_plan(member_plan)
     if not row:
         return {"plan": base, "status": "none", "source": "member-table",
                 "provider": None, "renews_at": None, "expired": False}
@@ -132,8 +145,8 @@ def subscription(acct: str, member_plan: str = "") -> dict:
     expired = bool(row["renews_at"]) and row["renews_at"] < time.time()
     active = row["status"] == "active" and not expired
     # The member table wins when it grants MORE than the subscription — that is
-    # how the owner accounts stay on pro without a billing row.
-    plan = row["plan"] if active else base
+    # how the owner accounts stay on the top plan without a billing row.
+    plan = _members.canonical_plan(row["plan"]) if active else base
     if PLAN_ORDER.index(base) > PLAN_ORDER.index(plan):
         plan = base
     return {
@@ -174,9 +187,7 @@ def start_checkout(acct: str, plan: str) -> dict:
     not connected yet" instead of failing at the payment sheet.
     """
     acct = _norm(acct)
-    plan = (plan or "").strip().lower()
-    if plan not in PLANS:
-        raise ValueError(f"unknown plan {plan!r}")
+    plan = _plan_key(plan)
     if plan == "free":
         raise ValueError("the free plan needs no checkout")
 
@@ -212,9 +223,7 @@ def activate(acct: str, plan: str, provider_name: str = "manual",
     delivered twice does not hand out two months of credits.
     """
     acct = _norm(acct)
-    plan = (plan or "").strip().lower()
-    if plan not in PLANS:
-        raise ValueError(f"unknown plan {plan!r}")
+    plan = _plan_key(plan)
     now = int(time.time())
     length = _PERIOD_SECONDS.get(period or PLANS[plan]["period"], _PERIOD_SECONDS["month"])
     renews = now + length

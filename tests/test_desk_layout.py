@@ -362,16 +362,40 @@ class FoldedScreensTest(unittest.TestCase):
     def test_account_and_wallet_are_one_destination(self):
         merged = _screen("AccountWalletScreen.tsx")
         self.assertIn("<AccountScreen />", merged)
-        self.assertIn("<WalletScreen embedded />", merged)
+        self.assertIn("<WalletScreen embedded tail={<AccountScreen embedded />} />", merged)
         hosts = _screen("Hosts.tsx")
         self.assertIn("render: () => <AccountWalletScreen />", hosts)
 
+    def test_it_is_one_page_and_not_a_page_with_tabs(self):
+        """A segmented control here is the old two-tab split wearing a smaller
+        hat — you still have to know which half a thing is on."""
+        merged = _screen("AccountWalletScreen.tsx")
+        self.assertNotIn("Segmented", merged)
+        self.assertNotIn("useState", merged)
+        self.assertNotIn("tab", merged.replace("tabs", ""))
+
+    def test_the_account_half_rides_inside_the_wallet_scroller(self):
+        """Two scrollers stacked scroll neither reliably nor legibly."""
+        wallet = _screen("WalletScreen.tsx")
+        self.assertIn("tail?: React.ReactNode;", wallet)
+        acct = _screen("AccountScreen.tsx")
+        self.assertIn("const Wrap = embedded ? View : ScrollView;", acct)
+
+    def test_deleting_your_account_survives_a_wallet_that_will_not_load(self):
+        """It is the one control on this page that a person has a right to
+        reach, so it cannot be behind a successful fetch of the credit
+        endpoints."""
+        wallet = _screen("WalletScreen.tsx")
+        err = wallet.split("if (err) {")[1].split("if (!wallet")[0]
+        self.assertIn("{tail}", err)
+        acct = _screen("AccountScreen.tsx")
+        self.assertIn("Delete my account", acct)
+
     def test_the_wallet_half_is_not_offered_where_it_does_not_work(self):
-        """Its endpoints only exist on the preview host; a dead segment is
-        worse than no segment."""
+        """Its endpoints only exist on the preview host; a dead half is worse
+        than no half."""
         merged = _screen("AccountWalletScreen.tsx")
         self.assertIn("const preview = usePreview();", merged)
-        self.assertIn("const wallet = preview && tab === 'wallet';", merged)
         self.assertIn("{preview ? (", merged)
 
     def test_the_account_page_still_reaches_people_without_a_wallet(self):

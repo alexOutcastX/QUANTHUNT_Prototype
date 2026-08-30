@@ -159,7 +159,7 @@ class MonetisationRouteTest(unittest.TestCase):
     def test_plans_are_listed_with_prices(self):
         r = self.client.get("/billing/plans", headers={"Host": self.IP})
         keys = [p["key"] for p in r.json["plans"]]
-        self.assertEqual(keys, ["free", "member", "pro"])
+        self.assertEqual(keys, ["free", "pro", "max"])
         self.assertFalse(r.json["provider_configured"])
 
     def test_checkout_is_honest_about_not_charging(self):
@@ -177,8 +177,8 @@ class MonetisationRouteTest(unittest.TestCase):
 
     def test_paywall_reports_what_unlocks_a_feature(self):
         r = self.client.get("/paywall/backtest", headers=self._auth())
-        self.assertEqual(r.json["required_plan"], "pro")
-        self.assertTrue(r.json["allowed"])        # sri is a pro owner account
+        self.assertEqual(r.json["required_plan"], "max")
+        self.assertTrue(r.json["allowed"])        # sri is an owner account
         anon = self.anon().get("/paywall/backtest", headers={"Host": self.IP})
         self.assertFalse(anon.json["allowed"])
         self.assertFalse(anon.json["signed_in"])

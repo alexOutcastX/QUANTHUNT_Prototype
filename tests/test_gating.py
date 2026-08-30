@@ -55,11 +55,11 @@ class GatedScreensTest(unittest.TestCase):
     """Each of these was open to anyone signed in."""
 
     EXPECTED = {
-        "BacktestScreen.tsx": ("backtest", "pro"),
-        "TerminalScreen.tsx": ("terminal", "pro"),
-        "AnalysisScreen.tsx": ("dossier", "pro"),
-        "PatternScreen.tsx": ("patterns", "member"),
-        "RecommendationsScreen.tsx": ("recommendations", "member"),
+        "BacktestScreen.tsx": ("backtest", "max"),
+        "TerminalScreen.tsx": ("terminal", "max"),
+        "AnalysisScreen.tsx": ("dossier", "max"),
+        "PatternScreen.tsx": ("patterns", "pro"),
+        "RecommendationsScreen.tsx": ("recommendations", "pro"),
     }
 
     def test_each_screen_is_wrapped(self):
@@ -76,7 +76,7 @@ class GatedScreensTest(unittest.TestCase):
         for fname in self.EXPECTED:
             with self.subTest(screen=fname):
                 src = read("screens", fname)
-                m = re.search(r"export default function \w+\(\)\s*\{(.*?)\n\}", src, re.S)
+                m = re.search(r"export default function \w+\([^)]*\)[^{]*\{(.*?)\n\}", src, re.S)
                 self.assertIsNotNone(m, f"{fname}: no default export found")
                 self.assertIn("<Gate", m.group(1),
                               f"{fname}: the default export bypasses the gate")

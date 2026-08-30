@@ -25,12 +25,24 @@ class AllowanceTest(unittest.TestCase):
     def test_free_gets_a_small_monthly_allowance(self):
         self.assertEqual(self.usage.limit_for("free", "screen_run"), 3)
 
-    def test_pro_is_unlimited(self):
+    def test_max_is_unlimited(self):
         """None, not a large number — an 'unlimited' that is really 9999 is a
         bug waiting for a power user."""
-        self.assertIsNone(self.usage.limit_for("pro", "screen_run"))
-        self.assertIsNone(self.usage.remaining("a", "screen_run", "pro"))
-        self.assertTrue(self.usage.allows("a", "screen_run", "pro"))
+        self.assertIsNone(self.usage.limit_for("max", "screen_run"))
+        self.assertIsNone(self.usage.remaining("a", "screen_run", "max"))
+        self.assertTrue(self.usage.allows("a", "screen_run", "max"))
+
+    def test_pro_sits_between_the_two(self):
+        self.assertEqual(self.usage.limit_for("pro", "screen_run"), 100)
+        self.assertEqual(self.usage.limit_for("pro", "backtest"), 5)
+
+    def test_a_plan_name_from_before_the_rename_gets_its_heir(self):
+        """A session still carrying "member" must get Pro's allowance, not the
+        empty dict that reads as unlimited."""
+        self.assertEqual(self.usage.limit_for("member", "screen_run"),
+                         self.usage.limit_for("pro", "screen_run"))
+        # and an unrecognised name lands on free, never on unlimited
+        self.assertEqual(self.usage.limit_for("nonsense", "screen_run"), 3)
 
     def test_an_allowance_runs_out(self):
         for _ in range(3):

@@ -1010,7 +1010,7 @@ export default function BacktestScreen() {
   return (
     <Gate
       feature="backtest"
-      requiredPlan="pro"
+      requiredPlan="max"
       title="Test a strategy before you risk money on it"
       blurb="Run any strategy against years of history with real Indian charges and slippage, then see what it would actually have returned."
       creditAction="backtest"

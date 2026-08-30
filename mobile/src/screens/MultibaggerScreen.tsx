@@ -991,7 +991,7 @@ export default function MultibaggerScreen() {
   const addToBacktest = async () => {
     if (!report) return;
     await AsyncStorage.setItem(BT_PREFILL_KEY, report.symbol).catch(() => {});
-    toast(`${report.symbol} queued — open Analysis ▸ Backtest`);
+    toast(`${report.symbol} queued — open Terminal ▸ Backtest`);
   };
 
   const m = report?.metrics || {};

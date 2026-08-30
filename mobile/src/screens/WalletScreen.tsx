@@ -17,7 +17,16 @@ import {
  * checkout that will work.
  */
 // `embedded` drops the page heading — the merged Account page supplies one.
-export default function WalletScreen({ embedded = false }: { embedded?: boolean }) {
+// `tail` is appended inside this screen's scroller, which is how the account
+// half (cloud sync, sign-out, deletion) rides along on the same single page
+// instead of behind a tab.
+export default function WalletScreen({
+  embedded = false,
+  tail,
+}: {
+  embedded?: boolean;
+  tail?: React.ReactNode;
+}) {
   const [wallet, setWallet] = useState<WalletResp | null>(null);
   const [ref, setRef] = useState<ReferralResp | null>(null);
   const [plans, setPlans] = useState<PlansResp | null>(null);
@@ -119,10 +128,15 @@ export default function WalletScreen({ embedded = false }: { embedded?: boolean 
     return (
       <View style={styles.container}>
         {embedded ? null : <ScreenTitle title="Wallet" sub="Credits, referrals and plan" />}
-        <EmptyState
-          title="Couldn't load your wallet"
-          hint={`${err} — these features are only available on the preview host for now.`}
-        />
+        <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
+          <EmptyState
+            title="Couldn't load your wallet"
+            hint={`${err} — these features are only available on the preview host for now.`}
+          />
+          {/* The account controls must not vanish because the credit
+              endpoints are having a bad day — deletion especially. */}
+          {tail}
+        </ScrollView>
       </View>
     );
   }
@@ -131,6 +145,7 @@ export default function WalletScreen({ embedded = false }: { embedded?: boolean 
       <View style={styles.container}>
         {embedded ? null : <ScreenTitle title="Wallet" sub="Credits, referrals and plan" />}
         <Loading label="Loading your wallet…" />
+        {tail}
       </View>
     );
   }
@@ -358,6 +373,8 @@ export default function WalletScreen({ embedded = false }: { embedded?: boolean 
             </Card>
           ))
         )}
+
+        {tail}
       </ScrollView>
     </View>
   );

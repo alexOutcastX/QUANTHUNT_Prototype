@@ -25,9 +25,9 @@ _lock = threading.Lock()
 # What each plan gets per calendar month. 0 means "not included at all";
 # absence from a plan's dict means unlimited.
 ALLOWANCES = {
-    "free":   {"screen_run": 3, "dossier": 0, "backtest": 0},
-    "member": {"screen_run": 100, "dossier": 2, "backtest": 5},
-    "pro":    {},          # unlimited
+    "free": {"screen_run": 3, "dossier": 0, "backtest": 0},
+    "pro":  {"screen_run": 100, "dossier": 2, "backtest": 5},
+    "max":  {},            # unlimited
 }
 
 LABELS = {
@@ -67,8 +67,9 @@ def _norm(acct):
 
 
 def limit_for(plan: str, action: str):
-    """None means unlimited."""
-    return ALLOWANCES.get(plan or "free", {}).get(action)
+    """None means unlimited. Legacy plan names resolve to their heir."""
+    import members as _members
+    return ALLOWANCES.get(_members.canonical_plan(plan), {}).get(action)
 
 
 def used(acct: str, action: str, ts: int = None) -> int:

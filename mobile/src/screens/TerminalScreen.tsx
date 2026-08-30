@@ -1320,7 +1320,7 @@ const PROVIDERS: Provider[] = [
 ];
 const providerOf = (id: string) => PROVIDERS.find((p) => p.id === id) || PROVIDERS[0];
 
-function TerminalInner() {
+function TerminalInner({ switcher }: { switcher?: React.ReactNode }) {
   // Rebuild the embedded graph HTML (resolved hex) when the theme toggles.
   const themeMode = useThemeMode();
   const [data, setData] = useState<GraphResp | null>(null);
@@ -1460,6 +1460,10 @@ function TerminalInner() {
     <View style={styles.container}>
       <View style={styles.head}>
         <Text style={styles.title} numberOfLines={1}>TAUREYE TERMINAL</Text>
+        {/* The Graph / Backtest switch, handed down by TerminalHub. It rides
+            in this row rather than a band of its own so the workspace keeps
+            every pixel of height it had as a top-level page. */}
+        {switcher}
         <TouchableOpacity
           style={[styles.keyBtn, !!aiKey && styles.keyBtnOn]}
           onPress={() => setKeyOpen((v) => !v)}
@@ -1831,16 +1835,16 @@ const styles = StyleSheet.create({
 
 
 /** The full trading terminal — gated through the one Gate component, never inline. */
-export default function TerminalScreen() {
+export default function TerminalScreen({ switcher }: { switcher?: React.ReactNode } = {}) {
   return (
     <Gate
       feature="terminal"
-      requiredPlan="pro"
+      requiredPlan="max"
       mode="replace"
       title="The full trading terminal"
       blurb="Multi-pane quotes, depth, charts and order tickets in one screen."
     >
-      <TerminalInner />
+      <TerminalInner switcher={switcher} />
     </Gate>
   );
 }

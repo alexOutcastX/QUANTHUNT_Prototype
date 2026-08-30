@@ -15,7 +15,7 @@ class TestMemberLogin(unittest.TestCase):
         m = members.check_login("Taureye", "TaureyePW")
         self.assertIsNotNone(m)
         self.assertEqual(m["username"], "Taureye")
-        self.assertEqual(m["plan"], "pro")
+        self.assertEqual(m["plan"], "max")
 
     def test_username_case_insensitive_password_exact(self):
         self.assertIsNotNone(members.check_login("TAUREYE", "TaureyePW"))
@@ -34,7 +34,7 @@ class TestMemberLogin(unittest.TestCase):
         live = members.from_cookie(tok)
         self.assertIsNotNone(live)
         self.assertEqual(live["uname"], "taureye")
-        self.assertEqual(live["plan"], "pro")
+        self.assertEqual(live["plan"], "max")
         self.assertIn("backtest", live["features"])
 
     def test_tampered_or_garbage_cookie_rejected(self):
@@ -52,23 +52,52 @@ class TestMemberLogin(unittest.TestCase):
 
     def test_env_account_override(self):
         os.environ["MEMBER_ACCOUNTS_JSON"] = json.dumps(
-            {"Alpha": {"password": "pw1", "plan": "member", "name": "Alpha"}})
+            {"Alpha": {"password": "pw1", "plan": "pro", "name": "Alpha"}})
         try:
             self.assertIsNone(members.check_login("Taureye", "TaureyePW"))
             m = members.check_login("alpha", "pw1")
             self.assertIsNotNone(m)
-            self.assertEqual(m["plan"], "member")
+            self.assertEqual(m["plan"], "pro")
         finally:
             os.environ.pop("MEMBER_ACCOUNTS_JSON", None)
 
     def test_plan_features_ladder(self):
         free = members.features_for("free")
         pro = members.features_for("pro")
+        mx = members.features_for("max")
         self.assertIn("heatmap", free)
-        self.assertNotIn("backtest", free)
-        self.assertIn("backtest", pro)
+        self.assertNotIn("screener", free)
+        self.assertIn("screener", pro)
+        # Pro is the middle rung: the screener, not the terminal.
+        self.assertNotIn("backtest", pro)
+        self.assertNotIn("terminal", pro)
+        self.assertIn("backtest", mx)
+        self.assertIn("terminal", mx)
+        # Each rung contains the one below it, so upgrading never takes
+        # anything away.
+        self.assertTrue(set(free) <= set(pro) <= set(mx))
         # unknown plan degrades to free, never to full access
         self.assertEqual(members.features_for("nonsense"), free)
+
+    def test_the_old_tier_names_still_resolve(self):
+        """Accounts predate the free/member/pro → free/pro/max rename. A stored
+        name that no longer exists must not silently drop someone to free."""
+        self.assertEqual(members.canonical_plan("member"), "pro")
+        self.assertEqual(members.canonical_plan("MEMBER"), "pro")
+        self.assertEqual(members.features_for("member"), members.features_for("pro"))
+        self.assertEqual(members.canonical_plan("free"), "free")
+        self.assertEqual(members.canonical_plan(""), "free")
+        self.assertEqual(members.canonical_plan(None), "free")
+
+    def test_an_owner_sits_on_the_top_plan_whatever_the_row_says(self):
+        """The old "pro" meant everything and the new one does not, so the
+        owner accounts are carried by being owners, not by their stored name."""
+        self.assertEqual(members.plan_of({"plan": "pro", "owner": True}), "max")
+        self.assertEqual(members.plan_of({"plan": "free", "owner": True}), "max")
+        self.assertEqual(members.plan_of({"owner": True}), "max")
+        # and a non-owner is not promoted by the same rule
+        self.assertEqual(members.plan_of({"plan": "pro"}), "pro")
+        self.assertEqual(members.plan_of({"plan": "free"}), "free")
 
 
 class MultipleAccountsTest(unittest.TestCase):
@@ -87,14 +116,14 @@ class MultipleAccountsTest(unittest.TestCase):
                 self.assertIsNotNone(members.check_login(user, pw),
                                      f"{user} cannot sign in")
 
-    def test_every_account_is_pro_and_owner(self):
+    def test_every_account_is_on_the_top_plan_and_an_owner(self):
         """Owner is what lets a session reach the broker, alerts and developer
         screens without a separate passcode — so this is the line between a
         login and full control of the instance. Asserted, not assumed."""
         for user, pw in self.ACCOUNTS:
             with self.subTest(user=user):
                 m = members.check_login(user, pw)
-                self.assertEqual(m["plan"], "pro")
+                self.assertEqual(m["plan"], "max")
                 self.assertTrue(m["owner"], f"{user} lost owner rights")
 
     def test_the_display_name_keeps_its_casing(self):

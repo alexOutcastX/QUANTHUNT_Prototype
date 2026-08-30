@@ -1107,7 +1107,7 @@ export default function RecommendationsScreen() {
   return (
     <Gate
       feature="recommendations"
-      requiredPlan="member"
+      requiredPlan="pro"
       mode="blur"
       title="Ranked setups, with the reasoning"
       blurb="The candidates our screens like today, each with the evidence that put it there."

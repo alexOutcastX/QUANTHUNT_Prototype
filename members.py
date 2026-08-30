@@ -60,12 +60,47 @@ def can_write(acct: dict) -> bool:
 # their feature lists trimmed when billing lands.
 PLAN_FEATURES = {
     "free": ["quotes", "heatmap", "news", "universe"],
-    "member": ["quotes", "heatmap", "news", "universe",
-               "screener", "patterns", "recommendations", "watchlist", "portfolio"],
     "pro": ["quotes", "heatmap", "news", "universe",
+            "screener", "patterns", "recommendations", "watchlist", "portfolio"],
+    "max": ["quotes", "heatmap", "news", "universe",
             "screener", "patterns", "recommendations", "watchlist", "portfolio",
             "backtest", "trade_scan", "terminal", "dossier", "exports", "alerts"],
 }
+
+# The ladder, cheapest first. Anything that has to compare two plans reads this
+# rather than sorting the dict, whose order is an implementation detail.
+PLAN_LADDER = ["free", "pro", "max"]
+TOP_PLAN = PLAN_LADDER[-1]
+
+# The tiers were once free / member / pro. Accounts created under those names
+# still exist — in the member table, in members.json on the server, in a saved
+# subscription row — so the old names keep resolving instead of silently
+# dropping someone to free. "member" was the middle rung, which is Pro now.
+#
+# The old "pro" was the TOP rung and today's "pro" is the middle one, so that
+# name cannot be remapped by string alone; owner accounts (the only holders of
+# it) are covered by the owner rule in plan_of() instead.
+LEGACY_PLANS = {"member": "pro"}
+
+
+def canonical_plan(plan: str) -> str:
+    """A stored plan name → one this build actually knows about."""
+    key = (plan or "").strip().lower()
+    key = LEGACY_PLANS.get(key, key)
+    return key if key in PLAN_FEATURES else "free"
+
+
+def plan_of(acct: dict) -> str:
+    """What an account's row entitles it to.
+
+    Owners are the people running the instance, not customers of it, so they
+    sit on the top plan whatever their row says. That is also what carries the
+    original owner accounts across the free/member/pro → free/pro/max rename:
+    their stored "pro" meant everything, and everything is what they keep.
+    """
+    if (acct or {}).get("owner"):
+        return TOP_PLAN
+    return canonical_plan((acct or {}).get("plan"))
 
 _DEFAULT_ACCOUNTS = {
     # `owner` promotes the member to the instance owner: the broker, alerts and
@@ -83,9 +118,9 @@ _DEFAULT_ACCOUNTS = {
     # can read the plaintext in git history. They are placeholders and must be
     # replaced before the site is open to strangers: rotate the credential,
     # then set MEMBER_ACCOUNTS_JSON with a hash from `python -m members hash`.
-    "taureye":   {"password": "TaureyePW", "plan": "pro", "name": "Taureye",   "owner": True},
-    "sreeraman": {"password": "SreeramPW", "plan": "pro", "name": "Sreeraman", "owner": True},
-    "sri":       {"password": "STI123",    "plan": "pro", "name": "Sri",       "owner": True},
+    "taureye":   {"password": "TaureyePW", "plan": "max", "name": "Taureye",   "owner": True},
+    "sreeraman": {"password": "SreeramPW", "plan": "max", "name": "Sreeraman", "owner": True},
+    "sri":       {"password": "STI123",    "plan": "max", "name": "Sri",       "owner": True},
 }
 
 
@@ -317,7 +352,7 @@ def check_login(username: str, password: str):
     if not acct or not ok:
         return None
     return {"username": acct.get("name") or uname, "uname": uname,
-            "plan": acct.get("plan") or "member",
+            "plan": plan_of(acct),
             "owner": bool(acct.get("owner")),
             "role": role_of(acct)}
 
@@ -431,7 +466,7 @@ def register(username: str, password: str, code: str = ""):
 
 
 def features_for(plan: str):
-    return PLAN_FEATURES.get(plan or "", PLAN_FEATURES["free"])
+    return PLAN_FEATURES[canonical_plan(plan)]
 
 
 def _sign(payload: bytes) -> str:
@@ -474,7 +509,7 @@ def from_cookie(cookie_value: str):
     acct = accounts().get(data["m"])
     if not acct:
         return None
-    plan = acct.get("plan") or "member"
+    plan = plan_of(acct)
     return {"username": acct.get("name") or data["m"], "uname": data["m"],
             "plan": plan, "features": features_for(plan),
             "owner": bool(acct.get("owner")),

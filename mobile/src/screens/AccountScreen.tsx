@@ -17,12 +17,15 @@ import {
   syncNow,
   syncState,
 } from '../session';
-import { Btn, Card } from '../ui';
+import { Btn, Card, SectionTitle } from '../ui';
 import { theme } from '../theme';
 
 type Step = 'email' | 'code';
 
-export default function AccountScreen() {
+// `embedded` drops the outer scroller: the merged Account page is one long
+// page with its own, and a ScrollView inside a ScrollView scrolls neither
+// reliably nor legibly.
+export default function AccountScreen({ embedded = false }: { embedded?: boolean } = {}) {
   const [me, setMe] = useState<string | null>(sessionEmail());
   const [sync, setSync] = useState(syncState());
   const [step, setStep] = useState<Step>('email');
@@ -130,8 +133,19 @@ export default function AccountScreen() {
           ? 'Sync error — will retry on next change'
           : 'Off';
 
+  const Wrap = embedded ? View : ScrollView;
+  // Embedded, the host's scroller already supplies the side padding, so this
+  // one keeps only the vertical rhythm — otherwise these cards sit inset from
+  // every other card on the page.
+  const wrapProps = embedded
+    ? { style: s.padEmbedded }
+    : { style: s.wrap, contentContainerStyle: s.pad };
+
   return (
-    <ScrollView style={s.wrap} contentContainerStyle={s.pad}>
+    <Wrap {...wrapProps}>
+      {/* The page above this is the wallet; without a heading these cards
+          read as more of the credit ledger. */}
+      {embedded ? <SectionTitle>Your account</SectionTitle> : null}
       {me ? (
         <>
           <Card style={s.card}>
@@ -230,13 +244,14 @@ export default function AccountScreen() {
         </Card>
       )}
       {note ? <Text style={s.note}>{note}</Text> : null}
-    </ScrollView>
+    </Wrap>
   );
 }
 
 const s = StyleSheet.create({
   wrap: { flex: 1, backgroundColor: theme.bg },
   pad: { padding: theme.sp.lg, gap: theme.sp.md },
+  padEmbedded: { paddingVertical: theme.sp.md, gap: theme.sp.md },
   card: { padding: theme.sp.lg, gap: theme.sp.sm },
   title: { color: theme.text, fontSize: theme.fs.xl, fontWeight: '800' },
   label: { color: theme.muted, fontSize: theme.fs.xs, letterSpacing: 1, fontWeight: '700', marginTop: theme.sp.xs },

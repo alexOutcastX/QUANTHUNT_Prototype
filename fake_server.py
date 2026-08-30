@@ -26,7 +26,7 @@ _MEMBER_TOKEN = "fake-member-token"
 # is the thing the smoke suite checks. (Thursday 23 July 2026 — the same day
 # the movers fixture is stamped with.)
 _SESSION = "2026-07-23"
-_MEMBER = {"username": "Taureye", "uname": "taureye", "plan": "pro", "owner": True,
+_MEMBER = {"username": "Taureye", "uname": "taureye", "plan": "max", "owner": True,
            "features": ["quotes", "heatmap", "news", "universe", "screener", "patterns",
                         "recommendations", "watchlist", "portfolio", "backtest",
                         "trade_scan", "terminal", "dossier", "exports", "alerts"]}
@@ -1061,14 +1061,71 @@ class H(BaseHTTPRequestHandler):
                 "oldest": base - 6 * 86400, "newest": base,
                 "total": 6, "keep_days": 35,
             })
+        # ── the credit economy ──
+        # These used to 404 here, which meant the account page rendered its
+        # sign-in half and nothing else, and the smoke suite could not see the
+        # plan cards at all. They are the thing a pricing change changes, so
+        # they are fixtured: deterministic, and matching the real shapes in
+        # billing.py / rewards.py so the screen renders the way it will live.
+        if path == "/preview":
+            return self._json({"preview": True, "host": "fixture",
+                               "reason": "fixture host previews everything"})
         if path == "/wallet/earn":
             # The header's wallet chip hides itself when this 404s, and with the
             # chip gone the smoke suite would measure a header 50px narrower
             # than the real one — which is exactly the measurement the nav-clip
             # check depends on. Deterministic values: a balance and a streak,
             # nothing claimable, so the chip renders in its ordinary state.
-            return self._json({"balance": 120, "prices": {},
-                               "daily": {"streak": 3, "claimable": False, "amount": 5}})
+            return self._json({
+                "balance": 120,
+                "earn": [
+                    {"key": "daily", "label": "Daily check-in", "detail": "Once per trading day", "credits": 5},
+                    {"key": "referral", "label": "Refer a friend", "detail": "When they apply your code", "credits": 50},
+                ],
+                "prices": [
+                    {"action": "dossier", "label": "Company report", "credits": 20},
+                    {"action": "backtest", "label": "Backtest run", "credits": 10},
+                ],
+                "daily": {"claimable": False, "claimed_today": True, "trading_day": True,
+                          "day": _SESSION, "streak": 3, "credits": 5,
+                          "next_milestone": 7, "next_milestone_bonus": 25,
+                          "milestones": {"7": 25, "30": 150}},
+            })
+        if path == "/wallet":
+            return self._json({
+                "account": _MEMBER["uname"],
+                "balances": {"credits": 120, "INR": 0},
+                "history": [
+                    {"id": 2, "currency": "credits", "amount": 5,
+                     "reason": "Daily check-in", "ts": 1753228800},
+                    {"id": 1, "currency": "credits", "amount": 115,
+                     "reason": "Opening balance", "ts": 1753142400},
+                ],
+            })
+        if path == "/wallet/gift":
+            return self._json({"balance": 120, "giftable": 100, "sent_today": 0,
+                               "daily_cap": 200, "remaining_today": 200, "minimum": 10})
+        if path == "/referral":
+            return self._json({"code": "TAUR-FIXT", "count": 2, "credits_earned": 100,
+                               "referrals": [], "referred_by": "",
+                               "reward_referrer": 50, "reward_referee": 25})
+        if path == "/billing/plans":
+            import billing as _billing
+            return self._json({
+                "plans": _billing.plans(),
+                "current": {"plan": _MEMBER["plan"], "status": "none",
+                            "source": "member-table", "provider": None,
+                            "renews_at": None, "expired": False},
+                "provider": "razorpay", "provider_configured": False,
+            })
+        if path == "/integrations/public":
+            return self._json({
+                "google": {"enabled": False, "client_id": "",
+                           "reason": "not connected yet"},
+                "supabase": {"enabled": False, "url": "", "anon_key": "",
+                             "reason": "not connected yet"},
+                "payments": {"provider": "razorpay", "enabled": False},
+            })
         if path == "/sectors/members":
             from urllib.parse import urlparse, parse_qs
             sec = (parse_qs(urlparse(self.path).query).get("sector", ["Financials"])[0])

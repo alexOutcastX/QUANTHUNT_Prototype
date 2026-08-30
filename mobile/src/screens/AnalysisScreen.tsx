@@ -1212,7 +1212,7 @@ export default function AnalysisScreen() {
   return (
     <Gate
       feature="dossier"
-      requiredPlan="pro"
+      requiredPlan="max"
       mode="replace"
       title="Institutional company report"
       blurb="Valuation against sector medians, cash flow, shareholding and promoter pledges — one printable report per company."
