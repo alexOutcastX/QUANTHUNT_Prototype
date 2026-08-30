@@ -4,7 +4,7 @@
 import React, { useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { API_BASE, api } from '../api';
-import { currentMember, memberLogout, subscribeMember } from '../member';
+import { currentMember, memberLogout, simulatePlan, subscribeMember } from '../member';
 import { Linking } from 'react-native';
 import {
   deleteAccount,
@@ -22,6 +22,15 @@ import { theme } from '../theme';
 
 type Step = 'email' | 'code';
 
+// The ladder, for the owner-only "view as" switcher below. Kept here rather
+// than fetched: it is a testing control, and one that cannot render because a
+// list endpoint was slow is worse than one that is a line behind the server.
+const PLANS: { key: string; label: string }[] = [
+  { key: 'free', label: 'FREE' },
+  { key: 'pro', label: 'PRO' },
+  { key: 'max', label: 'MAX' },
+];
+
 // `embedded` drops the outer scroller: the merged Account page is one long
 // page with its own, and a ScrollView inside a ScrollView scrolls neither
 // reliably nor legibly.
@@ -38,6 +47,8 @@ export default function AccountScreen({ embedded = false }: { embedded?: boolean
   // The membership sign-in IS the account (server auto-provisions its synced
   // documents), so this page reports it rather than asking to sign in twice.
   const [member, setMember] = useState(currentMember());
+  const [planBusy, setPlanBusy] = useState('');
+  const [planNote, setPlanNote] = useState('');
 
   useEffect(() => {
     refreshSession();
@@ -141,6 +152,65 @@ export default function AccountScreen({ embedded = false }: { embedded?: boolean
     ? { style: s.padEmbedded }
     : { style: s.wrap, contentContainerStyle: s.pad };
 
+  // Owner-only, and it can only ever show LESS than the account holds: the
+  // server applies the claim to owners, who are already on the top plan.
+  const asPlan = async (plan: string) => {
+    setPlanBusy(plan || 'off');
+    setPlanNote('');
+    try {
+      const m = await simulatePlan(plan);
+      setPlanNote(
+        m.simulating
+          ? `Viewing the app as ${m.plan.toUpperCase()}. Sign out to end it.`
+          : `Back on your real plan, ${m.plan.toUpperCase()}.`,
+      );
+    } catch (e) {
+      setPlanNote(e instanceof Error ? e.message : 'Could not switch plan.');
+    } finally {
+      setPlanBusy('');
+    }
+  };
+
+  const planSwitcher = member?.owner ? (
+    <Card style={s.card}>
+      <Text style={s.label}>TESTING · VIEW AS A PLAN</Text>
+      <Text style={s.hint}>
+        The only honest way to check a paywall is to stand on the other side of it, and
+        this account has everything. Pick a plan to see the app the way someone on it
+        does. It lasts for this session only, changes nothing about your account, and
+        can never show you more than you already have.
+      </Text>
+      <View style={s.planRow}>
+        {PLANS.map((pl) => {
+          const on = member.plan === pl.key;
+          return (
+            <TouchableOpacity
+              key={pl.key}
+              style={[s.planBtn, on && s.planBtnOn]}
+              onPress={() => asPlan(pl.key === (member.real_plan || '') ? '' : pl.key)}
+              disabled={!!planBusy}
+              activeOpacity={0.75}
+              accessibilityRole="button"
+              accessibilityState={{ selected: on }}
+              accessibilityLabel={`View the app as ${pl.label}`}
+            >
+              <Text style={[s.planTxt, on && s.planTxtOn]}>
+                {planBusy === pl.key ? '…' : pl.label}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+      {member.simulating ? (
+        <Text style={s.simWarn}>
+          Simulating {member.plan.toUpperCase()} — your real plan is{' '}
+          {(member.real_plan || '').toUpperCase()}.
+        </Text>
+      ) : null}
+      {planNote ? <Text style={s.hint}>{planNote}</Text> : null}
+    </Card>
+  ) : null;
+
   return (
     <Wrap {...wrapProps}>
       {/* The page above this is the wallet; without a heading these cards
@@ -174,6 +244,7 @@ export default function AccountScreen({ embedded = false }: { embedded?: boolean
               )}
             </View>
           </Card>
+          {planSwitcher}
           <Card style={s.card}>
             <Text style={s.label}>DELETE ACCOUNT</Text>
             <Text style={s.hint}>
@@ -186,6 +257,8 @@ export default function AccountScreen({ embedded = false }: { embedded?: boolean
           </Card>
         </>
       ) : (
+        <>
+        {planSwitcher}
         <Card style={s.card}>
           <Text style={s.title}>Sign in</Text>
           <Text style={s.hint}>
@@ -242,6 +315,7 @@ export default function AccountScreen({ embedded = false }: { embedded?: boolean
             </>
           )}
         </Card>
+        </>
       )}
       {note ? <Text style={s.note}>{note}</Text> : null}
     </Wrap>
@@ -287,4 +361,16 @@ const s = StyleSheet.create({
   dangerBtnArmed: { backgroundColor: theme.red },
   dangerTxt: { color: theme.text, fontWeight: '700', fontSize: theme.fs.sm + 1 },
   note: { color: theme.muted2, fontSize: theme.fs.sm, paddingHorizontal: theme.sp.xs },
+  planRow: { flexDirection: 'row', gap: theme.sp.sm, flexWrap: 'wrap', marginTop: theme.sp.xs },
+  planBtn: {
+    borderColor: theme.border2, borderWidth: 1, borderRadius: 999,
+    paddingHorizontal: 14, paddingVertical: 7, backgroundColor: theme.surface2,
+  },
+  planBtnOn: { backgroundColor: theme.accent, borderColor: theme.accent },
+  planTxt: {
+    color: theme.muted2, fontFamily: theme.mono, fontSize: theme.fs.sm,
+    fontWeight: '700', letterSpacing: 1,
+  },
+  planTxtOn: { color: theme.bg },
+  simWarn: { color: theme.brand, fontSize: theme.fs.sm, fontWeight: '700' },
 });

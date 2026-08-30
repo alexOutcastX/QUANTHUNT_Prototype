@@ -99,6 +99,27 @@ export async function memberRegister(
   return member;
 }
 
+/**
+ * View the app as another plan. Owners only — the server refuses everyone
+ * else, and applies the claim only to accounts that already hold everything,
+ * so this can only ever show LESS than the account really has.
+ *
+ * Pass '' to go back to the real plan.
+ */
+export async function simulatePlan(plan: string): Promise<Member> {
+  const res = await api.memberSimulatePlan(plan);
+  if (!res.member) throw new Error(res.detail || 'Could not switch plan.');
+  member = res.member;
+  if (usesHeaderSessions && res.token) {
+    setSessionToken('member', res.token);
+    await AsyncStorage.setItem(TOKEN_KEY, res.token).catch(() => {});
+  }
+  await AsyncStorage.setItem(CACHE_KEY, JSON.stringify(member)).catch(() => {});
+  // Every Gate on screen reads hasFeature(), so they all have to be told.
+  emit();
+  return member;
+}
+
 /** True inside the Capacitor APK, where Platform.OS still reports 'web'. */
 function isNativeShell(): boolean {
   try {

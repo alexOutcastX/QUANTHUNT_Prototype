@@ -1577,6 +1577,45 @@ def member_me():
     return jsonify({"member": current_member()})
 
 
+@app.route("/auth/member/simulate-plan", methods=["POST"])
+def member_simulate_plan():
+    """View the app as another plan. Owners only, this session only.
+
+    The only honest way to test a paywall is to stand on the other side of it,
+    and an owner account can never do that by definition — it has everything.
+    This re-signs the session with a plan claim, which members.from_cookie
+    applies ONLY to accounts that are owners anyway. So it can reduce what a
+    session sees and never raise it: every simulation an owner can ask for is
+    a downgrade from the top plan they already hold.
+
+    Nothing is written down. A simulation that outlived the browser tab would
+    eventually be forgotten and mistaken for a real plan.
+    """
+    m = current_member()
+    if m is None:
+        return jsonify({"error": "member-required",
+                        "detail": "Sign in first."}), 401
+    if not m.get("owner"):
+        # Not 404: the control is not offered to anyone else, so a request for
+        # it is either a mistake or an attempt, and both deserve the reason.
+        return jsonify({"error": "owner-required",
+                        "detail": "Only the instance owner can simulate a plan."}), 403
+
+    body = request.get_json(silent=True) or {}
+    want = str(body.get("plan") or "").strip().lower()
+    # An empty plan clears the simulation and returns the real one.
+    if want and want not in _members.PLAN_FEATURES:
+        return jsonify({"error": "unknown-plan",
+                        "detail": f"No such plan as {want!r}.",
+                        "plans": _members.PLAN_LADDER}), 400
+
+    token = _members.make_cookie(m, simulate=want)
+    fresh = _members.from_cookie(token)
+    _analytics.track(m["uname"], "plan.simulate", {"plan": want or "off"})
+    resp = jsonify({"member": fresh, "token": token})
+    return _session_cookie(resp, _members.COOKIE, token, _members.TTL)
+
+
 @app.route("/auth/member/logout", methods=["POST"])
 def member_logout():
     resp = jsonify({"member": None})

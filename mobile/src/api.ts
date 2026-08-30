@@ -1593,6 +1593,9 @@ export type Member = {
   // Owner-flagged members hold owner rights (broker, alerts, developer keys)
   // without a separate passcode — one sign-in covers the whole app.
   owner?: boolean;
+  /** This session is pretending to be on `plan`; `real_plan` is the truth. */
+  simulating?: boolean;
+  real_plan?: string;
 };
 export type MemberResp = { member: Member | null; token?: string; error?: string; detail?: string };
 /** What the sign-up form needs to know before anyone types into it. */
@@ -1741,6 +1744,10 @@ export const api = {
     postJson<MemberResp>('/auth/member/register', { username, password, code }),
   signupPolicy: () => getJson<SignupPolicy>('/auth/member/signup-policy'),
   memberMe: () => getJson<MemberResp>('/auth/member'),
+  // Owner-only, session-only: view the app as another plan. An empty string
+  // clears the simulation.
+  memberSimulatePlan: (plan: string) =>
+    postJson<MemberResp>('/auth/member/simulate-plan', { plan }),
   memberLogout: () => postJson<MemberResp>('/auth/member/logout', {}),
   authMe: () => getJson<MeResp>('/auth/me'),
   otpRequest: (email: string) => postJson<OtpRequestResp>('/auth/otp/request', { email }),

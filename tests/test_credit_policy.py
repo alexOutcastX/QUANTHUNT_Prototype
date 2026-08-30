@@ -72,8 +72,15 @@ class SpendRefusalTest(unittest.TestCase):
         with server._RL_LOCK:
             server._RL.clear()
         boot = server.app.test_client()
+        # DB_PATH is read when `store` is first imported, which has already
+        # happened by the time this class runs — so this row lands in whichever
+        # database the process is actually using. Leaving it behind made the
+        # suite pass only on a clean database and fail on the second run with
+        # "that username is taken".
+        cls.free = "creditfree"
+        cls._drop_free()
         r = boot.post("/auth/member/register",
-                      json={"username": "creditfree", "password": "a-good-password"},
+                      json={"username": cls.free, "password": "a-good-password"},
                       headers={"Host": cls.IP})
         assert r.status_code == 200, r.data[:200]
         cls.free_token = r.json["token"]
@@ -88,7 +95,16 @@ class SpendRefusalTest(unittest.TestCase):
         cls.owner_token = r.json["token"]
 
     @classmethod
+    def _drop_free(cls):
+        try:
+            import store
+            store.execute("DELETE FROM member_accounts WHERE uname=?", (cls.free,))
+        except Exception:
+            pass
+
+    @classmethod
     def tearDownClass(cls):
+        cls._drop_free()
         os.environ.pop("AUTH_SECRET", None)
         with cls.server._RL_LOCK:
             cls.server._RL.clear()

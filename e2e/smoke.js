@@ -1265,6 +1265,63 @@ function check(name, ok, detail) {
       );
     }
 
+    // 8m-pre · the owner's "view as a plan" switch. It exists so the paywall
+    // can be checked from an account that holds everything, so the check that
+    // matters is that flipping it actually re-gates the interface.
+    {
+      await page.evaluate(() => {
+        const el = document.querySelector('[aria-label^="Signed in as"]');
+        if (el) el.click();
+      });
+      await page.waitForTimeout(2500);
+      const acctPage = await page.evaluate(() => document.body.innerText);
+      check(
+        'the owner is offered a plan to view the app as',
+        /TESTING · VIEW AS A PLAN/.test(acctPage),
+        acctPage.slice(0, 200),
+      );
+      await page.evaluate(() => {
+        const el = [...document.querySelectorAll('div,span')]
+          .filter((e) => (e.textContent || '').trim() === 'FREE').pop();
+        if (el) el.click();
+      });
+      await page.waitForTimeout(1500);
+      check(
+        'picking one says plainly that it is a simulation',
+        /your real plan is MAX/.test(await page.evaluate(() => document.body.innerText)),
+      );
+      await page.evaluate(() => {
+        const el = document.querySelector('[aria-label="Terminal"]');
+        if (el) el.click();
+      });
+      await page.waitForTimeout(2500);
+      check(
+        'and the paywall closes in front of the owner',
+        /Unlock with Max/.test(await page.evaluate(() => document.body.innerText)),
+      );
+      // Back to the truth, or every check after this one runs as a free user.
+      await page.evaluate(() => {
+        const el = document.querySelector('[aria-label^="Signed in as"]');
+        if (el) el.click();
+      });
+      await page.waitForTimeout(2500);
+      await page.evaluate(() => {
+        const el = [...document.querySelectorAll('div,span')]
+          .filter((e) => (e.textContent || '').trim() === 'MAX').pop();
+        if (el) el.click();
+      });
+      await page.waitForTimeout(1500);
+      await page.evaluate(() => {
+        const el = document.querySelector('[aria-label="Terminal"]');
+        if (el) el.click();
+      });
+      await page.waitForTimeout(2500);
+      check(
+        'switching back reopens it',
+        !/Unlock with Max/.test(await page.evaluate(() => document.body.innerText)),
+      );
+    }
+
     // 8m · the paywall, seen from outside it. Signed in as an owner every
     // gate is open, which is exactly the state in which a hole in one goes
     // unnoticed — so this signs out, creates a free account, and looks at the

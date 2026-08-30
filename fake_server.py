@@ -1277,6 +1277,23 @@ class H(BaseHTTPRequestHandler):
             self.send_header("Set-Cookie", "te_member=1; Path=/")
             self.end_headers()
             return self.wfile.write(payload)
+        if self.path.split("?")[0] == "/auth/member/simulate-plan":
+            # Owner-only in the real server; the fixture's member IS an owner,
+            # so this exercises the switch itself. Features follow the plan,
+            # which is the whole point — every Gate on screen reads them.
+            import members as _mem
+            n = int(self.headers.get("Content-Length") or 0)
+            body = json.loads(self.rfile.read(n) or b"{}")
+            want = (body.get("plan") or "").strip().lower()
+            if want and want not in _mem.PLAN_FEATURES:
+                return self._status(400, {"error": "unknown-plan",
+                                          "detail": f"No such plan as {want!r}."})
+            plan = want or _MEMBER["plan"]
+            out = dict(_MEMBER)
+            out.update({"plan": plan, "features": list(_mem.PLAN_FEATURES[plan]),
+                        "simulating": bool(want) and want != _MEMBER["plan"],
+                        "real_plan": _MEMBER["plan"]})
+            return self._json({"member": out, "token": _MEMBER_TOKEN})
         if self.path.split("?")[0] == "/auth/member/logout":
             self.send_response(200)
             self.send_header("Content-Type", "application/json")

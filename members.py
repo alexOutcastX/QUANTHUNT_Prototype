@@ -495,9 +495,52 @@ def _verify(token: str):
     return data
 
 
-def make_cookie(member: dict) -> str:
-    payload = json.dumps({"m": member["uname"], "exp": int(time.time()) + TTL}).encode()
-    return _sign(payload)
+# ── viewing the app as another plan ─────────────────────────────────────────
+# An owner needs to see what a Free or Pro visitor sees, and the only honest
+# way to check a paywall is to stand on the other side of it. Reading the code
+# is not the same test: the client gates on the feature list in this dict, and
+# a bug there looks exactly like working software from an account that has
+# everything.
+#
+# Three properties make this safe to ship rather than a hole:
+#
+#   1. It is carried in the SIGNED session token, so nothing a browser can
+#      edit decides it. Only this server can mint one.
+#   2. It is applied only to accounts that are owners anyway, checked here on
+#      every request rather than only where the token was issued. A leaked or
+#      replayed token cannot elevate anyone, because the claim is ignored for
+#      everyone who is not already entitled to everything.
+#   3. It can only ever REDUCE what an owner sees — an owner is on the top
+#      plan, so every simulation is a downgrade. There is no direction in
+#      which this grants access to something.
+#
+# It lives on the session, not in the account table: a simulation that outlived
+# the browser tab would eventually be forgotten and mistaken for a real plan.
+
+
+def simulated_plan(acct: dict, claim: str) -> str:
+    """The plan a session should be treated as, given its token's claim.
+
+    An unrecognised claim is ignored rather than resolved. canonical_plan()
+    exists to rescue a stored plan name and lands anything unknown on free,
+    which is right for a real account and wrong here: a typo would silently
+    become a simulation instead of doing nothing.
+    """
+    key = (claim or "").strip().lower()
+    key = LEGACY_PLANS.get(key, key)
+    if key not in PLAN_FEATURES or not (acct or {}).get("owner"):
+        return ""
+    return key if key != plan_of(acct) else ""
+
+
+def make_cookie(member: dict, simulate: str = "") -> str:
+    """Sign a session. `simulate` rides along as a claim, never as authority —
+    from_cookie re-checks that the account may use it."""
+    body = {"m": member["uname"], "exp": int(time.time()) + TTL}
+    sim = (simulate or "").strip().lower()
+    if sim and sim in PLAN_FEATURES:
+        body["p"] = sim
+    return _sign(json.dumps(body).encode())
 
 
 def from_cookie(cookie_value: str):
@@ -510,9 +553,17 @@ def from_cookie(cookie_value: str):
     if not acct:
         return None
     plan = plan_of(acct)
+    sim = simulated_plan(acct, data.get("p", ""))
+    if sim:
+        plan = sim
     return {"username": acct.get("name") or data["m"], "uname": data["m"],
             "plan": plan, "features": features_for(plan),
             "owner": bool(acct.get("owner")),
+            # The interface has to be able to say so. A simulated session that
+            # looked identical to a real one is how someone ends up debugging a
+            # paywall that was never broken.
+            "simulating": bool(sim),
+            "real_plan": plan_of(acct),
             "role": role_of(acct)}
 
 
