@@ -23,6 +23,12 @@ class DeployExcludesTest(unittest.TestCase):
                      "quanthunt.db*"):
             self.assertIn(name, self.yml, f"deploy would delete {name} from the VM")
 
+    def test_the_credentials_survive_a_deploy(self):
+        """members.json holds the rotated logins. rsync --delete would take
+        them with it, and the app would fall back to the placeholders whose
+        passwords are in a public repository."""
+        self.assertIn("--exclude 'members.json'", self.yml)
+
     def test_the_systemd_unit_is_still_synced(self):
         """The unit carries SCAN_WARM and the gunicorn thread count; a deploy
         that stopped syncing it would silently pin production to old tuning."""

@@ -89,18 +89,64 @@ _DEFAULT_ACCOUNTS = {
 }
 
 
+def accounts_file() -> str:
+    """Where a JSON account table may live on the machine.
+
+    A file, not just an env var, because the env var has to survive two layers
+    of quoting to get there — a shell command and a systemd EnvironmentFile —
+    and a scrypt hash is full of `$`. A file is written once and read verbatim.
+    The deploy writes this one from a repo secret; nothing about it is ever
+    committed. It is excluded from the deploy rsync, or --delete would remove
+    the credentials on the next push.
+    """
+    p = os.environ.get("MEMBER_ACCOUNTS_FILE", "").strip()
+    return p or os.path.join(os.path.dirname(os.path.abspath(__file__)), "members.json")
+
+
+def _clean_table(data):
+    if not isinstance(data, dict) or not data:
+        return None
+    out = {str(k).strip().lower(): v for k, v in data.items()
+           if isinstance(v, dict) and v.get("password")}
+    return out or None
+
+
 def configured_accounts():
-    """The owner table: MEMBER_ACCOUNTS_JSON when set, else the placeholder."""
+    """The owner table.
+
+    In order: MEMBER_ACCOUNTS_JSON, then the accounts file, then the published
+    placeholders. The placeholders are a development convenience and a live
+    instance must not be running on them — see using_default_accounts().
+    """
     raw = os.environ.get("MEMBER_ACCOUNTS_JSON", "").strip()
     if raw:
         try:
-            data = json.loads(raw)
-            if isinstance(data, dict) and data:
-                return {str(k).strip().lower(): v for k, v in data.items()
-                        if isinstance(v, dict) and v.get("password")}
+            table = _clean_table(json.loads(raw))
+            if table:
+                return table
         except Exception:
-            pass
+            logging.warning("members: MEMBER_ACCOUNTS_JSON is not readable JSON")
+    path = accounts_file()
+    try:
+        with open(path, encoding="utf-8") as fh:
+            table = _clean_table(json.load(fh))
+        if table:
+            return table
+        logging.warning("members: %s holds no usable accounts", path)
+    except FileNotFoundError:
+        pass
+    except Exception:
+        logging.warning("members: could not read %s", path)
     return _DEFAULT_ACCOUNTS
+
+
+def using_default_accounts() -> bool:
+    """True when the instance is running on the published placeholders.
+
+    Their passwords are in a public repository's history, so on a reachable
+    instance this is an open door, not a warning about one.
+    """
+    return configured_accounts() is _DEFAULT_ACCOUNTS
 
 
 def registered_accounts():

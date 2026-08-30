@@ -1474,6 +1474,17 @@ def require_user(fn):
 # ── membership gate (username/password + plan) — the paywall foundation ──────
 import members as _members
 
+# Said once, at boot, in the log the operator actually reads. The placeholder
+# credentials are in a public repository's history: on a reachable instance
+# they are not a warning about an open door, they are the open door. Loud
+# rather than silent, and never in an HTTP response — telling an anonymous
+# caller which credentials are in use would be the same mistake again.
+if _members.using_default_accounts():
+    log.warning(
+        "SECURITY: running on the PUBLISHED placeholder logins. Rotate them: "
+        "write %s (or set MEMBER_ACCOUNTS_JSON) with hashes from "
+        "`python -m members hash`.", _members.accounts_file())
+
 
 def current_member():
     return (_members.from_cookie(request.cookies.get(_members.COOKIE, ""))
