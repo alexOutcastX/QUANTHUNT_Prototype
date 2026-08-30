@@ -13,7 +13,8 @@ import {
 import BullRun from './BullRun';
 import { Btn } from '../ui';
 import { theme } from '../theme';
-import { currentMember, memberLogin, restoreMember, subscribeMember } from '../member';
+import { SignupPolicy, api } from '../api';
+import { currentMember, memberLogin, memberRegister, restoreMember, subscribeMember } from '../member';
 import { landOnHome } from '../navIntent';
 
 // The app's front door: nothing renders until a member signs in. Credentials
@@ -35,36 +36,64 @@ export default function LoginGate({ children }: { children: React.ReactNode }) {
   const [, force] = useState(0);
   const [user, setUser] = useState('');
   const [pw, setPw] = useState('');
+  const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
   const [showPw, setShowPw] = useState(false);
   const [msg, setMsg] = useState('');
+  // One form, two modes. A separate sign-up screen means someone who typed a
+  // username into the wrong one has to type it again.
+  const [mode, setMode] = useState<'in' | 'up'>('in');
+  // The server decides whether signup is open at all, how long a password has
+  // to be, and whether an invite code is needed. Asking it means the rules the
+  // form states are the rules the server enforces.
+  const [policy, setPolicy] = useState<SignupPolicy | null>(null);
 
   useEffect(() => {
     const un = subscribeMember(() => force((n) => n + 1));
     restoreMember().finally(() => setChecked(true));
+    api.signupPolicy().then(setPolicy).catch(() => setPolicy(null));
     return un;
   }, []);
 
-  const login = useCallback(async () => {
+  const submit = useCallback(async () => {
     if (busy) return;
     setMsg('');
     if (!user.trim() || !pw) {
-      setMsg('Enter your username and password.');
+      setMsg(mode === 'up'
+        ? 'Choose a username and a password.'
+        : 'Enter your username and password.');
       return;
     }
     setBusy(true);
     setShowPw(false);
     try {
-      await memberLogin(user.trim(), pw);
+      if (mode === 'up') await memberRegister(user.trim(), pw, code.trim());
+      else await memberLogin(user.trim(), pw);
       // Sign in and you are on the home page, not on whatever screen the last
       // session was left open at.
       await landOnHome();
       setPw('');
-    } catch {
-      setMsg('Wrong username or password.');
+      setCode('');
+    } catch (e) {
+      // The server's own sentence — it knows whether the name is taken, the
+      // password is short or the invite code is wrong, and re-wording that
+      // here as "something went wrong" makes the caller guess which.
+      const said = e instanceof Error ? e.message : '';
+      const useful = said && !/^(signup-refused|HTTP \d+)$/.test(said);
+      setMsg(mode === 'up'
+        ? (useful ? said : 'Could not create that account.')
+        : 'Wrong username or password.');
     }
     setBusy(false);
-  }, [busy, user, pw]);
+  }, [busy, user, pw, code, mode]);
+
+  const canSignUp = policy ? policy.open : false;
+  const swap = (next: 'in' | 'up') => {
+    setMode(next);
+    setMsg('');
+    setPw('');
+    setShowPw(false);
+  };
 
   if (currentMember()) return <>{children}</>;
 
@@ -98,7 +127,35 @@ export default function LoginGate({ children }: { children: React.ReactNode }) {
               resizeMode="contain"
               accessible={false}
             />
-            <Text style={styles.tag}>Members only — sign in to continue</Text>
+            <Text style={styles.tag}>
+              {mode === 'up'
+                ? 'Create your TaurEye account'
+                : 'Members only — sign in to continue'}
+            </Text>
+            {canSignUp ? (
+              <View style={styles.modeRow}>
+                <TouchableOpacity
+                  style={[styles.modeBtn, mode === 'in' && styles.modeBtnOn]}
+                  onPress={() => swap('in')}
+                  activeOpacity={0.8}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: mode === 'in' }}
+                  testID="mode-signin"
+                >
+                  <Text style={[styles.modeTxt, mode === 'in' && styles.modeTxtOn]}>Sign in</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.modeBtn, mode === 'up' && styles.modeBtnOn]}
+                  onPress={() => swap('up')}
+                  activeOpacity={0.8}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: mode === 'up' }}
+                  testID="mode-signup"
+                >
+                  <Text style={[styles.modeTxt, mode === 'up' && styles.modeTxtOn]}>Create account</Text>
+                </TouchableOpacity>
+              </View>
+            ) : null}
             <TextInput
               value={user}
               onChangeText={setUser}
@@ -122,7 +179,7 @@ export default function LoginGate({ children }: { children: React.ReactNode }) {
                 autoCapitalize="none"
                 autoCorrect={false}
                 style={[styles.input, styles.pwInput]}
-                onSubmitEditing={login}
+                onSubmitEditing={submit}
                 testID="login-pw"
               />
               <TouchableOpacity
@@ -138,10 +195,37 @@ export default function LoginGate({ children }: { children: React.ReactNode }) {
                 <Text style={styles.pwEyeTxt}>{showPw ? 'Hide' : 'Show'}</Text>
               </TouchableOpacity>
             </View>
+            {mode === 'up' && policy?.invite_required ? (
+              <TextInput
+                value={code}
+                onChangeText={setCode}
+                placeholder="Invite code"
+                placeholderTextColor={theme.muted}
+                autoCapitalize="none"
+                autoCorrect={false}
+                style={styles.input}
+                testID="login-code"
+              />
+            ) : null}
+            {/* The rules, before you break them. The server owns these numbers
+                and the form reads them from it, so the two cannot drift. */}
+            {mode === 'up' && policy ? (
+              <Text style={styles.rules}>
+                {policy.username_min}–{policy.username_max} characters, starting with a letter.
+                Password at least {policy.password_min}.
+              </Text>
+            ) : null}
             {msg ? <Text style={styles.err}>{msg}</Text> : null}
-            <Btn label={busy ? 'SIGNING IN…' : 'SIGN IN'} onPress={login} />
+            <Btn
+              label={busy
+                ? (mode === 'up' ? 'CREATING…' : 'SIGNING IN…')
+                : (mode === 'up' ? 'CREATE ACCOUNT' : 'SIGN IN')}
+              onPress={submit}
+            />
             <Text style={styles.foot}>
-              Access is by membership. Educational market analytics — not investment advice.
+              {mode === 'up'
+                ? 'Educational market analytics — not investment advice. By creating an account you accept the disclaimer.'
+                : 'Access is by membership. Educational market analytics — not investment advice.'}
             </Text>
             {/* Somewhere to go when you are not a member yet, rather than
                 dead-ending on a password box. Navigates in place: signed out,
@@ -158,6 +242,19 @@ export default function LoginGate({ children }: { children: React.ReactNode }) {
 }
 
 const styles = StyleSheet.create({
+  modeRow: {
+    flexDirection: 'row',
+    gap: 6,
+    backgroundColor: theme.surface2,
+    borderRadius: 999,
+    padding: 3,
+    marginBottom: theme.sp.md,
+  },
+  modeBtn: { flex: 1, alignItems: 'center', borderRadius: 999, paddingVertical: 7 },
+  modeBtnOn: { backgroundColor: theme.accent },
+  modeTxt: { color: theme.muted2, fontSize: theme.fs.sm, fontWeight: '700' },
+  modeTxtOn: { color: theme.onAccent },
+  rules: { color: theme.muted, fontSize: theme.fs.xs + 1, lineHeight: 17, marginBottom: 6 },
   page: { flex: 1, backgroundColor: theme.bg, alignItems: 'center', justifyContent: 'center' },
   boot: { alignItems: 'center', gap: 10 },
   pwRow: { position: 'relative', justifyContent: 'center', marginBottom: theme.sp.md },

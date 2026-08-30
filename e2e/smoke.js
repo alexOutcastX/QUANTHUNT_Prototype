@@ -86,6 +86,48 @@ function check(name, ok, detail) {
         if (el) el.click();
       });
     if (gated) {
+      // 1c · the front door has two doors now. Checked before signing in,
+      // because that is the only moment the gate is on screen.
+      check(
+        'the gate offers sign-in and create-account',
+        (await page.locator('[data-testid="mode-signin"]').count()) === 1 &&
+          (await page.locator('[data-testid="mode-signup"]').count()) === 1,
+      );
+      await page.evaluate(() => {
+        const el = document.querySelector('[data-testid="mode-signup"]');
+        if (el) el.click();
+      });
+      await page.waitForTimeout(500);
+      const up = await page.evaluate(() => document.body.innerText);
+      check(
+        'creating an account states the rules first',
+        /Create your TaurEye account/.test(up) && /3–24 characters/.test(up)
+          && /at least 8/.test(up),
+        up.slice(0, 260),
+      );
+      // A refusal must arrive in the SERVER's words: it is the only party that
+      // knows whether the name is taken, the password is short, or the invite
+      // code is wrong.
+      await page.fill('[data-testid="login-user"]', 'ab');
+      await page.fill('[data-testid="login-pw"]', 'a-good-password');
+      await page.evaluate(() => {
+        const el = [...document.querySelectorAll('div,span')]
+          .filter((e) => (e.textContent || '').trim() === 'CREATE ACCOUNT').pop();
+        if (el) el.click();
+      });
+      await page.waitForTimeout(1200);
+      check(
+        'a refused sign-up says why',
+        /Username must be at least 3 characters/.test(
+          await page.evaluate(() => document.body.innerText)),
+        (await page.evaluate(() => document.body.innerText)).slice(0, 260),
+      );
+      await page.evaluate(() => {
+        const el = document.querySelector('[data-testid="mode-signin"]');
+        if (el) el.click();
+      });
+      await page.waitForTimeout(500);
+
       await page.fill('[data-testid="login-user"]', 'Taureye');
       await page.fill('[data-testid="login-pw"]', 'wrong-password');
       await clickSignIn();

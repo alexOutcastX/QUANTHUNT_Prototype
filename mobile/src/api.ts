@@ -123,8 +123,21 @@ async function postJson<T>(path: string, body: unknown): Promise<T> {
     headers: { 'Content-Type': 'application/json', ...authHeaders() },
     body: JSON.stringify(body ?? {}),
   });
-  const data = (await res.json().catch(() => ({}))) as T & { error?: string };
-  if (!res.ok) throw new Error((data as { error?: string }).error || 'HTTP ' + res.status);
+  const data = (await res.json().catch(() => ({}))) as T & { error?: string; detail?: string };
+  if (!res.ok) {
+    // `detail` is the sentence the server wrote for a person to read — "That
+    // username is taken", "Password must be at least 8 characters". `error` is
+    // the machine tag beside it. Throwing the tag threw away the only half
+    // worth showing, and every caller then had to invent its own wording for
+    // a refusal the server had already explained.
+    const d = data as { error?: string; detail?: string };
+    const err = new Error(d.detail || d.error || 'HTTP ' + res.status) as Error & {
+      code?: string; status?: number;
+    };
+    err.code = d.error;
+    err.status = res.status;
+    throw err;
+  }
   return data;
 }
 
@@ -1536,8 +1549,21 @@ async function delJson<T>(path: string): Promise<T> {
     credentials: 'include',
     headers: authHeaders(),
   });
-  const data = (await res.json().catch(() => ({}))) as T & { error?: string };
-  if (!res.ok) throw new Error((data as { error?: string }).error || 'HTTP ' + res.status);
+  const data = (await res.json().catch(() => ({}))) as T & { error?: string; detail?: string };
+  if (!res.ok) {
+    // `detail` is the sentence the server wrote for a person to read — "That
+    // username is taken", "Password must be at least 8 characters". `error` is
+    // the machine tag beside it. Throwing the tag threw away the only half
+    // worth showing, and every caller then had to invent its own wording for
+    // a refusal the server had already explained.
+    const d = data as { error?: string; detail?: string };
+    const err = new Error(d.detail || d.error || 'HTTP ' + res.status) as Error & {
+      code?: string; status?: number;
+    };
+    err.code = d.error;
+    err.status = res.status;
+    throw err;
+  }
   return data;
 }
 
@@ -1559,6 +1585,15 @@ export type Member = {
   owner?: boolean;
 };
 export type MemberResp = { member: Member | null; token?: string; error?: string; detail?: string };
+/** What the sign-up form needs to know before anyone types into it. */
+export type SignupPolicy = {
+  open: boolean;
+  invite_required: boolean;
+  username_min: number;
+  username_max: number;
+  password_min: number;
+  plan: string;
+};
 
 // ── monetisation (preview-gated) ────────────────────────────────────────────
 // Every endpoint below 404s on taureye.com and serves on 161.118.174.177 —
@@ -1692,6 +1727,9 @@ export const api = {
 
   memberLogin: (username: string, password: string) =>
     postJson<MemberResp>('/auth/member/login', { username, password }),
+  memberRegister: (username: string, password: string, code?: string) =>
+    postJson<MemberResp>('/auth/member/register', { username, password, code }),
+  signupPolicy: () => getJson<SignupPolicy>('/auth/member/signup-policy'),
   memberMe: () => getJson<MemberResp>('/auth/member'),
   memberLogout: () => postJson<MemberResp>('/auth/member/logout', {}),
   authMe: () => getJson<MeResp>('/auth/me'),

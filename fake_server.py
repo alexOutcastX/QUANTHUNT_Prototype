@@ -1017,6 +1017,10 @@ class H(BaseHTTPRequestHandler):
             if signed:
                 return self._json({"user": {"email": _MEMBER["username"], "source": "member"}})
             return self._json({"user": None})
+        if path == "/auth/member/signup-policy":
+            return self._json({"open": True, "invite_required": False,
+                               "username_min": 3, "username_max": 24,
+                               "password_min": 8, "plan": "free"})
         if path == "/auth/member":
             # Cookie (web) OR bearer header (the Capacitor shell, where the
             # WebView drops cross-site cookies) — mirrors server.py.
@@ -1160,6 +1164,38 @@ class H(BaseHTTPRequestHandler):
             self.send_header("Content-Type", "application/json")
             if ok:
                 self.send_header("Set-Cookie", "te_member=1; Path=/")
+            self.end_headers()
+            return self.wfile.write(payload)
+        if self.path.split("?")[0] == "/auth/member/register":
+            # The same rules members.py enforces, so the browser checks
+            # exercise a refusal AND a success without a database.
+            n = int(self.headers.get("Content-Length") or 0)
+            body = json.loads(self.rfile.read(n) or b"{}")
+            uname = (body.get("username") or "").strip()
+            pwd = body.get("password") or ""
+            err = None
+            if len(uname) < 3:
+                err = "Username must be at least 3 characters."
+            elif not uname[:1].isalpha():
+                err = "Username must start with a letter."
+            elif uname.lower() in ("taureye", "admin"):
+                err = "That username is taken."
+            elif len(pwd) < 8:
+                err = "Password must be at least 8 characters."
+            if err:
+                payload = json.dumps({"error": "signup-refused", "detail": err}).encode()
+                self.send_response(400)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                return self.wfile.write(payload)
+            newbie = dict(_MEMBER)
+            newbie.update({"username": uname, "uname": uname.lower(),
+                           "plan": "free", "owner": False, "role": "member",
+                           "features": ["quotes", "heatmap", "news", "universe"]})
+            payload = json.dumps({"member": newbie, "token": _MEMBER_TOKEN}).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Set-Cookie", "te_member=1; Path=/")
             self.end_headers()
             return self.wfile.write(payload)
         if self.path.split("?")[0] == "/auth/member/logout":

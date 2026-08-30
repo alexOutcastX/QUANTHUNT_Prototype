@@ -80,6 +80,25 @@ export async function memberLogin(username: string, password: string): Promise<M
   return member;
 }
 
+// Signing up signs you in: the server returns the same member payload and
+// session the login route does, so there is nothing left to do afterwards.
+export async function memberRegister(
+  username: string,
+  password: string,
+  code?: string,
+): Promise<Member> {
+  const res = await api.memberRegister(username, password, code);
+  if (!res.member) throw new Error(res.detail || 'signup-refused');
+  member = res.member;
+  if (usesHeaderSessions && res.token) {
+    setSessionToken('member', res.token);
+    await AsyncStorage.setItem(TOKEN_KEY, res.token).catch(() => {});
+  }
+  await AsyncStorage.setItem(CACHE_KEY, JSON.stringify(member)).catch(() => {});
+  emit();
+  return member;
+}
+
 /** True inside the Capacitor APK, where Platform.OS still reports 'web'. */
 function isNativeShell(): boolean {
   try {

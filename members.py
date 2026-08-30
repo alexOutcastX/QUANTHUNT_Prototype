@@ -4,12 +4,20 @@
 # account before the app UI loads, and each account carries a PLAN whose
 # feature set the client (and, via require_plan, the API) can gate on.
 #
-# Accounts are a placeholder for now: a hardcoded table with a single
-# credential, overridable via MEMBER_ACCOUNTS_JSON (a JSON object of
-# username -> {password, plan, name}) until a real billing/membership
-# backend replaces it. Sessions are HMAC-signed cookies (stdlib only, same
-# scheme as auth.py) keyed on AUTH_SECRET, or, when that is not set, on a
-# random key generated once and kept beside the database.
+# There are two account tables and the distinction matters:
+#
+#   * CONFIGURED accounts — the hardcoded placeholder table, overridable via
+#     MEMBER_ACCOUNTS_JSON. These are instance OWNERS, set by whoever runs the
+#     server: the broker, alerts and developer screens accept an owner session
+#     instead of a separate passcode, so one of these is full control.
+#   * REGISTERED accounts — rows in the member_accounts table, created by
+#     people signing themselves up. Never owners, always a scrypt hash, and
+#     they cannot shadow a configured name: accounts() lets the configured
+#     table win, and register() refuses a name either table already holds.
+#
+# Sessions are HMAC-signed cookies (stdlib only, same scheme as auth.py) keyed
+# on AUTH_SECRET, or, when that is not set, on a random key generated once and
+# kept beside the database.
 
 import base64
 import binascii
@@ -81,8 +89,8 @@ _DEFAULT_ACCOUNTS = {
 }
 
 
-def accounts():
-    """The member table: MEMBER_ACCOUNTS_JSON when set, else the placeholder."""
+def configured_accounts():
+    """The owner table: MEMBER_ACCOUNTS_JSON when set, else the placeholder."""
     raw = os.environ.get("MEMBER_ACCOUNTS_JSON", "").strip()
     if raw:
         try:
@@ -93,6 +101,47 @@ def accounts():
         except Exception:
             pass
     return _DEFAULT_ACCOUNTS
+
+
+def registered_accounts():
+    """Self-service accounts, from the database. Empty if it is unreachable.
+
+    A signup table that cannot be read must not take the login page down with
+    it: the configured owners still get in, which is what you need in order to
+    go and fix the database.
+    """
+    try:
+        import store
+        rows = store.query(
+            "SELECT uname, name, password, plan FROM member_accounts")
+    except Exception:
+        logging.warning("members: could not read registered accounts")
+        return {}
+    return {r["uname"]: {"password": r["password"], "plan": r["plan"],
+                         "name": r["name"], "owner": False, "role": "member",
+                         "registered": True}
+            for r in rows}
+
+
+def accounts():
+    """Every account that can sign in.
+
+    Configured last, and that is the security property: a row in the signup
+    table can never take over a name the operator has configured, whatever
+    else goes wrong.
+
+    Guarded here as well as inside registered_accounts(), because the
+    invariant belongs to the merge: whatever the signup table does, the
+    configured owners must still be able to sign in — they are who goes and
+    fixes it.
+    """
+    try:
+        merged = dict(registered_accounts())
+    except Exception:
+        logging.exception("members: registered accounts unavailable")
+        merged = {}
+    merged.update(configured_accounts())
+    return merged
 
 
 def _key_path() -> str:
@@ -225,6 +274,114 @@ def check_login(username: str, password: str):
             "plan": acct.get("plan") or "member",
             "owner": bool(acct.get("owner")),
             "role": role_of(acct)}
+
+
+# ── self-service signup ─────────────────────────────────────────────────────
+# What a new account is allowed to be, and what it is not.
+#
+# Never an owner and never on the operator's plan: a signup is a stranger, and
+# the ladder in PLAN_FEATURES is what decides how much of the app they see. The
+# default is deliberately the bottom rung — quotes, heatmap, news, universe —
+# because giving away the screener to anyone who types a username is a pricing
+# decision, not a default. MEMBER_SIGNUP_PLAN moves it in one env var.
+SIGNUP_PLAN = (os.environ.get("MEMBER_SIGNUP_PLAN", "free").strip().lower()
+               or "free")
+
+# Names nobody may register, because each one either impersonates the operator
+# or shadows something the app treats as special.
+RESERVED = {
+    "admin", "administrator", "root", "owner", "system", "support", "help",
+    "taureye", "taur-eye", "team", "staff", "moderator", "mod", "official",
+    "security", "billing", "payments", "api", "www", "null", "none", "undefined",
+    "me", "you", "anonymous", "guest", "test",
+}
+
+USERNAME_MIN, USERNAME_MAX = 3, 24
+PASSWORD_MIN = 8
+
+
+def _username_error(uname: str):
+    if len(uname) < USERNAME_MIN:
+        return f"Username must be at least {USERNAME_MIN} characters."
+    if len(uname) > USERNAME_MAX:
+        return f"Username must be {USERNAME_MAX} characters or fewer."
+    if not uname[0].isalpha():
+        return "Username must start with a letter."
+    for ch in uname:
+        if not (ch.isascii() and (ch.isalnum() or ch in "._-")):
+            return "Username may use letters, numbers, dot, dash and underscore."
+    if uname in RESERVED:
+        return "That username is reserved."
+    return None
+
+
+def _password_error(password: str, uname: str):
+    if len(password) < PASSWORD_MIN:
+        return f"Password must be at least {PASSWORD_MIN} characters."
+    if len(password) > 200:
+        return "Password is too long."
+    if password.strip().lower() == uname:
+        return "Password must not be your username."
+    return None
+
+
+def signup_open() -> bool:
+    """Signup can be closed entirely, or held behind a shared code."""
+    return (os.environ.get("MEMBER_SIGNUP", "open").strip().lower()
+            not in ("0", "off", "closed", "false", "no"))
+
+
+def _invite_error(code: str):
+    want = os.environ.get("MEMBER_SIGNUP_CODE", "").strip()
+    if not want:
+        return None
+    if not hmac.compare_digest((code or "").strip(), want):
+        return "That invite code is not valid."
+    return None
+
+
+def register(username: str, password: str, code: str = ""):
+    """Create an account. Returns (member, None) or (None, reason).
+
+    Every failure is a sentence someone can act on, and none of them says
+    whether a name is taken by a CONFIGURED account rather than a registered
+    one — "that username is taken" is all an outsider learns either way.
+    """
+    if not signup_open():
+        return None, "New accounts are closed right now."
+    err = _invite_error(code)
+    if err:
+        return None, err
+
+    raw = (username or "").strip()
+    uname = raw.lower()
+    err = _username_error(uname)
+    if err:
+        return None, err
+    err = _password_error(password or "", uname)
+    if err:
+        return None, err
+    if uname in accounts():
+        return None, "That username is taken."
+
+    try:
+        import store
+        store.execute(
+            "INSERT INTO member_accounts (uname, name, password, plan, created)"
+            " VALUES (?, ?, ?, ?, ?)",
+            (uname, raw, hash_password(password), SIGNUP_PLAN, int(time.time())),
+        )
+    except Exception as e:
+        # A UNIQUE violation is two people claiming one name in the same
+        # instant; anything else is the database. Neither is the caller's
+        # fault to explain in detail.
+        if "UNIQUE" in str(e).upper():
+            return None, "That username is taken."
+        logging.exception("members: could not create the account")
+        return None, "Could not create the account right now."
+
+    return {"username": raw, "uname": uname, "plan": SIGNUP_PLAN,
+            "owner": False, "role": "member"}, None
 
 
 def features_for(plan: str):

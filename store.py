@@ -48,6 +48,19 @@ def _migrate(conn):
             data TEXT NOT NULL           -- JSON payload
         );
         CREATE INDEX IF NOT EXISTS ix_snap ON snapshots (kind, key, ts);
+        -- Self-service member accounts (see members.py).
+        --
+        -- Separate from the configured table in members.py on purpose: those
+        -- are instance OWNERS, set by whoever runs the server, and a row here
+        -- must never be able to shadow one. The merge in members.accounts()
+        -- gives the configured table the last word.
+        CREATE TABLE IF NOT EXISTS member_accounts (
+            uname    TEXT PRIMARY KEY,      -- lowercased; the login name
+            name     TEXT NOT NULL,         -- the casing to show back
+            password TEXT NOT NULL,         -- scrypt hash, never plaintext
+            plan     TEXT NOT NULL,
+            created  INTEGER NOT NULL
+        );
         CREATE TABLE IF NOT EXISTS tradelog (
             id       INTEGER PRIMARY KEY AUTOINCREMENT,
             source   TEXT NOT NULL,        -- reco | momentum | multibagger

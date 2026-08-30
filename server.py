@@ -1529,6 +1529,38 @@ def member_login():
     return _session_cookie(resp, _members.COOKIE, token, _members.TTL)
 
 
+@app.route("/auth/member/register", methods=["POST"])
+# Ten an hour per IP. Creating an account is a thing a person does once; the
+# only caller who needs it faster is someone enumerating names.
+@rate_limit("member-register", 10, 3600)
+def member_register():
+    body = request.get_json(silent=True) or {}
+    m, err = _members.register(body.get("username", ""), body.get("password", ""),
+                               body.get("code", ""))
+    if m is None:
+        return jsonify({"error": "signup-refused", "detail": err}), 400
+    # Signed straight in: making someone type the password they just chose,
+    # into the form they just left, is a step that exists for no one.
+    m["features"] = _members.features_for(m["plan"])
+    token = _members.make_cookie(m)
+    _analytics.track(m["uname"], "auth.signup")
+    resp = jsonify({"member": m, "token": token})
+    return _session_cookie(resp, _members.COOKIE, token, _members.TTL)
+
+
+@app.route("/auth/member/signup-policy")
+def member_signup_policy():
+    """What the sign-up form needs to know before anyone types into it."""
+    return jsonify({
+        "open": _members.signup_open(),
+        "invite_required": bool(os.environ.get("MEMBER_SIGNUP_CODE", "").strip()),
+        "username_min": _members.USERNAME_MIN,
+        "username_max": _members.USERNAME_MAX,
+        "password_min": _members.PASSWORD_MIN,
+        "plan": _members.SIGNUP_PLAN,
+    })
+
+
 @app.route("/auth/member")
 def member_me():
     return jsonify({"member": current_member()})

@@ -86,9 +86,11 @@ class AppLoginGateToggleTest(unittest.TestCase):
         self.assertIn("hitSlop=", self.src)
         self.assertIn("minWidth: 48", self.src)
 
-    def test_the_password_is_rehidden_when_signing_in(self):
-        body = self.src[self.src.index("const login = useCallback"):]
-        self.assertIn("setShowPw(false)", body[:600])
+    def test_the_password_is_rehidden_on_submit(self):
+        """`login` became `submit` when the gate grew a create-account mode;
+        the field must still be re-hidden either way you use it."""
+        body = self.src[self.src.index("const submit = useCallback"):]
+        self.assertIn("setShowPw(false)", body[:700])
 
     def test_the_field_leaves_room_for_the_button(self):
         self.assertIn("pwInput: { paddingRight:", self.src)
