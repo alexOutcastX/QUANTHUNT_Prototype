@@ -51,6 +51,11 @@ jobs:
       - name: Install JS deps
         working-directory: mobile
         run: npm ci
+      # The filter sweep compiles mobile/src/screener.ts with esbuild, which is
+      # a root dev dependency (it also builds the landing page's bull). Only
+      # mobile/ was ever installed here, so the step below could not run at all.
+      - name: Install root JS deps (esbuild)
+        run: npm ci --no-audit --no-fund
       - name: Install Chromium
         working-directory: mobile
         run: npx playwright-core install chromium

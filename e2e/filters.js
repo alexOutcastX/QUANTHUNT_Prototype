@@ -26,12 +26,37 @@ const { execFileSync } = require('child_process');
 const ROOT = path.join(__dirname, '..');
 const OUT = path.join(process.env.TMPDIR || '/tmp', `screener-engine-${process.pid}.cjs`);
 
-// esbuild rather than a checked-in build: the test must exercise the CURRENT
-// source, or it becomes a test of whatever was last compiled.
-execFileSync(path.join(ROOT, 'node_modules', '.bin', 'esbuild'),
-  [path.join(ROOT, 'mobile', 'src', 'screener.ts'), '--bundle', '--format=cjs',
-   '--platform=node', '--log-level=warning', '--outfile=' + OUT],
+/**
+ * Where esbuild lives.
+ *
+ * It is a root dev dependency, but this ran green locally and failed in CI,
+ * which installs mobile/ and nothing else — the script assumed one layout and
+ * got ENOENT in the other. Both are checked, and a miss says what to run
+ * rather than throwing a spawn error at whoever reads the log next.
+ */
+function esbuild() {
+  const candidates = [
+    path.join(ROOT, 'node_modules', '.bin', 'esbuild'),
+    path.join(ROOT, 'mobile', 'node_modules', '.bin', 'esbuild'),
+  ];
+  const found = candidates.find((c) => fs.existsSync(c));
+  if (!found) {
+    console.error('esbuild not found. Run `npm ci` in the repository root.');
+    console.error('Looked in:\n  ' + candidates.join('\n  '));
+    process.exit(1);
+  }
+  return found;
+}
+
+// Compiled from source rather than from a checked-in build: the test must
+// exercise the CURRENT engine, or it becomes a test of whatever was last
+// compiled.
+const compile = (entry, out) => execFileSync(esbuild(),
+  [entry, '--bundle', '--format=cjs', '--platform=node',
+   '--log-level=warning', '--outfile=' + out],
   { stdio: ['ignore', 'inherit', 'inherit'] });
+
+compile(path.join(ROOT, 'mobile', 'src', 'screener.ts'), OUT);
 
 const E = require(OUT);
 const fx = JSON.parse(fs.readFileSync(path.join(ROOT, 'e2e', 'fixtures', 'screener_universe.json'), 'utf8'));
@@ -136,10 +161,7 @@ try {
 
 // ── 5. the shipped presets are screens, not empty sets ──
 const presetOut = path.join(process.env.TMPDIR || '/tmp', `screener-presets-${process.pid}.cjs`);
-execFileSync(path.join(ROOT, 'node_modules', '.bin', 'esbuild'),
-  [path.join(ROOT, 'mobile', 'src', 'presets.ts'), '--bundle', '--format=cjs',
-   '--platform=node', '--log-level=warning', '--outfile=' + presetOut],
-  { stdio: ['ignore', 'inherit', 'inherit'] });
+compile(path.join(ROOT, 'mobile', 'src', 'presets.ts'), presetOut);
 const P = require(presetOut);
 const emptyPresets = [];
 for (const p of P.PRESETS) {

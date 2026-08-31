@@ -35,6 +35,16 @@ class DeployExcludesTest(unittest.TestCase):
         passwords are in a public repository."""
         self.assertIn("--exclude 'members.json'", self.yml)
 
+    def test_the_filter_sweep_has_the_tool_it_compiles_with(self):
+        """It bundles mobile/src/screener.ts with esbuild, a ROOT dev
+        dependency. CI installed mobile/ and nothing else, so the step could
+        not run at all — green locally, ENOENT on the runner, and a deploy
+        blocked by a missing binary rather than by a real failure."""
+        self.assertIn("node e2e/filters.js", self.yml)
+        install = self.yml.index("run: npm ci --no-audit --no-fund")
+        run = self.yml.index("node e2e/filters.js")
+        self.assertLess(install, run, "root deps are installed after they are needed")
+
     def test_the_systemd_unit_is_still_synced(self):
         """The unit carries SCAN_WARM and the gunicorn thread count; a deploy
         that stopped syncing it would silently pin production to old tuning."""
