@@ -206,6 +206,21 @@ function check(name, ok, detail) {
       bodyText.slice(0, 300),
     );
 
+    // 4a-0 · the console filled from the prebuilt snapshot, not from four
+    // waves of requests. Every check below this — prices, technicals, filters,
+    // presets — is therefore also proving the fast path shows the same numbers
+    // the slow one did.
+    check(
+      'the console fills from the EOD snapshot',
+      /from the EOD snapshot/.test(bodyText),
+      (bodyText.match(/\d+ symbols[^\n]*/) || [''])[0],
+    );
+    check(
+      'and it is complete on arrival, not still sweeping',
+      /(\d+)\/\1 technicals/.test(bodyText),
+      (bodyText.match(/\d+ symbols[^\n]*/) || [''])[0],
+    );
+
     // At this width the console is in its phone layout: the builder lives in
     // a sheet, so what has to be on the bar is the Run button.
     check(

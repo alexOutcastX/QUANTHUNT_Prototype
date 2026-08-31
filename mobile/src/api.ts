@@ -324,6 +324,23 @@ export type ScanRow = {
   cs_bullish?: boolean | null;
   cs_bearish?: boolean | null;
 };
+// One universe, prebuilt at 16:00 and 02:00 IST: names, the session's closes,
+// technicals and fundamentals already merged. See snapshot.py.
+export type SnapshotRow = ScanRow & {
+  sym: string;
+  name?: string;
+  exchange?: string;
+  _fund?: Fundamentals | null;
+};
+export type SnapshotResp = {
+  index: string;
+  built_at: number;
+  count: number;
+  technicals: number;
+  fundamentals: number;
+  rows: SnapshotRow[];
+};
+
 export type ScanResp = {
   data: Record<string, ScanRow>;
   count: number;
@@ -2030,6 +2047,12 @@ export const api = {
   // `poll` re-asks for whatever came back pending until it drains or the
   // budget runs out, which is what actually fills the table. onBatch fires
   // with each batch's rows and overall progress.
+  // 404s until the first build, and after 36 hours without one — the console
+  // has a working multi-request path to fall back to, and an empty payload
+  // would look like an empty market.
+  screenerSnapshot: (index: string) =>
+    cachedGet<SnapshotResp>('/screener/snapshot?index=' + encodeURIComponent(index),
+                            TTL.slow, false, 30000),
   scan: async (
     symbols: string[],
     opts?: {

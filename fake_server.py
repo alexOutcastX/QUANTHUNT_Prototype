@@ -433,7 +433,38 @@ class H(BaseHTTPRequestHandler):
                     "source": "niftyindices-csv", "quote_source": "bhavcopy",
                     "quote_date": "2026-07-28", "priced": len(rows)})
 
+    def _snapshot(self):
+        """The prebuilt payload the console asks for first.
+
+        Built from the SAME fixture data the four-request path serves, so the
+        table is identical whichever route filled it — which is the property
+        that matters: the fast path must not quietly show different numbers.
+        """
+        cons = [{"symbol": s, "price": 1000 + i * 137.5, "prevClose": 990 + i * 137.0,
+                 "chg": (-2.5 + i * 0.6), "absChg": 10 + i, "volume": 1500000 + i * 250000}
+                for i, s in enumerate(self.SYMS)]
+        tech = self._scan_rows()
+        fund = self._fund_rows()
+        rows = []
+        for c in cons:
+            sym = c["symbol"]
+            row = {"sym": sym, "name": f"{sym.title()} Industries Limited", "exchange": "NSE",
+                   "price": c["price"], "prevClose": c["prevClose"], "chg": c["chg"],
+                   "absChg": c["absChg"], "volume": c["volume"]}
+            for k, v in (tech.get(sym) or {}).items():
+                row.setdefault(k, v)
+            row["_fund"] = fund.get(sym)
+            rows.append(row)
+        return self._json({"index": "NIFTY 50", "built_at": 1785312000,
+                           "count": len(rows), "technicals": len(tech),
+                           "fundamentals": sum(1 for r in rows if r["_fund"]),
+                           "rows": rows})
+
     def _scan(self):
+        data = self._scan_rows()
+        self._json({"data": data, "count": len(data)})
+
+    def _scan_rows(self):
         data = {}
         for i, s in enumerate(self.SYMS):
             data[s] = {"rsi": 25 + (i * 7) % 55, "d20": -6 + (i % 9), "d50": 1 + i * 0.5,
@@ -445,9 +476,14 @@ class H(BaseHTTPRequestHandler):
                        "new_high_52w": i % 11 == 0, "gap_up": i % 9 == 0, "volume_spike": i % 5 == 0,
                        "s1": 980 + i * 130, "s2": 960 + i * 130, "s3": 940 + i * 130,
                        "r1": 1020 + i * 140, "r2": 1040 + i * 140, "r3": 1060 + i * 140}
-        self._json({"data": data, "count": len(data)})
+        return data
 
     def _fund_bulk(self):
+        data = self._fund_rows()
+        self._json({"data": data, "pending": [], "provider": "stub",
+                    "cached": len(data), "total": len(data)})
+
+    def _fund_rows(self):
         secs = ["Industrials", "Financials", "Technology", "Healthcare", "Energy", "Consumer"]
         mcaps = [900, 22000, 65000, 4500, 120000, 800]  # micro/small/mid/large spread
         # Growth spans negative → strongly positive so a ">= 10%" screen picks a
@@ -472,7 +508,7 @@ class H(BaseHTTPRequestHandler):
                     "cash_conversion_pct": round(60 + (i % 9) * 12.0, 1),
                     "cashflow_year": "31-Mar-2024"}
                 for i, s in enumerate(self.SYMS)}
-        self._json({"data": data, "pending": [], "provider": "stub", "cached": len(data), "total": len(data)})
+        return data
 
     def _history(self):
         import math
@@ -916,6 +952,12 @@ class H(BaseHTTPRequestHandler):
             return self._multibagger()
         if path == "/universe":
             return self._universe()
+        if path == "/screener/snapshot":
+            return self._snapshot()
+        if path == "/screener/snapshot/status":
+            return self._json({"indices": ["NIFTY 50"], "times_ist": ["16:00", "02:00"],
+                               "max_age_sec": 129600, "next_run_at": 0,
+                               "snapshots": {}, "building": []})
         if path == "/index":
             return self._index_cons()
         if path == "/scan":

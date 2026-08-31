@@ -456,3 +456,59 @@ class SheetStackingTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SnapshotClientTest(unittest.TestCase):
+    """The console asks for the prebuilt payload first.
+
+    Measured against the live server, a cold open cost seven requests in four
+    waves and 4.7s from this network: /index (1.4s), /universe for names
+    (1.8s), /scan x3 (1.6s) and /fundamentals/bulk x3 (1.3s). Every cache
+    behind them was already warm — NIFTY 500 came back 500/500 cached — so what
+    was being paid for was the round trips, not the work.
+    """
+
+    def setUp(self):
+        self.src = _read("mobile", "src", "screens", "ScreenerScreen.tsx")
+        self.api = _read("mobile", "src", "api.ts")
+
+    def test_it_tries_the_snapshot_before_the_four_wave_path(self):
+        self.assertIn("await api.screenerSnapshot(sel[0])", self.src)
+        self.assertLess(self.src.index("api.screenerSnapshot"),
+                        self.src.index("api.indexConstituents"))
+
+    def test_the_route_is_asked_for_one_universe_at_a_time(self):
+        """A snapshot is per index; unioning two would duplicate the merge for
+        a case nobody opens on."""
+        self.assertIn("if (!force && sel.length === 1) {", self.src)
+
+    def test_a_forced_run_skips_it(self):
+        """The point of Run is fresh numbers, and a snapshot is a settled
+        close by definition."""
+        m = re.search(r"if \(!force && sel\.length === 1\)", self.src)
+        self.assertIsNotNone(m)
+
+    def test_a_missing_snapshot_is_not_an_error_the_user_sees(self):
+        """It 404s until the first build. The multi-request path is the
+        fallback and needs no announcement."""
+        block = self.src[self.src.index("api.screenerSnapshot"):]
+        block = block[:block.index("try {", block.index("} catch"))]
+        self.assertIn("catch", block)
+        self.assertNotIn("setError", block)
+
+    def test_live_quotes_merge_onto_the_snapshot_rather_than_replacing_it(self):
+        """Replacing would flash a complete table back to a bare one and leave
+        it there until the sweep re-landed — worse than the wait it replaced."""
+        self.assertIn("if (!prev.length) return seeded;", self.src)
+        self.assertIn("const merged: Row = { ...had, ...row };", self.src)
+
+    def test_the_status_line_says_the_numbers_are_a_settled_close(self):
+        """A table that fills instantly during market hours invites being read
+        as live."""
+        self.assertIn("from the EOD snapshot", self.src)
+
+    def test_a_new_load_stops_claiming_the_old_snapshot(self):
+        self.assertIn("setSnapAt(null);", self.src)
+
+    def test_the_client_route_matches_the_server_route(self):
+        self.assertIn("'/screener/snapshot?index='", self.api)

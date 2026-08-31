@@ -121,22 +121,48 @@ def _pct(x):
     return round(x * 100, 2) if isinstance(x, (int, float)) else None
 
 
-def _pct_loose(x):
-    """Percent from a provider that is inconsistent about its own units.
+# The largest dividend yield the NSE has ever plausibly produced. Anything
+# above this is a unit error somewhere upstream, and serving it would put a
+# fictional 46%-yielding Reliance at the top of every income screen.
+_MAX_DIVIDEND_YIELD = 40.0
 
-    yfinance returns returnOnAssets as a ratio (0.153) but dividendYield already
-    as a percent (4.8) — multiplying both by 100 gave Infosys a 480% dividend
-    yield, which sailed straight through any 'yield > 3%' screen. Above 1 the
-    number is already a percentage; at or below 1 it is a ratio.
 
-    The ambiguous case is a genuine sub-1% yield reported as a percent, which
-    this reads as a ratio and inflates. That is the rarer error and the less
-    harmful one — it lifts a near-zero yield into range rather than making a
-    normal payer look extraordinary.
+def _dividend_yield(x):
+    """yfinance's dividendYield, which is already a percentage.
+
+    It used to be rescaled by a heuristic: "above 1 it is a percent, at or
+    below 1 it is a ratio". The rarer, gentler error it accepted turned out to
+    be neither rare nor gentle. Sub-1% yields are ordinary on the NSE — most of
+    the index pays under 1% — so the heuristic multiplied nearly half the
+    market by a hundred. Measured on NIFTY 500: 81 companies were served a
+    yield above 40% and 53 more between 15% and 40%, with Reliance's 0.46%
+    reported as 46.0. An income screen for "yield > 3%" returned mostly
+    companies yielding a fraction of one percent.
+
+    So it is taken at face value, and a value that cannot be a yield is dropped
+    rather than served. Losing a number is recoverable; a filter that ranks by
+    a fiction is not.
     """
     if not isinstance(x, (int, float)):
         return None
-    return round(x if x > 1 else x * 100, 2)
+    if x < 0 or x > _MAX_DIVIDEND_YIELD:
+        return None
+    return round(float(x), 2)
+
+
+def _de_ratio(x):
+    """yfinance's debtToEquity, which it reports as a PERCENTAGE.
+
+    36.65 means 0.37x, not 36.65x. screener.in's balance-sheet derivation in
+    _screener_de returns a true ratio, so the same field arrived in two units
+    depending on which provider answered — and the screener labels it "x".
+    Every threshold anyone typed was therefore off by two orders of magnitude
+    for most rows: "Debt / Equity < 1" asked for companies under 1% geared,
+    which is why the Deep value strategy matched 1 name in 500 and Quality
+    compounder 9.
+    """
+    v = _n(x)
+    return round(v / 100.0, 3) if v is not None else None
 
 
 def _map_eodhd(fund: dict) -> dict:
@@ -177,10 +203,10 @@ def _map_yf(info: dict) -> dict:
         "forward_pe": _n(info.get("forwardPE")),
         "pb": _n(info.get("priceToBook")),
         "eps": info.get("trailingEps"),
-        "dividend_yield": _pct_loose(info.get("dividendYield")),
+        "dividend_yield": _dividend_yield(info.get("dividendYield")),
         "roe": _pct(info.get("returnOnEquity")),
         "roce": _pct(info.get("returnOnAssets")),
-        "debt_equity": _n(info.get("debtToEquity")),
+        "debt_equity": _de_ratio(info.get("debtToEquity")),
         "current_ratio": _n(info.get("currentRatio")),
         "market_cap_cr": round(mc / 1e7, 2) if isinstance(mc, (int, float)) and mc else None,
         "sector": info.get("sector"),

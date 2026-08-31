@@ -4560,6 +4560,89 @@ def start_scan_warm():
         threading.Thread(target=_warm_scan_loop, name="scan-warm", daemon=True).start()
 
 
+# ── EOD screener snapshots ───────────────────────────────────────────────────
+import snapshot as _snapshot
+
+
+def _build_snapshot(name):
+    """One universe, merged from the caches the warm loops already fill.
+
+    wait=True on the scan: this runs on the schedule, with nobody waiting, and
+    it exists precisely to do the work up front. Left non-blocking it would
+    return whatever happened to be hot and enqueue the rest onto the pool that
+    serves live requests — which is the behaviour the snapshot is replacing.
+    """
+    rows, _src = _get_constituents(name.strip().upper())
+    if not rows:
+        return None
+    syms = [r.get("symbol") for r in rows if r.get("symbol")]
+
+    tech = {}
+    for i in range(0, len(syms), SCAN_WARM_CHUNK):
+        chunk = syms[i:i + SCAN_WARM_CHUNK]
+        try:
+            tech.update(_scanner.scan(chunk, wait=True).get("data") or {})
+        except Exception as e:
+            log.warning("Snapshot %s: scan chunk failed: %s", name, e)
+        time.sleep(SCAN_WARM_PAUSE)          # yield the upstream budget
+
+    # Whatever fundamentals are cached. Deliberately not forced: the fundamentals
+    # sweep has its own pacing, and a snapshot missing a P/E column is far less
+    # bad than one that starved the live requests to fill it.
+    try:
+        fund = (_fund.bulk(syms) or {}).get("data") or {}
+    except Exception as e:
+        log.warning("Snapshot %s: fundamentals failed: %s", name, e)
+        fund = {}
+
+    names = {}
+    try:
+        uni, _warming = get_universe_nonblocking()
+        for u in (uni or {}).get("symbols", []) if isinstance(uni, dict) else (uni or []):
+            k = (u.get("symbol") or "").upper()
+            if k and k not in names:
+                names[k] = {"name": u.get("name") or k, "exchange": u.get("exchange") or "NSE"}
+    except Exception:
+        pass
+
+    return _snapshot.build(name, rows, tech, fund, names)
+
+
+def start_snapshots():
+    """Start the twice-daily snapshot builder (called from __main__ and wsgi)."""
+    if os.environ.get("SNAPSHOTS", "").strip().lower() in ("0", "off", "false", "no"):
+        log.info("Screener snapshots disabled by SNAPSHOTS")
+        return
+    _snapshot.start(_build_snapshot)
+
+
+@app.route("/screener/snapshot")
+def screener_snapshot():
+    """A whole universe — names, closes, technicals and fundamentals — in one
+    response, prebuilt at 16:00 and 02:00 IST.
+
+    404 rather than an empty payload when there is nothing fresh to serve: the
+    client has a working four-request path to fall back to, and a 200 with no
+    rows would look like an empty market.
+    """
+    name = (request.args.get("index") or "NIFTY 500").strip().upper()
+    snap = _snapshot.get(name)
+    if not snap:
+        return jsonify({"error": "no-snapshot", "index": name,
+                        "detail": "No snapshot has been built for this universe yet.",
+                        "status": _snapshot.status()}), 404
+    resp = jsonify(snap)
+    # It changes twice a day and is identical for everyone, so it is worth
+    # caching hard at the edge and in the browser.
+    resp.headers["Cache-Control"] = "public, max-age=900"
+    return resp
+
+
+@app.route("/screener/snapshot/status")
+def screener_snapshot_status():
+    return jsonify(_snapshot.status())
+
+
 AI_DISCLAIMER = ("AI-generated relationship map from model knowledge — indicative, "
                  "not verified filings data. Not investment advice.")
 
@@ -6433,6 +6516,7 @@ if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     threading.Thread(target=_prefetch_universe, daemon=True).start()
     start_scan_warm()
+    start_snapshots()
     start_fund_warm()
     start_alert_loop()
     start_backfill()

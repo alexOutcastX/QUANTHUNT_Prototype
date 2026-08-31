@@ -14,7 +14,9 @@
     "docker:up": "docker compose up -d --build",
     "docker:down": "docker compose down",
     "build:exe": "venv\\Scripts\\pip install pyinstaller && venv\\Scripts\\pyinstaller quanthunt.spec",
-    "build:bull": "node brand/src/build.mjs"
+    "build:bull": "node brand/src/build.mjs",
+    "test:filters": "node e2e/filters.js",
+    "test:smoke": "node e2e/smoke.js"
   },
   "repository": {
     "type": "git",

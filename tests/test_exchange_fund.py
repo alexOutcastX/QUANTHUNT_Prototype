@@ -256,25 +256,43 @@ class FetchShapeTest(unittest.TestCase):
 
 
 class DividendYieldUnitsTest(unittest.TestCase):
-    """yfinance is inconsistent with its own units: returnOnAssets comes back as
-    a ratio (0.153) while dividendYield comes back as a percent (4.8). Scaling
-    both by 100 gave Infosys a 480% dividend yield on the production VM — a
-    number that passes every 'yield > 3%' screen ever written."""
+    """yfinance reports dividendYield as a PERCENT, and a sub-1% yield is
+    ordinary on the NSE.
 
-    def test_percent_shaped_input_is_left_alone(self):
-        import fundamentals as F
-        self.assertEqual(F._pct_loose(4.8), 4.8)      # not 480.0
-        self.assertEqual(F._pct_loose(2.75), 2.75)
+    This used to be rescaled by a heuristic — "above 1 it is a percent, at or
+    below 1 it is a ratio" — whose accepted error was described as rare and
+    gentle. It was neither. Measured against NIFTY 500 as served: 81 companies
+    carried a yield above 40% and 53 more between 15% and 40%, with Reliance's
+    0.46% reported as 46.0. "Yield above 3%" returned mostly companies paying a
+    fraction of one percent, sorted so the worst offenders came first.
+    """
 
-    def test_ratio_shaped_input_is_scaled(self):
+    def test_a_sub_one_percent_yield_stays_where_it_belongs(self):
+        """The whole bug in one assertion: Reliance pays about 0.46%."""
         import fundamentals as F
-        self.assertEqual(F._pct_loose(0.028), 2.8)
+        self.assertEqual(F._dividend_yield(0.46), 0.46)      # not 46.0
+        self.assertEqual(F._dividend_yield(0.15), 0.15)
+
+    def test_ordinary_yields_are_unchanged(self):
+        import fundamentals as F
+        self.assertEqual(F._dividend_yield(4.8), 4.8)
+        self.assertEqual(F._dividend_yield(2.75), 2.75)
+
+    def test_an_impossible_yield_is_dropped_rather_than_served(self):
+        """Losing a number is recoverable; a filter that ranks by a fiction is
+        not. No NSE company yields 46%, so a value that says so is a unit
+        error upstream and must not reach an income screen."""
+        import fundamentals as F
+        self.assertIsNone(F._dividend_yield(46.0))
+        self.assertIsNone(F._dividend_yield(99.0))
+        self.assertIsNone(F._dividend_yield(-1))
+        self.assertEqual(F._dividend_yield(F._MAX_DIVIDEND_YIELD), F._MAX_DIVIDEND_YIELD)
 
     def test_zero_and_non_numbers(self):
         import fundamentals as F
-        self.assertEqual(F._pct_loose(0), 0)
-        self.assertIsNone(F._pct_loose(None))
-        self.assertIsNone(F._pct_loose("4.8"))
+        self.assertEqual(F._dividend_yield(0), 0)
+        self.assertIsNone(F._dividend_yield(None))
+        self.assertIsNone(F._dividend_yield("4.8"))
 
     def test_yf_mapping_uses_it_for_yield_but_not_for_returns(self):
         """ROE/ROCE really are ratios from this provider, so they must keep the
@@ -285,6 +303,50 @@ class DividendYieldUnitsTest(unittest.TestCase):
         self.assertEqual(m["dividend_yield"], 4.8)
         self.assertEqual(m["roe"], 36.67)
         self.assertEqual(m["roce"], 15.3)
+
+
+class DebtEquityUnitsTest(unittest.TestCase):
+    """yfinance reports debtToEquity as a PERCENTAGE; screener.in's balance
+    sheet derivation returns a true ratio.
+
+    The same field therefore arrived in two units depending on which provider
+    answered, and the screener labels it "x". Every threshold anyone typed was
+    off by two orders of magnitude for most rows: the shipped "D/E below 0.5"
+    preset asked for companies under 0.5% geared and matched 18 of the 308
+    NIFTY 500 rows that carry the field, where the ratio it meant matches 212.
+    """
+
+    def test_yfinance_percent_becomes_a_ratio(self):
+        import fundamentals as F
+        # Python rounds half to even, so 0.3665 lands on 0.366.
+        self.assertEqual(F._de_ratio(36.65), 0.366)     # Reliance, ~0.37x
+        self.assertEqual(F._de_ratio(10.21), 0.102)     # TCS, ~0.1x
+        self.assertEqual(F._de_ratio(89.02), 0.89)      # Tata Steel
+        self.assertEqual(F._de_ratio(0), 0.0)
+
+    def test_it_is_the_unit_the_screener_labels(self):
+        """The shipped preset says "D/E below 0.5" and means 0.5x."""
+        import fundamentals as F
+        self.assertLess(F._de_ratio(36.65), 0.5)
+        self.assertGreater(F._de_ratio(89.02), 0.5)
+
+    def test_non_numbers(self):
+        import fundamentals as F
+        self.assertIsNone(F._de_ratio(None))
+        self.assertIsNone(F._de_ratio("36.65"))
+
+    def test_the_mapper_uses_it(self):
+        import fundamentals as F
+        m = F._map_yf({"debtToEquity": 36.65})
+        self.assertEqual(m["debt_equity"], 0.366)
+
+    def test_the_screener_in_derivation_is_already_a_ratio(self):
+        """Borrowings / (equity + reserves) needs no conversion — which is why
+        the two providers disagreed in the first place."""
+        import inspect
+        import fundamentals as F
+        src = inspect.getsource(F._screener_de)
+        self.assertIn("round(borrow / equity, 2)", src)
 
 
 class ProviderWiringTest(unittest.TestCase):

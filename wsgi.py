@@ -25,6 +25,7 @@ threading.Thread(
 # Keep the screener's technical scan cache hot for the default index so the
 # first /scan responses are instant (see server.start_scan_warm).
 start_scan_warm()
+start_snapshots()
 
 # Scrape and cache company fundamentals up front so the valuation and growth
 # filters have data on the first screen open (see server.start_fund_warm).

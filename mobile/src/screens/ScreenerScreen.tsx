@@ -340,6 +340,15 @@ export function SimpleColumnMenu({
 
 const CFG_MIN_KEY = 'taureye.screener.cfgmin.v1';
 
+/** The trading day a snapshot was built for, as the status line shows it. */
+function snapDay(builtAt: number): string {
+  try {
+    return new Date(builtAt * 1000).toISOString().slice(0, 10);
+  } catch {
+    return '';
+  }
+}
+
 export function loadNames(): Promise<Record<string, { name: string; exchange: string }>> {
   if (!namesPromise) {
     namesPromise = api
@@ -434,6 +443,9 @@ export default function ScreenerScreen({
     live: true,
     asOf: null,
   });
+  // When the rows on screen came out of a prebuilt snapshot, so the status
+  // line can say so rather than implying they are live.
+  const [snapAt, setSnapAt] = useState<number | null>(null);
   // Expression filter rows (TaurEye-style `<metric> <op> <value>` chained
   // with AND/OR). Presets and the NL builder append rows into the same list.
   //
@@ -679,6 +691,36 @@ export default function ScreenerScreen({
     setScanJob(null);
     setError(null);
     setNote('');
+    setSnapAt(null);
+
+    // ── the one-request path ──
+    // A prebuilt snapshot carries names, the session's closes, technicals and
+    // fundamentals already merged, so the table is complete on the first
+    // response instead of after four waves of requests. It is EOD by
+    // definition; when the market is open the live path below runs behind it
+    // and overwrites the quotes, which is one request AFTER the rows are on
+    // screen rather than three before.
+    //
+    // Only for a single universe: a snapshot is per index, and merging two of
+    // them here would duplicate the union logic below for a case nobody opens
+    // on. A forced Run skips it too — the point of Run is fresh numbers.
+    if (!force && sel.length === 1) {
+      try {
+        const snap = await api.screenerSnapshot(sel[0]);
+        if (seq !== loadSeq.current) return;
+        if (snap?.rows?.length) {
+          setRows(snap.rows as Row[]);
+          setLoading(false);
+          setRefreshing(false);
+          setQuoteInfo({ live: false, asOf: snapDay(snap.built_at) });
+          setSnapAt(snap.built_at);
+        }
+      } catch {
+        // 404 until the first build, and after 36h without one. The path
+        // below is the fallback and needs no announcement.
+      }
+    }
+
     try {
       const [idxes, names] = await Promise.all([
         Promise.all(sel.map((n) => api.indexConstituents(n, force).catch(() => ({ data: [], error: undefined as string | undefined })))),
@@ -714,7 +756,24 @@ export default function ScreenerScreen({
         absChg: c.absChg,
         volume: c.volume,
       }));
-      setRows(seeded);
+      // Onto whatever is already on screen, not over it. If a snapshot painted
+      // first, its technicals and fundamentals must survive this — replacing
+      // the rows outright would flash a complete table back to a bare one and
+      // leave it there until the sweep re-landed, which is worse than the
+      // four-request wait this replaced.
+      setRows((prev) => {
+        if (!prev.length) return seeded;
+        const bySym = new Map(prev.map((r) => [r.sym, r]));
+        return seeded.map((row) => {
+          const had = bySym.get(row.sym);
+          if (!had) return row;
+          // Quotes win (they are the fresher half); everything else is kept.
+          const merged: Row = { ...had, ...row };
+          if (row.price == null) merged.price = had.price;
+          if (row.volume == null) merged.volume = had.volume;
+          return merged;
+        });
+      });
       setLoading(false);
       setRefreshing(false);
       // Quote provenance decides both the caption and who wins the /scan merge.
@@ -985,8 +1044,12 @@ export default function ScreenerScreen({
         ? `${rows.length}/${rows.length} technicals`
         : `technicals ${techCount}/${rows.length}…`,
     );
+    // Say where a complete table came from. A screen that fills instantly and
+    // does not say it is holding a settled close invites someone to read it as
+    // live during market hours.
+    if (snapAt) bits.push('from the EOD snapshot');
     return bits.join(' · ');
-  }, [note, rows, techCount, quoteInfo]);
+  }, [note, rows, techCount, quoteInfo, snapAt]);
 
   const stats = useMemo(() => {
     let buy = 0;

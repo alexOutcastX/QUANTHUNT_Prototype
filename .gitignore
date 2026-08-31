@@ -46,3 +46,8 @@ sectors_cache.json.tmp
 mobile/dist-precompressed/
 bse_codes.json
 ipo_cache.json
+
+# Prebuilt screener payloads (snapshot.py). Machine-local, rebuilt twice a day,
+# and a megabyte of market data that would be stale the moment it was committed.
+screener_snapshots.json
+screener_snapshots.json.tmp

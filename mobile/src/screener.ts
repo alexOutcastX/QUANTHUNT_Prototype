@@ -103,6 +103,51 @@ const fnum = (r: Row, k: keyof Fundamentals): number | null => {
   return typeof v === 'number' && isFinite(v) ? v : null;
 };
 
+/**
+ * PEG, derived when the feed does not carry it.
+ *
+ * It never does: /fundamentals/bulk served `peg` on 0 of 500 NIFTY 500 rows,
+ * so the PEG filter matched nothing and the GARP strategy — which is a PEG
+ * rule with a growth floor — could not return a single name. Both looked like
+ * empty screens rather than absent data.
+ *
+ * Lynch's definition is the ratio of the P/E to the annual earnings growth
+ * rate, and both halves are served (94% and 83%). multibagger.py already falls
+ * back from a missing PEG to a P/E band for the same reason, so computing it
+ * here follows the engine rather than inventing a number.
+ *
+ * Negative or zero growth has no PEG — the ratio is meaningless when earnings
+ * are shrinking, and a negative one would sort as "cheap".
+ */
+const pegOf = (r: Row): number | null => {
+  const direct = fnum(r, 'peg');
+  if (direct != null) return direct;
+  const pe = fnum(r, 'pe');
+  const growth = fnum(r, 'earnings_growth_pct');
+  if (pe == null || pe <= 0 || growth == null || growth <= 0) return null;
+  return pe / growth;
+};
+
+/**
+ * A rule on a field this row does not have.
+ *
+ * applyExpr's policy for a single filter is that an incomplete row does not
+ * constrain — you cannot fail a test that was never run. The composite
+ * strategy toggles below did the opposite: `(fnum(s, 'roce') ?? -1) >= 15`
+ * turns "we have no ROCE for this company" into a definite no. ROCE reaches
+ * 7.6% of rows (the exchange feed publishes ROE, and the ROCE gap-fill is a
+ * per-symbol Yahoo call that mostly does not run), so Quality compounder
+ * matched 0 of 500 names and Cash machine nearly as few.
+ *
+ * `optional` keeps a sparsely-served field as corroboration: it can disqualify
+ * a row it actually disagrees with, and stays out of the way when it has
+ * nothing to say. Well-served fields stay mandatory, so a row with no
+ * fundamentals at all still fails every strategy rather than passing them all
+ * on an absence of evidence.
+ */
+const optional = (v: number | null, ok: (x: number) => boolean): boolean =>
+  v == null || ok(v);
+
 
 // ---------- valuation, computed per row at screen time ----------
 // Sector medians come from /sector-medians (the cached fundamentals universe).
@@ -314,7 +359,7 @@ export const FILTER_DEFS: FilterDef[] = [
   { key: 'debt_equity', unit: '×', label: 'Debt / Equity', group: 'Fundamentals', type: 'range', fund: true, get: (s) => fnum(s, 'debt_equity') },
   { key: 'current_ratio', unit: '×', label: 'Current Ratio', group: 'Fundamentals', type: 'range', fund: true, get: (s) => fnum(s, 'current_ratio') },
   { key: 'market_cap_cr', label: 'Market Cap', group: 'Fundamentals', type: 'range', unit: '₹cr', fund: true, get: (s) => fnum(s, 'market_cap_cr') },
-  { key: 'peg', unit: '×', label: 'PEG Ratio', group: 'Fundamentals', type: 'range', fund: true, get: (s) => fnum(s, 'peg') },
+  { key: 'peg', unit: '×', label: 'PEG Ratio', group: 'Fundamentals', type: 'range', fund: true, get: (s) => pegOf(s) },
   // Both providers report these as latest quarter vs the same quarter a year
   // earlier, so the label says YoY rather than leaving you to assume it is a
   // full-year figure.
@@ -339,16 +384,25 @@ export const FILTER_DEFS: FilterDef[] = [
   // Engine strategies — the same rule sets the Multibagger and Momentum
   // engines rank by, exposed as one-tap toggles in the custom builder.
   { key: 'strat_quality', label: 'Quality compounder (MB engine)', group: 'Strategies', type: 'toggle', fund: true,
-    get: (s) => (fnum(s, 'roe') ?? -1) >= 15 && (fnum(s, 'roce') ?? -1) >= 15
-      && (fnum(s, 'debt_equity') ?? 99) <= 1 && (fnum(s, 'earnings_growth_pct') ?? -99) > 8 },
+    // ROE, leverage and growth are the rule; ROCE corroborates it where the
+    // feed has one. The MB engine itself scores quality without ROCE at all,
+    // so requiring it here was stricter than the engine this claims to mirror
+    // — and, at 7.6% coverage, strict enough to return nothing.
+    get: (s) => (fnum(s, 'roe') ?? -1) >= 15
+      && (fnum(s, 'debt_equity') ?? 99) <= 1 && (fnum(s, 'earnings_growth_pct') ?? -99) > 8
+      && optional(fnum(s, 'roce'), (v) => v >= 15) },
   { key: 'strat_value', label: 'Deep value (MB engine)', group: 'Strategies', type: 'toggle', fund: true,
     get: (s) => (fnum(s, 'pe') ?? 999) > 0 && (fnum(s, 'pe') ?? 999) < 15
       && (fnum(s, 'pb') ?? 999) < 3 && (fnum(s, 'roe') ?? -1) > 10 && (fnum(s, 'debt_equity') ?? 99) < 1.5 },
   { key: 'strat_garp', label: 'GARP — growth at fair price (MB engine)', group: 'Strategies', type: 'toggle', fund: true,
-    get: (s) => (fnum(s, 'peg') ?? 999) > 0 && (fnum(s, 'peg') ?? 999) <= 1.5
+    // pegOf, not the raw field: the feed does not carry PEG, so this rule was
+    // comparing 999 against 1.5 for every company on the exchange.
+    get: (s) => (pegOf(s) ?? 999) > 0 && (pegOf(s) ?? 999) <= 1.5
       && (fnum(s, 'earnings_growth_pct') ?? -99) >= 12 },
   { key: 'strat_cash', label: 'Cash machine (MB engine)', group: 'Strategies', type: 'toggle', fund: true,
-    get: (s) => (fnum(s, 'fcf_cr') ?? -1) > 0 && (fnum(s, 'roce') ?? -1) >= 15 },
+    // Free cash flow is the rule and is served for 84% of rows; ROCE
+    // corroborates where it exists rather than deciding on its absence.
+    get: (s) => (fnum(s, 'fcf_cr') ?? -1) > 0 && optional(fnum(s, 'roce'), (v) => v >= 15) },
   { key: 'strat_momo', label: 'Momentum leader (Momentum engine)', group: 'Strategies', type: 'toggle',
     get: (s) => n(s.rsi) != null && (s.rsi as number) >= 55 && (s.rsi as number) <= 78
       && (n(s.d50) ?? -1) > 0 && (n(s.d200) ?? -1) > 0 && (n(s.relvol) ?? 0) >= 1.2 },

@@ -23,6 +23,12 @@ class DeployExcludesTest(unittest.TestCase):
                      "quanthunt.db*"):
             self.assertIn(name, self.yml, f"deploy would delete {name} from the VM")
 
+    def test_the_screener_snapshots_survive_a_deploy(self):
+        """They are rebuilt twice a day, at 16:00 and 02:00 IST. Deleting them
+        on a push means the next visitor waits out the four-request path until
+        the following build — and a push at 16:05 costs the whole afternoon."""
+        self.assertIn("screener_snapshots.json", self.yml)
+
     def test_the_credentials_survive_a_deploy(self):
         """members.json holds the rotated logins. rsync --delete would take
         them with it, and the app would fall back to the placeholders whose
