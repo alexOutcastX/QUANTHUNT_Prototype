@@ -155,3 +155,24 @@ class HeaderWidthBudgetTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+class BackButtonBudgetTest(unittest.TestCase):
+    """The back chevron is part of the phone header's width budget.
+
+    It is 28px plus a gap on the left of the identity row, and the row was
+    sized as though it were not there: at 390px with Back showing, the
+    sign-out button sat 7px off the right edge. Measured by the smoke suite
+    ("both sit fully on screen"), not guessed.
+    """
+
+    def setUp(self):
+        import os
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        with open(os.path.join(root, "mobile", "src", "Shell.tsx"), encoding="utf-8") as fh:
+            self.src = fh.read()
+
+    def test_the_chevron_is_subtracted_before_the_market_chip_decides(self):
+        self.assertIn("width - (showBack ? BACK_W : 0) >= 360", self.src)
+
+    def test_its_cost_is_named_once(self):
+        self.assertIn("const BACK_W = 28 + 8;", self.src)

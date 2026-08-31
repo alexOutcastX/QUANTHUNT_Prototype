@@ -660,7 +660,16 @@ export default function ScreenerScreen({
     );
   }, []);
 
-  const load = useCallback(async (sel: string[]) => {
+  /**
+   * (Re)build the table for a set of universes.
+   *
+   * `force` bypasses the index cache. It matters: /index is cached for ten
+   * minutes, so an explicit Run inside that window would have re-rendered the
+   * same rows and called it a refresh — a control that appears to do work and
+   * does none. The automatic load on mount keeps the cache, which is what the
+   * cache is for; only a person asking for fresh numbers overrides it.
+   */
+  const load = useCallback(async (sel: string[], force = false) => {
     const seq = ++loadSeq.current;
     scanReq.current = new Set();
     pageScanBusy.current = false;
@@ -669,7 +678,7 @@ export default function ScreenerScreen({
     setNote('');
     try {
       const [idxes, names] = await Promise.all([
-        Promise.all(sel.map((n) => api.indexConstituents(n).catch(() => ({ data: [], error: undefined as string | undefined })))),
+        Promise.all(sel.map((n) => api.indexConstituents(n, force).catch(() => ({ data: [], error: undefined as string | undefined })))),
         loadNames(),
       ]);
       if (seq !== loadSeq.current) return;
@@ -803,7 +812,7 @@ export default function ScreenerScreen({
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
-    load(indexSel);
+    load(indexSel, true);
   }, [indexSel, load]);
 
   // Live pattern bias per symbol — fetched from the pattern engine's index
@@ -1140,10 +1149,18 @@ export default function ScreenerScreen({
       {/* Everything above the rows is FIXED — universe picker, filters,
           columns/export, pagination and the table's header row never scroll
           away; only the result rows do. */}
+      {/* ── screen settings ──────────────────────────────────────────────
+          One bounded, shaded block rather than a row of controls floating on
+          the page. "Minimise" needs a visible subject: before this it sat
+          outside everything it collapsed, so pressing it was a guess. The
+          block is what disappears, the button that collapses it lives inside
+          it, and the shade is what tells you where it ends. */}
+      <View style={[styles.settings, cfgMin && styles.settingsMin]}>
       <View style={styles.topBar}>
-        {/* The three things a screen starts from, in one row: which screener,
-            over what universe, looking for what. They used to be two pill bars
-            above the page and a button buried in the filter panel. */}
+        {/* The three things a screen starts from, centred on the page: which
+            screener, over what universe, looking for what. They used to be two
+            pill bars above the page and a button buried in the filter panel. */}
+        <View style={styles.dropRow}>
         {screens && onScreen ? (
           <TouchableOpacity
             ref={screenMenu.ref}
@@ -1178,36 +1195,51 @@ export default function ScreenerScreen({
             {presetCount ? `${presetCount} applied` : 'Pick one'} ▾
           </Text>
         </TouchableOpacity>
-        {!isDesktop ? (
-          <>
-            <TouchableOpacity
-              style={[styles.filterBarBtn, expr.length > 0 && styles.filterBarBtnOn]}
-              onPress={() => setFiltersOpen(true)}
-              activeOpacity={0.75}
-            >
-              <Text style={[styles.filterBarBtnTxt, expr.length > 0 && styles.filterBarBtnTxtOn]}>
-                ⚙ Filters{expr.length ? ` (${expr.length})` : ''}
-              </Text>
-            </TouchableOpacity>
-            <Text style={styles.filterSummary} numberOfLines={1}>
-              {expr.length ? exprSummary(expr) : 'No filters'}
-            </Text>
-          </>
-        ) : (
-          <>
-            {cfgMin ? (
-              <Text style={styles.filterSummary} numberOfLines={1}>
-                {expr.length ? `${expr.length} filter${expr.length === 1 ? '' : 's'} · ${exprSummary(expr)}` : 'No filters — full universe'}
-              </Text>
-            ) : (
-              <View style={{ flex: 1 }} />
-            )}
-            <TouchableOpacity style={styles.cfgMinBtn} onPress={toggleCfgMin} activeOpacity={0.75}>
-              <Text style={styles.cfgMinTxt}>{cfgMin ? '⌄ Screen settings' : '⌃ Minimise'}</Text>
-            </TouchableOpacity>
-          </>
-        )}
+        </View>
+        {/* Absolutely placed so it cannot pull the row off centre: a button in
+            the flow would shift the three pickers left by half its width. */}
+        {isDesktop ? (
+          <TouchableOpacity
+            style={styles.cfgMinBtn}
+            onPress={toggleCfgMin}
+            activeOpacity={0.75}
+            accessibilityRole="button"
+            accessibilityState={{ expanded: !cfgMin }}
+            accessibilityLabel={cfgMin ? 'Show screen settings' : 'Minimise screen settings'}
+          >
+            <Text style={styles.cfgMinTxt}>{cfgMin ? '⌄ Expand' : '⌃ Minimise'}</Text>
+          </TouchableOpacity>
+        ) : null}
       </View>
+
+      {!isDesktop ? (
+        <View style={styles.mobileFilterRow}>
+          <TouchableOpacity
+            style={[styles.filterBarBtn, expr.length > 0 && styles.filterBarBtnOn]}
+            onPress={() => setFiltersOpen(true)}
+            activeOpacity={0.75}
+          >
+            <Text style={[styles.filterBarBtnTxt, expr.length > 0 && styles.filterBarBtnTxtOn]}>
+              ⚙ Filters{expr.length ? ` (${expr.length})` : ''}
+            </Text>
+          </TouchableOpacity>
+          <Text style={styles.filterSummary} numberOfLines={1}>
+            {expr.length ? exprSummary(expr) : 'No filters'}
+          </Text>
+          <RunBtn onPress={onRefresh} running={refreshing} />
+        </View>
+      ) : null}
+
+      {isDesktop && cfgMin ? (
+        // Minimised: the block still says what it is holding, and still lets
+        // you re-run without expanding it to find the button.
+        <View style={styles.minRow}>
+          <Text style={styles.filterSummary} numberOfLines={1}>
+            {expr.length ? `${expr.length} filter${expr.length === 1 ? '' : 's'} · ${exprSummary(expr)}` : 'No filters — full universe'}
+          </Text>
+          <RunBtn onPress={onRefresh} running={refreshing} />
+        </View>
+      ) : null}
 
       {isDesktop && !cfgMin ? (
         <FilterPanel
@@ -1217,8 +1249,11 @@ export default function ScreenerScreen({
           onShare={onShare}
           onSaveScreen={() => setSavedModal(true)}
           onOpenFieldPicker={setFieldPickFor}
+          onRun={onRefresh}
+          running={refreshing}
         />
       ) : null}
+      </View>
       <View style={styles.statsRow}>
         <Text style={styles.statsTxt} numberOfLines={1}>
           <Text style={styles.statsN}>{stats.total}</Text> matches
@@ -1471,6 +1506,10 @@ export default function ScreenerScreen({
               onShare={onShare}
               onSaveScreen={() => setSavedModal(true)}
               onOpenFieldPicker={setFieldPickFor}
+              // Running from inside the sheet closes it: the point of pressing
+              // Run is to look at the rows, and they are behind this.
+              onRun={() => { setFiltersOpen(false); onRefresh(); }}
+              running={refreshing}
             />
           </ScrollView>
           <Btn label={`Show ${stats.total} matches`} onPress={() => setFiltersOpen(false)} style={styles.sheetApply} />
@@ -1831,6 +1870,34 @@ function exprSummary(expr: ExprRow[]): string {
 }
 const PRESET_GROUPS = ['Strategies', 'Trend', 'Momentum', 'Breakouts', 'Candlesticks', 'Volume', 'Fundamentals'] as const;
 
+/**
+ * Re-run the screen.
+ *
+ * The filter rows themselves are applied live — applyExpr runs on every
+ * keystroke — so this does not "apply" anything, and a button that pretended
+ * to would be a lie in the shape of a control. What it does is the part that
+ * is NOT live: re-fetch the universe, its quotes and the technical sweep, so a
+ * screen written twenty minutes ago is judged on today's numbers rather than
+ * the ones that happened to be in memory. That is the thing people are
+ * actually reaching for when they look for a Run button after editing a
+ * filter, and it had no control at all on desktop — only pull-to-refresh,
+ * which a mouse cannot do.
+ */
+function RunBtn({ onPress, running }: { onPress: () => void; running: boolean }) {
+  return (
+    <TouchableOpacity
+      style={[styles.runBtn, running && styles.runBtnBusy]}
+      onPress={onPress}
+      disabled={running}
+      activeOpacity={0.75}
+      accessibilityRole="button"
+      accessibilityLabel={running ? 'Re-running the screen' : 'Run the screen again with fresh data'}
+    >
+      <Text style={styles.runTxt}>{running ? '↻ Running…' : '▶ Run screen'}</Text>
+    </TouchableOpacity>
+  );
+}
+
 function FilterPanel({
   expr,
   setExpr,
@@ -1838,6 +1905,8 @@ function FilterPanel({
   onShare,
   onSaveScreen,
   onOpenFieldPicker,
+  onRun,
+  running,
 }: {
   expr: ExprRow[];
   setExpr: React.Dispatch<React.SetStateAction<ExprRow[]>>;
@@ -1845,6 +1914,8 @@ function FilterPanel({
   onShare: () => void;
   onSaveScreen: () => void;
   onOpenFieldPicker: (rowId: string) => void;
+  onRun: () => void;
+  running: boolean;
 }) {
   const [nlText, setNlText] = useState('');
   const [openSel, setOpenSel] = useState(''); // '<rowId>:f' | '<rowId>:o' | '<rowId>:v'
@@ -1916,6 +1987,7 @@ function FilterPanel({
             <TouchableOpacity style={styles.filterBtn} onPress={onSaveScreen} activeOpacity={0.75}>
               <Text style={styles.filterTxt}>Save screen{savedCount ? ` (${savedCount})` : ''}</Text>
             </TouchableOpacity>
+            <RunBtn onPress={onRun} running={running} />
           </View>
         </View>
       </View>
@@ -2235,15 +2307,71 @@ function SavedScreensModal({
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.bg },
   center: { flex: 1, backgroundColor: theme.bg },
+  // ── the screen-settings block ──
+  // A shade off the page, bounded, with everything it owns inside it. The
+  // pickers, the filter rows and the button that collapses them used to sit on
+  // the page background looking like part of the results, which is why
+  // "Minimise" read as a mystery: nothing on screen said what it would take
+  // away.
+  settings: {
+    backgroundColor: theme.surface,
+    borderColor: theme.border2,
+    borderWidth: 1,
+    borderRadius: theme.radius.lg,
+    marginHorizontal: theme.sp.md,
+    marginTop: theme.sp.sm,
+    marginBottom: theme.sp.sm,
+    overflow: 'visible',
+    // The filter and preset dropdowns are absolutely positioned inside this
+    // block, and RN-web scopes their zIndex to it — below the stats row's 60
+    // they would be painted through by the match count.
+    zIndex: 120,
+  },
+  settingsMin: { paddingBottom: 2 },
   topBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: theme.sp.sm,
+    paddingHorizontal: theme.sp.md,
+    paddingVertical: theme.sp.sm,
+  },
+  // Centred on the page. The minimise button is absolutely placed rather than
+  // a sibling in this row, because a button in the flow shifts the three
+  // pickers left by half its width — which is exactly the off-centre look
+  // this replaced.
+  dropRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexWrap: 'wrap',
+    gap: theme.sp.sm,
+    flexShrink: 1,
+  },
+  mobileFilterRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: theme.sp.sm,
     paddingHorizontal: theme.sp.md,
-    paddingVertical: theme.sp.sm,
-    borderBottomColor: theme.border,
-    borderBottomWidth: 1,
+    paddingBottom: theme.sp.sm,
   },
+  minRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.sp.sm,
+    paddingHorizontal: theme.sp.md,
+    paddingBottom: theme.sp.sm,
+  },
+  runBtn: {
+    backgroundColor: theme.accent,
+    borderColor: theme.accent,
+    borderWidth: 1,
+    borderRadius: theme.radius.sm + 2,
+    paddingHorizontal: theme.sp.md,
+    paddingVertical: theme.sp.sm + 1,
+  },
+  runBtnBusy: { opacity: 0.6 },
+  runTxt: { color: theme.bg, fontSize: theme.fs.sm + 1, fontWeight: '800' },
   idxChips: { paddingHorizontal: theme.sp.md, paddingVertical: theme.sp.sm, gap: theme.sp.sm },
   idxChip: {
     backgroundColor: theme.surface2,
@@ -2322,6 +2450,9 @@ const styles = StyleSheet.create({
   filterBarBtnTxtOn: { color: theme.brand },
   filterSummary: { flex: 1, color: theme.muted, fontSize: theme.fs.xs + 1 },
   cfgMinBtn: {
+    position: 'absolute',
+    right: theme.sp.md,
+    top: theme.sp.sm,
     backgroundColor: theme.surface2,
     borderColor: theme.border2,
     borderWidth: 1,
@@ -2682,9 +2813,9 @@ const styles = StyleSheet.create({
   // the table (RN-web gives sibling Views z-index 0, so the later table would
   // otherwise paint over the add-filter dropdown).
   panel: {
-    backgroundColor: theme.surface,
-    borderBottomColor: theme.border,
-    borderBottomWidth: 1,
+    // No background or border of its own any more: it is the body of the
+    // settings block above, and a second card edge inside that one read as
+    // two panels rather than one thing you can collapse.
     // Must stack ABOVE statsRow (zIndex 60): the filter/preset dropdowns are
     // absolutely positioned inside this panel, and RN-web scopes their
     // zIndex to this container — a lower value here let the match-count row

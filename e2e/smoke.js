@@ -202,6 +202,14 @@ function check(name, ok, detail) {
       bodyText.slice(0, 300),
     );
 
+    // At this width the console is in its phone layout: the builder lives in
+    // a sheet, so what has to be on the bar is the Run button.
+    check(
+      'the phone console offers a Run button on its filter bar',
+      /▶ Run screen/.test(bodyText),
+      bodyText.slice(0, 240),
+    );
+
     // Switching screener is the SCREEN dropdown. Defined here because 4b uses
     // it too — reaching Penny is no longer a pill on a bar.
     const pickScreen = async (label) => {
@@ -628,11 +636,21 @@ function check(name, ok, detail) {
         return { t: Math.round(r.top), l: Math.round(r.left), r: Math.round(r.right),
                  w: Math.round(r.width), text: (e.textContent || '').trim() };
       };
+      // Every child of the identity row, so a failure says WHICH control
+      // pushed the others off rather than only that they went.
+      const out = document.querySelector('[data-testid="header-signout"]');
+      const row = out && out.parentElement;
       return {
         acct: g('[aria-label^="Signed in as"]'),
         out: g('[data-testid="header-signout"]'),
         search: g('[aria-label="Search symbols and pages"]'),
         legal: g('[aria-label="Disclaimer and legal terms"]'),
+        back: g('[aria-label="Back"]'),
+        row: row ? [...row.children].map((e) => {
+          const r = e.getBoundingClientRect();
+          return { l: Math.round(r.left), r: Math.round(r.right),
+                   t: (e.textContent || '').trim().slice(0, 18) };
+        }) : null,
         vw: window.innerWidth,
       };
     });
@@ -1262,6 +1280,131 @@ function check(name, ok, detail) {
         'the switch is still there to go back with',
         await page.evaluate(() => [...document.querySelectorAll('[role="tab"]')]
           .some((e) => (e.textContent || '').trim() === 'Graph')),
+      );
+    }
+
+
+    // 8l-i · the screen settings block, at desktop width — where the filter
+    // builder and the Minimise button exist at all.
+    await page.evaluate(() => {
+      const el = document.querySelector('[aria-label="Screens"]');
+      if (el) el.click();
+    });
+    await page.waitForTimeout(4500);
+    // The settings are one bounded block, and everything that
+    // belongs to them is inside it — including the button that collapses it.
+    // Loose on the page, "Minimise" had no visible subject.
+    {
+      const box = await page.evaluate(() => {
+        const btn = [...document.querySelectorAll('div,span')]
+          .filter((e) => (e.textContent || '').trim() === '⌃ Minimise').pop();
+        if (!btn) return null;
+        let card = btn.parentElement;
+        // Walk out to the first ancestor that is drawn as a card.
+        while (card && !(parseFloat(getComputedStyle(card).borderRadius) > 6
+                         && getComputedStyle(card).borderTopWidth !== '0px'
+                         && card.getBoundingClientRect().width > 400)) {
+          card = card.parentElement;
+          if (card === document.body) return null;
+        }
+        const r = card.getBoundingClientRect();
+        const run = [...card.querySelectorAll('div,span')]
+          .some((e) => /Run screen/.test((e.textContent || '').trim()));
+        const drops = ['SCREEN', 'UNIVERSE', 'PRESET SCANS']
+          .every((t) => (card.textContent || '').includes(t));
+        // What is behind the card is the screen's own container, not <body>:
+        // the page paints theme.bg, the body is left at the browser default.
+        let behind = card.parentElement, pbg = 'rgba(0, 0, 0, 0)';
+        while (behind && pbg === 'rgba(0, 0, 0, 0)') {
+          pbg = getComputedStyle(behind).backgroundColor;
+          behind = behind.parentElement;
+        }
+        return {
+          bg: getComputedStyle(card).backgroundColor,
+          page: pbg,
+          holdsMinimise: card.contains(btn), holdsRun: run, holdsDrops: drops,
+          bottom: Math.round(r.bottom),
+        };
+      });
+      check('the screen settings are drawn as one bounded block', !!box, JSON.stringify(box));
+      if (box) {
+        check(
+          'shaded differently from the page behind it',
+          box.bg !== box.page && box.bg !== 'rgba(0, 0, 0, 0)',
+          JSON.stringify(box),
+        );
+        check(
+          'and it holds everything Minimise takes away',
+          box.holdsMinimise && box.holdsRun && box.holdsDrops,
+          JSON.stringify(box),
+        );
+      }
+      // The three pickers sit on the page's centre line.
+      const centred = await page.evaluate(() => {
+        const btn = (t) => {
+          const lab = [...document.querySelectorAll('div,span')]
+            .filter((e) => (e.textContent || '').trim() === t).pop();
+          return lab && (lab.closest('[role="button"]') || lab.parentElement);
+        };
+        const a = btn('SCREEN'), b = btn('PRESET SCANS');
+        if (!a || !b) return null;
+        const l = a.getBoundingClientRect().left;
+        const r = b.getBoundingClientRect().right;
+        return { l: Math.round(l), r: Math.round(r), vw: window.innerWidth,
+                 off: Math.round(Math.abs((l + r) / 2 - window.innerWidth / 2)) };
+      });
+      check(
+        'the pickers are centred on the page',
+        !!centred && centred.off <= 30,
+        JSON.stringify(centred),
+      );
+      // Collapsing takes the block away and leaves a way back.
+      await tapText('⌃ Minimise');
+      await page.waitForTimeout(700);
+      const min = await page.evaluate(() => document.body.innerText);
+      check(
+        'Minimise hides the filter builder',
+        !/\+ Add filter/.test(min) && /⌄ Expand/.test(min),
+        min.slice(0, 200),
+      );
+      check(
+        'but leaves the summary and a way to re-run',
+        /Golden cross/i.test(min) && /Run screen/.test(min),
+        min.slice(0, 200),
+      );
+      await tapText('⌄ Expand');
+      await page.waitForTimeout(700);
+      const back = await page.evaluate(() => document.body.innerText);
+      check(
+        'Expand brings it back',
+        /\+ Add filter/.test(back) && /⌃ Minimise/.test(back),
+        back.slice(0, 200),
+      );
+    }
+
+    // 8l-ii · Run re-fetches. The rows filter live, so what this proves is
+    // that the button does the part that is not live — it goes back to the
+    // server and the status line reflects a fresh sweep.
+    {
+      const before = await page.evaluate(() => document.body.innerText);
+      check('the console offers a Run button', /▶ Run screen/.test(before));
+      // Counted rather than watched: the fixture answers instantly, so a
+      // transient "Running…" label is not something a check can catch without
+      // being flaky. What matters is that the server was asked AGAIN — that is
+      // the work this button exists to do, since the filter rows themselves
+      // are applied live.
+      let hits = 0;
+      const count = (r) => { if (/\/index\?/.test(r.url())) hits += 1; };
+      page.on('request', count);
+      await tapText('▶ Run screen');
+      await page.waitForTimeout(2500);
+      page.off('request', count);
+      check('pressing it re-fetches the universe', hits > 0, `index requests: ${hits}`);
+      const after = await page.evaluate(() => document.body.innerText);
+      check(
+        'and it finishes with rows still on screen',
+        /matches/.test(after) && !/Running…/.test(after),
+        after.slice(0, 200),
       );
     }
 

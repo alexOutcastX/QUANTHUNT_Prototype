@@ -131,11 +131,100 @@ class ToolbarTest(unittest.TestCase):
         """It was a button buried inside the filter builder; it belongs beside
         the universe, because they are the two halves of one question."""
         self.assertIn("function PresetMenu(", self.screener)
-        top = self.screener[self.screener.index("<View style={styles.topBar}>"):]
-        top = top[:top.index("</View>\n\n      {isDesktop")]
+        top = self.screener[self.screener.index("<View style={styles.dropRow}>"):]
+        top = top[:top.index("</View>\n        {/* Absolutely placed")]
         self.assertIn("PRESET SCANS", top)
         self.assertIn("UNIVERSE", top)
         self.assertIn("SCREEN", top)
+
+    # ── the settings block ──────────────────────────────────────────────
+    # The pickers, the filter rows and the button that collapses them used to
+    # sit loose on the page background looking like part of the results, so
+    # "Minimise" was a guess: nothing on screen said what it would take away.
+
+    def test_the_settings_are_one_bounded_block(self):
+        """A shade off the page, with a border and a radius — so the thing
+        Minimise collapses has visible edges."""
+        style = re.search(r"  settings: \{(.*?)\n  \},", self.screener, re.S).group(1)
+        self.assertIn("backgroundColor: theme.surface", style)
+        self.assertIn("borderWidth: 1", style)
+        self.assertIn("borderRadius", style)
+        self.assertIn("marginHorizontal", style)
+
+    def test_the_panel_no_longer_draws_a_card_of_its_own(self):
+        """It is the body of the block above it; a second card edge inside the
+        first read as two panels rather than one collapsible thing."""
+        style = re.search(r"  panel: \{(.*?)\n  \},", self.screener, re.S).group(1)
+        self.assertNotIn("backgroundColor", style)
+        self.assertNotIn("borderBottomWidth", style)
+
+    def test_the_minimise_button_is_inside_what_it_minimises(self):
+        block = self.screener[self.screener.index("<View style={[styles.settings"):]
+        block = block[:block.index("<View style={styles.statsRow}>")]
+        self.assertIn("onPress={toggleCfgMin}", block)
+        self.assertIn("<FilterPanel", block)
+        self.assertIn("styles.dropRow", block)
+
+    def test_the_pickers_are_centred_on_the_page(self):
+        row = re.search(r"  dropRow: \{(.*?)\n  \},", self.screener, re.S).group(1)
+        self.assertIn("justifyContent: 'center'", row)
+        bar = re.search(r"  topBar: \{(.*?)\n  \},", self.screener, re.S).group(1)
+        self.assertIn("justifyContent: 'center'", bar)
+
+    def test_the_minimise_button_cannot_pull_them_off_centre(self):
+        """A button in the flow shifts the three pickers left by half its
+        width, which is the off-centre look this replaced."""
+        style = re.search(r"  cfgMinBtn: \{(.*?)\n  \},", self.screener, re.S).group(1)
+        self.assertIn("position: 'absolute'", style)
+        self.assertIn("right:", style)
+
+    def test_collapsed_it_still_says_what_it_holds(self):
+        block = self.screener[self.screener.index("{isDesktop && cfgMin ? ("):]
+        block = block[:block.index("{isDesktop && !cfgMin ? (")]
+        self.assertIn("exprSummary(expr)", block)
+        self.assertIn("<RunBtn", block)
+
+    # ── running a screen ────────────────────────────────────────────────
+
+    def test_there_is_a_run_button_at_every_width(self):
+        for anchor in ("styles.mobileFilterRow", "{isDesktop && cfgMin ? (", "styles.ctrlRight"):
+            with self.subTest(where=anchor):
+                block = self.screener[self.screener.index(anchor):][:900]
+                self.assertIn("<RunBtn", block)
+
+    def test_run_refetches_rather_than_pretending_to_apply(self):
+        """The filter rows are applied live — applyExpr runs on every
+        keystroke — so a button that claimed to "apply" them would be a lie in
+        the shape of a control. What it re-runs is the part that is NOT live:
+        the universe, its quotes and the technical sweep."""
+        self.assertIn("applyExpr(rows, expr)", self.screener)
+        self.assertIn("onRun={onRefresh}", self.screener)
+        self.assertIn("load(indexSel, true)", self.screener)
+
+    def test_run_bypasses_the_index_cache(self):
+        """/index is cached for ten minutes, so without this an explicit Run
+        inside that window re-rendered the same rows and called it a refresh —
+        a control that appears to do work and does none. The load on mount
+        still uses the cache, which is what the cache is for."""
+        self.assertIn("api.indexConstituents(n, force)", self.screener)
+        self.assertIn("async (sel: string[], force = false)", self.screener)
+        run = re.search(r"const onRefresh = useCallback\((.*?)\}, \[", self.screener, re.S).group(1)
+        self.assertIn("load(indexSel, true)", run)
+        # …and the automatic one does not force, or every mount would miss
+        # the cache that exists to make opening the console instant.
+        self.assertIn("setLoading(true);\n    load(indexSel);", self.screener)
+
+    def test_it_says_when_it_is_running_and_refuses_to_double_fire(self):
+        fn = self.screener[self.screener.index("function RunBtn("):]
+        fn = fn[:fn.index("\nfunction FilterPanel(")]
+        self.assertIn("disabled={running}", fn)
+        self.assertIn("Running…", fn)
+        self.assertIn("accessibilityLabel", fn)
+
+    def test_running_from_the_phone_sheet_closes_it(self):
+        """The point of pressing Run is to look at the rows, and on a phone
+        they are behind the sheet."""
+        self.assertIn("onRun={() => { setFiltersOpen(false); onRefresh(); }}", self.screener)
 
     def test_the_screener_bars_are_gone(self):
         """Two stacked pill rows above the page said what one dropdown says."""

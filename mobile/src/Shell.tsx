@@ -231,6 +231,9 @@ function useBackNav(active: string, ready: boolean): boolean {
   return canGoBack();
 }
 
+/** What BackBtn costs the header row, chevron plus its gap. */
+const BACK_W = 28 + 8;
+
 function BackBtn({ onPress }: { onPress: () => void }) {
   return (
     <TouchableOpacity
@@ -583,8 +586,12 @@ function NewMobileShell() {
             {/* On a narrow phone the market chip is what squeezed the account
                 name down to "T". It is the most repeated thing on the screen —
                 the ticker strip is directly below it and the home page opens
-                on a market clock — so it is the one that gives way. */}
-            {width >= 360 ? <MarketChip compact /> : null}
+                on a market clock — so it is the one that gives way.
+                The back chevron counts against the same budget: it is 28px of
+                the row, and without subtracting it a 390px phone showing Back
+                pushed the sign-out button 7px off the right edge — measured,
+                not guessed (e2e/smoke.js, "both sit fully on screen"). */}
+            {width - (showBack ? BACK_W : 0) >= 360 ? <MarketChip compact /> : null}
             <WalletChip />
             <AccountChip style={styles.acctBtnMobile} />
             <SignOutBtn />
