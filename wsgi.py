@@ -13,7 +13,7 @@ from __future__ import annotations
 import threading
 
 from server import (_prefetch_universe, app, start_alert_loop, start_backfill,
-                    start_fund_warm, start_scan_warm)
+                    start_fund_warm, start_scan_warm, start_snapshots)
 
 # Warm the universe cache in the background so the first /universe request is
 # fast, mirroring server.py's __main__ behaviour. Daemon so it never blocks
