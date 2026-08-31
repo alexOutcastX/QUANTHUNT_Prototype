@@ -17,10 +17,7 @@ import { InfoDot } from '../components/InfoCard';
 import { ExportCol, exportCsv, exportExcel, exportPdf } from '../csv';
 import { crore } from '../format';
 import { parseNL } from '../nlScreen';
-import { DEFAULT_PRESET_ID, PRESETS, Preset, defaultPreset } from '../presets';
-
-/** The tag every row of the opening screen carries. */
-const DEFAULT_TAG = 'preset:' + DEFAULT_PRESET_ID;
+import { PRESETS, Preset } from '../presets';
 
 // Fields the constituent feed already carries, so a filter on one of them can
 // match before the technical sweep lands. Everything else — RSI, the moving
@@ -439,13 +436,19 @@ export default function ScreenerScreen({
   });
   // Expression filter rows (TaurEye-style `<metric> <op> <value>` chained
   // with AND/OR). Presets and the NL builder append rows into the same list.
-  // Every load starts on the golden crossover rather than on whatever was left
-  // here last time. A screener that reopens mid-thought is a screener you have
-  // to clear before you can think; deliberately kept screens have their own
-  // home under Save screen, and a shared #screen= link still wins outright.
-  const [expr, setExpr] = useState<ExprRow[]>(
-    () => filtersToExpr(defaultPreset().filters, 'preset:' + DEFAULT_PRESET_ID),
-  );
+  //
+  // Every load starts EMPTY — the whole universe, no conditions. It used to
+  // open on the golden crossover, which meant the first thing the console ever
+  // showed was somebody else's screen: three rows out of five hundred, and a
+  // filter you had to notice and remove before you could look at the market.
+  // A suggestion is fine in the preset menu, where it is offered; as the
+  // opening state it is a filter nobody asked for.
+  //
+  // Nor is the last session's screen restored: one that reopens mid-thought is
+  // one you have to clear before you can think. Screens worth keeping have
+  // their own home under Save screen, and a shared #screen= link still wins
+  // outright.
+  const [expr, setExpr] = useState<ExprRow[]>([]);
   const [sortCol, setSortCol] = useState('signal');
   const [sortDir, setSortDir] = useState<1 | -1>(-1);
   const [track, setTrack] = useState<TrackEntry[]>([]);
@@ -533,10 +536,10 @@ export default function ScreenerScreen({
             AsyncStorage.getItem(FILTERS_KEY),
             AsyncStorage.getItem(INDEX_KEY),
           ]);
-          // Filters are NOT restored: the default screen is the golden
-          // crossover on every load. The stored keys are still read for the
-          // universe below, and left in place so a future "restore my last
-          // screen" has something to restore.
+          // Filters are NOT restored: the console opens on no filters at all,
+          // every load. The stored keys are still read for the universe below,
+          // and left in place so a future "restore my last screen" has
+          // something to restore.
           void x;
           void f;
           if (idx) {
@@ -1630,17 +1633,13 @@ function PresetMenu({
     const tag = 'preset:' + p.id;
     setExpr((prev) => {
       if (prev.some((e) => e.src === tag)) return prev.filter((e) => e.src !== tag);
-      // The opening screen is a SUGGESTION, not a choice anybody made. Stacking
-      // a chosen preset on top of it gives "golden cross AND Minervini", which
-      // almost always returns nothing and reads as a broken preset rather than
-      // as two screens combined. So an untouched default steps aside.
-      //
-      // Only untouched: the moment a row is edited, added or removed, this is
-      // no longer the default but a screen the user is building, and presets
-      // stack on it as they always have.
-      const untouched = prev.length > 0 && prev.every((e) => e.src === DEFAULT_TAG);
-      const base = untouched && tag !== DEFAULT_TAG ? [] : prev;
-      return [...base, ...filtersToExpr(p.filters, tag)];
+      // Presets stack, which is what makes them composable. There used to be an
+      // exception here — an untouched opening screen stepped aside so that
+      // picking a preset did not silently mean "golden cross AND that" — and it
+      // is gone with the opening screen it existed for. Nothing is on the
+      // console now unless somebody put it there, so nothing has to guess
+      // whether it was meant.
+      return [...prev, ...filtersToExpr(p.filters, tag)];
     });
   };
   return (

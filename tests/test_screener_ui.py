@@ -249,18 +249,45 @@ class ToolbarTest(unittest.TestCase):
 
 
 class DefaultScreenTest(unittest.TestCase):
+    """The console opens on nothing.
+
+    It used to open on the golden crossover, which meant the first thing it
+    ever showed was somebody else's screen — three names out of five hundred,
+    behind a filter you had to notice before you could look at the market. A
+    suggestion belongs in the preset menu, where it is offered; as the opening
+    state it is a filter nobody asked for.
+    """
+
     def setUp(self):
         self.src = _read("mobile", "src", "screens", "ScreenerScreen.tsx")
+        self.presets = _read("mobile", "src", "presets.ts")
 
-    def test_it_opens_on_the_golden_crossover(self):
-        self.assertIn("export const DEFAULT_PRESET_ID = 'golden-cross';",
-                      _read("mobile", "src", "presets.ts"))
-        self.assertIn("filtersToExpr(defaultPreset().filters, 'preset:' + DEFAULT_PRESET_ID)",
-                      self.src)
+    def test_it_opens_with_no_filters(self):
+        self.assertIn("const [expr, setExpr] = useState<ExprRow[]>([]);", self.src)
 
-    def test_the_default_is_the_50_200_cross(self):
-        block = _preset(_read("mobile", "src", "presets.ts"), "golden-cross")
+    def test_nothing_still_reaches_for_a_default_preset(self):
+        """A leftover import would put the old screen back the moment anyone
+        wired it up again."""
+        self.assertNotIn("defaultPreset", self.src)
+        self.assertNotIn("DEFAULT_PRESET_ID", self.src)
+        self.assertNotIn("DEFAULT_TAG", self.src)
+
+    def test_the_module_no_longer_claims_to_have_a_default(self):
+        """An exported name nothing imports is a claim the module makes about
+        itself that is not true."""
+        self.assertNotIn("export const DEFAULT_PRESET_ID", self.presets)
+        self.assertNotIn("export function defaultPreset", self.presets)
+
+    def test_the_golden_cross_is_still_a_preset_you_can_pick(self):
+        """Removed as the default, not removed."""
+        block = _preset(self.presets, "golden-cross")
+        self.assertIsNotNone(block)
         self.assertIn("golden_cross: true", block)
+
+    def test_the_empty_console_says_what_it_is_showing(self):
+        """No filters is a state, not a blank — it has to read as the whole
+        universe rather than as a screen that failed."""
+        self.assertIn("No filters — showing the full universe.", self.src)
 
     def test_last_sessions_filters_are_no_longer_restored(self):
         """"Every load" means every load — a screener that reopens mid-thought
@@ -275,14 +302,13 @@ class DefaultScreenTest(unittest.TestCase):
                       self.src)
 
 
-class DefaultPresetInteractionTest(unittest.TestCase):
-    """What happens when the opening screen meets a chosen one.
+class PresetStackingTest(unittest.TestCase):
+    """Presets stack, and now nothing has to guess whether they should.
 
-    Presets stack by design — that is what makes them composable. But the
-    console now opens on the golden crossover on every load, and that screen is
-    a SUGGESTION, not a choice anybody made. Stacking on top of it gives
-    "golden cross AND Minervini", which almost always returns nothing and reads
-    as a broken preset rather than as two screens combined.
+    There was an exception here: an untouched opening screen stepped aside so
+    that picking a preset did not silently mean "golden cross AND that". It is
+    gone with the opening screen it existed for — nothing is on the console
+    unless somebody put it there.
     """
 
     def setUp(self):
@@ -291,24 +317,23 @@ class DefaultPresetInteractionTest(unittest.TestCase):
         self.assertIsNotNone(m, "togglePresetExpr not found")
         self.body = m.group(0)
 
-    def test_an_untouched_default_steps_aside(self):
-        self.assertIn("const untouched = prev.length > 0 && prev.every((e) => e.src === DEFAULT_TAG);",
-                      self.body)
-        self.assertIn("const base = untouched && tag !== DEFAULT_TAG ? [] : prev;", self.body)
+    def test_a_preset_adds_to_whatever_is_there(self):
+        self.assertIn("return [...prev, ...filtersToExpr(p.filters, tag)];", self.body)
 
-    def test_a_screen_you_have_built_still_stacks(self):
-        """`every` is the whole safeguard: edit, add or remove one row and this
-        is no longer the default but a screen in progress."""
-        self.assertIn("prev.every((e) => e.src === DEFAULT_TAG)", self.body)
-        self.assertIn("[...base, ...filtersToExpr(p.filters, tag)]", self.body)
-
-    def test_toggling_the_default_itself_off_still_works(self):
-        """`tag !== DEFAULT_TAG` — otherwise re-picking the golden cross would
-        clear itself and immediately re-add it, which is a no-op that looks
-        like a broken toggle."""
-        self.assertIn("tag !== DEFAULT_TAG", self.body)
+    def test_picking_the_same_one_twice_removes_it(self):
         self.assertIn("if (prev.some((e) => e.src === tag)) return prev.filter((e) => e.src !== tag);",
                       self.body)
+
+    def test_the_special_case_is_gone_rather_than_left_unreachable(self):
+        """Dead code that guards a state that can no longer happen is a
+        question the next reader has to answer for nothing.
+
+        Asserted against the CODE, not the comment above it — the comment
+        explains what was removed and says the word."""
+        code = "\n".join(l for l in self.body.splitlines()
+                          if not l.strip().startswith("//"))
+        self.assertNotIn("untouched", code)
+        self.assertNotIn("DEFAULT_TAG", code)
 
 
 class StillScanningTest(unittest.TestCase):

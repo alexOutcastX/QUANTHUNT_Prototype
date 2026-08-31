@@ -196,9 +196,13 @@ function check(name, ok, detail) {
       /SCREEN[\s\S]{0,60}UNIVERSE[\s\S]{0,60}PRESET SCANS/i.test(bodyText),
       bodyText.slice(0, 200),
     );
+    // It opens on nothing: the whole universe, no conditions. Opening on a
+    // preset meant the first thing the console ever showed was somebody
+    // else's screen, behind a filter you had to notice before you could look
+    // at the market.
     check(
-      'it opens on the golden crossover',
-      /Golden cross/i.test(bodyText),
+      'it opens with no filters',
+      /No filters/.test(bodyText) && !/Golden cross/i.test(bodyText),
       bodyText.slice(0, 300),
     );
 
@@ -233,13 +237,8 @@ function check(name, ok, detail) {
     // fixture now answers /index the way production does — a quoteless CSV list
     // that the server backfills from the bhavcopy — so a blank table here means
     // the client dropped the prices it was handed.
-    // Clear the default screen first. The console now opens on the golden
-    // crossover, and the fixture has no crosses — so the table is legitimately
-    // empty and there would be no prices to check.
-    //
-    // Toggled off through the preset menu rather than "Clear all": that button
-    // is desktop-only (mobile keeps the filter builder in a popup), and this
-    // suite runs at 400px.
+    // Nothing to clear first: the console opens unfiltered, so the table below
+    // is the whole fixture universe and its prices are there to check.
     const tapText = (t) =>
       page.evaluate((x) => {
         const el = [...document.querySelectorAll('*')]
@@ -247,10 +246,10 @@ function check(name, ok, detail) {
         if (el) { (el.closest('[role="button"]') || el.parentElement).click(); return true; }
         return false;
       }, t);
-    // An empty table DURING the sweep is not an empty result. With the console
-    // opening on a filtered screen, "No matches — loosen or clear a filter"
-    // was the first thing on every load, blaming the screen for something that
-    // was merely unfinished.
+    // An empty table DURING the sweep is not an empty result. This mattered
+    // most when the console opened on a filtered screen — "No matches —
+    // loosen or clear a filter" was the first thing on every load — and it
+    // still has to hold for any screen you build yourself.
     const scanState = await page.evaluate(() => {
       const t = document.body.innerText;
       const line = (t.match(/\d+ symbols[^\n]*/) || [''])[0];
@@ -290,8 +289,21 @@ function check(name, ok, detail) {
         return !!hit && (hit === el || el.contains(hit) || hit.contains(el));
       }),
     );
+    // On, then off. With nothing applied at the start, the first tap is what
+    // proves a preset lands on the screen at all, and the second that it comes
+    // back off — the pair is the whole contract of a toggle.
+    check('a preset can be applied', await tapText('Golden cross today'));
+    await page.waitForTimeout(700);
+    check(
+      'and it lands on the screen',
+      /Golden cross/i.test(await page.evaluate(() => document.body.innerText)),
+    );
     check('a preset can be toggled back off', await tapText('Golden cross today'));
-    await page.waitForTimeout(500);
+    await page.waitForTimeout(700);
+    check(
+      'and the screen is empty again',
+      /No filters/.test(await page.evaluate(() => document.body.innerText)),
+    );
     await tapText('✕ Close');
     await page.waitForTimeout(2500);
     const table = await page.evaluate(() => {
@@ -1369,7 +1381,7 @@ function check(name, ok, detail) {
       );
       check(
         'but leaves the summary and a way to re-run',
-        /Golden cross/i.test(min) && /Run screen/.test(min),
+        /No filters — full universe/.test(min) && /Run screen/.test(min),
         min.slice(0, 200),
       );
       await tapText('⌄ Expand');

@@ -77,12 +77,10 @@ export const PRESETS: Preset[] = [
   { id: 'cs-three-black', name: 'Three black crows', desc: 'Three falling bearish candles — strong bearish signal', group: 'Candlesticks', filters: { cs_three_black: true } },
 ];
 
-/** What an empty screener starts as, every load. */
-export const DEFAULT_PRESET_ID = 'golden-cross';
-
-export function defaultPreset(): Preset {
-  return PRESETS.find((p) => p.id === DEFAULT_PRESET_ID) || PRESETS[0];
-}
+// There was a DEFAULT_PRESET_ID here — the screen the console opened on. It
+// opens on nothing now: the whole universe, no conditions, until somebody
+// picks something. A preset is a suggestion, and the place to offer one is the
+// preset menu, not the state you arrive in.
 
 const sameVal = (a: FilterValue | undefined, b: FilterValue): boolean =>
   JSON.stringify(a) === JSON.stringify(b);
