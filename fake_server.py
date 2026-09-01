@@ -1006,10 +1006,22 @@ class H(BaseHTTPRequestHandler):
                     "Bonus": "Bonus Issue 1:1",
                     "Split": "Face Value Split - From Rs 10/- To Rs 2/-",
                     "Other": "Demerger"}
+            # The record date is the day after the ex-date and the announcement
+            # is weeks before it, as in the real feed — and every third row has
+            # no announcement, because NSE's filings index has nothing for a
+            # small company and the row must render without one.
+            def _rec(d):
+                return (_dt.date.fromisoformat(d) + _dt.timedelta(days=1)).isoformat()
+
+            def _ann(d, i):
+                if i % 3 == 2:
+                    return None
+                return (_dt.date.fromisoformat(d) - _dt.timedelta(days=14 + i)).isoformat()
+
             items = [
                 {"symbol": f"CORP{i + 1}", "name": f"Corp {i + 1} Ltd", "kind": k,
-                 "subject": subj[k], "date": d, "ex_date": d, "record_date": d,
-                 "close_date": None, "series": "EQ"}
+                 "subject": subj[k], "date": d, "ex_date": d, "record_date": _rec(d),
+                 "announced": _ann(d, i), "close_date": None, "series": "EQ"}
                 for i, (d, k) in enumerate(zip(days, kinds))]
             def _ipo(sym, name, opens, closes):
                 o = (_t + _dt.timedelta(days=opens)).isoformat()

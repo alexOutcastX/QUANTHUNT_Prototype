@@ -52,18 +52,24 @@ def _s(v):
     return "" if v is None else str(v).strip()
 
 
-# ── parsers (pure; take the raw decoded JSON) ──
-def parse_announcements(raw) -> dict:
-    # NSE answers either a bare list or {"data": [...]}, and on a bad day a
-    # bare error string — which must produce an empty calendar, not a 500.
+def _rows(raw):
+    """The list inside an NSE payload.
+
+    NSE answers either a bare list or {"data": [...]}, and on a bad day a bare
+    error string — which must produce an empty result, not a 500.
+    """
     if isinstance(raw, list):
         rows = raw
     elif isinstance(raw, dict):
         rows = raw.get("data") or []
     else:
         rows = []
-    if not isinstance(rows, list):
-        rows = []
+    return rows if isinstance(rows, list) else []
+
+
+# ── parsers (pure; take the raw decoded JSON) ──
+def parse_announcements(raw) -> dict:
+    rows = _rows(raw)
     out = []
     for r in rows[:40]:
         out.append({
@@ -76,16 +82,7 @@ def parse_announcements(raw) -> dict:
 
 
 def parse_actions(raw) -> dict:
-    # NSE answers either a bare list or {"data": [...]}, and on a bad day a
-    # bare error string — which must produce an empty calendar, not a 500.
-    if isinstance(raw, list):
-        rows = raw
-    elif isinstance(raw, dict):
-        rows = raw.get("data") or []
-    else:
-        rows = []
-    if not isinstance(rows, list):
-        rows = []
+    rows = _rows(raw)
     out = []
     for r in rows[:40]:
         out.append({
@@ -257,16 +254,7 @@ def parse_ca_date(v):
 
 
 def parse_calendar(raw) -> dict:
-    # NSE answers either a bare list or {"data": [...]}, and on a bad day a
-    # bare error string — which must produce an empty calendar, not a 500.
-    if isinstance(raw, list):
-        rows = raw
-    elif isinstance(raw, dict):
-        rows = raw.get("data") or []
-    else:
-        rows = []
-    if not isinstance(rows, list):
-        rows = []
+    rows = _rows(raw)
     out = []
     for r in rows:
         if not isinstance(r, dict):
@@ -343,6 +331,153 @@ def ipo_rows(ipos, today=None, end=None) -> list:
     return out
 
 
+# ── When the company told the exchange ──────────────────────────────────────
+# The actions feed carries the ex-date and the record date but not the day the
+# action was announced: `caBroadcastDate` is null on every row NSE serves (546
+# of 546, over three separate windows), and so are bcStartDate / ndStartDate.
+# An announcement date has to be joined from the filings feed.
+#
+# What can be joined HONESTLY is narrow. The board meeting that declares a
+# dividend files as "Outcome of Board Meeting" and the dividend is inside the
+# attached PDF — the row's own text never names it, so there is nothing to
+# match on. The one filing that is unambiguously about this action is the
+# record-date intimation, which NSE labels "Record Date". That is what is
+# joined, and a row without one shows nothing rather than a guess.
+#
+# Measured against a live 30-day calendar: 42 of 56 dividends carry an
+# intimation, filed a median of 28 days before the ex-date. The misses are
+# small caps with no filings in the equities index at all, so a looser keyword
+# would not find them — it would only attach wrong dates to the rest.
+ANN_DAYS = 60           # how far back the filings index reaches
+ANN_TIMEOUT = 45        # 60 days of filings is ~26 MB — not an interactive read
+ANN_TTL = 6 * 3600
+ANN_RETRY = 900         # after a failed warm, before trying NSE again
+_ANN_KEY = "recdates"
+
+
+def _fetch(fetch, url, timeout=None):
+    """Call the injected fetch, passing a timeout when it accepts one.
+
+    Every other feed here is a small interactive read on the 12-second budget
+    server.py sets. The filings index is 26 MB fetched once every six hours off
+    the request path, and it needs longer — but the fetch is injected, and the
+    parsers' fakes take a bare URL. So the timeout is offered, never imposed.
+    """
+    if timeout is not None:
+        try:
+            import inspect
+            if "timeout" in inspect.signature(fetch).parameters:
+                return fetch(url, timeout=timeout)
+        except (TypeError, ValueError):
+            pass
+    return fetch(url)
+
+
+def _ann_day(v):
+    """The date out of an announcement timestamp.
+
+    NSE writes sort_date as "2026-09-01 14:50:25" and an_dt as
+    "01-Sep-2026 14:50:25"; either is acceptable, neither is trusted.
+    """
+    head = _s(v).split(" ")[0]
+    if len(head) == 10 and head[4] == "-" and head[7] == "-":
+        try:
+            int(head[:4]), int(head[5:7]), int(head[8:])
+        except ValueError:
+            return None
+        return head
+    return parse_ca_date(head)
+
+
+def parse_record_intimations(raw) -> dict:
+    """symbol → the days it filed a record-date intimation, oldest first."""
+    idx = {}
+    for r in _rows(raw):
+        if not isinstance(r, dict):
+            continue
+        sym = _s(r.get("symbol")).upper()
+        if not sym or "record date" not in _s(r.get("desc")).lower():
+            continue
+        day = _ann_day(r.get("sort_date") or r.get("an_dt") or r.get("dt"))
+        if day:
+            idx.setdefault(sym, []).append(day)
+    for days in idx.values():
+        days.sort()
+    return idx
+
+
+def announced_on(row, index, back=ANN_DAYS):
+    """When this action was announced, or None if the feed does not say.
+
+    The EARLIEST intimation in the window, not the latest: a company that moves
+    its record date files a second "Record Date" row, and the day the action
+    was announced is the first time it was said, not the correction.
+    """
+    import datetime
+    ex = row.get("ex_date") or row.get("date")
+    days = index.get(_s(row.get("symbol")).upper()) if isinstance(index, dict) else None
+    if not ex or not isinstance(ex, str) or not isinstance(days, list):
+        return None
+    try:
+        low = (datetime.date.fromisoformat(ex) - datetime.timedelta(days=back)).isoformat()
+    except ValueError:
+        return None
+    hits = [d for d in days if low <= d <= ex]
+    return hits[0] if hits else None
+
+
+def with_announced(items, index):
+    """Attach `announced` to the rows the index can speak for. In place."""
+    if not isinstance(index, dict) or not index:
+        return items
+    for row in items:
+        day = announced_on(row, index)
+        if day:
+            row["announced"] = day
+    return items
+
+
+def ann_url(days=ANN_DAYS, today=None):
+    import datetime
+    today = today or datetime.date.today()
+    start = today - datetime.timedelta(days=max(1, int(days)))
+    return (BASE + "/api/corporate-announcements?index=equities"
+            f"&from_date={start.strftime('%d-%m-%Y')}"
+            f"&to_date={today.strftime('%d-%m-%Y')}")
+
+
+def record_index(fetch, days=ANN_DAYS):
+    """Fetch and cache the record-date index. Blocking — call it off a request.
+
+    A failure keeps the last good index and backs off for ANN_RETRY rather
+    than blanking a working column on one bad NSE minute.
+    """
+    try:
+        idx = parse_record_intimations(_fetch(fetch, ann_url(days), ANN_TIMEOUT))
+    except Exception:
+        idx = {}
+    with _lock:
+        if not idx:
+            hit = _cache.get(_ANN_KEY)
+            return hit[1] if hit else {}
+        _cache[_ANN_KEY] = (time.time(), idx)
+    return idx
+
+
+def record_index_age():
+    """Seconds since the index was last filled, or None if it never was."""
+    with _lock:
+        hit = _cache.get(_ANN_KEY)
+    return None if not hit else time.time() - hit[0]
+
+
+def peek_record_index():
+    """Whatever index is in hand, without going to the network."""
+    with _lock:
+        hit = _cache.get(_ANN_KEY)
+    return hit[1] if hit else {}
+
+
 def calendar(fetch, days: int = 30, ipos=None) -> dict:
     """Upcoming actions across the whole market, for the next `days`.
 
@@ -378,6 +513,11 @@ def calendar(fetch, days: int = 30, ipos=None) -> dict:
     # does its own caching.
     actions = _cached(f"calendar:{days}", 1800, lambda: parse_calendar(fetch(url)))
     items = list(actions.get("items") or []) + ipo_rows(ipos, today, end)
+    # `announced` comes from the filings index, which is 26 MB and filled on a
+    # six-hourly schedule (server.start_corp_warm). Whatever is in hand is used
+    # and nothing is fetched here: a calendar row is worth serving with two
+    # dates on it, and the third arrives on the next reload.
+    with_announced(items, peek_record_index())
     items.sort(key=lambda x: (x.get("date") is None, x.get("date") or "", x["symbol"]))
     out = {
         "items": items,

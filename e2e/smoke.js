@@ -1012,6 +1012,28 @@ function check(name, ok, detail) {
       /CORP1/.test(desk) && /Interim Dividend/i.test(desk) && /in \d+d/.test(desk),
       (desk.match(/CORPORATE CALENDAR[\s\S]{0,220}/i) || [''])[0],
     );
+    // 8e-i · a corporate action has three dates and they are days or weeks
+    // apart. The row is filed under one of them, so an unlabelled "2 Sep" left
+    // the reader to assume which — and which one it is decides whether you can
+    // still buy the stock and be paid.
+    const rowDates = await page.evaluate(() =>
+      [...document.querySelectorAll('[role="link"]')]
+        .map((e) => e.innerText).filter((t) => /Ex \d/.test(t)));
+    check(
+      'each action names its ex-date and record date',
+      rowDates.length >= 3
+        && rowDates.every((t) => /Ex \d+ \w+/.test(t) && /Record \d+ \w+/.test(t)),
+      JSON.stringify(rowDates.slice(0, 3)),
+    );
+    check(
+      'and the announcement date where NSE published one',
+      rowDates.some((t) => /Announced \d+ \w+/.test(t))
+        // NSE's actions feed carries no announcement date; it is joined from
+        // the filings index and a company that filed nothing has none. The row
+        // must render without it rather than showing a dash or a guess.
+        && rowDates.some((t) => !/Announced/.test(t)),
+      JSON.stringify(rowDates.slice(0, 4)),
+    );
     // Every kind the calendar covers gets a chip, whether or not this window
     // holds one. Filtering the row down to what is present read as a missing
     // feature: in a quiet month it said "All · Dividend · Split" and there was

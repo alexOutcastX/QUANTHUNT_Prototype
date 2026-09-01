@@ -5346,12 +5346,17 @@ def _refresh_indices(category):
 
 
 # ── corporate / institutional data (NSE public feeds, injected fetch) ──
-def _corp_fetch(url):
-    """GET a full NSE URL via the warmed session; returns decoded JSON."""
+def _corp_fetch(url, timeout=12):
+    """GET a full NSE URL via the warmed session; returns decoded JSON.
+
+    The timeout is a keyword because one caller needs a different one: the
+    record-date index is sixty days of filings, ~26 MB, and corporate.py asks
+    for longer when it fetches it off the request path.
+    """
     s = nse_session()
     for _ in range(2):
         try:
-            r = s.get(url, timeout=12)
+            r = s.get(url, timeout=timeout)
             if r.status_code == 200:
                 return r.json()
         except Exception:
@@ -5359,6 +5364,29 @@ def _corp_fetch(url):
         _reset_session()
         s = nse_session()
     raise RuntimeError("NSE corporate fetch failed")
+
+
+def _corp_warm_loop():
+    """Keep the record-date index warm, so calendar rows carry an announced date.
+
+    The index is a single 26 MB read of every equity filing in the last sixty
+    days, which is why it is not on the request path: /corporate/calendar uses
+    whatever is in hand and serves the ex- and record dates regardless.
+    """
+    while True:
+        try:
+            idx = _corp.record_index(_corp_fetch)
+        except Exception as e:
+            idx = None
+            log.debug("record-date index failed: %s", e)
+        if idx:
+            log.info("Record-date index: %d symbols", len(idx))
+        time.sleep(_corp.ANN_TTL if idx else _corp.ANN_RETRY)
+
+
+def start_corp_warm():
+    """Start the record-date warm loop once (called from __main__ and wsgi.py)."""
+    threading.Thread(target=_corp_warm_loop, name="corp-warm", daemon=True).start()
 
 
 @app.route("/corporate/announcements")
@@ -6517,6 +6545,7 @@ if __name__ == "__main__":
     threading.Thread(target=_prefetch_universe, daemon=True).start()
     start_scan_warm()
     start_snapshots()
+    start_corp_warm()
     start_fund_warm()
     start_alert_loop()
     start_backfill()

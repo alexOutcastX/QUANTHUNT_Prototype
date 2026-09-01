@@ -86,8 +86,32 @@ function whenLabel(a: CalendarAction): string | null {
   return away === 0 ? 'today' : away === 1 ? 'tomorrow' : `in ${away}d`;
 }
 
+/** The three dates a corporate action actually has, in the order they happen.
+ *
+ * The row is filed under one of them and the big date column shows that one,
+ * which leaves "1 Sep" to mean whichever the reader assumes. A dividend has an
+ * announcement, a record date and an ex-date, they are days or weeks apart, and
+ * which one you are looking at decides whether you can still buy the stock and
+ * be paid — so each is named where it is shown.
+ *
+ * `announced` is what the company told the exchange, and NSE's actions feed
+ * does not carry it (caBroadcastDate is null on every row); it is joined from
+ * the filings index server-side and is simply absent for a company that has
+ * filed nothing. An absent date is left out rather than dashed — a row of
+ * em-dashes reads as broken, and the two dates that are always there are the
+ * ones being asked about most.
+ */
+function dateLine(a: CalendarAction): string {
+  const parts: string[] = [];
+  if (a.announced) parts.push(`Announced ${shortDate(a.announced)}`);
+  if (a.ex_date) parts.push(`Ex ${shortDate(a.ex_date)}`);
+  if (a.record_date) parts.push(`Record ${shortDate(a.record_date)}`);
+  return parts.join(' · ');
+}
+
 function ActionRow({ a }: { a: CalendarAction }) {
   const when = whenLabel(a);
+  const dates = dateLine(a);
   return (
     <TouchableOpacity
       style={s.row}
@@ -96,6 +120,7 @@ function ActionRow({ a }: { a: CalendarAction }) {
       accessibilityRole="link"
       accessibilityLabel={
         `${a.symbol}, ${a.subject}, ${a.kind === 'IPO' ? 'opens' : 'ex-date'} ${shortDate(a.date)}`
+        + (dates ? `. ${dates}` : '')
       }
     >
       <View style={s.dateCol}>
@@ -105,6 +130,10 @@ function ActionRow({ a }: { a: CalendarAction }) {
       <View style={{ flex: 1, minWidth: 0 }}>
         <Text style={s.sym} numberOfLines={1}>{a.symbol}</Text>
         <Text style={s.subject} numberOfLines={1}>{a.subject}</Text>
+        {/* Two lines, not one. At phone width three labelled dates are a few
+            pixels wider than the column, and truncating them hides the record
+            date — which is the one thing this line exists to say. */}
+        {dates ? <Text style={s.dates} numberOfLines={2}>{dates}</Text> : null}
       </View>
       <Text style={[s.kind, { color: KIND_TONE[a.kind] || theme.muted }]}>{a.kind}</Text>
     </TouchableOpacity>
@@ -424,7 +453,7 @@ const s = StyleSheet.create({
   chipN: { color: theme.muted, fontSize: theme.fs.xs, fontFamily: theme.mono },
 
   row: {
-    flexDirection: 'row', alignItems: 'center', gap: 10,
+    flexDirection: 'row', alignItems: 'flex-start', gap: 10,
     paddingVertical: 8, borderTopWidth: 1, borderTopColor: theme.border,
   },
   dateCol: { width: 62 },
@@ -432,6 +461,7 @@ const s = StyleSheet.create({
   away: { color: theme.muted, fontSize: 9, fontFamily: theme.mono },
   sym: { color: theme.text, fontSize: theme.fs.sm, fontWeight: '700' },
   subject: { color: theme.muted, fontSize: theme.fs.xs },
+  dates: { color: theme.muted, fontSize: theme.fs.xs, fontFamily: theme.mono, marginTop: 2 },
   kind: { fontSize: theme.fs.xs, fontWeight: '700' },
   more: { color: theme.brand, fontSize: theme.fs.xs, fontWeight: '700', marginTop: 8 },
 

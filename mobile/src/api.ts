@@ -424,6 +424,10 @@ export type CalendarAction = {
   date?: string | null;
   ex_date?: string | null;
   record_date?: string | null;
+  /** The day the company filed the record-date intimation with NSE. Absent
+   *  where the filings index has nothing for the symbol — the actions feed
+   *  itself carries no announcement date at all. */
+  announced?: string | null;
   close_date?: string | null;
   series?: string;
 };
