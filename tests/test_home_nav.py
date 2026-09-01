@@ -35,8 +35,23 @@ class RouteTableTest(unittest.TestCase):
 
     def test_every_destination_still_renders(self):
         for screen in ("DashboardScreen", "ScreensHub", "StockScreen",
-                       "DeskHub", "TerminalHub"):
+                       "DeskHub", "TerminalHub", "RecommendationsScreen"):
             self.assertIn(screen, self.routes, f"{screen} lost its route")
+
+    def test_ideas_sits_between_screens_and_desk(self):
+        """Order is the whole point of where a tab goes: you find candidates in
+        Screens, read the ranked ones in Ideas, then act on them in Desk."""
+        order = [l for l in self.routes.splitlines() if "k: '" in l or "k: HOME" in l]
+        keys = [l.split("k: ")[1].split(",")[0].strip().strip("'") for l in order]
+        self.assertEqual(keys.index("ideas"), keys.index("screens") + 1)
+        self.assertLess(keys.index("ideas"), keys.index("desk"))
+
+    def test_the_tab_label_is_short_enough_for_a_four_tab_bar(self):
+        """"Recommendations" is fifteen characters against Screens at seven and
+        Desk at four; on a 390px phone that is what makes the bar scroll."""
+        line = [l for l in self.routes.splitlines() if "k: 'ideas'" in l][0]
+        label = line.split("label: '")[1].split("'")[0]
+        self.assertLessEqual(len(label), 8, f"{label!r} is long for a tab")
 
     def test_backtest_is_not_a_destination_of_its_own(self):
         """It is a section of the Terminal now. A route here as well would put

@@ -19,6 +19,7 @@ const StockScreen = lazyScreen(() => import('./screens/StockScreen'));
 // on first open rather than as two tabs that each pay their own download.
 const TerminalHub = lazyScreen(() => import('./screens/TerminalHub'));
 const HeatmapScreen = lazyScreen(() => import('./screens/HeatmapScreen'));
+const RecommendationsScreen = lazyScreen(() => import('./screens/RecommendationsScreen'));
 import TickerStrip from './components/TickerStrip';
 import PdfPreview from './components/PdfPreview';
 import LegalSheet from './components/LegalSheet';
@@ -148,6 +149,12 @@ const HOME = 'today';
 const ROUTES: Route[] = [
   { k: HOME, label: 'Home', icon: 'home', tab: false, render: (nav) => <DashboardScreen onNavigate={nav} /> },
   { k: 'screens', label: 'Screens', icon: 'screens', render: () => <ScreensHub /> },
+  // Ranked buy setups. It was an entry in the screener's SCREEN dropdown, which
+  // put a finished list of names one level inside a tool for building lists —
+  // two different jobs behind one control. Labelled "Ideas" rather than
+  // "Recommendations": the screen keeps its full title, and a fifteen-character
+  // label on a four-tab bar is what forces the bar to scroll on a phone.
+  { k: 'ideas', label: 'Ideas', icon: 'target', render: () => <RecommendationsScreen /> },
   { k: 'stock', label: 'Symbol', icon: 'stock', tab: false, render: () => <StockScreen /> },
   { k: 'desk', label: 'Desk', icon: 'desk', render: () => <DeskHub /> },
   { k: 'terminal', label: 'Terminal', icon: 'terminal', render: () => <TerminalHub /> },
@@ -435,6 +442,12 @@ function mapTarget(page: string, sub?: string): string {
   // and the { sub: 'bt' } riding along is what TerminalHub reads to open on
   // the backtest rather than the graph.
   const bt = 'terminal';
+  // Recommendations left the screener's dropdown for a tab of its own. Every
+  // key that used to reach it — the palette, the heatmap's sector links, a
+  // saved sub-tab, navigate('screens', { sub: 'reco' }) — lands there instead,
+  // and the { sub: 'reco', sector } riding along is what the screen still reads
+  // to open its long-term list on that sector.
+  if (sub === 'reco') return 'ideas';
   switch (page) {
     case 'today':
     case 'dashboard':
@@ -443,6 +456,9 @@ function mapTarget(page: string, sub?: string): string {
       return 'stock';
     case 'terminal':
       return 'terminal';
+    case 'ideas':
+    case 'reco':
+      return 'ideas';
     case 'backtest':
       return bt;
     case 'screens':

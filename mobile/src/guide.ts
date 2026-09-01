@@ -134,7 +134,16 @@ export const GUIDE_CHAPTERS: GuideChapter[] = [
         title: 'Screens',
         blocks: [
           { kind: 'p', text: 'The screening console, and the centre of the app. It answers "which companies match these conditions". The next chapter covers it in full.' },
-          { kind: 'p', text: 'The SCREEN dropdown also holds purpose-built screens that are not general filters — Multibagger, Momentum, Penny and Patterns — each with its own ranking method rather than a list of conditions you set.' },
+          { kind: 'p', text: 'The SCREEN dropdown also holds purpose-built screens that are not general filters — Multibagger, Momentum, Penny and Patterns — each with its own ranking method rather than a list of conditions you set. Ranked buy setups used to sit here too; they have their own tab now, Ideas.' },
+        ],
+      },
+      {
+        title: 'Ideas',
+        blocks: [
+          { kind: 'p', text: 'A finished list rather than a tool for making one. Ideas ranks buy setups that the engines have already found — the Screens console asks "which companies match my conditions", Ideas answers "here is what the rules surfaced today, ordered by how strongly".' },
+          { kind: 'p', text: 'Each row carries the confidence behind it and the reasoning that produced it, so you can disagree with a specific step rather than with the list. The sub-lists split by horizon: long-term buy candidates drawn from the Multibagger engine, and shorter-term setups from the momentum side.' },
+          { kind: 'p', text: 'Tapping a sector in the home page heatmap opens this tab filtered to that sector, which is the quickest route from "banks look strong" to a list of specific names.' },
+          { kind: 'note', text: 'Ranked is not recommended. The order is the output of the scoring rules described in this guide, and every name on the list still needs your own work.' },
         ],
       },
       {

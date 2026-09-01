@@ -232,8 +232,33 @@ class ToolbarTest(unittest.TestCase):
         self.assertNotIn("SCREENER_TABS", self.hosts)
 
     def test_every_screener_is_in_the_dropdown(self):
-        for key in ("'custom'", "'mb'", "'momentum'", "'penny'", "'reco'", "'patterns'"):
+        for key in ("'custom'", "'mb'", "'momentum'", "'penny'", "'patterns'"):
             self.assertIn(f"key: {key}", self.hosts)
+
+    def test_ranked_ideas_are_not_in_it(self):
+        """The dropdown lists ways of BUILDING a list. Recommendations is a
+        finished one, and it has its own tab now — keeping it here would put
+        two different jobs behind one control."""
+        self.assertNotIn("key: 'reco'", self.hosts)
+        shell = _read("mobile", "src", "Shell.tsx")
+        self.assertIn("k: 'ideas', label: 'Ideas'", shell)
+
+    def test_every_old_route_into_it_still_lands(self):
+        """The palette, the heatmap's sector links and any saved sub-tab all
+        say sub: 'reco'. None of them may land on a screen that is gone."""
+        shell = _read("mobile", "src", "Shell.tsx")
+        self.assertIn("if (sub === 'reco') return 'ideas';", shell)
+        palette = _read("mobile", "src", "components", "CommandPalette.tsx")
+        self.assertIn("page: 'ideas', sub: 'reco'", palette)
+
+    def test_the_sector_intent_the_screen_reads_is_unchanged(self):
+        """RecommendationsScreen opens its long list when a heatmap tile routes
+        in with { sub: 'reco', sector }. Renaming that sub would have broken
+        the heatmap silently."""
+        heat = _read("mobile", "src", "screens", "HeatmapScreen.tsx")
+        self.assertIn("{ sub: 'reco', label: 'Recommendations'", heat)
+        reco = _read("mobile", "src", "screens", "RecommendationsScreen.tsx")
+        self.assertIn("p?.sub === 'reco' && p?.sector", reco)
 
     def test_the_heatmap_kept_its_route_but_lost_its_tab(self):
         """It is on the home page now; every existing intent must still land."""

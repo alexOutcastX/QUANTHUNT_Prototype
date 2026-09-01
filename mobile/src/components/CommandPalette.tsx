@@ -26,7 +26,7 @@ type Dest = { label: string; hint: string; icon: IconName; page: string; sub?: s
 const DESTS: Dest[] = [
   { label: 'Today', hint: 'Market overview & movers', icon: 'home', page: 'today' },
   { label: 'Screener', hint: 'Filter NSE / BSE — the raw scan', icon: 'screens', page: 'screens', sub: 'screener' },
-  { label: 'Recommendations', hint: 'Ranked buy setups', icon: 'screens', page: 'screens', sub: 'reco' },
+  { label: 'Ideas', hint: 'Ranked buy setups', icon: 'target', page: 'ideas', sub: 'reco' },
   { label: 'Multibagger', hint: 'Long-term candidates', icon: 'screens', page: 'screens', sub: 'mb' },
   { label: 'Momentum', hint: 'Trend & thrust radar', icon: 'screens', page: 'screens', sub: 'momentum' },
   { label: 'Patterns', hint: 'Chart-pattern scanner', icon: 'screens', page: 'screens', sub: 'patterns' },

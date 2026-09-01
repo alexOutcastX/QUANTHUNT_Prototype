@@ -156,11 +156,24 @@ function check(name, ok, detail) {
         .map((e) => e.getAttribute('aria-label')));
     // Backtest lost its tab when it became a section of the Terminal — it is
     // reached by the switch in the terminal's own header now, not by a button
-    // of its own here.
+    // of its own here. Ideas gained one, out of the screener's dropdown: a
+    // finished ranked list is a different job from a tool for building lists.
     check(
-      'the tab strip is the three browse destinations',
-      JSON.stringify(tabs) === JSON.stringify(['Screens', 'Desk', 'Terminal']),
+      'the tab strip is the four browse destinations',
+      JSON.stringify(tabs) === JSON.stringify(['Screens', 'Ideas', 'Desk', 'Terminal']),
       JSON.stringify(tabs),
+    );
+    // Four tabs at 400px is the width question the short label answers.
+    check(
+      'and all four fit without the bar scrolling',
+      await page.evaluate(() => {
+        const els = [...document.querySelectorAll('[data-testid="nav-tab"]')];
+        const w = document.documentElement.clientWidth;
+        return els.length > 0 && els.every((e) => {
+          const r = e.getBoundingClientRect();
+          return r.left >= -1 && r.right <= w + 1;
+        });
+      }),
     );
     check('signing in lands on the home page', /MARKET BREADTH/i.test(
       await page.evaluate(() => document.body.innerText)));
@@ -1441,6 +1454,42 @@ function check(name, ok, detail) {
         /matches/.test(after) && !/Running…/.test(after),
         after.slice(0, 200),
       );
+    }
+
+    // 8l-iii · Ideas, out of the screener's dropdown and into a tab.
+    {
+      await page.evaluate(() => {
+        const el = document.querySelector('[aria-label="Ideas"]');
+        if (el) el.click();
+      });
+      await page.waitForTimeout(3500);
+      check(
+        'the Ideas tab opens the ranked list',
+        /Long term|recommendation/i.test(await page.evaluate(() => document.body.innerText)),
+      );
+      await page.evaluate(() => {
+        const el = document.querySelector('[aria-label="Screens"]');
+        if (el) el.click();
+      });
+      await page.waitForTimeout(3500);
+      await page.evaluate(() => {
+        const el = document.querySelector('[aria-label="Choose a screener"]');
+        if (el) el.click();
+      });
+      await page.waitForTimeout(700);
+      const menu = await page.evaluate(() => document.body.innerText);
+      check(
+        'and the SCREEN dropdown no longer offers it',
+        !/Recommendations/.test(menu),
+        menu.slice(0, 200),
+      );
+      check(
+        'while every other screener is still in there',
+        ['Custom', 'Multibagger', 'Momentum', 'Penny', 'Patterns'].every((x) => menu.includes(x)),
+        menu.slice(0, 200),
+      );
+      await page.keyboard.press('Escape');
+      await page.waitForTimeout(400);
     }
 
     // 8m-pre · the owner's "view as a plan" switch. It exists so the paywall

@@ -25,7 +25,6 @@ const MomentumScreen = lazyScreen(() => import('./MomentumScreen'));
 const MultibaggerScreen = lazyScreen(() => import('./MultibaggerScreen'));
 const PennyScreen = lazyScreen(() => import('./PennyScreen'));
 const PatternScreen = lazyScreen(() => import('./PatternScreen'));
-const RecommendationsScreen = lazyScreen(() => import('./RecommendationsScreen'));
 const EntityGraphScreen = lazyScreen(() => import('./EntityGraphScreen'));
 const PaperTradeScreen = lazyScreen(() => import('./PaperTradeScreen'));
 const AlertsScreen = lazyScreen(() => import('./AlertsScreen'));
@@ -310,6 +309,11 @@ export function ScreensHub() {
 }
 
 // Every screener the SCREEN dropdown offers, in the order it lists them.
+//
+// Recommendations is deliberately absent: it is a finished, ranked list rather
+// than a way of building one, and it has its own tab now ("Ideas"). A
+// navigate('screens', { sub: 'reco' }) is rewritten to that tab by Shell's
+// mapTarget, so every old link still lands on it.
 // `hidden` keeps a destination reachable by intent without putting it in the
 // menu — the heatmap moved to the home page and the constituent table has its
 // own entry points.
@@ -328,7 +332,6 @@ const SCREENS: ScreenDef[] = [
   { key: 'mb', label: 'Multibagger', hint: 'Long-run compounders by growth & quality', render: () => <MultibaggerScreen /> },
   { key: 'momentum', label: 'Momentum', hint: 'Strength, trend and relative performance', render: () => <MomentumScreen /> },
   { key: 'penny', label: 'Penny', hint: 'Low-priced names, graded for liquidity and risk', render: () => <PennyScreen /> },
-  { key: 'reco', label: 'Recommendations', hint: 'Ranked buy setups from the Multibagger candidates', render: () => <RecommendationsScreen /> },
   { key: 'patterns', label: 'Patterns', hint: 'Chart patterns with confidence & targets', render: () => <PatternScreen /> },
   { key: 'heatmap', label: 'Heatmap', render: () => <HeatmapScreen />, hidden: true },
   { key: 'universe', label: 'Universe', render: () => <UniverseScreen />, hidden: true },
@@ -338,7 +341,7 @@ const SCREENS: ScreenDef[] = [
 // means the raw custom screener.
 const SCREENER_SUBS: Record<string, string> = {
   screener: 'custom', custom: 'custom', mb: 'mb', momentum: 'momentum',
-  penny: 'penny', reco: 'reco', patterns: 'patterns', heatmap: 'heatmap',
+  penny: 'penny', patterns: 'patterns', heatmap: 'heatmap',
   universe: 'universe',
 };
 
