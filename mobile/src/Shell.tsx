@@ -319,7 +319,7 @@ function GuideLink({ style }: { style?: object }) {
         accessibilityState={{ expanded: open }}
         hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
       >
-        <Text style={styles.legalTxt}>GUIDE</Text>
+        <Text style={[styles.legalTxt, styles.guideTxt]}>GUIDE</Text>
       </TouchableOpacity>
       {open ? <GuideSheet onClose={() => setOpen(false)} /> : null}
     </>
@@ -792,6 +792,11 @@ const styles = StyleSheet.create({
     zIndex: 5,
   },
   legalTxt: { color: theme.muted, fontSize: theme.fs.xs, fontFamily: theme.mono, letterSpacing: 1 },
+  // The guide is the one control in this strip anybody is meant to press. The
+  // disclaimer is there to be findable; the guide is there to be noticed, and
+  // at the shared muted weight it read as the same kind of small print. Weight
+  // alone would not have shown at theme.muted, so the colour steps up with it.
+  guideTxt: { color: theme.text, fontWeight: '800' },
   // flexShrink 0 is the whole point: the nav and the search box were both
   // elastic, so an over-subscribed bar took width from BOTH — and the nav is a
   // horizontal ScrollView, so its share of the loss was silent. It scrolled

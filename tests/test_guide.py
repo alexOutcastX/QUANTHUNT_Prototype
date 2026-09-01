@@ -145,6 +145,23 @@ class SheetTest(unittest.TestCase):
         self.assertNotIn("<Gate", link)
         self.assertNotIn("hasFeature", link)
 
+    def test_the_guide_is_the_emphasised_one_of_the_pair(self):
+        """The disclaimer is there to be findable; the guide is there to be
+        noticed. Sharing one muted style made the thing people are meant to
+        press look like the small print beside it."""
+        style = re.search(r"  guideTxt: \{(.*?)\},", self.shell, re.S).group(1)
+        self.assertIn("fontWeight: '800'", style)
+        self.assertIn("color: theme.text", style)
+        # …and the disclaimer keeps the quiet one, or "emphasised" means nothing
+        legal = re.search(r"  legalTxt: \{(.*?)\},", self.shell, re.S).group(1)
+        self.assertIn("color: theme.muted", legal)
+        self.assertNotIn("fontWeight", legal)
+
+    def test_the_label_is_upper_case_in_the_markup(self):
+        """Not text-transform: the string itself, so it reads the same wherever
+        it is rendered and a test can see it."""
+        self.assertIn(">GUIDE<", self.shell)
+
     def test_the_footer_strip_lays_two_items_out_as_a_centred_row(self):
         """It holds two now. Left as a column they would stack; left without
         justification one would take the leftover width, which is not the
