@@ -22,6 +22,7 @@ const HeatmapScreen = lazyScreen(() => import('./screens/HeatmapScreen'));
 import TickerStrip from './components/TickerStrip';
 import PdfPreview from './components/PdfPreview';
 import LegalSheet from './components/LegalSheet';
+import GuideSheet from './components/GuideSheet';
 // Both are modals: nothing renders until the user opens them, so there is no
 // reason for their code to be in the bundle that blocks first paint. They are
 // prefetched with the screens once the app is idle, so opening one still feels
@@ -296,6 +297,28 @@ function AccountChip({ style }: { style?: object }) {
 // /legal.html: on the web that replaced the app, and in a standalone install
 // it opened a document with nothing to go back to — you could read the
 // disclaimer and then you were stuck in it.
+// The guide, beside the disclaimer — the two things you open with a question
+// rather than navigate to. Ungated on purpose: someone who cannot yet use the
+// screener is exactly who needs to read what it does.
+function GuideLink({ style }: { style?: object }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <TouchableOpacity
+        style={[styles.legalBtn, style]}
+        onPress={() => setOpen(true)}
+        accessibilityRole="button"
+        accessibilityLabel="Guide — how to use TaurEye"
+        accessibilityState={{ expanded: open }}
+        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+      >
+        <Text style={styles.legalTxt}>GUIDE</Text>
+      </TouchableOpacity>
+      {open ? <GuideSheet onClose={() => setOpen(false)} /> : null}
+    </>
+  );
+}
+
 function LegalLink({ style }: { style?: object }) {
   const [open, setOpen] = useState(false);
   return (
@@ -534,6 +557,7 @@ function NewDesktopShell() {
         <WalletChip />
         <ThemeToggle />
         <AccountChip />
+        <GuideLink />
         <LegalLink />
         <SignOutBtn />
       </View>
@@ -623,10 +647,13 @@ function NewMobileShell() {
       </View>
       <TickerStrip />
       <View style={styles.mobileBody}>{tab.render((k) => legacyNav(k, setActive))}</View>
-      {/* One thing in the strip, so "centred" means centred. It used to hold
-          three, with the disclaimer given the leftover width between them —
+      {/* Two things in the strip, and both are the same kind of thing: a
+          document you open with a question and dismiss. Laid out as a centred
+          row so the pair sits in the middle. It once held three mixed controls
+          with the disclaimer taking whatever width was left between them,
           which is not the middle of anything. */}
       <View style={styles.footerBar}>
+        <GuideLink style={styles.legalBtnMobile} />
         <LegalLink style={styles.legalBtnMobile} />
       </View>
       {palette ? <CommandPalette open onClose={() => setPalette(false)} /> : null}
@@ -737,7 +764,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   footerBar: {
+    // Two items, both the same kind of thing, laid out as a centred row with a
+    // gap — so the PAIR is centred and neither is given "the leftover width
+    // between" other controls, which is what made this strip look off before.
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    gap: theme.sp.lg,
     borderTopColor: theme.border,
     borderTopWidth: 1,
     zIndex: 5,

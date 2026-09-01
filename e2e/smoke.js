@@ -672,6 +672,7 @@ function check(name, ok, detail) {
         out: g('[data-testid="header-signout"]'),
         search: g('[aria-label="Search symbols and pages"]'),
         legal: g('[aria-label="Disclaimer and legal terms"]'),
+        guide: g('[aria-label="Guide — how to use TaurEye"]'),
         back: g('[aria-label="Back"]'),
         row: row ? [...row.children].map((e) => {
           const r = e.getBoundingClientRect();
@@ -702,11 +703,18 @@ function check(name, ok, detail) {
         && /Search symbols/.test(phone.search.text),
       JSON.stringify(phone.search),
     );
+    // The strip holds two documents now — the guide and the disclaimer — so
+    // it is the PAIR that has to sit in the middle, not either one of them.
+    // Checked as a pair rather than relaxed to "roughly", because the failure
+    // this guards against is one item taking the leftover width beside the
+    // other, which reads as off-centre and is exactly what it looks like.
     check(
-      'and the disclaimer strip is actually centred',
-      !!phone.legal
-        && Math.abs((phone.legal.l + phone.legal.r) / 2 - phone.vw / 2) <= 2,
-      JSON.stringify({ legal: phone.legal, vw: phone.vw }),
+      'the guide and the disclaimer share the strip, centred as a pair',
+      !!phone.legal && !!phone.guide
+        && Math.abs((Math.min(phone.guide.l, phone.legal.l)
+                     + Math.max(phone.guide.r, phone.legal.r)) / 2 - phone.vw / 2) <= 2
+        && phone.guide.t === phone.legal.t,
+      JSON.stringify({ guide: phone.guide, legal: phone.legal, vw: phone.vw }),
     );
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.waitForTimeout(1000);
@@ -1546,6 +1554,51 @@ function check(name, ok, detail) {
           gate.slice(0, 240),
         );
       }
+    }
+
+    // 8n · the guide. Ungated, reachable from the chrome at any width, and a
+    // sheet rather than a destination — you open it with a question and get
+    // your page back.
+    {
+      check('the chrome offers a GUIDE control', await tapText('GUIDE'));
+      await page.waitForTimeout(900);
+      const contents = await page.evaluate(() => document.body.innerText);
+      check(
+        'it opens on a contents list, not a wall of text',
+        /Start here/.test(contents) && /Market basics/.test(contents)
+          && /Using the screener/.test(contents),
+        contents.slice(0, 200),
+      );
+      check(
+        'and it can be searched',
+        (await page.locator('[aria-label="Search the guide"]').count()) === 1,
+      );
+      await tapText('The technical readings');
+      await page.waitForTimeout(700);
+      const chapter = await page.evaluate(() => document.body.innerText);
+      check(
+        'a chapter opens and explains the readings on every row',
+        /RSI \(14\)/.test(chapter) && /DISTANCE/.test(chapter),
+        chapter.slice(0, 200),
+      );
+      check('a chapter can be left without closing the guide', /‹ Guide/.test(chapter));
+      await tapText('‹ Guide');
+      await page.waitForTimeout(500);
+      await page.fill('[aria-label="Search the guide"]', 'credits');
+      await page.waitForTimeout(500);
+      const found = await page.evaluate(() => document.body.innerText);
+      check(
+        'searching narrows the contents',
+        /Plans and credits/.test(found) && !/Market basics/.test(found),
+        found.slice(0, 200),
+      );
+      await page.fill('[aria-label="Search the guide"]', '');
+      await tapText('✕ Close');
+      await page.waitForTimeout(700);
+      check(
+        'closing hands back the page you were on',
+        !/Start here/.test(await page.evaluate(() => document.body.innerText)),
+      );
     }
 
     // 9 · no uncaught page errors during the whole run
