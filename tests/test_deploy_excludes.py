@@ -52,6 +52,21 @@ class DeployExcludesTest(unittest.TestCase):
         install = self.yml.index("run: npm ci --no-audit --no-fund")
         self.assertLess(install, self.yml.index("node e2e/dma.js"))
 
+    def test_the_snapshot_rebuild_is_opt_in_and_last(self):
+        """Off unless asked for, because a restart is deliberately not a reason
+        to re-sweep the upstream — and LAST, because the credentials step
+        restarts the service too and a restart mid-build abandons the sweep."""
+        self.assertIn("rebuild_snapshots", self.yml)
+        self.assertIn("default: false", self.yml)
+        self.assertIn("Force an EOD snapshot rebuild", self.yml)
+        creds = self.yml.index("Install member credentials")
+        rebuild = self.yml.index("- name: Force an EOD snapshot rebuild")
+        self.assertLess(creds, rebuild, "a later restart would kill the rebuild")
+
+    def test_the_rebuild_keeps_the_last_good_snapshot(self):
+        """If the sweep fails there must still be something to fall back to."""
+        self.assertIn('cp -f "$F" "$F.bak"', self.yml)
+
     def test_the_systemd_unit_is_still_synced(self):
         """The unit carries SCAN_WARM and the gunicorn thread count; a deploy
         that stopped syncing it would silently pin production to old tuning."""

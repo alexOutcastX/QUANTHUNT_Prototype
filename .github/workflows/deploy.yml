@@ -25,6 +25,11 @@ on:
         description: "Ref to deploy (tag/sha/branch), e.g. v1.0.0 to roll back. Blank = latest."
         required: false
         default: ""
+      rebuild_snapshots:
+        description: "Force an EOD snapshot rebuild after the restart. Off by default — the schedule (16:00 / 02:00 IST) covers the normal case. Turn it on when a deploy changes what a snapshot CONTAINS, since the one on disk is still within its max age and would otherwise be served, missing the new fields, until the next scheduled build."
+        type: boolean
+        required: false
+        default: false
 
 concurrency:
   group: deploy-vm
@@ -224,3 +229,28 @@ jobs:
               sleep 2
             done
             echo "FAIL: app did not respond after restart"; exit 1'
+
+      # Opt-in, and off unless someone asks for it. snapshot.start() only
+      # builds on boot when there is NOTHING servable — restarting the service
+      # is deliberately not a reason to re-sweep the upstream. So the file is
+      # moved aside (not deleted: it is the last good copy if the rebuild
+      # fails) and the service restarted, which makes the boot build fire.
+      - name: Force an EOD snapshot rebuild
+        if: ${{ github.event.inputs.rebuild_snapshots == 'true' }}
+        env:
+          U: ${{ secrets.VM_USER }}
+          H: ${{ secrets.VM_HOST }}
+        run: |
+          ssh -i ~/.ssh/id_deploy "$U@$H" '
+            APP=/opt/quanthunt
+            F="$APP/screener_snapshots.json"
+            if [ -f "$F" ]; then
+              cp -f "$F" "$F.bak"
+              rm -f "$F"
+              echo "moved the existing snapshot aside (kept as .bak)"
+            else
+              echo "no snapshot file on disk — the boot build would run anyway"
+            fi
+            sudo systemctl restart quanthunt'
+          echo "Rebuild triggered. It starts ~20s after the restart and takes"
+          echo "several minutes; /screener/snapshot/status reports progress."
