@@ -8,6 +8,7 @@ QuantHunt NSE Direct backend.
 - /fundamentals : PE, EPS, revenue, ratios (YF)
 """
 from flask import Flask, jsonify, redirect, request, render_template, send_from_directory
+from flask.json.provider import DefaultJSONProvider
 from flask_cors import CORS
 import requests, logging, time, threading, os, io, csv, datetime, json, math, sys
 import pandas as pd
@@ -40,6 +41,45 @@ import cases as _cases          # TaurEye-built investment baskets (sector/cap/s
 # Support both normal run and PyInstaller frozen exe
 _BASE_DIR = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
 app = Flask(__name__, template_folder=_BASE_DIR, static_folder=_BASE_DIR)
+
+
+# ── never serve a non-finite float ──────────────────────────────────────────
+#
+# Python writes NaN and Infinity into JSON quite happily. No browser will read
+# them back: JSON.parse rejects the token, and it rejects the WHOLE document,
+# so one bad number in one row of a 500-row payload leaves the client with
+# nothing at all. That is a catastrophic failure mode for a cosmetic problem,
+# and it is not hypothetical — a symbol whose previous close came back NaN took
+# the entire screener snapshot with it, and the page it fed had no way to tell
+# "the server is broken" from "there is nothing to show".
+#
+# The strict encoder is tried first, so the normal path pays nothing: it is the
+# same call, with NaN made an error instead of an output. Only when that fires
+# is the payload walked and the offending values turned into null — which is
+# what every one of these fields already means when it is absent.
+# Named for the payload, not the value: `_finite` was already taken further
+# down this module by a scalar coercion, and the later definition silently won.
+def _json_safe(o):
+    """The same structure with every non-finite float replaced by None."""
+    if isinstance(o, float):
+        return None if (o != o or o in (float("inf"), float("-inf"))) else o
+    if isinstance(o, dict):
+        return {k: _json_safe(v) for k, v in o.items()}
+    if isinstance(o, (list, tuple)):
+        return [_json_safe(v) for v in o]
+    return o
+
+
+class _StrictJSON(DefaultJSONProvider):
+    def dumps(self, obj, **kw):
+        try:
+            return super().dumps(obj, allow_nan=False, **kw)
+        except ValueError:
+            log.warning("JSON payload held a non-finite float; serving null for it")
+            return super().dumps(_json_safe(obj), allow_nan=False, **kw)
+
+
+app.json = _StrictJSON(app)
 # CORS is an explicit allowlist — never a wildcard (credentials are sent). The
 # web SPA is served same-origin (no CORS needed). The Capacitor mobile shell
 # loads from a localhost WebView origin, so those exact origins are allowed;

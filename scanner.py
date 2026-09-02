@@ -359,7 +359,11 @@ def row_from_frame(df, idx_ret=None):
 
     close, high, low, vol = df["Close"], df["High"], df["Low"], df["Volume"]
     price = float(close.iloc[-1])
-    prev = float(close.iloc[-2]) if len(close) > 1 else price
+    # A NaN previous close is the one that got out: `chg` and `absChg` are
+    # derived from it, and NaN propagates silently through arithmetic.
+    prev = (_num(close.iloc[-2], 6) if len(close) > 1 else price)
+    if prev is None:
+        prev = price
 
     def dist(ma):
         v = ma.iloc[-1]
@@ -389,8 +393,11 @@ def row_from_frame(df, idx_ret=None):
 
     # 52-week high / low (bounded to available bars)
     win = min(252, len(close))
-    high52 = float(high.rolling(win).max().iloc[-1])
-    low52 = float(low.rolling(win).min().iloc[-1])
+    # _num, not float: a rolling max over a window that is all-NaN is NaN, and
+    # `if high52` is true for NaN, so the percentages below inherited it and the
+    # row went out with NaN in five fields.
+    high52 = _num(high.rolling(win).max().iloc[-1])
+    low52 = _num(low.rolling(win).min().iloc[-1])
     pct_from_high = round((price - high52) / high52 * 100, 2) if high52 else None
     pct_from_low = round((price - low52) / low52 * 100, 2) if low52 else None
 
@@ -492,8 +499,12 @@ def row_from_frame(df, idx_ret=None):
     # today's trading levels derive from yesterday's OHLC — and it means the
     # break flags below can actually fire when today's close escapes the band).
     if len(close) >= 2:
-        pH, pL, pC = float(high.iloc[-2]), float(low.iloc[-2]), float(close.iloc[-2])
+        pH, pL, pC = (_num(high.iloc[-2], 6), _num(low.iloc[-2], 6),
+                      _num(close.iloc[-2], 6))
     else:
+        pH, pL, pC = H, L, C
+    # Same bar, same failure: fall back to today's rather than emit NaN levels.
+    if pH is None or pL is None or pC is None:
         pH, pL, pC = H, L, C
     cam_h4 = pC + (pH - pL) * 1.1 / 2
     cam_h3 = pC + (pH - pL) * 1.1 / 4
