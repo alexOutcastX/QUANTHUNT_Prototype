@@ -191,6 +191,36 @@ def _sma(series, n):
     return series.rolling(n).mean()
 
 
+# ── moving-average pair gaps, for the "near a crossover" scan ───────────────
+#
+# The pairs a trend trader watches, fast first. 9/20 is the short-term turn,
+# 20/50 the swing turn, 50/100 the intermediate, 50/200 the golden/death cross.
+MA_PAIRS = ((9, 20), (20, 50), (50, 100), (50, 200))
+
+# How far back the "was it wider then?" reading looks. A week of sessions is
+# long enough to show a trend and short enough that a single day's noise does
+# not decide it.
+MA_GAP_LOOKBACK = 5
+
+
+def ma_gap(fast, slow):
+    """The fast average's distance from the slow one, in percent.
+
+    Signed: negative means the fast average is below the slow one, so a cross
+    from here would be upward. None when either value is missing or the slow
+    average is zero — never a fabricated 0.
+    """
+    if fast is None or slow is None:
+        return None
+    try:
+        f, sl = float(fast), float(slow)
+    except (TypeError, ValueError):
+        return None
+    if sl == 0 or f != f or sl != sl:          # NaN-safe
+        return None
+    return round((f / sl - 1) * 100, 3)
+
+
 def _index_returns():
     """NIFTY 50 daily pct returns, cached, for beta."""
     now = time.time()
@@ -480,6 +510,22 @@ def row_from_frame(df, idx_ret=None):
         except (IndexError, TypeError, ValueError):
             return None
 
+    sma9, sma100 = _sma(close, 9), _sma(close, 100)
+
+    # A small gap on its own does not mean two averages are converging — they
+    # may have just crossed and be separating. So each pair reports the gap now
+    # AND the gap a week ago; the pair of numbers is what lets the client say
+    # "closing" rather than merely "close".
+    _series = {9: sma9, 20: sma20, 50: sma50, 100: sma100, 200: sma200}
+    back = -1 - MA_GAP_LOOKBACK
+    ma_gaps = {}
+    for _f, _sl in MA_PAIRS:
+        now = ma_gap(_last(_series[_f]), _last(_series[_sl]))
+        then = (ma_gap(_last(_series[_f], back), _last(_series[_sl], back))
+                if len(close) > MA_GAP_LOOKBACK + 1 else None)
+        if now is not None:
+            ma_gaps[f"{_f}_{_sl}"] = [now, then]
+
     v50, v150, v200 = _last(sma50), _last(sma150), _last(sma200)
     v200_prev = _last(sma200, -21) if len(close) > 21 else None
     dma200_rising = bool(v200 is not None and v200_prev is not None and v200 > v200_prev)
@@ -505,6 +551,7 @@ def row_from_frame(df, idx_ret=None):
         "d9": dist(_sma(close, 9)),
         "d20": dist(_sma(close, 20)),
         "d50": dist(_sma(close, 50)),
+        "d100": dist(sma100),
         "d150": dist(sma150),
         "d200": dist(_sma(close, 200)),
         "rsi": _num(rsi.iloc[-1], 1),
@@ -543,6 +590,8 @@ def row_from_frame(df, idx_ret=None):
         "ret_6m": ret_6m,
         "minervini": bool(mnv_all),
         "minervini_rules": mnv_passed,
+        # {"9_20": [gap now %, gap 5 sessions ago %], ...} — see MA_PAIRS.
+        "ma_gaps": ma_gaps,
         # Candlestick patterns on the latest bar
         **cs,
     }

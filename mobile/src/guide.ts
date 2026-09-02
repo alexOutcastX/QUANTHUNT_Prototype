@@ -143,6 +143,7 @@ export const GUIDE_CHAPTERS: GuideChapter[] = [
           { kind: 'p', text: 'A finished list rather than a tool for making one. Ideas ranks buy setups that the engines have already found — the Screens console asks "which companies match my conditions", Ideas answers "here is what the rules surfaced today, ordered by how strongly".' },
           { kind: 'p', text: 'Each row carries the confidence behind it and the reasoning that produced it, so you can disagree with a specific step rather than with the list. The sub-lists split by horizon: long-term buy candidates drawn from the Multibagger engine, and shorter-term setups from the momentum side.' },
           { kind: 'p', text: 'Tapping a sector in the home page heatmap opens this tab filtered to that sector, which is the quickest route from "banks look strong" to a list of specific names.' },
+          { kind: 'p', text: 'The DMA crossovers tab is a different kind of list. It does not rank anything — it reports which moving-average pairs (9/20, 20/50, 50/100, 50/200) are still apart but closing on each other, nearest first, with a rough number of sessions to contact at the rate the gap has been shrinking. A pair that is close but widening has already crossed and is left out. It is a fact about two averages converging, not a signal.' },
           { kind: 'note', text: 'Ranked is not recommended. The order is the output of the scoring rules described in this guide, and every name on the list still needs your own work.' },
         ],
       },

@@ -1514,6 +1514,58 @@ function check(name, ok, detail) {
       await page.waitForTimeout(400);
     }
 
+    // 8l-iv · Ideas ▸ DMA crossovers — the averages about to meet.
+    //
+    // The engine sweep (e2e/dma.js) proves the selection rule. What it cannot
+    // see is whether the tab renders: the list reads the EOD snapshot rather
+    // than the per-symbol scan its sibling tabs use, so a change to the
+    // snapshot's shape would empty this page and nothing else.
+    {
+      await page.evaluate(() => {
+        const el = document.querySelector('[aria-label="Ideas"]');
+        if (el) el.click();
+      });
+      await page.waitForTimeout(2500);
+      // The Segmented control's items are plain touchables, not role=button,
+      // so they are found by text the way the rest of this suite does it.
+      const ideaTabs = await page.evaluate(() => document.body.innerText);
+      check('Ideas offers a DMA crossovers tab beside HFT/ICT/SMC',
+            /HFT\/ICT\/SMC[\s\S]{0,40}DMA crossovers/.test(ideaTabs),
+            ideaTabs.slice(0, 260));
+
+      await page.evaluate(() => {
+        const el = [...document.querySelectorAll('div,span')]
+          .filter((e) => !e.children.length && (e.textContent || '').trim() === 'DMA crossovers')
+          .pop();
+        if (el) el.click();
+      });
+      await page.waitForTimeout(3500);
+      const dma = await page.evaluate(() => document.body.innerText);
+      check('it opens on the approaching-crossover list',
+            /Approaching a crossover/i.test(dma), dma.slice(0, 220));
+      check('and offers all four pairs',
+            ['9 / 20', '20 / 50', '50 / 100', '50 / 200'].every((p) => dma.includes(p)),
+            dma.slice(0, 300));
+      check('with rows that name the gap and where it is heading',
+            /% *\n?apart/i.test(dma) && /(Bullish|Bearish|Golden|Death) cross/.test(dma),
+            dma.slice(0, 400));
+      check('the page says a pending cross is not a signal',
+            /not a signal/i.test(dma));
+
+      // The fixture puts 50/100 on a WIDENING gap for every symbol, so that
+      // chip must be the empty one — which is the selection rule visible in
+      // the rendered page rather than in a unit test.
+      await page.evaluate(() => {
+        const el = [...document.querySelectorAll('[role="button"]')]
+          .find((e) => (e.getAttribute('aria-label') || '').startsWith('50 / 100,'));
+        if (el) el.click();
+      });
+      await page.waitForTimeout(900);
+      check('a pair that is close but separating is excluded',
+            /Nothing is converging that closely/i.test(
+              await page.evaluate(() => document.body.innerText)));
+    }
+
     // 8m-pre · the owner's "view as a plan" switch. It exists so the paywall
     // can be checked from an account that holds everything, so the check that
     // matters is that flipping it actually re-gates the interface.

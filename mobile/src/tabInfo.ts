@@ -248,3 +248,40 @@ export const PATTERN_INFO: InfoContent = {
     'For research and education only. Pattern recognition is inherently probabilistic and not investment advice. Historical continuation odds do not predict the future, and patterns fail regularly. ' +
     SAFETY_COMMON,
 };
+
+export const DMA_CROSS_INFO: InfoContent = {
+  about:
+    'Moving-average pairs that have not crossed yet but are closing on each other. The screener already has a filter for a cross that HAS happened — that fires on the day every scanner in the country sees it. This list is the window before it: which averages are still apart, by how much, and how fast the gap is shrinking.',
+  sections: [
+    {
+      heading: 'The four pairs',
+      bullets: [
+        '9 / 20 — the short-term turn, measured in days rather than weeks',
+        '20 / 50 — the swing turn most position traders watch',
+        '50 / 100 — the intermediate trend, between swing and primary',
+        '50 / 200 — the golden and death cross: the slowest, and the most watched',
+      ],
+    },
+    {
+      heading: 'How a candidate is chosen',
+      bullets: [
+        'The two averages are within the threshold you set — 0.5%, 1% or 2% apart.',
+        'The gap is NARROWER than it was five sessions ago. A pair that is close but widening has already crossed and is dropped.',
+        'The list is ordered nearest-first, and the estimate is simply the remaining gap divided by the rate it has been closing at.',
+        'Direction is read off the sign: the fast average below the slow one would cross upward, above it would cross downward.',
+      ],
+    },
+    {
+      heading: 'Honest limits',
+      bullets: [
+        'The session estimate assumes the last week’s rate continues. Price is under no obligation to oblige, and a single wide day can undo it.',
+        'Averages converge and then separate without crossing all the time. "Approaching" is not "will".',
+        'The numbers come from the end-of-day snapshot, so they are as of the last close, not intraday.',
+        'A cross is a lagging construction by definition — it describes where price has already been.',
+      ],
+    },
+  ],
+  disclaimer:
+    'For research and education only. A pending crossover is an arithmetic fact about two moving averages, not a recommendation to buy or sell. ' +
+    SAFETY_COMMON,
+};

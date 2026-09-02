@@ -17,6 +17,7 @@ import { addSymbol, loadWatchlist, normSymbol } from '../watchlist';
 import { LocalAlert, addLocalAlert, hasLocalAlert, loadLocalAlerts } from '../localalerts';
 import { loadNames } from './ScreenerScreen';
 import ShortTermScreen from './ShortTermScreen';
+import DmaCrossScreen from './DmaCrossScreen';
 import InstitutionalScreen from './InstitutionalScreen';
 import SmcScreen from './SmcScreen';
 import { useResponsive } from '../responsive';
@@ -27,7 +28,7 @@ import MacdControls from '../components/MacdControls';
 import { netRR } from '../costs';
 import { Card, Dropdown, EmptyState, FadeSlideIn, InfoButton, RiskBadge, Segmented, Sheet } from '../ui';
 import { PaperTrade, addPaperTrade, hasOpenPaper, loadPaperTrades } from '../paperTrades';
-import { INSTITUTIONAL_INFO, RECOMMENDATIONS_INFO, SHORT_TERM_INFO, SMC_INFO } from '../tabInfo';
+import { DMA_CROSS_INFO, INSTITUTIONAL_INFO, RECOMMENDATIONS_INFO, SHORT_TERM_INFO, SMC_INFO } from '../tabInfo';
 import { theme } from '../theme';
 import {
   DEPTH_OPTIONS,
@@ -819,8 +820,8 @@ function LongTermRecs() {
 // setups, a short-term swing tab (pullback reversals), and an Institutional tab
 // that screens by algorithmic strategy. A segmented toggle switches between
 // them; each keeps its own persistent cache.
-type RecMode = 'long' | 'short' | 'inst' | 'smc';
-const REC_MODES: RecMode[] = ['long', 'short', 'inst', 'smc'];
+type RecMode = 'long' | 'short' | 'inst' | 'smc' | 'dma';
+const REC_MODES: RecMode[] = ['long', 'short', 'inst', 'smc', 'dma'];
 function RecommendationsInner() {
   const [mode, setMode] = useState<RecMode>('long');
   const [modeHydrated, setModeHydrated] = useState(false);
@@ -856,6 +857,7 @@ function RecommendationsInner() {
     { key: 'short', label: 'Short term' },
     { key: 'inst', label: 'Institutional' },
     { key: 'smc', label: 'HFT/ICT/SMC' },
+    { key: 'dma', label: 'DMA crossovers' },
   ];
   // The ⓘ beside the tabs is mode-aware: it opens the detail for whichever
   // sub-list is active, so each sub-screen can drop its own title block.
@@ -864,6 +866,7 @@ function RecommendationsInner() {
     short: { title: 'Short-term swing', info: SHORT_TERM_INFO },
     inst: { title: 'Institutional', info: INSTITUTIONAL_INFO },
     smc: { title: 'HFT / ICT / SMC', info: SMC_INFO },
+    dma: { title: 'DMA crossovers', info: DMA_CROSS_INFO },
   }[mode];
   const [q, setQ] = useState('');
   const [verdictSym, setVerdictSym] = useState<string | null>(null);
@@ -896,7 +899,11 @@ function RecommendationsInner() {
         <Segmented items={TABS} value={mode} onChange={setMode} info={modeInfo.info} infoTitle={modeInfo.title} />
       </View>
       <View style={{ flex: 1 }}>
-        {mode === 'short' ? <ShortTermScreen /> : mode === 'inst' ? <InstitutionalScreen /> : mode === 'smc' ? <SmcScreen /> : <LongTermRecs />}
+        {mode === 'short' ? <ShortTermScreen />
+          : mode === 'inst' ? <InstitutionalScreen />
+            : mode === 'smc' ? <SmcScreen />
+              : mode === 'dma' ? <DmaCrossScreen />
+                : <LongTermRecs />}
       </View>
       {verdictSym ? <TradeVerdict symbol={verdictSym} onClose={() => setVerdictSym(null)} /> : null}
     </View>

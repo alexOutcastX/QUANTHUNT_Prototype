@@ -475,8 +475,24 @@ class H(BaseHTTPRequestHandler):
                        "pct_from_high": round(-(i % 12) * 1.4, 1), "pct_from_low": round(5 + i * 2.0, 1),
                        "new_high_52w": i % 11 == 0, "gap_up": i % 9 == 0, "volume_spike": i % 5 == 0,
                        "s1": 980 + i * 130, "s2": 960 + i * 130, "s3": 940 + i * 130,
-                       "r1": 1020 + i * 140, "r2": 1040 + i * 140, "r3": 1060 + i * 140}
+                       "r1": 1020 + i * 140, "r2": 1040 + i * 140, "r3": 1060 + i * 140,
+                       "d100": 2 + i * 0.7, "ma_gaps": self._ma_gaps(i)}
         return data
+
+    @staticmethod
+    def _ma_gaps(i):
+        """[gap now, gap five sessions ago] per pair, spread across the cases
+        the DMA-crossover tab has to handle: converging from below, converging
+        from above, one already crossed and separating (which must be dropped),
+        and one with no history at all."""
+        near = round(0.12 + (i % 5) * 0.21, 3)          # 0.12 … 0.96 — inside 1%
+        return {
+            "9_20": [-near, -(near + 0.4)],            # closing from below
+            "20_50": [near + 0.3, near + 0.9],         # closing from above
+            "50_100": [round(0.4 + (i % 3) * 0.2, 3),  # widening — already crossed
+                       round(0.1 + (i % 3) * 0.2, 3)],
+            "50_200": [-round(0.5 + (i % 4) * 0.35, 3), None],   # no history
+        }
 
     def _fund_bulk(self):
         data = self._fund_rows()

@@ -61,6 +61,8 @@ jobs:
         run: npx playwright-core install chromium
       - name: Every screener filter, executed against a real session
         run: node e2e/filters.js
+      - name: The DMA-crossover engine, executed against a real session
+        run: node e2e/dma.js
 
       - name: Headless smoke against the shipping bundle
         run: node e2e/smoke.js

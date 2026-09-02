@@ -264,6 +264,7 @@ export type ScanRow = {
   d9?: number | null;
   d20?: number | null;
   d50?: number | null;
+  d100?: number | null;
   d150?: number | null;
   d200?: number | null;
   rsi?: number | null;
@@ -275,6 +276,10 @@ export type ScanRow = {
   pct_from_high?: number | null;
   pct_from_low?: number | null;
   beta?: number | null;
+  /** Moving-average pair gaps for the DMA-crossover scan: each key is
+   *  "fast_slow" and each value is [gap now %, gap 5 sessions ago %].
+   *  Absent for a symbol with too little history. See scanner.MA_PAIRS. */
+  ma_gaps?: Record<string, [number, number | null]> | null;
   sqzOn?: boolean | null;
   sqzFire?: boolean | null;
   sqzMom?: number | null;

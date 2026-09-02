@@ -45,6 +45,13 @@ class DeployExcludesTest(unittest.TestCase):
         run = self.yml.index("node e2e/filters.js")
         self.assertLess(install, run, "root deps are installed after they are needed")
 
+    def test_the_dma_sweep_runs_too_and_after_the_same_install(self):
+        """It compiles mobile/src/dmaCross.ts with the same root esbuild, so it
+        has the same failure mode if the ordering ever changes."""
+        self.assertIn("node e2e/dma.js", self.yml)
+        install = self.yml.index("run: npm ci --no-audit --no-fund")
+        self.assertLess(install, self.yml.index("node e2e/dma.js"))
+
     def test_the_systemd_unit_is_still_synced(self):
         """The unit carries SCAN_WARM and the gunicorn thread count; a deploy
         that stopped syncing it would silently pin production to old tuning."""
