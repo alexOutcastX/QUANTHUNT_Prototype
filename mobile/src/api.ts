@@ -277,9 +277,11 @@ export type ScanRow = {
   pct_from_low?: number | null;
   beta?: number | null;
   /** Moving-average pair gaps for the DMA-crossover scan: each key is
-   *  "fast_slow" and each value is [gap now %, gap 5 sessions ago %].
+   *  "fast_slow" and each value is [gap now %, gap 5 sessions ago %, how far
+   *  the gap moves in a typical session]. The third element arrived after the
+   *  first two, so a snapshot built before it simply has a shorter array.
    *  Absent for a symbol with too little history. See scanner.MA_PAIRS. */
-  ma_gaps?: Record<string, [number, number | null]> | null;
+  ma_gaps?: Record<string, [number, number | null, (number | null)?]> | null;
   sqzOn?: boolean | null;
   sqzFire?: boolean | null;
   sqzMom?: number | null;

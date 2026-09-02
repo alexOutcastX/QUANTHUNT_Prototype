@@ -481,17 +481,22 @@ class H(BaseHTTPRequestHandler):
 
     @staticmethod
     def _ma_gaps(i):
-        """[gap now, gap five sessions ago] per pair, spread across the cases
-        the DMA-crossover tab has to handle: converging from below, converging
-        from above, one already crossed and separating (which must be dropped),
-        and one with no history at all."""
+        """[gap now, gap five sessions ago, points the gap moves in a session]
+        per pair, spread across the cases the DMA-crossover tab has to handle:
+        converging from below, converging from above, one already crossed and
+        separating (which must be dropped), and one with no history at all.
+
+        The third element is deliberately absent from one pair: a snapshot
+        built before the volatility existed has two-element arrays, and that
+        row must still list — with no probability rather than a made-up one."""
         near = round(0.12 + (i % 5) * 0.21, 3)          # 0.12 … 0.96 — inside 1%
+        sig = round(0.02 + (i % 4) * 0.05, 3)           # 0.02 … 0.17 points
         return {
-            "9_20": [-near, -(near + 0.4)],            # closing from below
-            "20_50": [near + 0.3, near + 0.9],         # closing from above
+            "9_20": [-near, -(near + 0.4), sig],       # closing from below
+            "20_50": [near + 0.3, near + 0.9, sig * 2],  # closing from above
             "50_100": [round(0.4 + (i % 3) * 0.2, 3),  # widening — already crossed
-                       round(0.1 + (i % 3) * 0.2, 3)],
-            "50_200": [-round(0.5 + (i % 4) * 0.35, 3), None],   # no history
+                       round(0.1 + (i % 3) * 0.2, 3), sig],
+            "50_200": [-round(0.5 + (i % 4) * 0.35, 3), None],   # no history, no sigma
         }
 
     def _fund_bulk(self):

@@ -77,6 +77,45 @@ class GapTest(unittest.TestCase):
 
 
 @unittest.skipIf(scanner is None or not HAVE_PANDAS, "needs pandas")
+class SigmaTest(unittest.TestCase):
+    """How far the gap travels in a session — the input that turns a straight
+    line drawn to zero into a probability."""
+
+    def sigma(self, fast, slow):
+        import pandas as pd
+        return scanner.ma_gap_sigma(pd.Series(fast, dtype="float64"),
+                                    pd.Series(slow, dtype="float64"))
+
+    def test_the_gap_volatility_measures_the_change_not_the_level(self):
+        """A gap that walks steadily from 5% to 1% has a huge spread of LEVELS
+        and almost no session-to-session movement. Measuring the level would
+        call the steadiest pair on the page the most volatile one."""
+        flat = [100 + (5 - i * 0.2) for i in range(30)]       # dead straight
+        sig = self.sigma(flat, [100.0] * 30)
+        self.assertIsNotNone(sig)
+        self.assertLess(sig, 0.01)
+
+    def test_a_jumpy_gap_measures_wider_than_a_smooth_one(self):
+        smooth = self.sigma([100 + i * 0.1 for i in range(30)], [100.0] * 30)
+        jumpy = self.sigma([100 + (i % 2) * 2.0 for i in range(30)], [100.0] * 30)
+        self.assertIsNotNone(smooth)
+        self.assertIsNotNone(jumpy)
+        self.assertGreater(jumpy, smooth)
+
+    def test_too_little_history_gives_no_volatility_rather_than_zero(self):
+        """Zero would mean 'this gap never moves', which the model reads as a
+        certainty either way. Absent means 'no opinion'."""
+        self.assertIsNone(self.sigma([100, 101], [100, 100]))
+        self.assertIsNone(self.sigma([], []))
+
+    def test_a_zero_average_is_dropped_rather_than_divided_by(self):
+        self.assertIsNone(self.sigma([100.0] * 30, [0.0] * 30))
+
+    def test_the_window_is_about_a_month_of_sessions(self):
+        self.assertEqual(scanner.MA_GAP_VOL_WINDOW, 21)
+
+
+@unittest.skipIf(scanner is None or not HAVE_PANDAS, "needs pandas")
 class RowTest(unittest.TestCase):
     """The gaps computed over real series, rather than from two hand-picked
     numbers — this is where an off-by-one window or a reversed pair shows up."""
@@ -127,9 +166,11 @@ class WiringTest(unittest.TestCase):
         self.assertIn('"ma_gaps": ma_gaps', self.scanner)
 
     def test_each_pair_carries_its_own_history(self):
-        """[now, then] — one number could not distinguish closing from
-        separating, which is the whole point of the feature."""
-        self.assertIn("ma_gaps[f\"{_f}_{_sl}\"] = [now, then]", self.scanner)
+        """[now, then, sigma] — one number could not distinguish closing from
+        separating, which is the whole point of the feature, and two could not
+        say how likely the closing is to finish."""
+        self.assertIn("ma_gaps[f\"{_f}_{_sl}\"] = [now, then,", self.scanner)
+        self.assertIn("ma_gap_sigma(_series[_f], _series[_sl])", self.scanner)
 
     def test_a_pair_with_no_current_gap_is_omitted_entirely(self):
         """Better an absent key than a key holding None, which a client would
@@ -171,8 +212,9 @@ class TabTest(unittest.TestCase):
         self.assertIn("Math.abs(was) < distance", code)
 
     def test_the_list_is_nearest_first_and_stable(self):
-        self.assertIn("(a.distance - b.distance) || a.symbol.localeCompare(b.symbol)",
+        self.assertIn("if (a.distance !== b.distance) return a.distance - b.distance;",
                       self.logic)
+        self.assertIn("return a.symbol.localeCompare(b.symbol)", self.logic)
 
     def test_it_reads_the_prebuilt_snapshot(self):
         """Its sibling tabs scan symbol by symbol and take a minute. Everything
@@ -189,6 +231,82 @@ class TabTest(unittest.TestCase):
         low = self.screen.lower()
         for phrase in ("you should buy", "we recommend", "guaranteed", "will cross"):
             self.assertNotIn(phrase, low)
+
+    def test_the_probability_is_a_closed_form_not_a_simulation(self):
+        """First passage for arithmetic Brownian motion. A simulation in a
+        render path would be slow, and worse, would give a different answer
+        every time the list redrew."""
+        self.assertIn("export function crossProbability(", self.logic)
+        self.assertIn("normCdf", self.logic)
+        self.assertNotIn("Math.random", self.logic)
+
+    def test_a_pair_already_touching_is_certain_rather_than_a_division_by_zero(self):
+        self.assertIn("if (d === 0) return 1;", self.logic)
+
+    def test_the_three_sorts_are_offered(self):
+        for key in ("'near'", "'probability'", "'time'"):
+            self.assertIn(key, self.logic, key)
+        self.assertIn("SORTS", self.screen)
+
+    def test_an_unknown_ranks_last_rather_than_lowest(self):
+        """An unmeasured probability is not a zero and an unmeasured ETA is not
+        an immediate one. Sorting them as such would float the least-known rows
+        to the top of a list read top-down."""
+        self.assertIn("a.probability == null ? -1", self.logic)
+        self.assertIn("a.eta == null ? Infinity", self.logic)
+
+    def test_the_horizon_is_selectable_and_the_chance_follows_it(self):
+        self.assertIn("HORIZONS", self.screen)
+        self.assertIn("setHorizon", self.screen)
+        self.assertIn("horizon, sort", self.screen)
+
+    def test_a_row_opens_the_detail_card(self):
+        card = read("mobile", "src", "components", "CrossoverCard.tsx")
+        self.assertIn("CrossoverCard", self.screen)
+        self.assertIn("onOpen(a)", self.screen)
+        # It gets the whole snapshot row, not just the six fields an Approach
+        # carries — the average levels and the technicals live there.
+        self.assertIn("row={bySym.get(open.symbol) || null}", self.screen)
+        self.assertIn("export default function CrossoverCard", card)
+
+    def test_the_card_carries_the_same_actions_as_its_siblings(self):
+        card = read("mobile", "src", "components", "CrossoverCard.tsx")
+        for action in ("Chart", "Pattern", "Report", "Paper trade", "Watchlist", "Alert"):
+            self.assertIn(action, card, action)
+
+    def test_the_card_proposes_no_trade(self):
+        """Its siblings open on an entry, a stop and a target because those
+        setups have a view. This one does not have one, and must not imply it
+        does by printing levels it did not choose."""
+        card = read("mobile", "src", "components", "CrossoverCard.tsx")
+        self.assertIn("stop: 0", card)
+        self.assertIn("target: 0", card)
+        low = card.lower()
+        for phrase in ("you should buy", "we recommend", "guaranteed", "will cross"):
+            self.assertNotIn(phrase, low)
+
+    def test_the_two_levels_reconcile_with_the_gap_above_them(self):
+        """The averages are derived from two independent distances, and the gap
+        is a third number. Printing all three unreconciled lets a reader do the
+        division and find the card disagreeing with itself in the last digit —
+        so the fast one is always recomputed from the slow one and the gap."""
+        card = read("mobile", "src", "components", "CrossoverCard.tsx")
+        self.assertIn("const ratio = 1 + a.gap / 100;", card)
+        self.assertIn("fastMa = slowMa * ratio;", card)
+        self.assertIn("slowMa = fastMa / ratio;", card)
+
+    def test_the_card_says_what_the_model_is_not(self):
+        """The number looks like a forecast and is not one. Anywhere it is
+        shown, the assumption it rests on is shown with it."""
+        card = read("mobile", "src", "components", "CrossoverCard.tsx")
+        self.assertIn("is not a random walk", card)
+        self.assertIn("not as a forecast", card)
+        self.assertIn("is not a random walk", self.logic + self.info)
+
+    def test_the_explainer_covers_the_chance_and_the_sorts(self):
+        self.assertIn("closed form", self.info)
+        for word in ("Nearest", "Probability", "Soonest"):
+            self.assertIn(word, self.info, word)
 
     def test_the_guide_describes_the_tab(self):
         guide = read("mobile", "src", "guide.ts")

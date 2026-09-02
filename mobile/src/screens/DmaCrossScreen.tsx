@@ -12,12 +12,13 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SnapshotRow, api } from '../api';
-import { openStock } from '../navIntent';
 import { useResponsive } from '../responsive';
 import { theme } from '../theme';
 import { Card, EmptyState, Loading } from '../ui';
+import CrossoverCard from '../components/CrossoverCard';
 import {
-  Approach, PAIRS, PairKey, crossName, countByPair, etaLabel, scanApproaches,
+  Approach, DEFAULT_HORIZON, HORIZONS, PAIRS, PairKey, SORTS, SortKey,
+  crossName, countByPair, etaLabel, probabilityLabel, scanApproaches,
 } from '../dmaCross';
 
 const UNIVERSE = 'NIFTY 500';
@@ -58,24 +59,37 @@ function Chip({ label, count, on, onPress }: {
   );
 }
 
-function ApproachRow({ a, wide }: { a: Approach; wide: boolean }) {
+function ApproachRow({ a, wide, horizon, onOpen }: {
+  a: Approach; wide: boolean; horizon: number; onOpen: (a: Approach) => void;
+}) {
   const up = a.direction === 'up';
   const tone = up ? theme.green : theme.red;
   const eta = etaLabel(a);
+  const prob = probabilityLabel(a);
   return (
     <TouchableOpacity
       style={s.row}
-      onPress={() => openStock(a.symbol)}
+      onPress={() => onOpen(a)}
       activeOpacity={0.7}
-      accessibilityRole="link"
+      accessibilityRole="button"
       accessibilityLabel={
         `${a.symbol}, ${a.pair.label} averages ${a.distance.toFixed(2)} percent apart, `
         + `${crossName(a).toLowerCase()}${eta ? ', ' + eta : ''}`
+        + `${a.probability == null ? '' : `, ${prob} chance within ${horizon} sessions`}`
       }
     >
       <View style={s.gapCol}>
         <Text style={[s.gap, { color: tone }]}>{a.distance.toFixed(2)}%</Text>
         <Text style={s.gapNote}>apart</Text>
+      </View>
+      <View style={s.probCol}>
+        {/* Half is the line where the model stops saying "probably not". Above
+            it the number is coloured with the direction; below it stays grey so
+            a wall of tinted numbers does not read as a wall of signals. */}
+        <Text style={[s.prob, a.probability != null && a.probability >= 0.5 ? { color: tone } : null]}>
+          {prob}
+        </Text>
+        <Text style={s.gapNote}>in {horizon}d</Text>
       </View>
       <View style={{ flex: 1, minWidth: 0 }}>
         <View style={s.symLine}>
@@ -114,6 +128,9 @@ export default function DmaCrossScreen() {
   const [pair, setPair] = useState<PairKey | 'all'>('all');
   const [within, setWithin] = useState(1);
   const [dir, setDir] = useState<DirFilter>('all');
+  const [sort, setSort] = useState<SortKey>('near');
+  const [horizon, setHorizon] = useState(DEFAULT_HORIZON);
+  const [open, setOpen] = useState<Approach | null>(null);
   const [all, setAll] = useState(false);
   const { width } = useResponsive();
   const wide = width >= 720;
@@ -147,8 +164,8 @@ export default function DmaCrossScreen() {
   // the chips have to come from the unfiltered set or they would only ever
   // report the tab you are already looking at.
   const found = useMemo(
-    () => scanApproaches(rows || [], { within }),
-    [rows, within],
+    () => scanApproaches(rows || [], { within, horizon, sort }),
+    [rows, within, horizon, sort],
   );
   const counts = useMemo(() => countByPair(found), [found]);
   const shown = useMemo(() => {
@@ -161,6 +178,14 @@ export default function DmaCrossScreen() {
       && (dir === 'all' || a.direction === dir)).length,
     [found, pair, dir],
   );
+
+  // The card wants the whole snapshot row, not just the six fields an
+  // Approach carries — the moving-average levels and the technicals live there.
+  const bySym = useMemo(() => {
+    const m = new Map<string, SnapshotRow>();
+    (rows || []).forEach((r) => { if (r && r.sym) m.set(r.sym.toUpperCase(), r); });
+    return m;
+  }, [rows]);
 
   const withHistory = useMemo(
     () => (rows || []).some((r) => r && r.ma_gaps && Object.keys(r.ma_gaps).length > 0),
@@ -213,7 +238,24 @@ export default function DmaCrossScreen() {
             <Chip label="▲ Bullish" on={dir === 'up'} onPress={() => setDir('up')} />
             <Chip label="▼ Bearish" on={dir === 'down'} onPress={() => setDir('down')} />
           </View>
+          <View style={s.ctlGroup}>
+            <Text style={s.ctlLabel}>SORT</Text>
+            {SORTS.map((o) => (
+              <Chip key={o.key} label={o.label} on={sort === o.key} onPress={() => setSort(o.key)} />
+            ))}
+          </View>
+          <View style={s.ctlGroup}>
+            <Text style={s.ctlLabel}>HORIZON</Text>
+            {HORIZONS.map((h) => (
+              <Chip key={h} label={`${h}d`} on={horizon === h} onPress={() => setHorizon(h)} />
+            ))}
+          </View>
         </View>
+
+        <Text style={s.sortNote}>
+          {SORTS.find((o) => o.key === sort)?.note} Chances are quoted over the
+          next {horizon} sessions.
+        </Text>
 
         {pair !== 'all' ? (
           <Text style={s.pairBlurb}>{PAIRS.find((p) => p.key === pair)?.blurb}</Text>
@@ -234,7 +276,13 @@ export default function DmaCrossScreen() {
         ) : (
           <>
             {shown.map((a) => (
-              <ApproachRow key={`${a.symbol}:${a.pair.key}`} a={a} wide={wide} />
+              <ApproachRow
+                key={`${a.symbol}:${a.pair.key}`}
+                a={a}
+                wide={wide}
+                horizon={horizon}
+                onOpen={setOpen}
+              />
             ))}
             {total > shown.length ? (
               <TouchableOpacity onPress={() => setAll(true)} activeOpacity={0.7}>
@@ -248,8 +296,18 @@ export default function DmaCrossScreen() {
       <Text style={s.foot}>
         A pending cross is two averages converging, not a signal. The estimate
         assumes the last week's rate continues, which is exactly what price does
-        not have to do.
+        not have to do. The chance treats the gap as wandering randomly, which
+        it does not — both sides are smoothed — so it ranks these candidates
+        against each other rather than forecasting any one of them.
       </Text>
+
+      {open ? (
+        <CrossoverCard
+          a={open}
+          row={bySym.get(open.symbol) || null}
+          onClose={() => setOpen(null)}
+        />
+      ) : null}
     </ScrollView>
   );
 }
@@ -280,6 +338,9 @@ const s = StyleSheet.create({
     color: theme.muted, fontSize: 9, fontFamily: theme.mono,
     letterSpacing: 1, fontWeight: '700',
   },
+  sortNote: {
+    color: theme.muted, fontSize: theme.fs.xs, lineHeight: 16, marginBottom: theme.sp.sm,
+  },
   pairBlurb: {
     color: theme.muted, fontSize: theme.fs.xs, fontStyle: 'italic',
     marginTop: 2, marginBottom: theme.sp.sm,
@@ -290,6 +351,8 @@ const s = StyleSheet.create({
     paddingVertical: 9, borderTopWidth: 1, borderTopColor: theme.border,
   },
   gapCol: { width: 58 },
+  probCol: { width: 44 },
+  prob: { color: theme.muted2, fontSize: theme.fs.sm, fontFamily: theme.mono, fontWeight: '700' },
   gap: { fontSize: theme.fs.sm, fontFamily: theme.mono, fontWeight: '700' },
   gapNote: { color: theme.muted, fontSize: 9, fontFamily: theme.mono },
   symLine: { flexDirection: 'row', alignItems: 'center', gap: 8 },

@@ -213,6 +213,114 @@ console.log(`${D.PAIRS.length} pairs: ${D.PAIRS.map((p) => p.label).join(', ')}\
         etas.every((v) => Number.isInteger(v) && v >= 1), JSON.stringify(etas.slice(0, 5)));
 }
 
+// ── 10. the probability model ──
+{
+  // Every argument fixed but the gap: a wider gap cannot be likelier.
+  const at = (d) => D.crossProbability(d, 0.05, 0.1, 10);
+  check('a wider gap is never more likely than a narrower one',
+        at(0.1) >= at(0.3) && at(0.3) >= at(0.6) && at(0.6) >= at(1.5),
+        [0.1, 0.3, 0.6, 1.5].map(at).map((v) => v.toFixed(3)).join(' '));
+
+  const byH = D.HORIZONS.map((h) => D.crossProbability(0.5, 0.02, 0.15, h));
+  check('a longer horizon can only raise the chance',
+        byH.every((v, i) => i === 0 || v >= byH[i - 1]), byH.map((v) => v.toFixed(3)).join(' '));
+
+  const faster = D.crossProbability(0.5, 0.08, 0.15, 10);
+  const slower = D.crossProbability(0.5, 0.01, 0.15, 10);
+  check('closing faster is likelier than closing slowly', faster > slower,
+        `${faster.toFixed(3)} vs ${slower.toFixed(3)}`);
+
+  check('a gap already touching is a certainty, not a divide by zero',
+        D.crossProbability(0, 0.05, 0.1, 10) === 1);
+
+  // A gap that never moves either arrives on the straight line or never does.
+  check('a motionless gap resolves deterministically',
+        D.crossProbability(0.5, 0.1, 0, 10) === 1 && D.crossProbability(0.5, 0.01, 0, 10) === 0);
+
+  check('no volatility to model with means no number rather than a guess',
+        D.crossProbability(0.5, 0.05, null, 10) === null
+        && D.crossProbability(0.5, 0.05, NaN, 10) === null);
+
+  // A wide drift over a wide gap overflows exp(); the answer is still a
+  // probability, and Infinity * 0 would have made it NaN.
+  const extreme = D.crossProbability(50, 40, 0.01, 20);
+  check('an extreme drift stays inside zero and one',
+        extreme != null && extreme >= 0 && extreme <= 1 && isFinite(extreme), String(extreme));
+
+  let outside = 0;
+  for (let d = 0; d <= 3; d += 0.05) {
+    for (const mu of [-0.2, -0.01, 0, 0.01, 0.2]) {
+      for (const sig of [0.001, 0.05, 0.5, 5]) {
+        for (const h of [1, 5, 10, 20, 60]) {
+          const v = D.crossProbability(d, mu, sig, h);
+          if (v == null || !isFinite(v) || v < 0 || v > 1) outside++;
+        }
+      }
+    }
+  }
+  check('every point of a 6,100-case sweep is a probability', outside === 0, String(outside));
+}
+
+// ── 11. the sorts ──
+{
+  const rows = [
+    // near: tiny gap, barely moving. time/probability: wider but racing.
+    row('CREEP', { '9_20': [0.10, 0.11, 0.4] }),
+    row('RACER', { '9_20': [0.80, 2.30, 0.05] }),
+    row('MIDDLE', { '9_20': [0.40, 0.70, 0.10] }),
+  ];
+  const order = (k) => D.scanApproaches(rows, { within: 1, sort: k }).map((a) => a.symbol).join(',');
+  check('nearest is still the default', order() === 'CREEP,MIDDLE,RACER', order());
+  check('sorting by soonest puts the fastest closer first',
+        order('time').split(',')[0] === 'RACER', order('time'));
+  check('sorting by probability leads with the likeliest',
+        (() => {
+          const got = D.scanApproaches(rows, { within: 1, sort: 'probability' });
+          return got.every((a, i) => i === 0 || (got[i - 1].probability ?? -1) >= (a.probability ?? -1));
+        })(), order('probability'));
+  check('a sort reorders the same rows rather than changing which rows there are',
+        ['near', 'probability', 'time'].every((k) =>
+          order(k).split(',').sort().join() === 'CREEP,MIDDLE,RACER'.split(',').sort().join()));
+
+  // A row the feed gave no volatility for cannot be scored, and an unscored
+  // row is not a zero — it goes last so the top of the list stays the part
+  // that is actually known.
+  const mixed = [
+    row('KNOWN', { '20_50': [0.5, 0.9, 0.2] }),
+    row('UNKNOWN', { '20_50': [0.1, 0.6] }),
+  ];
+  const byProb = D.scanApproaches(mixed, { within: 1, sort: 'probability' }).map((a) => a.symbol);
+  check('a row with no probability sorts last, not first',
+        byProb.join() === 'KNOWN,UNKNOWN', byProb.join());
+  const byTime = D.scanApproaches(
+    [row('NOETA', { '20_50': [0.5, null, 0.2] }), row('HASETA', { '20_50': [0.9, 1.4, 0.2] })],
+    { within: 1, sort: 'time' },
+  ).map((a) => a.symbol);
+  check('a row with no estimate sorts last too', byTime.join() === 'HASETA,NOETA', byTime.join());
+
+  // Every sort must still be stable, or the list reshuffles under the reader.
+  const tie = [row('BBB', { '9_20': [0.5, 1, 0.1] }), row('AAA', { '9_20': [0.5, 1, 0.1] })];
+  ['near', 'probability', 'time'].forEach((k) => {
+    const f = D.scanApproaches(tie, { within: 2, sort: k }).map((a) => a.symbol).join();
+    const r = D.scanApproaches(tie.slice().reverse(), { within: 2, sort: k }).map((a) => a.symbol).join();
+    check(`the ${k} sort is stable`, f === 'AAA,BBB' && f === r, `${f} vs ${r}`);
+  });
+}
+
+// ── 12. a snapshot built before sigma existed still works ──
+{
+  const old = D.scanApproaches([row('OLD', { '20_50': [0.4, 0.9] })], { within: 1 })[0];
+  check('a two-element pair is still listed', !!old && old.distance === 0.4);
+  check('and reports no probability rather than a fabricated one',
+        old.sigma === null && old.probability === null,
+        `sigma=${old.sigma} p=${old.probability}`);
+  check('which the label renders as an em dash', D.probabilityLabel(old) === '\u2014',
+        D.probabilityLabel(old));
+  const known = D.scanApproaches([row('NEW', { '20_50': [0.4, 0.9, 0.1] })], { within: 1 })[0];
+  check('a three-element pair is scored', known.probability != null
+        && D.probabilityLabel(known).endsWith('%'), D.probabilityLabel(known));
+}
+
 fs.unlinkSync(OUT);
 console.log(failures ? `\n${failures} FAILURE(S)` : '\nALL DMA CROSSOVER CHECKS PASSED');
 process.exit(failures ? 1 : 0);

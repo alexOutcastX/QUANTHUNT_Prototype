@@ -202,6 +202,11 @@ MA_PAIRS = ((9, 20), (20, 50), (50, 100), (50, 200))
 # not decide it.
 MA_GAP_LOOKBACK = 5
 
+# How many sessions of gap history the volatility is measured over. A month of
+# them: enough for the number to mean something, short enough to describe how
+# the pair is behaving now rather than last quarter.
+MA_GAP_VOL_WINDOW = 21
+
 
 def ma_gap(fast, slow):
     """The fast average's distance from the slow one, in percent.
@@ -219,6 +224,31 @@ def ma_gap(fast, slow):
     if sl == 0 or f != f or sl != sl:          # NaN-safe
         return None
     return round((f / sl - 1) * 100, 3)
+
+
+def ma_gap_sigma(fast, slow, window=MA_GAP_VOL_WINDOW):
+    """How much the gap between two averages moves in a session, in points.
+
+    The standard deviation of the DAILY CHANGE in the gap, not of the gap
+    itself — the question a probability has to answer is how far this thing
+    travels in a day, not how wide it has been.
+
+    Without it a converging pair can only be extrapolated in a straight line,
+    which says a gap closing at 0.1 points a session is certain to touch in
+    five. It is not: the same drift with a jumpy gap may cross tomorrow or
+    wander for a month, and those are the two cases a reader needs told apart.
+    """
+    try:
+        gaps = (fast / slow - 1.0) * 100.0
+        deltas = gaps.diff().tail(window).dropna()
+        if len(deltas) < 5:
+            return None
+        v = float(deltas.std())
+    except (TypeError, ValueError, ZeroDivisionError, AttributeError):
+        return None
+    if v != v or v in (float("inf"), float("-inf")) or v < 0:
+        return None
+    return round(v, 4)
 
 
 def _index_returns():
@@ -535,7 +565,11 @@ def row_from_frame(df, idx_ret=None):
         then = (ma_gap(_last(_series[_f], back), _last(_series[_sl], back))
                 if len(close) > MA_GAP_LOOKBACK + 1 else None)
         if now is not None:
-            ma_gaps[f"{_f}_{_sl}"] = [now, then]
+            # [gap now, gap a week ago, how far the gap moves in a session].
+            # The third is what turns "closing at this rate" into a probability
+            # instead of a straight line drawn to zero.
+            ma_gaps[f"{_f}_{_sl}"] = [now, then,
+                                      ma_gap_sigma(_series[_f], _series[_sl])]
 
     v50, v150, v200 = _last(sma50), _last(sma150), _last(sma200)
     v200_prev = _last(sma200, -21) if len(close) > 21 else None
@@ -601,7 +635,7 @@ def row_from_frame(df, idx_ret=None):
         "ret_6m": ret_6m,
         "minervini": bool(mnv_all),
         "minervini_rules": mnv_passed,
-        # {"9_20": [gap now %, gap 5 sessions ago %], ...} — see MA_PAIRS.
+        # {"9_20": [gap now %, gap 5 ago %, daily sigma], ...} — see MA_PAIRS.
         "ma_gaps": ma_gaps,
         # Candlestick patterns on the latest bar
         **cs,

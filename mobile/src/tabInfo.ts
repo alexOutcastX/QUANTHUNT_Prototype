@@ -267,13 +267,23 @@ export const DMA_CROSS_INFO: InfoContent = {
       bullets: [
         'The two averages are within the threshold you set — 0.5%, 1% or 2% apart.',
         'The gap is NARROWER than it was five sessions ago. A pair that is close but widening has already crossed and is dropped.',
-        'The list is ordered nearest-first, and the estimate is simply the remaining gap divided by the rate it has been closing at.',
+        'The estimate is simply the remaining gap divided by the rate it has been closing at.',
         'Direction is read off the sign: the fast average below the slow one would cross upward, above it would cross downward.',
+      ],
+    },
+    {
+      heading: 'The chance, and where it comes from',
+      bullets: [
+        'The gap is treated as a random walk: so many points from zero, closing at the rate of the last week, and moving by so much in a typical session. The chance of it reaching zero within the horizon has a closed form — no simulation and no fitted constants.',
+        'The horizon is yours to set: 5, 10 or 20 sessions. A wider horizon can only raise the number.',
+        'Sort by Nearest for the smallest gap, Probability for the likeliest to complete, or Soonest for the fewest sessions at the current rate. They disagree often, and the disagreement is informative — a gap can be tiny and barely moving, or wide and closing fast.',
+        'Tap any row for the two average levels, how the gap has moved, the chance over all three horizons, and the actions.',
       ],
     },
     {
       heading: 'Honest limits',
       bullets: [
+        'A gap between two moving averages is NOT a random walk. Both sides are smoothed, so the gap is steadier and more persistent than the model assumes, and it reads high on a pair drifting evenly. Use it to rank these candidates against each other, not as a forecast for any one of them.',
         'The session estimate assumes the last week’s rate continues. Price is under no obligation to oblige, and a single wide day can undo it.',
         'Averages converge and then separate without crossing all the time. "Approaching" is not "will".',
         'The numbers come from the end-of-day snapshot, so they are as of the last close, not intraday.',
