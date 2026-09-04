@@ -387,8 +387,30 @@ def row_from_frame(df, idx_ret=None):
     if df is None or df.empty or len(df) < 20:
         return None
 
+    # A feed appends a bar for the session in progress before it has traded —
+    # sometimes carrying a volume but no close — and EVERY number below is read
+    # off the last bar. So one placeholder does not cost one field, it costs the
+    # whole row: price, the distance from all six averages, the 52-week
+    # extremes, the change, Williams %R, %B, the pivots and the returns all come
+    # back empty. And because the placeholder appears on every symbol at once,
+    # it empties the universe at once — a screener with nothing to screen on.
+    #
+    # Trim it. The last bar that actually has a close IS the latest close; there
+    # is nothing to compute from a bar that has not happened yet.
+    valid = df["Close"].notna().to_numpy().nonzero()[0]
+    if len(valid) == 0:
+        return None
+    if valid[-1] != len(df) - 1:
+        df = df.iloc[:valid[-1] + 1]
+        if len(df) < 20:
+            return None
+
     close, high, low, vol = df["Close"], df["High"], df["Low"], df["Volume"]
     price = float(close.iloc[-1])
+    # Belt and braces after the trim: a row priced at NaN is not a row with one
+    # bad field, it is a row where nothing downstream means anything.
+    if not math.isfinite(price):
+        return None
     # A NaN previous close is the one that got out: `chg` and `absChg` are
     # derived from it, and NaN propagates silently through arithmetic.
     prev = (_num(close.iloc[-2], 6) if len(close) > 1 else price)
@@ -591,7 +613,7 @@ def row_from_frame(df, idx_ret=None):
         "chg": round((price / prev - 1) * 100, 2) if prev else None,
         "absChg": round(price - prev, 2),
         "volume": int(volume),
-        "avgvol": int(avgvol) if avgvol else None,
+        "avgvol": int(avgvol) if avgvol and math.isfinite(avgvol) else None,
         "relvol": relvol,
         "d9": dist(_sma(close, 9)),
         "d20": dist(_sma(close, 20)),

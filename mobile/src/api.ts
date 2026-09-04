@@ -2061,9 +2061,13 @@ export const api = {
   // 404s until the first build, and after 36 hours without one — the console
   // has a working multi-request path to fall back to, and an empty payload
   // would look like an empty market.
-  screenerSnapshot: (index: string) =>
+  // `force` skips the ten-minute cache. Without it a deliberate refresh — the
+  // pull gesture, the button on the crossover scan — returns the same payload
+  // it already had and looks like it did nothing, which is precisely the moment
+  // a reader is asking whether the data moved.
+  screenerSnapshot: (index: string, force = false) =>
     cachedGet<SnapshotResp>('/screener/snapshot?index=' + encodeURIComponent(index),
-                            TTL.slow, false, 30000),
+                            TTL.slow, force, 30000),
   scan: async (
     symbols: string[],
     opts?: {

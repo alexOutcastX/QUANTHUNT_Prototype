@@ -10,7 +10,9 @@
 // universe and is rebuilt twice a day, so this list is complete the moment the
 // tab opens instead of filling in over a minute of requests.
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import {
+  ActivityIndicator, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View,
+} from 'react-native';
 import { SnapshotRow, api } from '../api';
 import { useResponsive } from '../responsive';
 import { theme } from '../theme';
@@ -135,10 +137,10 @@ export default function DmaCrossScreen() {
   const { width } = useResponsive();
   const wide = width >= 720;
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (force = false) => {
     setError('');
     try {
-      const snap = await api.screenerSnapshot(UNIVERSE);
+      const snap = await api.screenerSnapshot(UNIVERSE, force);
       if (snap?.rows?.length) {
         setRows(snap.rows);
         setBuiltAt(snap.built_at);
@@ -154,9 +156,11 @@ export default function DmaCrossScreen() {
 
   useEffect(() => { load(); }, [load]);
 
+  // Always forced: someone who asked for a refresh is asking the server, not
+  // the copy the app already decided was fresh enough.
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await load();
+    await load(true);
     setRefreshing(false);
   }, [load]);
 
@@ -201,11 +205,31 @@ export default function DmaCrossScreen() {
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.muted2} />}
     >
       <Card style={s.card}>
-        <View style={s.head}>
+        {/* On a phone the title and the snapshot date both wrap when they
+            share a row with the button, which reads as four ragged lines. Give
+            the title the row and let the meta take the next one. */}
+        <View style={[s.head, !wide && s.headStack]}>
           <Text style={s.title}>Approaching a crossover</Text>
-          <Text style={s.headNote}>
-            {UNIVERSE}{builtAt ? ` · ${snapDay(builtAt)} close` : ''}
-          </Text>
+          <View style={[s.headRight, !wide && s.headRightWide]}>
+            <Text style={s.headNote} numberOfLines={1}>
+              {UNIVERSE}{builtAt ? ` · ${snapDay(builtAt)} close` : ''}
+            </Text>
+            {/* The pull gesture exists, but it is invisible, and on a desktop
+                browser it is not there at all. */}
+            <TouchableOpacity
+              style={[s.refresh, refreshing && s.refreshBusy]}
+              onPress={onRefresh}
+              disabled={refreshing}
+              activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel="Refresh the crossover scan"
+              accessibilityState={{ busy: refreshing, disabled: refreshing }}
+            >
+              {refreshing
+                ? <ActivityIndicator size="small" color={theme.brand} />
+                : <Text style={s.refreshTxt}>↻ Refresh</Text>}
+            </TouchableOpacity>
+          </View>
         </View>
         <Text style={s.lede}>
           Moving averages still apart but closing on each other, nearest first.
@@ -316,7 +340,21 @@ const s = StyleSheet.create({
   wrap: { flex: 1 },
   content: { padding: theme.sp.md, paddingBottom: theme.sp.xl },
   card: { padding: theme.sp.md },
-  head: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between' },
+  head: {
+    flexDirection: 'row', alignItems: 'center',
+    justifyContent: 'space-between', gap: theme.sp.sm,
+  },
+  headStack: { flexDirection: 'column', alignItems: 'stretch', gap: 8 },
+  headRight: { flexDirection: 'row', alignItems: 'center', gap: 10, flexShrink: 1 },
+  headRightWide: { justifyContent: 'space-between', flexShrink: 0 },
+  refresh: {
+    minWidth: 78, minHeight: 30, alignItems: 'center', justifyContent: 'center',
+    paddingHorizontal: 11, borderRadius: 999,
+    borderWidth: 1, borderColor: theme.border2, backgroundColor: theme.surface2,
+  },
+  // Held at the same size while it spins, so the header does not jump.
+  refreshBusy: { opacity: 0.7 },
+  refreshTxt: { color: theme.brand, fontSize: theme.fs.xs, fontWeight: '700' },
   title: { color: theme.text, fontSize: theme.fs.md, fontWeight: '800' },
   headNote: { color: theme.muted, fontSize: theme.fs.xs, fontFamily: theme.mono },
   lede: { color: theme.muted, fontSize: theme.fs.xs, lineHeight: 17, marginTop: 6 },
