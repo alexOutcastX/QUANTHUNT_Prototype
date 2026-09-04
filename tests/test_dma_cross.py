@@ -308,6 +308,25 @@ class TabTest(unittest.TestCase):
         for word in ("Nearest", "Probability", "Soonest"):
             self.assertIn(word, self.info, word)
 
+    def test_the_scan_can_be_refreshed_on_demand(self):
+        """The pull gesture is invisible, and in a desktop browser it does not
+        exist at all."""
+        self.assertIn("Refresh the crossover scan", self.screen)
+        self.assertIn("onPress={onRefresh}", self.screen)
+
+    def test_a_refresh_goes_past_the_cache(self):
+        """The snapshot is cached for ten minutes, so a refresh that returns the
+        copy the app already had looks broken at exactly the moment someone is
+        asking whether the numbers moved."""
+        api = read("mobile", "src", "api.ts")
+        self.assertIn("screenerSnapshot: (index: string, force = false)", api)
+        self.assertIn("TTL.slow, force, 30000", api)
+        self.assertIn("await load(true);", self.screen)
+
+    def test_the_refresh_button_cannot_be_pressed_twice(self):
+        self.assertIn("disabled={refreshing}", self.screen)
+        self.assertIn("busy: refreshing", self.screen)
+
     def test_the_guide_describes_the_tab(self):
         guide = read("mobile", "src", "guide.ts")
         self.assertIn("DMA crossovers", guide)

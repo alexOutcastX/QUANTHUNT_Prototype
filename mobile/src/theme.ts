@@ -222,13 +222,48 @@ const numCell: TextStyle = Platform.OS === 'web'
   ? { fontFamily: MONO, fontVariant: ['tabular-nums'] }
   : { fontFamily: MONO };
 
+/**
+ * The Android shell runs the SAME bundle as the web app, on a screen a third
+ * the width held at arm's length rather than desk distance. Type sized for a
+ * browser card reads oversized there: fewer rows fit on a screen, and density
+ * is most of what a terminal is for.
+ *
+ * So the scale is reduced inside the native shell only — the web app is
+ * untouched. It has to be decided HERE, at module load, because every
+ * StyleSheet.create in the app is evaluated at module load too and a size
+ * baked into one cannot be changed afterwards.
+ *
+ * Detection is belt and braces. Capacitor injects `window.Capacitor` before any
+ * app code runs, which is the real signal; the fallback recognises the shell by
+ * where it is served from — https://localhost with no port, which is Capacitor's
+ * androidScheme and is not something a browser reaches by accident. The Expo dev
+ * server is also localhost but over http and with a port, so it stays at the web
+ * scale. If both miss, the app renders at web sizes: smaller than intended is a
+ * regression worth avoiding, but larger than intended is merely the status quo.
+ */
+const NATIVE_SHELL = WEB && (() => {
+  try {
+    const cap = (window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor;
+    if (cap?.isNativePlatform?.()) return true;
+    const l = window.location;
+    return l.protocol === 'https:' && l.hostname === 'localhost' && !l.port;
+  } catch {
+    return false;
+  }
+})();
+
+// Nine pixels is the floor the micro-labels already sit at, so the smallest
+// step stops there rather than scaling into illegibility.
+const fz = (n: number) => (NATIVE_SHELL ? Math.max(9, Math.round(n * 0.9)) : n);
+
 export const theme = {
   ...colors,
   mono: MONO,
   shadow,
   motion,
   numCell,
-  fs: { xs: 10, sm: 12, md: 14, lg: 16, xl: 20, xxl: 24, h1: 28 },
+  /** Reduced inside the Android shell — see NATIVE_SHELL above. */
+  fs: { xs: fz(10), sm: fz(12), md: fz(14), lg: fz(16), xl: fz(20), xxl: fz(24), h1: fz(28) },
   sp: { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32 },
   radius: { sm: 6, md: 10, lg: 14, xl: 20, pill: 999 },
 };
