@@ -3,9 +3,21 @@ name: Android APK + Capgo OTA
 # PHONE UPDATES SHIP AS APKs. The Capgo subscription has ended, so there is no
 # over-the-air path: installed phones stay on whatever bundle they last pulled,
 # however many times you promote to production. To update a phone, run this
-# workflow (Actions → Android APK + Capgo OTA → Run workflow), download the
-# `taureye-android-debug` artifact and install it over the existing app — same
-# signing key, so it upgrades in place and keeps your sign-in and data.
+# workflow (Actions → Android APK + Capgo OTA → Run workflow) and download the
+# `taureye-android-debug` artifact.
+#
+# READ THIS BEFORE EXPECTING AN IN-PLACE UPGRADE. `assembleDebug` signs with
+# ~/.android/debug.keystore, and a GitHub runner is a fresh machine with no such
+# file — so the Android plugin generates a NEW key pair on every run. Two APKs
+# from two runs therefore carry two different signatures, and Android refuses to
+# install one over the other ("App not installed"). Uninstall the old app first.
+# Anything held on the phone goes with it; the account itself is server-side, so
+# signing in again restores it.
+#
+# The fix, when it is worth doing, is a signing key that outlives the runner:
+# generate one, store it base64 in a repo secret, and add a signingConfig that
+# uses it. That is a decision about key material in a public repository, so it
+# is deliberately not made here.
 #
 # The web app is unaffected and always current: the VM serves it fresh on every
 # load, with no Capgo in the path.
@@ -24,8 +36,9 @@ on:
       api_base:
         description: 'API base URL baked into the bundle'
         required: false
-        # Blank = the TAUREYE_API_BASE repo variable (set it to the https
-        # domain once TLS is live — see docs/TLS-RUNBOOK.md), else the VM IP.
+        # Blank = the TAUREYE_API_BASE repo variable, else https://taureye.com.
+        # TLS is live, so the plain-http VM IP is no longer the fallback:
+        # shipping it would put every phone back on cleartext by default.
         default: ''
       capgo_upload:
         description: 'Also publish an OTA bundle to Capgo'
@@ -52,10 +65,14 @@ jobs:
       - name: Export web bundle
         run: npx expo export --platform web --output-dir dist
         env:
-          EXPO_PUBLIC_API_BASE: ${{ github.event.inputs.api_base || vars.TAUREYE_API_BASE || 'http://161.118.174.177' }}
+          EXPO_PUBLIC_API_BASE: ${{ github.event.inputs.api_base || vars.TAUREYE_API_BASE || 'https://taureye.com' }}
       - run: npx cap sync android
       - name: Build debug APK
         run: cd android && ./gradlew assembleDebug --no-daemon
+        env:
+          # Monotonic across runs, so a later APK is an upgrade rather than a
+          # sibling Android has no way to order. See android/app/build.gradle.
+          TAUREYE_VERSION_CODE: ${{ github.run_number }}
       - uses: actions/upload-artifact@v4
         with:
           name: taureye-android-debug
@@ -88,7 +105,7 @@ jobs:
       - name: Export web bundle (API base baked in)
         run: npx expo export --platform web --output-dir dist
         env:
-          EXPO_PUBLIC_API_BASE: ${{ vars.TAUREYE_API_BASE || 'http://161.118.174.177' }}
+          EXPO_PUBLIC_API_BASE: ${{ vars.TAUREYE_API_BASE || 'https://taureye.com' }}
       # OTA is OPT-IN. The Capgo subscription has ended, so phone updates ship
       # as APKs: run this workflow manually and install the artifact. Attempting
       # a publish against a lapsed plan just burns CI time on a call that cannot

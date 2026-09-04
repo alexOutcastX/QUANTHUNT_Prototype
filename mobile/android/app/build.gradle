@@ -7,7 +7,12 @@ android {
         applicationId "com.taureye.terminal.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
+        // Android decides "is this an upgrade?" from versionCode alone, so two
+        // builds sharing one can never replace each other on a phone. Taking it
+        // from the CI run number makes it monotonic without anyone remembering
+        // to bump a file; a local build has no run number and falls back to 1,
+        // which is harmless because a local build is not what gets distributed.
+        versionCode System.getenv("TAUREYE_VERSION_CODE")?.toInteger() ?: 1
         versionName "2.12.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
